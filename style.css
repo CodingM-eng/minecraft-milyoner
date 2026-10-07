@@ -3542,6 +3542,11 @@ input[type="range"] {
   background: rgba(255, 82, 82, 0.18);
 }
 
+.priority-VERY_HIGH {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.2);
+}
+
 .priority-HIGH {
   color: var(--gold);
   background: rgba(255, 190, 26, 0.2);
@@ -3552,7 +3557,41 @@ input[type="range"] {
   background: rgba(166, 180, 208, 0.12);
 }
 
-/* Responsive Refinements (Section 30) */
+/* Mobile Admin Bottom Navigation (Section 38) */
+.admin-mobile-nav {
+  display: none;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.25rem;
+  padding: 0.45rem;
+  border-top: 3px solid #08090e;
+  background: rgba(8, 11, 18, 0.96);
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+}
+
+.admin-mob-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
+  min-height: 48px;
+  background: transparent;
+  border: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-mob-btn.active {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(255, 190, 26, 0.15);
+}
+
+/* Responsive Refinements (Section 38) */
 @media (max-width: 1024px) {
   .vip-showcase-grid {
     grid-template-columns: 1fr;
@@ -3581,6 +3620,12 @@ input[type="range"] {
 
   .econ-widget-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .admin-mobile-nav {
+    display: grid;
   }
 }
 

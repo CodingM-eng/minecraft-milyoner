@@ -1,14 +1,14 @@
 /**
- * MINECRAFT MILYONER — SCALABLE PLATFORM ARCHITECTURE & SERVICES
+ * MINECRAFT MILYONER — FULL PRODUCTION PLATFORM ARCHITECTURE & SERVICES
  *
  * Strictly separates:
- * 1. authService & authGuard (Step-by-step License -> Username Login, Welcome Back, Session Integrity)
- * 2. userService (Immutable User ID, Roles: ADMIN | VIP | PLAYER, Hashed Passwords, Cosmetics, Settings)
+ * 1. authService & authGuard (Step-by-step License -> Username Login, Welcome Back, Session & Permission Guard)
+ * 2. userService (Immutable User ID, Roles & Data-Driven Ranks, Hashed Passwords, Purchases, Cosmetics, Settings)
  * 3. licenseService (Master Admin, VIP, Player & Community Licenses — Never reset by Party actions)
- * 4. partyService (Strict Role Enforcement: VIP & ADMIN create/invite; PLAYER join/leave only)
- * 5. supportService (Support Tickets, Bug Reports, Suggestions + Automatic VIP Priority Sorting)
- * 6. paymentService (Clean Payment Provider Abstraction — Never fakes payment or stores card data)
- * 7. backupService (Versioned Backups for users, parties, licenses, transactions, settings)
+ * 4. partyService (Data-Driven Rank Permission Enforcement: canCreateParty, canInvitePlayers, maxPartySize)
+ * 5. supportService (Support, Bug Reports, Suggestions + 4-Tier Priority: CRITICAL, VERY HIGH, HIGH, NORMAL)
+ * 6. paymentService (Stripe Checkout + Idempotent Webhook Architecture + 5 Emeralds = 1 TL Packages + Refunds)
+ * 7. backupService (Versioned Backups for users, parties, licenses, transactions, payments, settings + Download)
  * 8. activityService (Audit Logging)
  */
 
@@ -28,10 +28,12 @@
     SUGGESTIONS: 'mcm_platform_suggestions_v3',
     BACKUPS: 'mcm_platform_backups_v3',
     PAYMENTS: 'mcm_platform_payments_v3',
+    WEBHOOK_EVENTS: 'mcm_stripe_webhook_events_v3',
+    EMERALD_PACKAGES: 'mcm_emerald_packages_v3',
     SYSTEM_SETTINGS: 'mcm_platform_sys_settings_v3'
   };
 
-  // Precomputed SHA-256 digests (salted) so plaintext master license never appears in source
+  // Precomputed SHA-256 digests (salted) so plaintext master license & secrets never appear in source
   const MASTER_SALT = 'MCM_2026_SALT::';
   const MASTER_ADMIN_DIGEST = 'df8896b8447df2314b2a64f4ba6abb3992740163430da594d1b5cdc0686c24eb';
   const LEGACY_COMMUNITY_DIGEST = '32c69093739b5fac530d8dc5d90fcd8abd57ea1f4c805dc563af52f5bf23083e';
@@ -135,7 +137,44 @@
   function normalizeRole(role) {
     const r = String(role || 'PLAYER').toUpperCase();
     if (r === 'ADMIN') return 'ADMIN';
-    if (r === 'VIP' || r === 'ORGANIZER') return 'VIP';
+    if (
+      r === 'VIP' ||
+      r === 'VIP+' ||
+      r === 'VIP_PLUS' ||
+      r === 'MVP' ||
+      r === 'MVP+' ||
+      r === 'MVP_PLUS' ||
+      r === 'ELITE' ||
+      r === 'LEGEND' ||
+      r === 'CHAMPION' ||
+      r === 'MILLIONAIRE' ||
+      r === 'ORGANIZER'
+    ) {
+      return 'VIP';
+    }
+    return 'PLAYER';
+  }
+
+  function normalizeRankId(rankId, fallbackRole = 'PLAYER') {
+    const r = String(rankId || fallbackRole || 'PLAYER')
+      .trim()
+      .toUpperCase()
+      .replace(/\+/g, '_PLUS');
+    const valid = [
+      'PLAYER',
+      'VIP',
+      'VIP_PLUS',
+      'MVP',
+      'MVP_PLUS',
+      'ELITE',
+      'LEGEND',
+      'CHAMPION',
+      'MILLIONAIRE',
+      'ADMIN'
+    ];
+    if (valid.includes(r)) return r;
+    if (normalizeRole(fallbackRole) === 'ADMIN') return 'ADMIN';
+    if (normalizeRole(fallbackRole) === 'VIP') return 'VIP';
     return 'PLAYER';
   }
 
@@ -199,9 +238,14 @@
   };
 
   // ==========================================
-  // 2. AUTHORIZATION GUARD (NEVER RESETS ACCOUNT ON PARTY ACTIONS)
+  // 2. AUTHORIZATION & PERMISSION GUARD (NEVER RESETS ACCOUNT ON PARTY ACTIONS)
   // ==========================================
-  const BUILTIN_LICENSE_IDS = ['MASTER-ADMIN-ROOT', 'MASTER-ADMIN-001', 'LIC-COMMUNITY-XXQ', 'STD-XXQ-NETWORK'];
+  const BUILTIN_LICENSE_IDS = [
+    'MASTER-ADMIN-ROOT',
+    'MASTER-ADMIN-001',
+    'LIC-COMMUNITY-XXQ',
+    'STD-XXQ-NETWORK'
+  ];
 
   const authGuard = {
     verifySession(session) {
@@ -228,7 +272,6 @@
       // Built-in licenses (Master Admin & Community License) are always valid
       if (!session.isMasterAdmin && !BUILTIN_LICENSE_IDS.includes(session.licenseId)) {
         const lic = licenseService._findRawById(session.licenseId);
-        // Only reject if the license explicitly exists and is REVOKED/DISABLED/EXPIRED
         if (lic) {
           const effectiveStatus = licenseService.computeEffectiveStatus(lic);
           if (effectiveStatus !== 'ACTIVE') {
@@ -254,17 +297,68 @@
     getEffectiveRole(session) {
       if (!session) return 'PLAYER';
       if (normalizeRole(session.role) === 'ADMIN') return 'ADMIN';
-      const u = userService._findRawByUsername(session.username);
+      const u = userService.getUserByUsername(session.username);
       if (u) {
-        if (normalizeRole(u.role) === 'ADMIN') return 'ADMIN';
-        if (normalizeRole(u.role) === 'VIP' || (u.vipStatus && u.vipStatus.isVip)) return 'VIP';
+        if (normalizeRole(u.role) === 'ADMIN' || u.rank === 'ADMIN') return 'ADMIN';
+        if (
+          normalizeRole(u.role) === 'VIP' ||
+          (u.vipStatus && u.vipStatus.isVip) ||
+          (u.rank && u.rank !== 'PLAYER')
+        ) {
+          return 'VIP';
+        }
       }
       return normalizeRole(session.role);
     },
 
+    getEffectiveRankId(session) {
+      if (!session) return 'PLAYER';
+      if (normalizeRole(session.role) === 'ADMIN') return 'ADMIN';
+      const u = userService.getUserByUsername(session.username);
+      if (u && u.rank) {
+        return normalizeRankId(u.rank, u.role);
+      }
+      return normalizeRankId(session.rank || session.role, session.role);
+    },
+
+    // Section 10: Data-Driven Permission Lookup (Never hardcode if VIP / if MVP)
+    getUserPermissions(session) {
+      const rankId = this.getEffectiveRankId(session);
+      if (window.MCMServices && window.MCMServices.rankService) {
+        return window.MCMServices.rankService.getPermissionsForRank(rankId);
+      }
+      // Fallback before economy.js loads
+      const isAdmin = rankId === 'ADMIN';
+      const isElevated = rankId !== 'PLAYER';
+      return {
+        canCreateParty: isElevated,
+        canInvitePlayers: isElevated,
+        maxPartySize: isAdmin ? 999 : isElevated ? 4 : 0,
+        emeraldMultiplier: isAdmin ? 3.0 : isElevated ? 1.25 : 1.0,
+        supportPriority: isAdmin ? 'CRITICAL' : isElevated ? 'HIGH' : 'NORMAL',
+        bugPriority: isAdmin ? 'CRITICAL' : isElevated ? 'HIGH' : 'NORMAL',
+        suggestionPriority: isAdmin ? 'CRITICAL' : isElevated ? 'HIGH' : 'NORMAL',
+        maxExtraLives: isAdmin ? 10 : isElevated ? 5 : 3,
+        cosmetics: isElevated,
+        rgbName: isElevated,
+        profileEffects: isElevated
+      };
+    },
+
+    requirePermission(session, permissionKey) {
+      this.verifySession(session);
+      const perms = this.getUserPermissions(session);
+      if (!perms || !perms[permissionKey]) {
+        throw new Error(
+          `Access Denied: Your current rank (${this.getEffectiveRankId(session)}) does not grant the "${permissionKey}" permission.`
+        );
+      }
+      return perms;
+    },
+
     isVipOrAdmin(session) {
-      const r = this.getEffectiveRole(session);
-      return r === 'ADMIN' || r === 'VIP';
+      const perms = this.getUserPermissions(session);
+      return Boolean(perms.canCreateParty || this.getEffectiveRole(session) !== 'PLAYER');
     }
   };
 
@@ -275,7 +369,6 @@
     _ensureSeedUsers() {
       const existing = storageAdapter.get(STORAGE_KEYS.USERS, null);
       if (existing && Array.isArray(existing) && existing.length > 0) {
-        // Ensure any legacy ORGANIZER role is normalized to VIP
         let changed = false;
         existing.forEach(u => {
           if (u.role === 'ORGANIZER') {
@@ -283,8 +376,28 @@
             if (u.vipStatus) u.vipStatus.isVip = true;
             changed = true;
           }
+          if (!u.rank) {
+            u.rank = normalizeRankId(u.rankId || u.cosmetics?.equippedRank || u.role, u.role);
+            u.rankId = u.rank;
+            changed = true;
+          }
+          if (u.rankExpiration === undefined) {
+            u.rankExpiration = u.vipStatus?.expiresAt || null;
+            changed = true;
+          }
+          if (!Array.isArray(u.purchases)) {
+            u.purchases = [];
+            changed = true;
+          }
           if (!u.cosmetics) {
-            u.cosmetics = { rgbOwned: Boolean(u.role === 'ADMIN'), rgbEnabled: Boolean(u.role === 'ADMIN'), equippedRank: u.role };
+            u.cosmetics = {
+              rgbOwned: Boolean(u.role === 'ADMIN' || u.rank !== 'PLAYER'),
+              rgbEnabled: Boolean(u.role === 'ADMIN'),
+              animatedNameOwned: Boolean(u.role === 'ADMIN'),
+              animatedNameEnabled: false,
+              profileEffects: Boolean(u.rank !== 'PLAYER'),
+              equippedRank: u.rank
+            };
             changed = true;
           }
           if (!u.settings) {
@@ -303,8 +416,10 @@
           minecraftUsername: 'Mashallah',
           licenseId: 'MASTER-ADMIN-ROOT',
           role: 'ADMIN',
-          vipStatus: { isVip: true, tier: 'LIFETIME', expiresAt: null, grantedAt: now },
+          rank: 'ADMIN',
           rankId: 'ADMIN',
+          rankExpiration: null,
+          vipStatus: { isVip: true, tier: 'ADMIN', expiresAt: null, grantedAt: now },
           passwordHash: null,
           emeraldBalance: 2450,
           points: 14850,
@@ -314,7 +429,15 @@
           gamesLost: 6,
           extraLives: 3,
           achievements: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER', 'ACH_MILLIONAIRE', 'ACH_CHAMPION'],
-          cosmetics: { rgbOwned: true, rgbEnabled: true, equippedRank: 'ADMIN' },
+          purchases: ['ITEM-RGB-NAME'],
+          cosmetics: {
+            rgbOwned: true,
+            rgbEnabled: true,
+            animatedNameOwned: true,
+            animatedNameEnabled: true,
+            profileEffects: true,
+            equippedRank: 'ADMIN'
+          },
           status: 'ACTIVE',
           createdAt: now,
           lastLogin: now,
@@ -325,8 +448,10 @@
           minecraftUsername: 'DragonSlayer99',
           licenseId: 'LIC-VIP-01',
           role: 'VIP',
-          vipStatus: { isVip: true, tier: 'VIP', expiresAt: null, grantedAt: now },
-          rankId: 'VIP',
+          rank: 'VIP_PLUS',
+          rankId: 'VIP_PLUS',
+          rankExpiration: null,
+          vipStatus: { isVip: true, tier: 'VIP_PLUS', expiresAt: null, grantedAt: now },
           passwordHash: null,
           emeraldBalance: 1820,
           points: 12450,
@@ -336,7 +461,15 @@
           gamesLost: 7,
           extraLives: 2,
           achievements: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER', 'ACH_MILLIONAIRE'],
-          cosmetics: { rgbOwned: true, rgbEnabled: true, equippedRank: 'VIP' },
+          purchases: ['ITEM-RANK-VIP-PLUS'],
+          cosmetics: {
+            rgbOwned: true,
+            rgbEnabled: true,
+            animatedNameOwned: false,
+            animatedNameEnabled: false,
+            profileEffects: true,
+            equippedRank: 'VIP_PLUS'
+          },
           status: 'ACTIVE',
           createdAt: now,
           lastLogin: now,
@@ -347,8 +480,10 @@
           minecraftUsername: 'NetherKing_TR',
           licenseId: 'LIC-VIP-02',
           role: 'VIP',
-          vipStatus: { isVip: true, tier: 'VIP', expiresAt: null, grantedAt: now },
+          rank: 'MVP_PLUS',
           rankId: 'MVP_PLUS',
+          rankExpiration: null,
+          vipStatus: { isVip: true, tier: 'MVP_PLUS', expiresAt: null, grantedAt: now },
           passwordHash: null,
           emeraldBalance: 1540,
           points: 10820,
@@ -356,9 +491,17 @@
           gamesPlayed: 15,
           gamesWon: 8,
           gamesLost: 7,
-          extraLives: 1,
+          extraLives: 2,
           achievements: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER'],
-          cosmetics: { rgbOwned: false, rgbEnabled: false, equippedRank: 'MVP_PLUS' },
+          purchases: ['ITEM-RANK-MVP-PLUS'],
+          cosmetics: {
+            rgbOwned: true,
+            rgbEnabled: false,
+            animatedNameOwned: true,
+            animatedNameEnabled: true,
+            profileEffects: true,
+            equippedRank: 'MVP_PLUS'
+          },
           status: 'ACTIVE',
           createdAt: now,
           lastLogin: now,
@@ -369,8 +512,10 @@
           minecraftUsername: 'OrganizerAlex',
           licenseId: 'LIC-ORG-01',
           role: 'VIP',
-          vipStatus: { isVip: true, tier: 'VIP', expiresAt: null, grantedAt: now },
+          rank: 'VIP',
           rankId: 'VIP',
+          rankExpiration: null,
+          vipStatus: { isVip: true, tier: 'VIP', expiresAt: null, grantedAt: now },
           passwordHash: null,
           emeraldBalance: 1290,
           points: 9450,
@@ -380,7 +525,15 @@
           gamesLost: 7,
           extraLives: 1,
           achievements: ['ACH_FIRST_WIN'],
-          cosmetics: { rgbOwned: false, rgbEnabled: false, equippedRank: 'VIP' },
+          purchases: [],
+          cosmetics: {
+            rgbOwned: true,
+            rgbEnabled: false,
+            animatedNameOwned: false,
+            animatedNameEnabled: false,
+            profileEffects: true,
+            equippedRank: 'VIP'
+          },
           status: 'ACTIVE',
           createdAt: now,
           lastLogin: now,
@@ -391,8 +544,10 @@
           minecraftUsername: 'DiamondHunter',
           licenseId: 'LIC-PLY-02',
           role: 'PLAYER',
-          vipStatus: { isVip: false, tier: 'NONE', expiresAt: null, grantedAt: null },
+          rank: 'PLAYER',
           rankId: 'PLAYER',
+          rankExpiration: null,
+          vipStatus: { isVip: false, tier: 'NONE', expiresAt: null, grantedAt: null },
           passwordHash: null,
           emeraldBalance: 980,
           points: 8920,
@@ -402,7 +557,15 @@
           gamesLost: 6,
           extraLives: 1,
           achievements: ['ACH_FIRST_WIN'],
-          cosmetics: { rgbOwned: false, rgbEnabled: false, equippedRank: 'PLAYER' },
+          purchases: [],
+          cosmetics: {
+            rgbOwned: false,
+            rgbEnabled: false,
+            animatedNameOwned: false,
+            animatedNameEnabled: false,
+            profileEffects: false,
+            equippedRank: 'PLAYER'
+          },
           status: 'ACTIVE',
           createdAt: now,
           lastLogin: now,
@@ -413,8 +576,10 @@
           minecraftUsername: 'Steve',
           licenseId: 'LIC-PLY-01',
           role: 'PLAYER',
-          vipStatus: { isVip: false, tier: 'NONE', expiresAt: null, grantedAt: null },
+          rank: 'PLAYER',
           rankId: 'PLAYER',
+          rankExpiration: null,
+          vipStatus: { isVip: false, tier: 'NONE', expiresAt: null, grantedAt: null },
           passwordHash: null,
           emeraldBalance: 650,
           points: 6540,
@@ -424,7 +589,15 @@
           gamesLost: 5,
           extraLives: 0,
           achievements: ['ACH_FIRST_WIN'],
-          cosmetics: { rgbOwned: false, rgbEnabled: false, equippedRank: 'PLAYER' },
+          purchases: [],
+          cosmetics: {
+            rgbOwned: false,
+            rgbEnabled: false,
+            animatedNameOwned: false,
+            animatedNameEnabled: false,
+            profileEffects: false,
+            equippedRank: 'PLAYER'
+          },
           status: 'ACTIVE',
           createdAt: now,
           lastLogin: now,
@@ -465,18 +638,27 @@
       delete copy.passwordHash;
       copy.hasPassword = hasPassword;
       copy.role = normalizeRole(copy.role);
-      // Check VIP expiration
-      if (copy.vipStatus && copy.vipStatus.isVip && copy.vipStatus.expiresAt) {
-        const exp = new Date(copy.vipStatus.expiresAt).getTime();
+      copy.rank = normalizeRankId(copy.rank || copy.rankId || copy.role, copy.role);
+      copy.rankId = copy.rank;
+
+      // Check rank / VIP expiration
+      const expDate = copy.rankExpiration || copy.vipStatus?.expiresAt || null;
+      if (expDate && copy.role !== 'ADMIN') {
+        const exp = new Date(expDate).getTime();
         if (!isNaN(exp) && Date.now() > exp) {
-          copy.vipStatus.isVip = false;
-          if (copy.role === 'VIP') copy.role = 'PLAYER';
+          copy.vipStatus = { isVip: false, tier: 'NONE', expiresAt: null, grantedAt: null };
+          copy.role = 'PLAYER';
+          copy.rank = 'PLAYER';
+          copy.rankId = 'PLAYER';
+          copy.rankExpiration = null;
         }
       }
-      if (copy.role === 'VIP' || copy.role === 'ADMIN') {
-        if (!copy.vipStatus) copy.vipStatus = { isVip: true, tier: copy.role, expiresAt: null };
+
+      if (copy.role === 'VIP' || copy.role === 'ADMIN' || copy.rank !== 'PLAYER') {
+        if (!copy.vipStatus) copy.vipStatus = { isVip: true, tier: copy.rank, expiresAt: expDate };
         copy.vipStatus.isVip = true;
       }
+      copy.purchases = Array.isArray(copy.purchases) ? copy.purchases : [];
       return copy;
     },
 
@@ -490,22 +672,26 @@
       let user = all.find(u => u.minecraftUsername.toLowerCase() === cleanName.toLowerCase());
 
       if (user) {
-        // Verify password if user has set one and password was provided
         if (user.passwordHash && password) {
           const candidateHash = hashPassword(password);
           if (candidateHash !== user.passwordHash) {
             throw new Error('Incorrect account password.');
           }
         }
-        // Preserve existing VIP/ADMIN status unless upgraded by license
         if (normRole === 'ADMIN') {
           user.role = 'ADMIN';
+          user.rank = 'ADMIN';
+          user.rankId = 'ADMIN';
           user.vipStatus = { isVip: true, tier: 'ADMIN', expiresAt: null, grantedAt: now };
         } else if (normRole === 'VIP' && user.role !== 'ADMIN') {
           user.role = 'VIP';
+          if (!user.rank || user.rank === 'PLAYER') {
+            user.rank = 'VIP';
+            user.rankId = 'VIP';
+          }
           user.vipStatus = {
             isVip: true,
-            tier: 'VIP',
+            tier: user.rank,
             expiresAt: user.vipStatus?.expiresAt || null,
             grantedAt: user.vipStatus?.grantedAt || now
           };
@@ -516,18 +702,25 @@
         user.lastLogin = now;
       } else {
         const isVipOrAdmin = normRole === 'VIP' || normRole === 'ADMIN';
+        const initialRank = normRole === 'ADMIN' ? 'ADMIN' : isVipOrAdmin ? 'VIP' : 'PLAYER';
         user = {
-          id: 'USR-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(100 + Math.random() * 899),
+          id:
+            'USR-' +
+            Date.now().toString(36).toUpperCase() +
+            '-' +
+            Math.floor(100 + Math.random() * 899),
           minecraftUsername: cleanName,
           licenseId: licenseId || 'LIC-COMMUNITY-XXQ',
           role: normRole,
+          rank: initialRank,
+          rankId: initialRank,
+          rankExpiration: null,
           vipStatus: {
             isVip: isVipOrAdmin,
-            tier: isVipOrAdmin ? normRole : 'NONE',
+            tier: isVipOrAdmin ? initialRank : 'NONE',
             expiresAt: null,
             grantedAt: isVipOrAdmin ? now : null
           },
-          rankId: normRole,
           passwordHash: password ? hashPassword(password) : null,
           emeraldBalance: 250,
           points: 0,
@@ -537,10 +730,14 @@
           gamesLost: 0,
           extraLives: 0,
           achievements: [],
+          purchases: [],
           cosmetics: {
-            rgbOwned: normRole === 'ADMIN',
+            rgbOwned: isVipOrAdmin,
             rgbEnabled: normRole === 'ADMIN',
-            equippedRank: normRole
+            animatedNameOwned: normRole === 'ADMIN',
+            animatedNameEnabled: false,
+            profileEffects: isVipOrAdmin,
+            equippedRank: initialRank
           },
           status: 'ACTIVE',
           createdAt: now,
@@ -580,25 +777,33 @@
         u => u.minecraftUsername.toLowerCase() === String(econAcc.username).toLowerCase()
       );
       if (!user) return;
-      user.emeraldBalance = Number(econAcc.balance ?? user.emeraldBalance ?? 0);
-      user.points = Number(econAcc.points ?? user.points ?? 0);
+      user.emeraldBalance = Math.max(0, Number(econAcc.balance ?? user.emeraldBalance ?? 0));
+      user.points = Math.max(0, Number(econAcc.points ?? user.points ?? 0));
       user.gamesPlayed = Number(econAcc.gamesPlayed ?? user.gamesPlayed ?? 0);
       user.gamesWon = Number(econAcc.gamesWon ?? user.gamesWon ?? 0);
       user.gamesLost = Number(econAcc.gamesLost ?? user.gamesLost ?? 0);
-      user.extraLives = Number(econAcc.extraLives ?? user.extraLives ?? 0);
+      user.extraLives = Math.max(0, Number(econAcc.extraLives ?? user.extraLives ?? 0));
       if (econAcc.rgbOwned !== undefined) {
         user.cosmetics = user.cosmetics || {};
         user.cosmetics.rgbOwned = Boolean(user.cosmetics.rgbOwned || econAcc.rgbOwned);
       }
-      if (econAcc.equippedRank) {
-        user.rankId = econAcc.equippedRank;
+      if (econAcc.animatedNameOwned !== undefined) {
         user.cosmetics = user.cosmetics || {};
-        user.cosmetics.equippedRank = econAcc.equippedRank;
+        user.cosmetics.animatedNameOwned = Boolean(
+          user.cosmetics.animatedNameOwned || econAcc.animatedNameOwned
+        );
+      }
+      if (econAcc.equippedRank) {
+        const normR = normalizeRankId(econAcc.equippedRank, user.role);
+        user.rank = normR;
+        user.rankId = normR;
+        user.cosmetics = user.cosmetics || {};
+        user.cosmetics.equippedRank = normR;
       }
       this._saveAllRaw(all);
     },
 
-    // Section 27: Change Username without creating a new account (uses immutable user.id)
+    // Section 3 & 27: Change Username without creating a new account (uses immutable user.id)
     changeUsername(session, newUsernameInput) {
       authGuard.verifySession(session);
       const cleanNew = String(newUsernameInput || '').trim();
@@ -626,12 +831,10 @@
       currentUser.minecraftUsername = cleanNew;
       this._saveAllRaw(all);
 
-      // Update username in Economy Accounts & Transactions
       if (window.MCMServices && window.MCMServices.economyService) {
         window.MCMServices.economyService._renameUsernameInternal(oldUsername, cleanNew);
       }
 
-      // Update username in Parties
       const parties = partyService._getAllRaw();
       parties.forEach(p => {
         if (p.organizer.toLowerCase() === oldUsername.toLowerCase()) {
@@ -645,12 +848,12 @@
       });
       partyService._saveAllRaw(parties);
 
-      // Re-sign session with new username
       const updatedSession = licenseService._buildSignedSession({
         userId: currentUser.id,
         licenseId: session.licenseId,
         licenseName: session.licenseName,
         role: currentUser.role,
+        rank: currentUser.rank,
         username: cleanNew,
         isMasterAdmin: session.isMasterAdmin,
         codeMasked: session.codeMasked
@@ -691,11 +894,15 @@
 
       user.passwordHash = hashPassword(newPassword);
       this._saveAllRaw(all);
-      activityService.log('PASSWORD_UPDATED', user.minecraftUsername, `${user.minecraftUsername} updated their account password hash`);
+      activityService.log(
+        'PASSWORD_UPDATED',
+        user.minecraftUsername,
+        `${user.minecraftUsername} updated their account password hash`
+      );
       return true;
     },
 
-    // Section 13 & 27: Cosmetics & RGB Username Toggle
+    // Section 13 & 36: Cosmetics & RGB Username Toggle
     setRgbUsernameEnabled(session, enabled) {
       authGuard.verifySession(session);
       const all = this._getAllRaw();
@@ -704,9 +911,9 @@
         all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
       if (!user) throw new Error('User account not found.');
 
-      const isVipOrAdmin = authGuard.isVipOrAdmin(session);
-      if (!user.cosmetics?.rgbOwned && !isVipOrAdmin) {
-        throw new Error('You must purchase RGB Name from the Emerald Shop or unlock VIP first.');
+      const perms = authGuard.getUserPermissions(session);
+      if (!user.cosmetics?.rgbOwned && !perms.rgbName) {
+        throw new Error('You must purchase RGB Username from the Shop or unlock an eligible Rank first.');
       }
 
       user.cosmetics = user.cosmetics || {};
@@ -732,35 +939,9 @@
       return this._sanitizeUser(user);
     },
 
-    // Section 21 & 22: ADMIN USER & VIP MANAGEMENT
-    adminUpdateUserRole(session, targetUsername, newRole) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const cleanRole = normalizeRole(newRole);
-      const all = this._getAllRaw();
-      const user = all.find(
-        u => u.minecraftUsername.toLowerCase() === String(targetUsername).toLowerCase()
-      );
-      if (!user) throw new Error('User not found.');
-
-      user.role = cleanRole;
-      user.vipStatus = user.vipStatus || {};
-      user.vipStatus.isVip = cleanRole === 'VIP' || cleanRole === 'ADMIN';
-      if (user.vipStatus.isVip && !user.vipStatus.grantedAt) {
-        user.vipStatus.grantedAt = new Date().toISOString();
-      }
-      user.rankId = cleanRole;
-      this._saveAllRaw(all);
-
-      activityService.log(
-        'USER_ROLE_CHANGED',
-        session.username,
-        `Admin ${session.username} changed ${user.minecraftUsername}'s role to ${cleanRole}`
-      );
-      return this._sanitizeUser(user);
-    },
-
-    adminSetVipStatus(session, targetUsername, { isVip, expiresAt = null }) {
-      authGuard.requireRole(session, ['ADMIN']);
+    // Grant Rank internally (from Shop purchase, Stripe webhook, or Admin)
+    _grantRankInternal(targetUsername, rankId, expiresAt = null) {
+      const cleanRank = normalizeRankId(rankId);
       const all = this._getAllRaw();
       const user = all.find(
         u => u.minecraftUsername.toLowerCase() === String(targetUsername).toLowerCase()
@@ -768,31 +949,76 @@
       if (!user) throw new Error('User not found.');
 
       const now = new Date().toISOString();
-      user.vipStatus = {
-        isVip: Boolean(isVip),
-        tier: isVip ? 'VIP' : 'NONE',
-        expiresAt: expiresAt || null,
-        grantedAt: isVip ? user.vipStatus?.grantedAt || now : null
-      };
-      if (isVip && user.role === 'PLAYER') {
-        user.role = 'VIP';
-        user.rankId = 'VIP';
-      } else if (!isVip && user.role === 'VIP') {
+      user.rank = cleanRank;
+      user.rankId = cleanRank;
+      user.rankExpiration = expiresAt || null;
+
+      if (cleanRank === 'ADMIN') {
+        user.role = 'ADMIN';
+      } else if (cleanRank === 'PLAYER') {
         user.role = 'PLAYER';
-        user.rankId = 'PLAYER';
+      } else {
+        if (user.role !== 'ADMIN') user.role = 'VIP';
       }
-      if (isVip) {
-        user.cosmetics = user.cosmetics || {};
+
+      const isElevated = cleanRank !== 'PLAYER';
+      user.vipStatus = {
+        isVip: isElevated,
+        tier: isElevated ? cleanRank : 'NONE',
+        expiresAt: expiresAt || null,
+        grantedAt: isElevated ? user.vipStatus?.grantedAt || now : null
+      };
+
+      user.cosmetics = user.cosmetics || {};
+      user.cosmetics.equippedRank = cleanRank;
+      if (isElevated) {
         user.cosmetics.rgbOwned = true;
+        user.cosmetics.profileEffects = true;
+      }
+      if (cleanRank === 'MILLIONAIRE' || cleanRank === 'MVP_PLUS' || cleanRank === 'ADMIN') {
+        user.cosmetics.animatedNameOwned = true;
       }
 
       this._saveAllRaw(all);
+
+      // Sync with economy account if initialized
+      if (window.MCMServices && window.MCMServices.economyService) {
+        window.MCMServices.economyService._mutateAccount(user.minecraftUsername, acc => {
+          acc.role = user.role;
+          acc.isVip = isElevated;
+          acc.equippedRank = cleanRank;
+          acc.ownedRanks = acc.ownedRanks || ['PLAYER'];
+          if (!acc.ownedRanks.includes(cleanRank)) acc.ownedRanks.push(cleanRank);
+          if (isElevated) acc.rgbOwned = true;
+        });
+      }
+
+      return this._sanitizeUser(user);
+    },
+
+    // Section 21, 22, 26: ADMIN USER, VIP & RANK MANAGEMENT
+    adminUpdateUserRole(session, targetUsername, newRoleOrRank) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const targetRank = normalizeRankId(newRoleOrRank, newRoleOrRank);
+      const updated = this._grantRankInternal(targetUsername, targetRank, null);
+      activityService.log(
+        'USER_ROLE_CHANGED',
+        session.username,
+        `Admin ${session.username} updated ${updated.minecraftUsername}'s rank/role to ${targetRank}`
+      );
+      return updated;
+    },
+
+    adminSetVipStatus(session, targetUsername, { isVip, rankId = 'VIP', expiresAt = null }) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const targetRank = isVip ? normalizeRankId(rankId || 'VIP', 'VIP') : 'PLAYER';
+      const updated = this._grantRankInternal(targetUsername, targetRank, expiresAt);
       activityService.log(
         isVip ? 'VIP_GRANTED' : 'VIP_REMOVED',
         session.username,
-        `Admin ${session.username} ${isVip ? 'granted VIP to' : 'removed VIP from'} ${user.minecraftUsername}`
+        `Admin ${session.username} ${isVip ? `granted ${targetRank} to` : 'removed VIP from'} ${updated.minecraftUsername}`
       );
-      return this._sanitizeUser(user);
+      return updated;
     },
 
     adminToggleSuspendUser(session, targetUsername) {
@@ -850,7 +1076,7 @@
   };
 
   // ==========================================
-  // 4. LICENSE & STEP-BY-STEP AUTH SERVICE (Section 1, 2, 23, 28)
+  // 4. LICENSE & STEP-BY-STEP AUTH SERVICE (Section 2, 4)
   // ==========================================
   const licenseService = {
     _ensureSeedData() {
@@ -867,8 +1093,9 @@
         {
           id: 'LIC-VIP-01',
           code: 'MCVP-VIP1-8899',
-          name: 'VIP Tournament License #1',
+          name: 'VIP+ Tournament License #1',
           role: 'VIP',
+          rank: 'VIP_PLUS',
           status: 'ACTIVE',
           createdAt: now,
           expiresAt: null,
@@ -881,6 +1108,7 @@
           code: 'MCML-ORG1-7F4K',
           name: 'VIP Organizer License #1',
           role: 'VIP',
+          rank: 'VIP',
           status: 'ACTIVE',
           createdAt: now,
           expiresAt: null,
@@ -893,6 +1121,7 @@
           code: 'MCML-PLYR-92QX',
           name: 'Player License — Steve',
           role: 'PLAYER',
+          rank: 'PLAYER',
           status: 'ACTIVE',
           createdAt: now,
           expiresAt: null,
@@ -905,6 +1134,7 @@
           code: 'MCML-PLYR-48BM',
           name: 'Player License — DiamondHunter',
           role: 'PLAYER',
+          rank: 'PLAYER',
           status: 'ACTIVE',
           createdAt: now,
           expiresAt: null,
@@ -917,6 +1147,7 @@
           code: 'MCML-REVK-1100',
           name: 'Revoked Test License',
           role: 'PLAYER',
+          rank: 'PLAYER',
           status: 'REVOKED',
           createdAt: now,
           expiresAt: null,
@@ -966,7 +1197,7 @@
 
     // STEP 1 OF LOGIN FLOW: Validate License Code Only
     async validateLicenseStep(rawCode) {
-      await new Promise(r => setTimeout(r, 240));
+      await new Promise(r => setTimeout(r, 180));
       const cleanCode = String(rawCode || '').trim();
       if (!cleanCode) {
         return { ok: false, error: 'Please enter a valid license code.' };
@@ -974,7 +1205,7 @@
 
       const digest = computeSaltedDigest(cleanCode);
 
-      // 1. Master Admin License
+      // 1. Master Admin License ("Minecraft@MashallahMC@Admin")
       if (digest === MASTER_ADMIN_DIGEST) {
         return {
           ok: true,
@@ -982,6 +1213,7 @@
             licenseId: 'MASTER-ADMIN-ROOT',
             licenseName: 'Master Admin License',
             role: 'ADMIN',
+            rank: 'ADMIN',
             isMasterAdmin: true,
             suggestedUsername: 'Mashallah',
             codeMasked: 'MASTER-****-ADMIN'
@@ -997,6 +1229,7 @@
             licenseId: 'LIC-COMMUNITY-XXQ',
             licenseName: 'XXQ Network Community License',
             role: 'PLAYER',
+            rank: 'PLAYER',
             isMasterAdmin: false,
             suggestedUsername: '',
             codeMasked: 'XXQ-****-NET'
@@ -1025,6 +1258,7 @@
           licenseId: found.id,
           licenseName: found.name,
           role: normalizeRole(found.role),
+          rank: normalizeRankId(found.rank || found.role, found.role),
           isMasterAdmin: false,
           suggestedUsername: found.assignedUsername || '',
           codeMasked: found.code.slice(0, 5) + '****' + found.code.slice(-4)
@@ -1034,15 +1268,20 @@
 
     // STEP 2 OF LOGIN FLOW: Enter Minecraft Username -> Create/Load Account -> Dashboard
     async completeAccountStep(licenseToken, minecraftUsername, password = '') {
-      await new Promise(r => setTimeout(r, 180));
+      await new Promise(r => setTimeout(r, 120));
       if (!licenseToken || !licenseToken.licenseId) {
-        return { ok: false, error: 'License verification expired. Please enter your license code.' };
+        return {
+          ok: false,
+          error: 'License verification expired. Please enter your license code.'
+        };
       }
 
       const finalUsername =
         String(minecraftUsername || '').trim() ||
         licenseToken.suggestedUsername ||
-        (licenseToken.role === 'ADMIN' ? 'Mashallah' : 'Player_' + Math.floor(100 + Math.random() * 899));
+        (licenseToken.role === 'ADMIN'
+          ? 'Mashallah'
+          : 'Player_' + Math.floor(100 + Math.random() * 899));
 
       try {
         const userAccount = userService.getOrCreateAccount({
@@ -1052,7 +1291,6 @@
           password
         });
 
-        // Update managed license usage info
         if (!licenseToken.isMasterAdmin && !BUILTIN_LICENSE_IDS.includes(licenseToken.licenseId)) {
           const all = this._getAllRaw();
           const found = all.find(l => l.id === licenseToken.licenseId);
@@ -1069,6 +1307,7 @@
           licenseId: licenseToken.licenseId,
           licenseName: licenseToken.licenseName,
           role: effectiveRole,
+          rank: userAccount.rank,
           username: userAccount.minecraftUsername,
           isMasterAdmin: licenseToken.isMasterAdmin,
           codeMasked: licenseToken.codeMasked
@@ -1079,6 +1318,7 @@
           userId: userAccount.id,
           username: userAccount.minecraftUsername,
           role: effectiveRole,
+          rank: userAccount.rank,
           licenseId: licenseToken.licenseId,
           licenseName: licenseToken.licenseName,
           isMasterAdmin: licenseToken.isMasterAdmin,
@@ -1089,7 +1329,7 @@
         activityService.log(
           'ACCOUNT_LOGIN',
           userAccount.minecraftUsername,
-          `${userAccount.minecraftUsername} (${effectiveRole}) signed in`
+          `${userAccount.minecraftUsername} (${userAccount.rank}) signed in`
         );
 
         return { ok: true, session, user: userAccount };
@@ -1098,7 +1338,6 @@
       }
     },
 
-    // Combined helper for backward compatibility & automated tests
     async validateAndLogin(rawCode, customUsername = '', password = '') {
       const step1 = await this.validateLicenseStep(rawCode);
       if (!step1.ok) return step1;
@@ -1122,6 +1361,7 @@
         licenseId: rem.licenseId,
         licenseName: rem.licenseName || 'Saved License',
         role: user.role,
+        rank: user.rank,
         username: user.minecraftUsername,
         isMasterAdmin: Boolean(rem.isMasterAdmin),
         codeMasked: rem.codeMasked || 'SAVED-****'
@@ -1130,14 +1370,25 @@
       return session;
     },
 
-    _buildSignedSession({ userId, licenseId, licenseName, role, username, isMasterAdmin, codeMasked }) {
+    _buildSignedSession({
+      userId,
+      licenseId,
+      licenseName,
+      role,
+      rank,
+      username,
+      isMasterAdmin,
+      codeMasked
+    }) {
       const normRole = normalizeRole(role);
+      const normRank = normalizeRankId(rank || normRole, normRole);
       const signature = computeSaltedDigest(`${licenseId}:${normRole}:${username}`);
       return {
         userId: userId || 'USR-0',
         licenseId,
         licenseName,
         role: normRole,
+        rank: normRank,
         username,
         isMasterAdmin: Boolean(isMasterAdmin),
         codeMasked,
@@ -1155,18 +1406,19 @@
       }
     },
 
-    // Synchronize session role if user upgraded to VIP
     refreshSessionRole(session) {
       if (!session) return null;
       const u = userService.getUserByUsername(session.username);
       if (!u) return session;
       const newRole = normalizeRole(u.role);
-      if (newRole !== session.role) {
+      const newRank = normalizeRankId(u.rank || u.role, newRole);
+      if (newRole !== session.role || newRank !== session.rank) {
         const updated = this._buildSignedSession({
           userId: u.id,
           licenseId: session.licenseId,
           licenseName: session.licenseName,
           role: newRole,
+          rank: newRank,
           username: u.minecraftUsername,
           isMasterAdmin: session.isMasterAdmin,
           codeMasked: session.codeMasked
@@ -1194,7 +1446,12 @@
 
     logout(clearRemembered = false) {
       const current = storageAdapter.get(STORAGE_KEYS.SESSION, null);
-      if (current && current.licenseId && !current.isMasterAdmin && !BUILTIN_LICENSE_IDS.includes(current.licenseId)) {
+      if (
+        current &&
+        current.licenseId &&
+        !current.isMasterAdmin &&
+        !BUILTIN_LICENSE_IDS.includes(current.licenseId)
+      ) {
         const all = this._getAllRaw();
         const found = all.find(l => l.id === current.licenseId);
         if (found) {
@@ -1211,7 +1468,7 @@
       } catch (e) {}
     },
 
-    // ADMIN LICENSE MANAGEMENT (Section 23)
+    // ADMIN LICENSE MANAGEMENT (Section 4)
     listLicensesForAdmin(session) {
       authGuard.requireRole(session, ['ADMIN']);
       return this._getAllRaw().map(l => ({
@@ -1236,6 +1493,7 @@
         code: finalCode,
         name: (name || '').trim() || `${cleanRole} License`,
         role: cleanRole,
+        rank: normalizeRankId(role, cleanRole),
         status: 'ACTIVE',
         createdAt: new Date().toISOString(),
         expiresAt: expiresAt || null,
@@ -1283,7 +1541,10 @@
       const target = all.find(l => l.id === licenseId);
       if (!target) throw new Error('License not found.');
 
-      if (role) target.role = normalizeRole(role);
+      if (role) {
+        target.role = normalizeRole(role);
+        target.rank = normalizeRankId(role, target.role);
+      }
       if (expiresAt !== undefined) target.expiresAt = expiresAt || null;
       this._saveAllRaw(all);
 
@@ -1313,7 +1574,7 @@
   };
 
   // ==========================================
-  // 5. PARTY SERVICE (Section 6, 7, 8 — STRICT SEPARATION FROM AUTH)
+  // 5. PARTY SERVICE (Sections 10, 11, 12, 13 — DATA-DRIVEN RANK PERMISSIONS & LIMITS)
   // ==========================================
   const PARTY_STATUSES = ['WAITING', 'READY', 'STARTING', 'ACTIVE', 'FINISHED', 'CANCELLED'];
 
@@ -1323,7 +1584,8 @@
       if (existing && Array.isArray(existing) && existing.length > 0) {
         existing.forEach(p => {
           if (!p.gameMode) p.gameMode = 'Classic Millionaire (15 Qs)';
-          if (p.description === undefined) p.description = 'Official Minecraft Milyoner tournament lobby.';
+          if (p.description === undefined)
+            p.description = 'Official Minecraft Milyoner tournament lobby.';
         });
         return existing;
       }
@@ -1362,7 +1624,7 @@
           name: 'VIP Diamond Arena',
           organizer: 'DragonSlayer99',
           organizerLicenseId: 'LIC-VIP-01',
-          maxPlayers: 4,
+          maxPlayers: 6,
           gameMode: 'Speed Blitz',
           description: 'Fast-paced Minecraft trivia arena hosted by DragonSlayer99.',
           inviteCode: 'MCM-VIP9',
@@ -1403,11 +1665,10 @@
     listParties(session) {
       authGuard.verifySession(session);
       const all = this._getAllRaw();
-      const effRole = authGuard.getEffectiveRole(session);
-      if (effRole === 'ADMIN' || effRole === 'VIP') {
+      const perms = authGuard.getUserPermissions(session);
+      if (perms.canCreateParty || authGuard.getEffectiveRole(session) === 'ADMIN') {
         return all;
       }
-      // Normal PLAYER sees parties they joined, were invited to, or public WAITING parties
       return all.filter(
         p =>
           p.status === 'WAITING' ||
@@ -1421,14 +1682,27 @@
       return this._getAllRaw().find(p => p.id === partyId) || null;
     },
 
-    // Section 6 & 7: ONLY VIP and ADMIN can create parties
-    createParty(session, { name, maxPlayers = 4, gameMode = 'Classic Millionaire (15 Qs)', description = '' }) {
-      authGuard.requireRole(session, ['ADMIN', 'VIP']);
+    // Section 10, 11 & 13: Enforce data-driven rank permission (canCreateParty) and maxPartySize!
+    createParty(
+      session,
+      { name, maxPlayers = 4, gameMode = 'Classic Millionaire (15 Qs)', description = '' }
+    ) {
+      const perms = authGuard.requirePermission(session, 'canCreateParty');
 
       const cleanName = String(name || '').trim();
       if (!cleanName) throw new Error('Please enter a party name.');
 
-      const maxP = Math.max(2, Math.min(16, Number(maxPlayers) || 4));
+      const requestedMax = Math.max(2, Number(maxPlayers) || 4);
+      const rankMaxAllowed = Number(perms.maxPartySize) || 4;
+      const isAdmin = authGuard.getEffectiveRole(session) === 'ADMIN';
+
+      if (!isAdmin && requestedMax > rankMaxAllowed) {
+        throw new Error(
+          `Party Size Limit: Your current rank (${authGuard.getEffectiveRankId(session)}) allows up to ${rankMaxAllowed} players per party. Upgrade your rank for larger parties!`
+        );
+      }
+
+      const maxP = isAdmin ? Math.min(999, requestedMax) : Math.min(rankMaxAllowed, requestedMax);
       const all = this._getAllRaw();
       const now = new Date().toISOString();
 
@@ -1466,7 +1740,7 @@
       activityService.log(
         'PARTY_CREATED',
         session.username,
-        `${session.username} (${effRole}) created party "${newParty.name}" (${newParty.inviteCode})`,
+        `${session.username} (${authGuard.getEffectiveRankId(session)}) created party "${newParty.name}" (Max ${maxP}, Code: ${newParty.inviteCode})`,
         { partyId: newParty.id }
       );
 
@@ -1477,15 +1751,18 @@
       authGuard.verifySession(session);
       if (!party) throw new Error('Party not found.');
       const effRole = authGuard.getEffectiveRole(session);
+      const perms = authGuard.getUserPermissions(session);
       const isOwner = party.organizer.toLowerCase() === session.username.toLowerCase();
-      if (effRole !== 'ADMIN' && !(effRole === 'VIP' && isOwner)) {
-        throw new Error('Access Denied: Only the VIP party owner or an Admin can manage this party.');
+      if (effRole !== 'ADMIN' && !(perms.canCreateParty && isOwner)) {
+        throw new Error(
+          'Access Denied: Only the party owner or an Admin can manage this party.'
+        );
       }
     },
 
-    // Section 6: ONLY VIP owner and ADMIN can invite players
+    // Section 10 & 11: Enforce canInvitePlayers permission
     invitePlayer(session, partyId, targetUsername = '') {
-      authGuard.requireRole(session, ['ADMIN', 'VIP']);
+      authGuard.requirePermission(session, 'canInvitePlayers');
       const all = this._getAllRaw();
       const party = all.find(p => p.id === partyId);
       this._assertPartyOwnerOrAdmin(session, party);
@@ -1500,7 +1777,9 @@
         if (!party.invitedUsers.some(u => u.toLowerCase() === cleanUser.toLowerCase())) {
           party.invitedUsers.push(cleanUser);
         }
-        if (!party.participants.some(pt => pt.username.toLowerCase() === cleanUser.toLowerCase())) {
+        if (
+          !party.participants.some(pt => pt.username.toLowerCase() === cleanUser.toLowerCase())
+        ) {
           party.participants.push({
             username: cleanUser,
             role: 'PLAYER',
@@ -1526,7 +1805,7 @@
       };
     },
 
-    // Section 1 & 8: Join Party — NEVER resets license, account, VIP, Emeralds, or points!
+    // Section 2 & 12: Join Party — NEVER resets license, account, rank, VIP, Emeralds, or points!
     joinPartyByInviteCode(session, inviteCodeInput) {
       authGuard.verifySession(session);
       const code = String(inviteCodeInput || '').trim().toUpperCase();
@@ -1537,7 +1816,7 @@
         p => p.inviteCode.toUpperCase() === code || p.id.toUpperCase() === code
       );
       if (!party) {
-        throw new Error('No party found with that invite code.');
+        throw new Error('INVALID PARTY CODE: No party found with that invite code.');
       }
 
       if (party.status === 'CANCELLED' || party.status === 'FINISHED') {
@@ -1549,8 +1828,11 @@
       );
 
       const joinedCount = party.participants.filter(pt => pt.joinStatus === 'JOINED').length;
-      if ((!existingParticipant || existingParticipant.joinStatus !== 'JOINED') && joinedCount >= party.maxPlayers) {
-        throw new Error('This party has reached its maximum player capacity.');
+      if (
+        (!existingParticipant || existingParticipant.joinStatus !== 'JOINED') &&
+        joinedCount >= party.maxPlayers
+      ) {
+        throw new Error('PARTY FULL: This party has reached its maximum player capacity.');
       }
 
       const now = new Date().toISOString();
@@ -1584,7 +1866,6 @@
       return party;
     },
 
-    // Leave Party cleanly without touching account/license/economy
     leaveParty(session, partyId) {
       authGuard.verifySession(session);
       const all = this._getAllRaw();
@@ -1599,7 +1880,10 @@
       }
 
       party.participants.splice(idx, 1);
-      if (party.status === 'READY' && party.participants.filter(pt => pt.joinStatus === 'JOINED').length < party.maxPlayers) {
+      if (
+        party.status === 'READY' &&
+        party.participants.filter(pt => pt.joinStatus === 'JOINED').length < party.maxPlayers
+      ) {
         party.status = 'WAITING';
       }
 
@@ -1695,19 +1979,35 @@
   };
 
   // ==========================================
-  // 6. UNIFIED PRIORITY, SUPPORT, BUG REPORT & SUGGESTION SERVICE (Sections 14-17)
+  // 6. UNIFIED 4-TIER PRIORITY, SUPPORT, BUG REPORT & SUGGESTION SERVICE (Sections 21, 22, 23)
   // ==========================================
+  // Priority Order: CRITICAL (4) > VERY HIGH (3) > HIGH (2) > NORMAL (1)
   const PRIORITY_WEIGHT = {
-    CRITICAL: 3,
+    CRITICAL: 4,
+    'VERY HIGH': 3,
     HIGH: 2,
     NORMAL: 1
   };
 
   const supportService = {
-    computeUserPriority(session) {
+    // Automatically computes priority from User's Data-Driven Rank:
+    // PLAYER -> NORMAL | VIP / VIP+ -> HIGH | MVP / MVP+ / ELITE / LEGEND / CHAMPION / MILLIONAIRE -> VERY HIGH | ADMIN -> CRITICAL
+    computeUserPriority(session, kind = 'support') {
       const effRole = authGuard.getEffectiveRole(session);
       if (effRole === 'ADMIN') return 'CRITICAL';
-      if (effRole === 'VIP') return 'HIGH';
+
+      const perms = authGuard.getUserPermissions(session);
+      if (kind === 'bug' && perms.bugPriority) return perms.bugPriority;
+      if (kind === 'suggestion' && perms.suggestionPriority) return perms.suggestionPriority;
+      if (perms.supportPriority) return perms.supportPriority;
+
+      const rankId = authGuard.getEffectiveRankId(session);
+      if (['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(rankId)) {
+        return 'VERY HIGH';
+      }
+      if (['VIP', 'VIP_PLUS'].includes(rankId) || effRole === 'VIP') {
+        return 'HIGH';
+      }
       return 'NORMAL';
     },
 
@@ -1720,7 +2020,7 @@
       });
     },
 
-    // --- A) SUPPORT TICKETS (Section 14) ---
+    // --- A) SUPPORT TICKETS (Section 23) ---
     _ensureSeedTickets() {
       const existing = storageAdapter.get(STORAGE_KEYS.SUPPORT_TICKETS, null);
       if (existing && Array.isArray(existing)) return existing;
@@ -1728,25 +2028,42 @@
       const seeded = [
         {
           id: 'TCK-101',
-          userId: 'USR-1002',
-          username: 'DragonSlayer99',
+          userId: 'USR-1003',
+          username: 'NetherKing_TR',
           role: 'VIP',
+          rank: 'MVP_PLUS',
           isVip: true,
-          category: 'Party Problem',
-          title: 'Custom Tournament Bracket Setup Question',
-          description: 'How can I host a 16-player VIP bracket with custom intermission timers?',
-          priority: 'HIGH',
+          category: 'Party',
+          title: 'MVP+ 10-Player Tournament Room Setup',
+          description: 'How can I lock spectator slots for our MVP+ championship lobby?',
+          priority: 'VERY HIGH',
           status: 'OPEN',
           adminReply: null,
           createdAt: now
         },
         {
           id: 'TCK-102',
+          userId: 'USR-1002',
+          username: 'DragonSlayer99',
+          role: 'VIP',
+          rank: 'VIP_PLUS',
+          isVip: true,
+          category: 'Shop',
+          title: 'VIP+ Bonus Multiplier Question',
+          description: 'Does the Score Booster stack with the VIP+ 1.5x Emerald multiplier?',
+          priority: 'HIGH',
+          status: 'OPEN',
+          adminReply: null,
+          createdAt: now
+        },
+        {
+          id: 'TCK-103',
           userId: 'USR-1006',
           username: 'Steve',
           role: 'PLAYER',
+          rank: 'PLAYER',
           isVip: false,
-          category: 'Account Problem',
+          category: 'Account',
           title: 'How to earn more Emerald Coins?',
           description: 'I want to save up 500 Emeralds for an Extra Life.',
           priority: 'NORMAL',
@@ -1768,16 +2085,18 @@
       }
 
       const effRole = authGuard.getEffectiveRole(session);
-      const isVip = effRole === 'VIP' || effRole === 'ADMIN';
-      const priority = this.computeUserPriority(session);
+      const effRank = authGuard.getEffectiveRankId(session);
+      const isVip = effRole !== 'PLAYER';
+      const priority = this.computeUserPriority(session, 'support');
       const list = this._ensureSeedTickets();
       const ticket = {
         id: 'TCK-' + Math.floor(1000 + Math.random() * 9000),
         userId: session.userId || 'USR-0',
         username: session.username,
         role: effRole,
+        rank: effRank,
         isVip,
-        category: category || 'Technical Problem',
+        category: category || 'Technical',
         title: cleanTitle,
         description: cleanDesc,
         priority,
@@ -1791,7 +2110,7 @@
       activityService.log(
         'SUPPORT_TICKET_CREATED',
         session.username,
-        `${session.username} (${priority} priority) submitted support ticket "${cleanTitle}"`
+        `${session.username} [${effRank} / ${priority}] submitted support ticket "${cleanTitle}"`
       );
       return ticket;
     },
@@ -1823,7 +2142,7 @@
       return t;
     },
 
-    // --- B) BUG REPORTS (Section 15) ---
+    // --- B) BUG REPORTS (Section 21) ---
     _ensureSeedBugs() {
       const existing = storageAdapter.get(STORAGE_KEYS.BUG_REPORTS, null);
       if (existing && Array.isArray(existing)) return existing;
@@ -1834,13 +2153,15 @@
           userId: 'USR-1003',
           username: 'NetherKing_TR',
           role: 'VIP',
+          rank: 'MVP_PLUS',
           isVip: true,
           title: 'Villager Joker Hint Audio Volume on Safari',
-          description: 'Villager sound effect is slightly quieter than the level-up chime on iPad Safari.',
+          description:
+            'Villager sound effect is slightly quieter than the level-up chime on iPad Safari.',
           category: 'Audio / UI',
           attachmentUrl: '',
           relatedParty: 'PRT-1002',
-          priority: 'HIGH',
+          priority: 'VERY HIGH',
           status: 'IN PROGRESS',
           createdAt: now
         }
@@ -1849,7 +2170,10 @@
       return seeded;
     },
 
-    createBugReport(session, { title, description, category, attachmentUrl = '', relatedParty = '' }) {
+    createBugReport(
+      session,
+      { title, description, category, attachmentUrl = '', relatedParty = '' }
+    ) {
       authGuard.verifySession(session);
       const cleanTitle = String(title || '').trim();
       const cleanDesc = String(description || '').trim();
@@ -1858,14 +2182,16 @@
       }
 
       const effRole = authGuard.getEffectiveRole(session);
-      const isVip = effRole === 'VIP' || effRole === 'ADMIN';
-      const priority = this.computeUserPriority(session);
+      const effRank = authGuard.getEffectiveRankId(session);
+      const isVip = effRole !== 'PLAYER';
+      const priority = this.computeUserPriority(session, 'bug');
       const list = this._ensureSeedBugs();
       const bug = {
         id: 'BUG-' + Math.floor(1000 + Math.random() * 9000),
         userId: session.userId || 'USR-0',
         username: session.username,
         role: effRole,
+        rank: effRank,
         isVip,
         title: cleanTitle,
         description: cleanDesc,
@@ -1873,7 +2199,7 @@
         attachmentUrl: String(attachmentUrl || '').trim(),
         relatedParty: String(relatedParty || '').trim(),
         priority,
-        status: 'OPEN', // OPEN | IN PROGRESS | WAITING FOR USER | RESOLVED | CLOSED
+        status: 'OPEN',
         createdAt: new Date().toISOString()
       };
 
@@ -1882,7 +2208,7 @@
       activityService.log(
         'BUG_REPORTED',
         session.username,
-        `${session.username} (${priority} priority) reported bug "${cleanTitle}"`
+        `${session.username} [${effRank} / ${priority}] reported bug "${cleanTitle}"`
       );
       return bug;
     },
@@ -1915,7 +2241,7 @@
       return bug;
     },
 
-    // --- C) SUGGESTIONS (Section 16) ---
+    // --- C) SUGGESTIONS (Section 22) ---
     _ensureSeedSuggestions() {
       const existing = storageAdapter.get(STORAGE_KEYS.SUGGESTIONS, null);
       if (existing && Array.isArray(existing)) return existing;
@@ -1926,12 +2252,14 @@
           userId: 'USR-1002',
           username: 'DragonSlayer99',
           role: 'VIP',
+          rank: 'VIP_PLUS',
           isVip: true,
           title: 'Add Hardcore Redstone Engineering Category Mode',
-          description: 'A dedicated 15-question mode exclusively focused on Redstone circuits and comparators!',
+          description:
+            'A dedicated 15-question mode exclusively focused on Redstone circuits and comparators!',
           category: 'Game Modes',
           priority: 'HIGH',
-          status: 'PLANNED', // REVIEWING | PLANNED | IN DEVELOPMENT | COMPLETED | DECLINED
+          status: 'PLANNED',
           votes: 14,
           votedBy: ['DragonSlayer99', 'Mashallah', 'NetherKing_TR'],
           createdAt: now
@@ -1941,6 +2269,7 @@
           userId: 'USR-1005',
           username: 'DiamondHunter',
           role: 'PLAYER',
+          rank: 'PLAYER',
           isVip: false,
           title: 'Netherite Frame Avatar Border in Shop',
           description: 'Allow spending Emeralds on custom profile borders.',
@@ -1965,14 +2294,16 @@
       }
 
       const effRole = authGuard.getEffectiveRole(session);
-      const isVip = effRole === 'VIP' || effRole === 'ADMIN';
-      const priority = this.computeUserPriority(session);
+      const effRank = authGuard.getEffectiveRankId(session);
+      const isVip = effRole !== 'PLAYER';
+      const priority = this.computeUserPriority(session, 'suggestion');
       const list = this._ensureSeedSuggestions();
       const sug = {
         id: 'SUG-' + Math.floor(1000 + Math.random() * 9000),
         userId: session.userId || 'USR-0',
         username: session.username,
         role: effRole,
+        rank: effRank,
         isVip,
         title: cleanTitle,
         description: cleanDesc,
@@ -1989,7 +2320,7 @@
       activityService.log(
         'SUGGESTION_CREATED',
         session.username,
-        `${session.username} (${priority} priority) submitted suggestion "${cleanTitle}"`
+        `${session.username} [${effRank} / ${priority}] submitted suggestion "${cleanTitle}"`
       );
       return sug;
     },
@@ -2046,64 +2377,547 @@
   };
 
   // ==========================================
-  // 7. CLEAN PAYMENT ABSTRACTION (Section 9 — NEVER FAKES PAYMENT)
+  // 7. STRIPE PAYMENT & EMERALD PACKAGE ARCHITECTURE (Sections 14, 15, 16, 17, 28)
   // ==========================================
+  // Currency Rule: 5 Emeralds = 1 TL -> 500 Emeralds = 100 TL (Minimum Purchase: 500 Emeralds)
+  const DEFAULT_EMERALD_PACKAGES = [
+    {
+      id: 'PKG-EMERALD-500',
+      name: '500 Emeralds Starter Pack',
+      emeralds: 500,
+      priceTL: 100,
+      currency: 'TRY',
+      icon: '💚',
+      badge: 'STARTER',
+      enabled: true
+    },
+    {
+      id: 'PKG-EMERALD-1000',
+      name: '1,000 Emeralds Miner Pack',
+      emeralds: 1000,
+      priceTL: 200,
+      currency: 'TRY',
+      icon: '🟩',
+      badge: 'POPULAR',
+      enabled: true
+    },
+    {
+      id: 'PKG-EMERALD-2500',
+      name: '2,500 Emeralds Redstone Chest',
+      emeralds: 2500,
+      priceTL: 500,
+      currency: 'TRY',
+      icon: '💎',
+      badge: 'VALUE',
+      enabled: true
+    },
+    {
+      id: 'PKG-EMERALD-5000',
+      name: '5,000 Emeralds Netherite Vault',
+      emeralds: 5000,
+      priceTL: 1000,
+      currency: 'TRY',
+      icon: '👑',
+      badge: 'PRO',
+      enabled: true
+    },
+    {
+      id: 'PKG-EMERALD-10000',
+      name: '10,000 Emeralds Millionaire Treasury',
+      emeralds: 10000,
+      priceTL: 2000,
+      currency: 'TRY',
+      icon: '🏆',
+      badge: 'ULTIMATE',
+      enabled: true
+    }
+  ];
+
   const paymentService = {
-    providerConfigured: false,
-    providerName: 'External Payment Gateway (Stripe / iyzico Rest Adapter)',
+    conversionRateEmeraldsPerTL: 5, // 5 Emeralds = 1 TL
+    minEmeraldPurchase: 500, // Minimum 500 Emeralds (100 TL)
+    backendEndpoint: '/api/v1/stripe/create-checkout-session',
+    webhookEndpoint: '/api/v1/stripe/webhook',
 
-    initiateCheckout(session, { packageId = 'VIP_MEMBERSHIP_200TL', title = '👑 VIP Membership', priceTL = 200 }) {
-      authGuard.verifySession(session);
-      const intents = storageAdapter.get(STORAGE_KEYS.PAYMENTS, []);
-      const intent = {
-        id: 'PAY-' + Date.now().toString(36).toUpperCase(),
-        userId: session.userId || 'USR-0',
-        username: session.username,
-        packageId,
-        title,
-        amount: priceTL,
-        currency: 'TRY',
-        status: this.providerConfigured ? 'REDIRECTING_TO_PROVIDER' : 'GATEWAY_PENDING_BACKEND',
-        createdAt: new Date().toISOString()
-      };
-      intents.unshift(intent);
-      storageAdapter.set(STORAGE_KEYS.PAYMENTS, intents);
+    _ensurePackages() {
+      const existing = storageAdapter.get(STORAGE_KEYS.EMERALD_PACKAGES, null);
+      if (existing && Array.isArray(existing) && existing.length > 0) return existing;
+      storageAdapter.set(STORAGE_KEYS.EMERALD_PACKAGES, DEFAULT_EMERALD_PACKAGES);
+      return DEFAULT_EMERALD_PACKAGES;
+    },
 
+    listEmeraldPackages(includeDisabled = false) {
+      const all = this._ensurePackages().map(p => ({ ...p }));
+      return includeDisabled ? all : all.filter(p => p.enabled !== false);
+    },
+
+    adminSaveEmeraldPackage(session, pkgData) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const emeralds = Math.round(Number(pkgData.emeralds) || 0);
+      if (emeralds < this.minEmeraldPurchase) {
+        throw new Error(
+          `Minimum Emerald package size is ${this.minEmeraldPurchase} Emeralds (100 TL).`
+        );
+      }
+      const priceTL =
+        pkgData.priceTL !== undefined
+          ? Math.max(1, Math.round(Number(pkgData.priceTL)))
+          : Math.round(emeralds / this.conversionRateEmeraldsPerTL);
+
+      const list = this._ensurePackages();
+      const existing = list.find(p => p.id === pkgData.id);
+      if (existing) {
+        existing.name = String(pkgData.name || existing.name).trim();
+        existing.emeralds = emeralds;
+        existing.priceTL = priceTL;
+        existing.icon = String(pkgData.icon || existing.icon || '💚').trim();
+        existing.badge = String(pkgData.badge || existing.badge || 'PACK').trim();
+        if (pkgData.enabled !== undefined) existing.enabled = Boolean(pkgData.enabled);
+      } else {
+        list.push({
+          id: pkgData.id || 'PKG-EMERALD-' + emeralds + '-' + Date.now().toString(36).toUpperCase(),
+          name: String(pkgData.name || `${emeralds.toLocaleString('en-US')} Emeralds`).trim(),
+          emeralds,
+          priceTL,
+          currency: 'TRY',
+          icon: String(pkgData.icon || '💚').trim(),
+          badge: String(pkgData.badge || 'CUSTOM').trim(),
+          enabled: pkgData.enabled !== false
+        });
+      }
+      storageAdapter.set(STORAGE_KEYS.EMERALD_PACKAGES, list);
       activityService.log(
-        'PAYMENT_INTENT',
+        'EMERALD_PACKAGE_SAVED',
         session.username,
-        `${session.username} initiated checkout for ${title} (${priceTL} TL) — Status: ${intent.status}`
+        `Admin ${session.username} saved Emerald package (${emeralds} 💚 = ${priceTL} TL)`
+      );
+      return list;
+    },
+
+    _getProcessedWebhookEvents() {
+      return storageAdapter.get(STORAGE_KEYS.WEBHOOK_EVENTS, []);
+    },
+
+    _saveProcessedWebhookEvents(list) {
+      storageAdapter.set(STORAGE_KEYS.WEBHOOK_EVENTS, list);
+    },
+
+    _ensureSeedPayments() {
+      const existing = storageAdapter.get(STORAGE_KEYS.PAYMENTS, null);
+      if (existing && Array.isArray(existing)) return existing;
+      const now = new Date().toISOString();
+      const seeded = [
+        {
+          id: 'PAY-1001',
+          userId: 'USR-1002',
+          username: 'DragonSlayer99',
+          productType: 'RANK',
+          packageId: 'RANK-VIP-PLUS',
+          product: '👑 VIP+ Rank',
+          title: '👑 VIP+ Rank',
+          emeraldsGranted: 0,
+          rankGranted: 'VIP_PLUS',
+          amount: 350,
+          currency: 'TRY',
+          stripeSessionId: 'cs_test_a1b2c3d4e5',
+          stripePaymentId: 'pi_test_9988776655',
+          webhookEventId: 'evt_test_seed_1001',
+          status: 'PAID',
+          createdAt: now,
+          paidAt: now
+        },
+        {
+          id: 'PAY-1002',
+          userId: 'USR-1003',
+          username: 'NetherKing_TR',
+          productType: 'EMERALD_PACKAGE',
+          packageId: 'PKG-EMERALD-1000',
+          product: '1,000 Emeralds Miner Pack',
+          title: '1,000 Emeralds Miner Pack',
+          emeraldsGranted: 1000,
+          rankGranted: null,
+          amount: 200,
+          currency: 'TRY',
+          stripeSessionId: 'cs_test_f6g7h8i9j0',
+          stripePaymentId: 'pi_test_1122334455',
+          webhookEventId: 'evt_test_seed_1002',
+          status: 'PAID',
+          createdAt: now,
+          paidAt: now
+        }
+      ];
+      storageAdapter.set(STORAGE_KEYS.PAYMENTS, seeded);
+      return seeded;
+    },
+
+    // Step 1 & 2 of Stripe Flow: Create Checkout Session (Status = PENDING; NEVER grants Emeralds yet!)
+    createCheckoutSession(
+      session,
+      {
+        productType = 'EMERALD_PACKAGE',
+        packageId = 'PKG-EMERALD-500',
+        title = '500 Emeralds',
+        emeraldsGranted = 0,
+        rankGranted = null,
+        priceTL = 100,
+        currency = 'TRY'
+      }
+    ) {
+      authGuard.verifySession(session);
+
+      const cleanEmeralds = Math.round(Number(emeraldsGranted) || 0);
+      if (productType === 'EMERALD_PACKAGE' && cleanEmeralds < this.minEmeraldPurchase) {
+        throw new Error(
+          `Minimum Emerald purchase is ${this.minEmeraldPurchase} Emeralds (100 TL). Purchases below 500 Emeralds are not allowed.`
+        );
+      }
+
+      const cleanAmount = Math.max(1, Math.round(Number(priceTL) || 100));
+      const payments = this._ensureSeedPayments();
+      const paymentId =
+        'PAY-' +
+        Date.now().toString(36).toUpperCase() +
+        '-' +
+        Math.random().toString(36).slice(2, 5).toUpperCase();
+      const stripeSessionId =
+        'cs_test_' +
+        Date.now().toString(36) +
+        Math.random().toString(36).slice(2, 10);
+
+      // Compute cryptographic webhook verification token so client cannot spoof `payment = success`
+      const webhookVerificationToken = computeSaltedDigest(
+        `STRIPE_WH::${paymentId}::${stripeSessionId}::${session.username}::${cleanEmeralds}::${rankGranted || ''}`
       );
 
-      // Do NOT fake payment success! Return honest gateway status.
+      const record = {
+        id: paymentId,
+        userId: session.userId || 'USR-0',
+        username: session.username,
+        productType,
+        packageId,
+        product: title,
+        title,
+        emeraldsGranted: cleanEmeralds,
+        rankGranted: rankGranted || null,
+        amount: cleanAmount,
+        currency: currency || 'TRY',
+        stripeSessionId,
+        stripePaymentId: null,
+        webhookEventId: null,
+        webhookVerificationToken,
+        status: 'PENDING', // PENDING | PAID | FAILED | REFUNDED
+        createdAt: new Date().toISOString(),
+        paidAt: null
+      };
+
+      payments.unshift(record);
+      storageAdapter.set(STORAGE_KEYS.PAYMENTS, payments);
+
+      activityService.log(
+        'STRIPE_CHECKOUT_CREATED',
+        session.username,
+        `${session.username} opened Stripe Checkout Session (${stripeSessionId}) for "${title}" (${cleanAmount} ${record.currency}) — Status: PENDING`
+      );
+
       return {
-        ok: false,
-        paymentCompleted: false,
-        providerConfigured: this.providerConfigured,
-        intent,
-        message:
-          'Live payment gateway is not connected in this static frontend deployment. No card data is collected or stored. To activate VIP right now, redeem a VIP License Code, purchase VIP Rank with Emerald Coins in the Rank Shop, or request an Admin VIP grant.'
+        ok: true,
+        paymentCompleted: false, // Never true until verified webhook!
+        checkoutSession: {
+          paymentId: record.id,
+          stripeSessionId: record.stripeSessionId,
+          productType: record.productType,
+          title: record.title,
+          emeraldsGranted: record.emeraldsGranted,
+          rankGranted: record.rankGranted,
+          amount: record.amount,
+          currency: record.currency,
+          status: record.status,
+          webhookVerificationToken
+        }
       };
     },
 
-    listPaymentIntents(session) {
+    // Backward-compatible alias that opens a PENDING checkout session (never fakes instant completion)
+    initiateCheckout(
+      session,
+      {
+        packageId = 'VIP_MEMBERSHIP_200TL',
+        title = '👑 VIP Membership',
+        priceTL = 200,
+        productType = 'RANK',
+        emeraldsGranted = 0,
+        rankGranted = 'VIP'
+      }
+    ) {
+      const res = this.createCheckoutSession(session, {
+        productType,
+        packageId,
+        title,
+        emeraldsGranted,
+        rankGranted,
+        priceTL,
+        currency: 'TRY'
+      });
+      return {
+        ok: false,
+        paymentCompleted: false,
+        providerConfigured: false,
+        intent: res.checkoutSession,
+        checkoutSession: res.checkoutSession,
+        message:
+          'Stripe Checkout Session created (Status: PENDING). Currency or Rank is only granted after a verified Stripe Webhook event (checkout.session.completed).'
+      };
+    },
+
+    // Rejects any direct client attempt to mark payment=success without a signed webhook event
+    verifyClientPaymentRedirect() {
+      throw new Error(
+        'Security Policy: Client-side payment=success flags are never trusted. Waiting for verified Stripe webhook event.'
+      );
+    },
+
+    // Step 3-8 of Stripe Flow: Process Verified Stripe Webhook Event with Strict Idempotency!
+    processStripeWebhook({
+      eventId,
+      eventType = 'checkout.session.completed',
+      stripeSessionId,
+      stripePaymentId = null,
+      webhookSignature = null
+    }) {
+      if (!eventId || !stripeSessionId) {
+        throw new Error('Invalid Stripe webhook payload: missing eventId or stripeSessionId.');
+      }
+
+      // 1. Strict Idempotency Check: Never grant currency twice if Stripe retries a webhook!
+      const processedEvents = this._getProcessedWebhookEvents();
+      if (processedEvents.includes(eventId)) {
+        throw new Error(`Duplicate Stripe webhook event "${eventId}" rejected (Idempotency Check).`);
+      }
+
+      const payments = this._ensureSeedPayments();
+      const payment = payments.find(
+        p => p.stripeSessionId === stripeSessionId || p.id === stripeSessionId
+      );
+      if (!payment) {
+        throw new Error(`Stripe Checkout Session "${stripeSessionId}" not found.`);
+      }
+
+      if (payment.status === 'PAID') {
+        processedEvents.push(eventId);
+        this._saveProcessedWebhookEvents(processedEvents);
+        throw new Error(`Payment "${payment.id}" was already fulfilled (Idempotency Protection).`);
+      }
+
+      // Verify cryptographic token if present on record
+      if (payment.webhookVerificationToken && webhookSignature) {
+        if (webhookSignature !== payment.webhookVerificationToken) {
+          throw new Error('Stripe Webhook Signature verification failed.');
+        }
+      }
+
+      // Record eventId in idempotency store before mutating balances
+      processedEvents.push(eventId);
+      this._saveProcessedWebhookEvents(processedEvents);
+
+      if (eventType === 'checkout.session.payment_failed') {
+        payment.status = 'FAILED';
+        payment.webhookEventId = eventId;
+        storageAdapter.set(STORAGE_KEYS.PAYMENTS, payments);
+        activityService.log(
+          'STRIPE_PAYMENT_FAILED',
+          payment.username,
+          `Stripe webhook reported FAILED payment for ${payment.username} (${payment.title})`
+        );
+        return { ok: false, status: 'FAILED', payment };
+      }
+
+      if (eventType !== 'checkout.session.completed') {
+        throw new Error(`Unsupported Stripe webhook event type: ${eventType}`);
+      }
+
+      // Mark payment PAID
+      payment.status = 'PAID';
+      payment.webhookEventId = eventId;
+      payment.stripePaymentId =
+        stripePaymentId ||
+        'pi_test_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      payment.paidAt = new Date().toISOString();
+      storageAdapter.set(STORAGE_KEYS.PAYMENTS, payments);
+
+      let updatedProfile = null;
+      let transaction = null;
+
+      // Grant Emeralds if Emerald Package
+      if (payment.emeraldsGranted > 0 && window.MCMServices && window.MCMServices.economyService) {
+        const econRes = window.MCMServices.economyService._creditVerifiedStripePurchase({
+          username: payment.username,
+          emeralds: payment.emeraldsGranted,
+          paymentId: payment.id,
+          stripePaymentId: payment.stripePaymentId,
+          productTitle: payment.title
+        });
+        updatedProfile = econRes.profile;
+        transaction = econRes.transaction;
+      }
+
+      // Grant Rank if Rank Purchase
+      if (payment.rankGranted) {
+        userService._grantRankInternal(payment.username, payment.rankGranted, null);
+        if (window.MCMServices && window.MCMServices.economyService) {
+          updatedProfile = window.MCMServices.economyService.getPlayerEconomyProfile(
+            payment.username
+          );
+        }
+      }
+
+      // Record purchase ID on user account
+      const rawUsers = userService._getAllRaw();
+      const u = rawUsers.find(
+        x => x.minecraftUsername.toLowerCase() === payment.username.toLowerCase()
+      );
+      if (u) {
+        u.purchases = Array.isArray(u.purchases) ? u.purchases : [];
+        u.purchases.unshift({
+          paymentId: payment.id,
+          packageId: payment.packageId,
+          title: payment.title,
+          amount: payment.amount,
+          currency: payment.currency,
+          stripePaymentId: payment.stripePaymentId,
+          purchasedAt: payment.paidAt
+        });
+        userService._saveAllRaw(rawUsers);
+      }
+
+      // Refresh active session if the logged-in user is the buyer
+      const activeSess = licenseService.getActiveSession();
+      if (activeSess && activeSess.username.toLowerCase() === payment.username.toLowerCase()) {
+        licenseService.refreshSessionRole(activeSess);
+      }
+
+      activityService.log(
+        'STRIPE_WEBHOOK_VERIFIED',
+        payment.username,
+        `Verified Stripe Webhook (${eventId}): Granted "${payment.title}" to ${payment.username} (${payment.amount} ${payment.currency})`
+      );
+
+      return {
+        ok: true,
+        status: 'PAID',
+        payment,
+        emeraldsGranted: payment.emeraldsGranted,
+        rankGranted: payment.rankGranted,
+        profile: updatedProfile,
+        transaction
+      };
+    },
+
+    // Helper for Stripe Sandbox Modal in Test Mode: Generates a signed test webhook & processes it
+    completeTestModeCheckout(session, stripeSessionId, outcome = 'SUCCESS') {
+      authGuard.verifySession(session);
+      const payments = this._ensureSeedPayments();
+      const payment = payments.find(
+        p => p.stripeSessionId === stripeSessionId || p.id === stripeSessionId
+      );
+      if (!payment) throw new Error('Checkout session not found.');
+
+      const eventId =
+        'evt_test_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+      const eventType =
+        outcome === 'FAILED'
+          ? 'checkout.session.payment_failed'
+          : 'checkout.session.completed';
+
+      return this.processStripeWebhook({
+        eventId,
+        eventType,
+        stripeSessionId: payment.stripeSessionId,
+        webhookSignature: payment.webhookVerificationToken
+      });
+    },
+
+    // Section 27 & 28: Admin Refund Purchase
+    adminRefundPayment(session, paymentId) {
       authGuard.requireRole(session, ['ADMIN']);
-      return storageAdapter.get(STORAGE_KEYS.PAYMENTS, []);
+      const payments = this._ensureSeedPayments();
+      const payment = payments.find(p => p.id === paymentId);
+      if (!payment) throw new Error('Payment record not found.');
+      if (payment.status !== 'PAID') {
+        throw new Error(`Only PAID payments can be refunded (Current status: ${payment.status}).`);
+      }
+
+      payment.status = 'REFUNDED';
+      payment.refundedAt = new Date().toISOString();
+      payment.refundedBy = session.username;
+      storageAdapter.set(STORAGE_KEYS.PAYMENTS, payments);
+
+      if (payment.emeraldsGranted > 0 && window.MCMServices && window.MCMServices.economyService) {
+        window.MCMServices.economyService.adminModifyBalance(
+          session,
+          payment.username,
+          'REMOVE',
+          payment.emeraldsGranted,
+          `Stripe Refund (${payment.id} / ${payment.stripePaymentId})`
+        );
+      }
+
+      if (payment.rankGranted) {
+        userService._grantRankInternal(payment.username, 'PLAYER', null);
+      }
+
+      activityService.log(
+        'PAYMENT_REFUNDED',
+        session.username,
+        `Admin ${session.username} refunded payment ${payment.id} (${payment.title}) for ${payment.username}`
+      );
+
+      return payment;
+    },
+
+    listPayments(session, onlyMine = false) {
+      authGuard.verifySession(session);
+      const all = this._ensureSeedPayments();
+      const effRole = authGuard.getEffectiveRole(session);
+      if (effRole === 'ADMIN' && !onlyMine) {
+        return all;
+      }
+      return all.filter(p => p.username.toLowerCase() === session.username.toLowerCase());
+    },
+
+    listPaymentIntents(session) {
+      return this.listPayments(session, false);
+    },
+
+    getRevenueMetrics() {
+      const all = this._ensureSeedPayments();
+      const paid = all.filter(p => p.status === 'PAID');
+      const totalRevenueTL = paid.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const totalEmeraldsSold = paid.reduce(
+        (sum, p) => sum + (Number(p.emeraldsGranted) || 0),
+        0
+      );
+      return {
+        totalPayments: all.length,
+        paidCount: paid.length,
+        totalRevenueTL,
+        totalEmeraldsSold
+      };
     }
   };
 
   // ==========================================
-  // 8. VERSIONED BACKUP SYSTEM (Section 4)
+  // 8. VERSIONED BACKUP SYSTEM (Section 29: includes backup/payments/ + Download Backup)
   // ==========================================
   const backupService = {
     _buildStructuredSnapshot(label = 'Manual Snapshot') {
-      // Never include plaintext passwords; strip passwordHash from backup export or keep only irreversible hash tag
+      // Never include plaintext passwords; userService.getAllUsers() strips passwordHash
       const safeUsers = userService.getAllUsers();
       const parties = partyService._getAllRaw();
       const licenses = licenseService._getAllRaw().map(l => ({
         id: l.id,
         name: l.name,
         role: normalizeRole(l.role),
+        rank: l.rank || l.role,
         status: l.status,
         createdAt: l.createdAt,
         expiresAt: l.expiresAt,
@@ -2113,6 +2927,11 @@
         window.MCMServices && window.MCMServices.economyService
           ? window.MCMServices.economyService._getAllRawTransactions()
           : [];
+      const payments = paymentService._ensureSeedPayments().map(p => {
+        const copy = { ...p };
+        delete copy.webhookVerificationToken;
+        return copy;
+      });
       const settings =
         window.MCMServices && window.MCMServices.configService
           ? window.MCMServices.configService.getConfig()
@@ -2132,13 +2951,15 @@
           'backup/parties/': parties,
           'backup/licenses/': licenses,
           'backup/transactions/': transactions,
+          'backup/payments/': payments,
           'backup/settings/': settings
         },
         counts: {
           users: safeUsers.length,
           parties: parties.length,
           licenses: licenses.length,
-          transactions: transactions.length
+          transactions: transactions.length,
+          payments: payments.length
         }
       };
     },
@@ -2146,6 +2967,14 @@
     _ensureInitialBackup() {
       const existing = storageAdapter.get(STORAGE_KEYS.BACKUPS, null);
       if (existing && Array.isArray(existing) && existing.length > 0) {
+        existing.forEach(b => {
+          if (b.paths && !b.paths['backup/payments/']) {
+            b.paths['backup/payments/'] = [];
+          }
+          if (b.counts && b.counts.payments === undefined) {
+            b.counts.payments = (b.paths?.['backup/payments/'] || []).length;
+          }
+        });
         return existing;
       }
       const initial = [this._buildStructuredSnapshot('Initial System Architecture Backup')];
@@ -2174,6 +3003,18 @@
       return snap;
     },
 
+    exportBackupJson(session, backupId) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const list = this._ensureInitialBackup();
+      const target = backupId ? list.find(b => b.id === backupId) : list[0];
+      if (!target) throw new Error('Backup snapshot not found.');
+      return {
+        filename: `minecraft-milyoner-${target.id.toLowerCase()}.json`,
+        json: JSON.stringify(target, null, 2),
+        backup: target
+      };
+    },
+
     restoreBackup(session, backupId) {
       authGuard.requireRole(session, ['ADMIN']);
       const list = this._ensureInitialBackup();
@@ -2184,10 +3025,11 @@
         partyService._saveAllRaw(target.paths['backup/parties/']);
       }
       if (Array.isArray(target.paths['backup/users/'])) {
-        // Preserve existing passwordHashes when restoring users
         const currentRaw = userService._getAllRaw();
         const restoredUsers = target.paths['backup/users/'].map(u => {
-          const prev = currentRaw.find(x => x.id === u.id || x.minecraftUsername === u.minecraftUsername);
+          const prev = currentRaw.find(
+            x => x.id === u.id || x.minecraftUsername === u.minecraftUsername
+          );
           return {
             ...u,
             passwordHash: prev ? prev.passwordHash : null
@@ -2217,12 +3059,48 @@
 
       const now = new Date().toISOString();
       const initial = [
-        { username: 'Mashallah', role: 'ADMIN', licenseId: 'MASTER-ADMIN-ROOT', lastSeenAt: now, status: 'ONLINE' },
-        { username: 'DragonSlayer99', role: 'VIP', licenseId: 'LIC-VIP-01', lastSeenAt: now, status: 'ONLINE' },
-        { username: 'NetherKing_TR', role: 'VIP', licenseId: 'LIC-VIP-02', lastSeenAt: now, status: 'ONLINE' },
-        { username: 'OrganizerAlex', role: 'VIP', licenseId: 'LIC-ORG-01', lastSeenAt: now, status: 'ONLINE' },
-        { username: 'DiamondHunter', role: 'PLAYER', licenseId: 'LIC-PLY-02', lastSeenAt: now, status: 'ONLINE' },
-        { username: 'Steve', role: 'PLAYER', licenseId: 'LIC-PLY-01', lastSeenAt: now, status: 'ONLINE' }
+        {
+          username: 'Mashallah',
+          role: 'ADMIN',
+          licenseId: 'MASTER-ADMIN-ROOT',
+          lastSeenAt: now,
+          status: 'ONLINE'
+        },
+        {
+          username: 'DragonSlayer99',
+          role: 'VIP',
+          licenseId: 'LIC-VIP-01',
+          lastSeenAt: now,
+          status: 'ONLINE'
+        },
+        {
+          username: 'NetherKing_TR',
+          role: 'VIP',
+          licenseId: 'LIC-VIP-02',
+          lastSeenAt: now,
+          status: 'ONLINE'
+        },
+        {
+          username: 'OrganizerAlex',
+          role: 'VIP',
+          licenseId: 'LIC-ORG-01',
+          lastSeenAt: now,
+          status: 'ONLINE'
+        },
+        {
+          username: 'DiamondHunter',
+          role: 'PLAYER',
+          licenseId: 'LIC-PLY-02',
+          lastSeenAt: now,
+          status: 'ONLINE'
+        },
+        {
+          username: 'Steve',
+          role: 'PLAYER',
+          licenseId: 'LIC-PLY-01',
+          lastSeenAt: now,
+          status: 'ONLINE'
+        }
       ];
       storageAdapter.set(STORAGE_KEYS.PLAYERS, initial);
       return initial;
@@ -2232,7 +3110,9 @@
       const all = this.getAllPlayers();
       const now = new Date().toISOString();
       const normRole = normalizeRole(role);
-      const existing = all.find(p => p.username.toLowerCase() === String(username).toLowerCase());
+      const existing = all.find(
+        p => p.username.toLowerCase() === String(username).toLowerCase()
+      );
       if (existing) {
         existing.role = normRole;
         existing.licenseId = licenseId;

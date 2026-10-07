@@ -758,10 +758,11 @@
                 <th>Rank</th>
                 <th>Minecraft Username</th>
                 <th>Rank Badge</th>
-                <th>⭐ Total Points</th>
-                <th>💚 Emerald Balance</th>
-                <th>🎮 Games Played</th>
+                <th>⭐ Points</th>
+                <th>💚 Emeralds</th>
                 <th>🏆 Wins</th>
+                <th>🎮 Games</th>
+                <th>📈 Win Rate</th>
                 <th>❤️ Extra Lives Used</th>
               </tr>
             </thead>
@@ -772,14 +773,14 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 7: EMERALD SHOP, RANK SHOP & COSMETICS (SECTIONS 11, 12, 13, 33)
+         SCREEN 7: EMERALD SHOP, RANK SHOP & COSMETICS (SECTIONS 14, 15, 18, 33)
          ========================================== -->
     <section id="screen-shop" class="screen" aria-label="Emerald Shop">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
             <h2 class="hub-page-title">💚 Emerald Shop</h2>
-            <p class="hub-page-sub">Spend your <strong>Emerald Coins</strong> on Gameplay items, Ranks, RGB Cosmetics, VIP bundles &amp; Special boosters!</p>
+            <p class="hub-page-sub">Buy <strong>💚 Emeralds</strong> (5 💚 = 1 TL, Min 500 💚) via Stripe or spend Emeralds on Gameplay, Ranks, Cosmetics &amp; Special items!</p>
           </div>
           <div class="shop-balance-banner">
             <div class="shop-wallet-box">
@@ -795,9 +796,10 @@
           </div>
         </div>
 
-        <!-- Shop Category Tabs (Section 11 & 33) -->
+        <!-- Shop Category Tabs (Section 18 & 33) -->
         <div class="shop-category-tabs" role="group" aria-label="Shop Categories">
           <button type="button" class="shop-cat-btn active" data-shop-cat="ALL">💚 All Items</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Emeralds">💚 Emeralds (TL)</button>
           <button type="button" class="shop-cat-btn" data-shop-cat="Gameplay">❤️ Gameplay</button>
           <button type="button" class="shop-cat-btn" data-shop-cat="Ranks">👑 Ranks</button>
           <button type="button" class="shop-cat-btn" data-shop-cat="Cosmetics">🎨 Cosmetics</button>
@@ -1281,11 +1283,11 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 12: ADMIN PANEL — 100% ENGLISH ONLY (SECTIONS 18-25)
-         Sidebar with 16 dedicated pages:
-         Dashboard, Users, Licenses, Parties, Leaderboard, Economy,
-         Shop, VIP, Support, Bug Reports, Suggestions, Transactions,
-         Achievements, Backups, Activity Logs, Settings
+         SCREEN 12: ADMIN PANEL — 100% ENGLISH ONLY (SECTIONS 31-37)
+         Sidebar with 18 dedicated pages:
+         Dashboard, Users, Ranks, Licenses, Parties, Leaderboard, Economy,
+         Emerald Shop, Rank Shop, Payments, Support, Bug Reports, Suggestions,
+         Transactions, Achievements, Backups, Activity Logs, Settings
          ========================================== -->
     <section id="screen-admin" class="screen" aria-label="Admin Panel">
       <div class="admin-shell mc-panel">
@@ -1314,13 +1316,16 @@
         </div>
 
         <div class="admin-body">
-          <!-- Admin Sidebar Navigation (16 English Sections) -->
-          <aside class="admin-sidebar mc-panel-inset" aria-label="Admin Navigation">
+          <!-- Admin Sidebar Navigation (18 English Sections) -->
+          <aside class="admin-sidebar mc-panel-inset" aria-label="Admin Navigation" id="admin-sidebar-nav">
             <button type="button" class="admin-nav-btn active" data-admin-tab="dashboard">
               <span>📊</span> <span>Dashboard</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="users">
               <span>👥</span> <span>Users</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="ranks">
+              <span>🎖️</span> <span>Ranks</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="licenses">
               <span>🔑</span> <span>Licenses</span>
@@ -1335,10 +1340,13 @@
               <span>💚</span> <span>Economy</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="shop">
-              <span>🛒</span> <span>Shop</span>
+              <span>🛒</span> <span>Emerald Shop</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="vip">
-              <span>👑</span> <span>VIP</span>
+              <span>👑</span> <span>Rank Shop</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="payments">
+              <span>💳</span> <span>Payments</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="support">
               <span>🎧</span> <span>Support</span>
@@ -1350,10 +1358,10 @@
               <span>💡</span> <span>Suggestions</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="transactions">
-              <span>💳</span> <span>Transactions</span>
+              <span>📒</span> <span>Transactions</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="achievements">
-              <span>🎖️</span> <span>Achievements</span>
+              <span>🏅</span> <span>Achievements</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="backups">
               <span>💾</span> <span>Backups</span>
@@ -1369,7 +1377,7 @@
           <!-- Admin Content Views (100% English) -->
           <div class="admin-content">
 
-            <!-- 1. DASHBOARD (Section 20: 10 Cards) -->
+            <!-- 1. DASHBOARD (Section 32: 12 Cards) -->
             <div id="admin-tab-dashboard" class="admin-tab-pane active">
               <div class="admin-section-header">
                 <h3>📊 Admin Dashboard Overview</h3>
@@ -1382,12 +1390,16 @@
                   <strong class="m-value" id="adm-card-total-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Active Users</span>
+                  <span class="m-label">Online Users</span>
                   <strong class="m-value emerald-text" id="adm-card-active-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
                   <span class="m-label">VIP Users</span>
                   <strong class="m-value gold-text" id="adm-card-vip-users">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">MVP Users</span>
+                  <strong class="m-value diamond-text" id="adm-card-mvp-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
                   <span class="m-label">Active Parties</span>
@@ -1402,8 +1414,12 @@
                   <strong class="m-value emerald-text" id="adm-card-total-emeralds">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Total Transactions</span>
-                  <strong class="m-value" id="adm-card-total-tx">0</strong>
+                  <span class="m-label">Emeralds Sold</span>
+                  <strong class="m-value emerald-text" id="adm-card-emeralds-sold">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Revenue</span>
+                  <strong class="m-value gold-text" id="adm-card-revenue">0 TL</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
                   <span class="m-label">Open Tickets</span>
@@ -1433,26 +1449,34 @@
                 <div class="mc-panel-inset dash-box">
                   <h4>🛡️ Platform Security &amp; Architecture Status</h4>
                   <ul class="sys-status-list">
-                    <li><span>Role-Based Access Control (ADMIN / VIP / PLAYER):</span> <strong class="emerald-text">ACTIVE</strong></li>
+                    <li><span>Data-Driven Rank Hierarchy (PLAYER → MILLIONAIRE / ADMIN):</span> <strong class="emerald-text">ACTIVE</strong></li>
+                    <li><span>Stripe Webhook Verification &amp; Idempotency:</span> <strong class="emerald-text">ENFORCED</strong></li>
                     <li><span>License Signature Verification:</span> <strong class="emerald-text">SHA-256 VERIFIED</strong></li>
                     <li><span>Password Storage Policy:</span> <strong class="emerald-text">SALTED HASH ONLY</strong></li>
                     <li><span>Extra Life Revive Engine:</span> <strong class="emerald-text" id="adm-status-extralife">ENABLED</strong></li>
-                    <li><span>VIP Priority Queue Sorting:</span> <strong class="gold-text">HIGH PRIORITY FIRST</strong></li>
+                    <li><span>Support Queue Sorting:</span> <strong class="gold-text">CRITICAL / VERY HIGH / HIGH / NORMAL</strong></li>
                   </ul>
                 </div>
               </div>
             </div>
 
-            <!-- 2. USERS (Section 21) -->
+            <!-- 2. USERS (Section 33) -->
             <div id="admin-tab-users" class="admin-tab-pane">
               <div class="admin-section-header">
                 <h3>👥 Users Management</h3>
               </div>
               <div class="admin-filter-bar">
-                <input type="text" id="search-adm-users" class="mc-input mc-input-sm" placeholder="🔍 Search username, role, or ID..." />
+                <input type="text" id="search-adm-users" class="mc-input mc-input-sm" placeholder="🔍 Search username, rank, role, or ID..." />
                 <select id="filter-adm-users-role" class="mc-select">
-                  <option value="ALL">All Roles</option>
+                  <option value="ALL">All Ranks &amp; Roles</option>
                   <option value="ADMIN">ADMIN</option>
+                  <option value="MILLIONAIRE">MILLIONAIRE</option>
+                  <option value="CHAMPION">CHAMPION</option>
+                  <option value="LEGEND">LEGEND</option>
+                  <option value="ELITE">ELITE</option>
+                  <option value="MVP_PLUS">MVP+</option>
+                  <option value="MVP">MVP</option>
+                  <option value="VIP_PLUS">VIP+</option>
                   <option value="VIP">VIP</option>
                   <option value="PLAYER">PLAYER</option>
                 </select>
@@ -1460,7 +1484,73 @@
               <div id="adm-users-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 3. LICENSES (Section 23) -->
+            <!-- 3. RANKS (Section 6, 7, 34) -->
+            <div id="admin-tab-ranks" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🎖️ Rank &amp; Permission System Management</h3>
+              </div>
+              <div class="mc-panel-inset admin-create-bar">
+                <h4 class="panel-sec-title">➕ Create or Edit Rank</h4>
+                <form id="form-admin-save-rank" class="create-grid" autocomplete="off">
+                  <div>
+                    <label>Rank ID (e.g. VIP, MVP_PLUS, TITAN)</label>
+                    <input type="text" id="adm-rank-id" class="mc-input mc-input-sm" placeholder="e.g. TITAN" required />
+                  </div>
+                  <div>
+                    <label>Display Name</label>
+                    <input type="text" id="adm-rank-name" class="mc-input mc-input-sm" placeholder="e.g. TITAN" required />
+                  </div>
+                  <div>
+                    <label>Badge Icon</label>
+                    <input type="text" id="adm-rank-icon" class="mc-input mc-input-sm" value="⚡" maxlength="4" required />
+                  </div>
+                  <div>
+                    <label>Badge Color (Hex)</label>
+                    <input type="text" id="adm-rank-color" class="mc-input mc-input-sm" value="#fbbf24" required />
+                  </div>
+                  <div>
+                    <label>Emerald Price (💚)</label>
+                    <input type="number" id="adm-rank-emerald-price" class="mc-input mc-input-sm" min="0" value="1500" required />
+                  </div>
+                  <div>
+                    <label>TL Price (TRY)</label>
+                    <input type="number" id="adm-rank-tl-price" class="mc-input mc-input-sm" min="0" value="300" required />
+                  </div>
+                  <div>
+                    <label>Max Party Size</label>
+                    <input type="number" id="adm-rank-party-limit" class="mc-input mc-input-sm" min="0" max="999" value="6" required />
+                  </div>
+                  <div>
+                    <label>Emerald Multiplier</label>
+                    <input type="number" id="adm-rank-multiplier" class="mc-input mc-input-sm" step="0.05" min="1" max="5" value="1.25" required />
+                  </div>
+                  <div>
+                    <label>Support Priority</label>
+                    <select id="adm-rank-priority" class="mc-select">
+                      <option value="NORMAL">NORMAL</option>
+                      <option value="HIGH">HIGH</option>
+                      <option value="VERY HIGH">VERY HIGH</option>
+                      <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Can Create Party</label>
+                    <select id="adm-rank-can-party" class="mc-select">
+                      <option value="true">YES</option>
+                      <option value="false">NO</option>
+                    </select>
+                  </div>
+                  <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
+                    <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                      <span class="btn-inner">💾 Save Rank Definition</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+              <div id="adm-ranks-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- 4. LICENSES -->
             <div id="admin-tab-licenses" class="admin-tab-pane">
               <div class="admin-section-header">
                 <h3>🔑 License Management</h3>
@@ -1517,7 +1607,7 @@
               <div id="adm-licenses-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 4. PARTIES -->
+            <!-- 5. PARTIES -->
             <div id="admin-tab-parties" class="admin-tab-pane">
               <div class="admin-section-header">
                 <h3>🎉 Party Management &amp; Admin Override</h3>
@@ -1542,7 +1632,7 @@
               <div id="adm-parties-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 5. LEADERBOARD (Admin View) -->
+            <!-- 6. LEADERBOARD (Admin View) -->
             <div id="admin-tab-leaderboard" class="admin-tab-pane">
               <div class="admin-section-header">
                 <h3>🏆 Leaderboard Management</h3>
@@ -1556,10 +1646,10 @@
               <div id="adm-leaderboard-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 6. ECONOMY (Section 25) -->
+            <!-- 7. ECONOMY (Section 35) -->
             <div id="admin-tab-economy" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>💚 Economy &amp; Reward Configuration</h3>
+                <h3>💚 Economy, Conversion Rate &amp; Reward Configuration</h3>
               </div>
 
               <div class="mc-panel-inset admin-create-bar">
@@ -1597,7 +1687,7 @@
               </div>
 
               <form id="form-admin-economy-config" class="mc-panel-inset admin-create-bar" autocomplete="off">
-                <h4 class="panel-sec-title">⚙️ Configure Normal &amp; VIP Rewards &amp; Extra Life Rules</h4>
+                <h4 class="panel-sec-title">⚙️ Configure Conversion Rate (5 💚 = 1 TL), Rewards &amp; Extra Life Rules</h4>
                 <div class="create-grid">
                   <div>
                     <label>Normal Game Completed (+💚)</label>
@@ -1649,12 +1739,17 @@
                   </button>
                 </div>
               </form>
+
+              <div class="mc-panel-inset dash-box">
+                <h4 class="panel-sec-title">💚 Emerald Purchase Packages (5 Emeralds = 1 TL, Min 500 💚)</h4>
+                <div id="adm-emerald-packages-list" class="admin-table-wrap"></div>
+              </div>
             </div>
 
-            <!-- 7. SHOP -->
+            <!-- 8. EMERALD SHOP -->
             <div id="admin-tab-shop" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🛒 Shop &amp; Rank Items Management</h3>
+                <h3>🛒 Emerald Shop Items Management</h3>
               </div>
               <div class="mc-panel-inset admin-create-bar">
                 <h4 class="panel-sec-title">➕ Create New Shop Item</h4>
@@ -1696,6 +1791,7 @@
                       <option value="SCORE_BOOSTER">Score Booster (+50% Score)</option>
                       <option value="EMERALD_BOOSTER">Emerald Booster (+50% 💚)</option>
                       <option value="RGB_NAME">RGB Username Cosmetic</option>
+                      <option value="ANIMATED_NAME">Animated Name Cosmetic</option>
                     </select>
                   </div>
                   <div style="grid-column: 1 / -1;">
@@ -1712,67 +1808,94 @@
               <div id="adm-shop-items-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 8. VIP MANAGEMENT (Section 22) -->
+            <!-- 9. RANK SHOP & VIP MANAGEMENT (Section 34) -->
             <div id="admin-tab-vip" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>👑 VIP Membership Management</h3>
+                <h3>👑 Rank Shop &amp; VIP / MVP Assignment</h3>
               </div>
 
               <div class="mc-panel-inset admin-create-bar">
-                <h4 class="panel-sec-title">👑 Grant / Update / Remove VIP Status</h4>
+                <h4 class="panel-sec-title">👑 Assign Rank / Grant or Revoke VIP Status</h4>
                 <form id="form-admin-grant-vip" class="create-grid" autocomplete="off">
                   <div>
                     <label>Minecraft Username</label>
                     <input type="text" id="adm-vip-username" list="adm-econ-players-datalist" class="mc-input mc-input-sm" placeholder="e.g. Steve" required />
                   </div>
                   <div>
-                    <label>VIP Expiration (Leave blank for Lifetime)</label>
+                    <label>Select Rank</label>
+                    <select id="adm-vip-rank-select" class="mc-select">
+                      <option value="VIP">VIP (Max Party: 4)</option>
+                      <option value="VIP_PLUS">VIP+ (Max Party: 6)</option>
+                      <option value="MVP">MVP (Max Party: 8)</option>
+                      <option value="MVP_PLUS">MVP+ (Max Party: 10)</option>
+                      <option value="ELITE">ELITE (Max Party: 12)</option>
+                      <option value="LEGEND">LEGEND (Max Party: 14)</option>
+                      <option value="CHAMPION">CHAMPION (Max Party: 16)</option>
+                      <option value="MILLIONAIRE">MILLIONAIRE (Max Party: 20)</option>
+                      <option value="PLAYER">PLAYER (Demote)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Rank Expiration (Leave blank for Lifetime)</label>
                     <input type="date" id="adm-vip-expires" class="mc-input mc-input-sm" />
                   </div>
                   <div style="display:flex; gap:0.5rem; align-items:flex-end;">
                     <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                      <span class="btn-inner">👑 Grant / Update VIP</span>
+                      <span class="btn-inner">👑 Grant / Update Rank</span>
                     </button>
                     <button type="button" id="btn-adm-revoke-vip" class="mc-btn mc-btn-danger mc-btn-small">
-                      <span class="btn-inner">✖ Remove VIP</span>
+                      <span class="btn-inner">✖ Reset to PLAYER</span>
                     </button>
                   </div>
                 </form>
               </div>
 
               <div class="mc-panel-inset dash-box" style="margin-bottom:0.85rem;">
-                <h4 class="panel-sec-title">👑 Active VIP &amp; Admin Members</h4>
+                <h4 class="panel-sec-title">👑 Active Ranked &amp; Admin Members</h4>
                 <div id="adm-vip-users-list" class="admin-table-wrap"></div>
-              </div>
-
-              <div class="mc-panel-inset dash-box">
-                <h4 class="panel-sec-title">💳 VIP Checkout Intents (paymentService Log)</h4>
-                <div id="adm-vip-payments-list" class="admin-table-wrap"></div>
               </div>
             </div>
 
-            <!-- 9. SUPPORT TICKETS (Section 14 & 17) -->
+            <!-- 10. PAYMENTS (Section 25, 36) -->
+            <div id="admin-tab-payments" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>💳 Stripe Payment History &amp; Webhook Audit</h3>
+                <select id="filter-adm-payments-status" class="mc-select mc-select-xs">
+                  <option value="ALL">All Statuses</option>
+                  <option value="PAID">PAID</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="FAILED">FAILED</option>
+                  <option value="REFUNDED">REFUNDED</option>
+                </select>
+              </div>
+              <p class="panel-sec-desc" style="margin-bottom:0.75rem;">
+                Every Stripe Checkout Session is created in <code>PENDING</code> status and only transitions to <code>PAID</code> after a verified, idempotent <code>checkout.session.completed</code> webhook event.
+              </p>
+              <div id="adm-vip-payments-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- 11. SUPPORT TICKETS (Section 28 & 30) -->
             <div id="admin-tab-support" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🎧 Support Tickets (VIP Priority Sorted First)</h3>
+                <h3>🎧 Support Tickets (4-Tier Priority Sorted)</h3>
               </div>
               <div id="adm-support-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 10. BUG REPORTS (Section 15 & 17) -->
+            <!-- 12. BUG REPORTS (Section 28 & 30) -->
             <div id="admin-tab-bugs" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🐛 Bug Reports (VIP Priority Sorted First)</h3>
+                <h3>🐛 Bug Reports (4-Tier Priority Sorted)</h3>
               </div>
               <div id="adm-bugs-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 11. SUGGESTIONS (Section 16 & 17) -->
+            <!-- 13. SUGGESTIONS (Section 29 & 30) -->
             <div id="admin-tab-suggestions" class="admin-tab-pane">
               <div class="admin-section-header">
                 <h3>💡 Player Suggestions</h3>
                 <select id="adm-suggestions-sort" class="mc-select mc-select-xs">
-                  <option value="PRIORITY">Sort: Priority (VIP First)</option>
+                  <option value="PRIORITY">Sort: Priority (CRITICAL/VERY HIGH/HIGH First)</option>
                   <option value="MOST_VOTES">Sort: Most Votes</option>
                   <option value="NEWEST">Sort: Newest</option>
                   <option value="OLDEST">Sort: Oldest</option>
@@ -1781,38 +1904,43 @@
               <div id="adm-suggestions-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 12. TRANSACTIONS (Section 25) -->
+            <!-- 14. TRANSACTIONS -->
             <div id="admin-tab-transactions" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>💳 Emerald Transaction Ledger</h3>
+                <h3>📒 Emerald Transaction Ledger</h3>
                 <input type="text" id="search-adm-tx-history" class="mc-input mc-input-sm" style="max-width:260px;" placeholder="🔍 Search user, ID, or reason..." />
               </div>
               <div id="adm-tx-history-list" class="tx-history-list"></div>
             </div>
 
-            <!-- 13. ACHIEVEMENTS -->
+            <!-- 15. ACHIEVEMENTS -->
             <div id="admin-tab-achievements" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🎖️ Platform Achievements Catalog</h3>
+                <h3>🏅 Platform Achievements Catalog</h3>
               </div>
               <div id="adm-achievements-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 14. BACKUPS (Section 4) -->
+            <!-- 16. BACKUPS (Section 37) -->
             <div id="admin-tab-backups" class="admin-tab-pane">
               <div class="admin-section-header">
                 <h3>💾 Versioned Backup System (backup/)</h3>
-                <button type="button" id="btn-adm-create-backup" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">➕ Create Versioned Backup</span>
-                </button>
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                  <button type="button" id="btn-adm-create-backup" class="mc-btn mc-btn-emerald mc-btn-small">
+                    <span class="btn-inner">➕ Create Backup</span>
+                  </button>
+                  <button type="button" id="btn-adm-download-latest-backup" class="mc-btn mc-btn-gold mc-btn-small">
+                    <span class="btn-inner">⬇️ Download Backup JSON</span>
+                  </button>
+                </div>
               </div>
               <p class="panel-sec-desc" style="margin-bottom:0.75rem;">
-                Structured backup namespaces: <code>backup/users/</code>, <code>backup/parties/</code>, <code>backup/licenses/</code>, <code>backup/transactions/</code>, <code>backup/settings/</code>. Plaintext passwords are never stored.
+                Structured backup namespaces: <code>backup/users/</code>, <code>backup/parties/</code>, <code>backup/licenses/</code>, <code>backup/transactions/</code>, <code>backup/payments/</code>, <code>backup/settings/</code>. Plaintext passwords are never stored.
               </p>
               <div id="adm-backups-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 15. ACTIVITY LOGS -->
+            <!-- 17. ACTIVITY LOGS -->
             <div id="admin-tab-activity" class="admin-tab-pane">
               <div class="admin-section-header">
                 <h3>📜 System Activity Logs</h3>
@@ -1823,7 +1951,7 @@
               <div id="adm-full-activity-list" class="activity-feed-list full-log"></div>
             </div>
 
-            <!-- 16. SETTINGS -->
+            <!-- 18. SETTINGS -->
             <div id="admin-tab-settings" class="admin-tab-pane">
               <div class="admin-section-header">
                 <h3>⚙️ System Settings &amp; Session Security</h3>
@@ -1844,10 +1972,77 @@
 
           </div>
         </div>
+
+        <!-- Mobile Admin Bottom Navigation (Section 38) -->
+        <nav class="admin-mobile-nav mc-panel-inset" aria-label="Mobile Admin Navigation">
+          <button type="button" class="admin-mob-btn active" data-admin-tab="dashboard">
+            <span>📊</span>
+            <small>Dashboard</small>
+          </button>
+          <button type="button" class="admin-mob-btn" data-admin-tab="users">
+            <span>👥</span>
+            <small>Users</small>
+          </button>
+          <button type="button" class="admin-mob-btn" data-admin-tab="shop">
+            <span>🛒</span>
+            <small>Shop</small>
+          </button>
+          <button type="button" class="admin-mob-btn" data-admin-tab="support">
+            <span>🎧</span>
+            <small>Tickets</small>
+          </button>
+          <button type="button" class="admin-mob-btn" id="btn-admin-mob-more">
+            <span>☰</span>
+            <small>More</small>
+          </button>
+        </nav>
       </div>
     </section>
 
   </main>
+
+  <!-- ==========================================
+       MODAL: STRIPE CHECKOUT & WEBHOOK VERIFICATION (SECTIONS 23-27)
+       ========================================== -->
+  <div id="modal-stripe-checkout" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="stripe-modal-title">
+    <div class="modal-box mc-panel">
+      <div class="modal-header">
+        <h3 id="stripe-modal-title">💳 Stripe Secure Checkout (Test Mode)</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-stripe-checkout" aria-label="Close">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="mc-panel-inset" style="padding:0.95rem; margin-bottom:0.85rem;">
+          <div class="ticket-row">
+            <span>Checkout Session ID:</span>
+            <code id="stripe-chk-session-id" class="emerald-text">cs_test_...</code>
+          </div>
+          <div class="ticket-row">
+            <span>Order Item:</span>
+            <strong id="stripe-chk-item-label" class="gold-text">500 Emeralds</strong>
+          </div>
+          <div class="ticket-row">
+            <span>Amount Due:</span>
+            <strong id="stripe-chk-amount-tl" class="emerald-text">100 TL</strong>
+          </div>
+          <div class="ticket-row">
+            <span>Payment Status:</span>
+            <span id="stripe-chk-status-badge" class="status-pill status-waiting">PENDING</span>
+          </div>
+        </div>
+        <p class="panel-sec-desc" style="font-size:0.86rem; line-height:1.45;">
+          🔒 <strong>Webhook Security Architecture:</strong> Emeralds or Ranks are <em>never</em> granted from a client redirect alone. Clicking <strong>Complete Stripe Test Payment</strong> dispatches a signed <code>checkout.session.completed</code> webhook event to <code>paymentService.processStripeWebhook()</code> with strict idempotency protection.
+        </p>
+      </div>
+      <div class="modal-footer modal-footer-split" style="flex-wrap:wrap; gap:0.5rem;">
+        <button type="button" id="btn-stripe-simulate-fail" class="mc-btn mc-btn-danger mc-btn-small">
+          <span class="btn-inner">✖ Simulate Failed Payment</span>
+        </button>
+        <button type="button" id="btn-stripe-complete-pay" class="mc-btn mc-btn-emerald">
+          <span class="btn-inner">💳 Complete Stripe Test Payment</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ==========================================
        MODAL: EXTRA LIFE REVIVE PROMPT (SECTION 26)

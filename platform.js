@@ -51,6 +51,7 @@
       this.selectedShopCategory = 'ALL';
       this.extraLifeCallbacks = null;
       this.leaderboardRefreshTimer = null;
+      this.activeCheckoutSession = null;
 
       this.init();
     }
@@ -62,6 +63,7 @@
       this.bindLeaderboardScreen();
       this.bindEmeraldShopScreen();
       this.bindVipShopScreen();
+      this.bindStripeCheckoutModal();
       this.bindProfileAndCosmetics();
       this.bindSupportHub();
       this.bindAccountSettings();
@@ -974,7 +976,7 @@
       if (filteredRanked.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="8" style="text-align:center; padding:1.5rem; color:var(--text-muted);">
+            <td colspan="9" style="text-align:center; padding:1.5rem; color:var(--text-muted);">
               No matching players found.
             </td>
           </tr>
@@ -1009,6 +1011,7 @@
               <td><strong class="emerald-text">💚 ${row.emeraldCoins.toLocaleString('en-US')}</strong></td>
               <td>${row.gamesPlayed}</td>
               <td class="emerald-text">${row.gamesWon}</td>
+              <td><strong>${row.winRate}%</strong></td>
               <td>❤️ ${row.extraLivesUsed}</td>
             </tr>
           `;
@@ -1017,7 +1020,7 @@
     }
 
     // ==========================================
-    // SECTION 11, 12, 13 & 33: EMERALD SHOP & RANK SHOP UI
+    // SECTION 16-27: EMERALD SHOP, RANK SHOP & STRIPE CHECKOUT UI
     // ==========================================
     bindEmeraldShopScreen() {
       document.querySelectorAll('[data-shop-cat]').forEach(btn => {
@@ -1035,7 +1038,14 @@
     renderEmeraldShop() {
       if (!this.session) return;
       const profile = economyService.getPlayerEconomyProfile(this.session.username);
-      const items = shopService.listShopItems(false, this.selectedShopCategory);
+      const items =
+        this.selectedShopCategory === 'Emeralds'
+          ? []
+          : shopService.listShopItems(false, this.selectedShopCategory);
+      const emeraldPackages =
+        this.selectedShopCategory === 'ALL' || this.selectedShopCategory === 'Emeralds'
+          ? paymentService.getEmeraldPackages(false)
+          : [];
 
       const balEl = document.getElementById('shop-emerald-balance');
       if (balEl) {
@@ -1065,7 +1075,37 @@
       const grid = document.getElementById('emerald-shop-grid');
       if (!grid) return;
 
-      grid.innerHTML = items
+      const packagesHtml = emeraldPackages
+        .map(
+          pkg => `
+            <div class="shop-item-card">
+              <div>
+                <div class="shop-item-top">
+                  <div class="shop-item-icon">${this.escapeHtml(pkg.icon || '💚')}</div>
+                  <span class="shop-item-price-tag">${pkg.priceTL.toLocaleString('en-US')} TL</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+                  <h3 class="shop-item-title" style="margin:0;">${this.escapeHtml(pkg.title)}</h3>
+                  <span class="role-badge role-vip">${this.escapeHtml(pkg.badge || '5 💚 = 1 TL')}</span>
+                </div>
+                <p class="shop-item-desc">"Purchase ${pkg.emeralds.toLocaleString('en-US')} Emerald Coins securely via Stripe (${pkg.priceTL} TL)."</p>
+              </div>
+              <div class="shop-item-footer">
+                <span class="meta-muted">Stripe Verified Webhook</span>
+                <button
+                  type="button"
+                  class="mc-btn mc-btn-emerald mc-btn-small btn-buy-emerald-pkg"
+                  data-pkg-id="${this.escapeHtml(pkg.id)}"
+                >
+                  <span class="btn-inner">Buy (${pkg.priceTL} TL)</span>
+                </button>
+              </div>
+            </div>
+          `
+        )
+        .join('');
+
+      const itemsHtml = items
         .map(item => {
           const check = shopService.evaluateEligibility(this.session, item);
           const priceStr =
@@ -1076,6 +1116,16 @@
             item.requiredRole === 'VIP'
               ? '<span class="role-badge role-vip">Requires VIP</span>'
               : `<span class="meta-muted">${this.escapeHtml(item.category)}</span>`;
+          const rankTlBtn =
+            item.effectType === 'GRANT_RANK' && item.priceTL && check.canBuy
+              ? `<button
+                   type="button"
+                   class="mc-btn mc-btn-gold mc-btn-small btn-buy-rank-tl"
+                   data-rank-id="${this.escapeHtml(item.targetRank)}"
+                 >
+                   <span class="btn-inner">💳 ${item.priceTL} TL</span>
+                 </button>`
+              : '';
 
           return `
             <div class="shop-item-card">
@@ -1090,21 +1140,42 @@
                 </div>
                 <p class="shop-item-desc">"${this.escapeHtml(item.description)}"</p>
               </div>
-              <div class="shop-item-footer">
+              <div class="shop-item-footer" style="gap:0.4rem; flex-wrap:wrap;">
                 <span class="meta-muted">${this.escapeHtml(check.reason)}</span>
-                <button
-                  type="button"
-                  class="mc-btn ${check.canBuy ? 'mc-btn-emerald' : 'mc-btn-stone'} mc-btn-small btn-buy-shop-item"
-                  data-item-id="${this.escapeHtml(item.id)}"
-                  ${check.canBuy ? '' : 'disabled'}
-                >
-                  <span class="btn-inner">${this.escapeHtml(check.buttonLabel)}</span>
-                </button>
+                <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                  ${rankTlBtn}
+                  <button
+                    type="button"
+                    class="mc-btn ${check.canBuy ? 'mc-btn-emerald' : 'mc-btn-stone'} mc-btn-small btn-buy-shop-item"
+                    data-item-id="${this.escapeHtml(item.id)}"
+                    ${check.canBuy ? '' : 'disabled'}
+                  >
+                    <span class="btn-inner">${this.escapeHtml(check.buttonLabel)}</span>
+                  </button>
+                </div>
               </div>
             </div>
           `;
         })
         .join('');
+
+      grid.innerHTML = packagesHtml + itemsHtml;
+
+      grid.querySelectorAll('.btn-buy-emerald-pkg').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const pkgId = btn.getAttribute('data-pkg-id');
+          this.openStripeCheckoutModal({ type: 'EMERALDS', packageId: pkgId });
+        });
+      });
+
+      grid.querySelectorAll('.btn-buy-rank-tl').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const rankId = btn.getAttribute('data-rank-id');
+          this.openStripeCheckoutModal({ type: 'RANK', rankId });
+        });
+      });
 
       grid.querySelectorAll('.btn-buy-shop-item').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1140,6 +1211,98 @@
     }
 
     // ==========================================
+    // STRIPE CHECKOUT & WEBHOOK VERIFICATION MODAL (SECTIONS 23-27)
+    // ==========================================
+    openStripeCheckoutModal(payload) {
+      try {
+        const res = paymentService.createCheckoutSession(this.session, payload);
+        this.activeCheckoutSession = res.checkoutSession;
+
+        const modal = document.getElementById('modal-stripe-checkout');
+        const idEl = document.getElementById('stripe-chk-session-id');
+        const itemEl = document.getElementById('stripe-chk-item-label');
+        const amtEl = document.getElementById('stripe-chk-amount-tl');
+        const badgeEl = document.getElementById('stripe-chk-status-badge');
+
+        if (idEl) idEl.textContent = res.checkoutSession.id;
+        if (itemEl) itemEl.textContent = res.checkoutSession.title;
+        if (amtEl) amtEl.textContent = `${res.checkoutSession.amount} TL`;
+        if (badgeEl) {
+          badgeEl.textContent = res.checkoutSession.status;
+          badgeEl.className = 'status-pill status-WAITING';
+        }
+        if (modal) modal.classList.remove('hidden');
+      } catch (err) {
+        window.soundManager.playWrong();
+        this.showToast(err.message, 'error');
+      }
+    }
+
+    bindStripeCheckoutModal() {
+      const modal = document.getElementById('modal-stripe-checkout');
+      const completeBtn = document.getElementById('btn-stripe-complete-pay');
+      const failBtn = document.getElementById('btn-stripe-simulate-fail');
+
+      if (completeBtn) {
+        completeBtn.addEventListener('click', () => {
+          if (!this.activeCheckoutSession) return;
+          try {
+            const webhookRes = paymentService.completeTestModeCheckout(
+              this.session,
+              this.activeCheckoutSession.id
+            );
+            this.activeCheckoutSession = null;
+            if (modal) modal.classList.add('hidden');
+
+            this.session = licenseService.refreshSessionRole(this.session) || this.session;
+            this.updateTopBarSessionUI();
+            this.syncEconomyHeaderUI();
+            this.renderEmeraldShop();
+            this.renderVipShop();
+
+            window.soundManager.playCorrect();
+            if (window.mcQuizGame) {
+              window.mcQuizGame.particles.spawnBurst(
+                window.innerWidth / 2,
+                window.innerHeight / 2,
+                'emerald',
+                55
+              );
+            }
+            this.showToast(
+              `✅ Stripe Webhook Verified (${webhookRes.eventId}): ${webhookRes.payment.title} credited!`,
+              'success'
+            );
+          } catch (err) {
+            window.soundManager.playWrong();
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
+
+      if (failBtn) {
+        failBtn.addEventListener('click', () => {
+          if (!this.activeCheckoutSession) return;
+          window.soundManager.playWrong();
+          try {
+            paymentService.failCheckoutSession(
+              this.activeCheckoutSession.id,
+              'Simulated card decline in Stripe Test Mode'
+            );
+            this.activeCheckoutSession = null;
+            if (modal) modal.classList.add('hidden');
+            this.showToast(
+              '❌ Payment failed in Stripe Test Mode. 0 Emeralds were granted.',
+              'error'
+            );
+          } catch (err) {
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
+    }
+
+    // ==========================================
     // SECTION 9 & 10: SEPARATE VIP SHOP & PAYMENT ABSTRACTION
     // ==========================================
     bindVipShopScreen() {
@@ -1150,20 +1313,32 @@
         buyVipBtn.addEventListener('click', () => {
           window.soundManager.playClick();
           const res = paymentService.initiateCheckout(this.session, {
+            type: 'RANK',
+            rankId: 'VIP',
             packageId: 'VIP_PACKAGE_200TL',
             title: '👑 VIP Membership (200 TL)',
             priceTL: 200
           });
+          this.activeCheckoutSession = res.intent;
           const statusBox = document.getElementById('payment-service-status-box');
           const statusMsg = document.getElementById('payment-service-status-msg');
           if (statusBox && statusMsg) {
-            statusMsg.textContent = `${res.message} (Intent ID: ${res.intent.id})`;
+            statusMsg.textContent = `${res.message} (Session ID: ${res.intent.id})`;
             statusBox.classList.remove('hidden');
           }
-          this.showToast(
-            'Payment Intent recorded via paymentService (No card data collected).',
-            'info'
-          );
+          const modal = document.getElementById('modal-stripe-checkout');
+          const idEl = document.getElementById('stripe-chk-session-id');
+          const itemEl = document.getElementById('stripe-chk-item-label');
+          const amtEl = document.getElementById('stripe-chk-amount-tl');
+          const badgeEl = document.getElementById('stripe-chk-status-badge');
+          if (idEl) idEl.textContent = res.intent.id;
+          if (itemEl) itemEl.textContent = res.intent.title;
+          if (amtEl) amtEl.textContent = `${res.intent.amount} TL`;
+          if (badgeEl) {
+            badgeEl.textContent = res.intent.status;
+            badgeEl.className = 'status-pill status-WAITING';
+          }
+          if (modal) modal.classList.remove('hidden');
         });
       }
 
@@ -1426,8 +1601,9 @@
       if (openCreateBtn && createBox) {
         openCreateBtn.addEventListener('click', () => {
           window.soundManager.playClick();
-          if (!authGuard.isVipOrAdmin(this.session)) {
-            this.showToast('Access Denied: Only VIP and ADMIN users can create parties.', 'error');
+          const perms = authGuard.getUserPermissions(this.session);
+          if (!perms.canCreateParty) {
+            this.showToast('Access Denied: Only VIP, MVP, and ADMIN users can create parties.', 'error');
             return;
           }
           createBox.classList.toggle('hidden');
@@ -1490,24 +1666,42 @@
     renderPartyLobby(forceShowCreate = false) {
       if (!this.session) return;
       const effRole = authGuard.getEffectiveRole(this.session);
+      const perms = authGuard.getUserPermissions(this.session);
+      const profile = economyService.getPlayerEconomyProfile(this.session.username);
 
       const welcomeTitle = document.getElementById('party-welcome-title');
       const roleBadge = document.getElementById('party-user-role-badge');
       const licName = document.getElementById('party-user-license-name');
       const createBtn = document.getElementById('btn-open-create-party');
       const createBox = document.getElementById('organizer-create-party-box');
+      const maxSelect = document.getElementById('input-party-max');
 
       if (welcomeTitle) {
         welcomeTitle.innerHTML = `Welcome, ${this.formatUsernameHtml(this.session.username)}`;
       }
       if (roleBadge) {
-        roleBadge.textContent = effRole;
+        roleBadge.textContent = profile.rankBadge || effRole;
         roleBadge.className = `role-badge role-${effRole.toLowerCase()}`;
       }
       if (licName) licName.textContent = this.session.licenseName || 'Active Account';
 
-      // Section 6: Normal PLAYER sees [ Join Party ] ONLY. VIP & ADMIN see [ Create Party ]
-      const canCreateParty = authGuard.isVipOrAdmin(this.session);
+      // Populate maxPlayers options dynamically up to user's rank maxPartySize (Section 8)
+      if (maxSelect && perms.canCreateParty) {
+        const cap = Math.min(32, perms.maxPartySize || 4);
+        const sizes = [2, 4, 6, 8, 10, 12, 14, 16, 20, 32].filter(n => n <= cap);
+        if (!sizes.includes(cap)) sizes.push(cap);
+        maxSelect.innerHTML = sizes
+          .map(
+            n =>
+              `<option value="${n}" ${n === cap ? 'selected' : ''}>${n} Players ${
+                n === cap ? `(${profile.rank || effRole} Max)` : ''
+              }</option>`
+          )
+          .join('');
+      }
+
+      // Section 9: Normal PLAYER sees [ Join Party ] ONLY. Ranked & ADMIN see [ Create Party ]
+      const canCreateParty = Boolean(perms.canCreateParty);
       if (createBtn) createBtn.classList.toggle('hidden', !canCreateParty);
       if (createBox) {
         if (!canCreateParty) {
@@ -1594,9 +1788,10 @@
       }
 
       const effRole = authGuard.getEffectiveRole(this.session);
+      const perms = authGuard.getUserPermissions(this.session);
       const isOwner = party.organizer.toLowerCase() === this.session.username.toLowerCase();
-      // Section 6 & 7: ONLY VIP owner or ADMIN can see party management & invite controls
-      const canManage = effRole === 'ADMIN' || (effRole === 'VIP' && isOwner);
+      // Section 9 & 10: ONLY ranked owner with canInvitePlayers or ADMIN can see party management & invite controls
+      const canManage = effRole === 'ADMIN' || (Boolean(perms.canInvitePlayers) && isOwner);
       const isParticipant = party.participants.some(
         pt => pt.username.toLowerCase() === this.session.username.toLowerCase() && pt.joinStatus === 'JOINED'
       );
@@ -1606,7 +1801,7 @@
       const managementToolbarHtml = canManage
         ? `
           <div class="party-owner-toolbar">
-            <div class="owner-toolbar-title">👑 VIP / ADMIN PARTY MANAGEMENT</div>
+            <div class="owner-toolbar-title">👑 RANKED OWNER / ADMIN PARTY MANAGEMENT</div>
             <div class="inline-join-form">
               <input type="text" id="inp-invite-username" class="mc-input mc-input-sm" placeholder="Minecraft username to invite..." />
               <button type="button" id="btn-detail-invite" class="mc-btn mc-btn-emerald mc-btn-small">
@@ -2246,7 +2441,7 @@
     }
 
     // ==========================================
-    // SECTIONS 18-25: ADMIN PANEL — 100% ENGLISH ONLY (16 PAGES)
+    // SECTIONS 31-37: ADMIN PANEL — 100% ENGLISH ONLY (18 PAGES)
     // ==========================================
     openAdminPanel() {
       try {
@@ -2281,6 +2476,15 @@
         });
       });
 
+      const mobMoreBtn = document.getElementById('btn-admin-mob-more');
+      const sidebarNav = document.getElementById('admin-sidebar-nav');
+      if (mobMoreBtn && sidebarNav) {
+        mobMoreBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          sidebarNav.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      }
+
       const goGameBtn = document.getElementById('btn-admin-go-game');
       if (goGameBtn) {
         goGameBtn.addEventListener('click', () => {
@@ -2302,6 +2506,56 @@
       const filterUsersRole = document.getElementById('filter-adm-users-role');
       if (searchUsers) searchUsers.addEventListener('input', () => this.renderAdminUsers());
       if (filterUsersRole) filterUsersRole.addEventListener('change', () => this.renderAdminUsers());
+
+      // Ranks Save Form (Section 6, 7, 34)
+      const saveRankForm = document.getElementById('form-admin-save-rank');
+      if (saveRankForm) {
+        saveRankForm.addEventListener('submit', e => {
+          e.preventDefault();
+          try {
+            const id = document.getElementById('adm-rank-id')?.value.trim();
+            const name = document.getElementById('adm-rank-name')?.value.trim();
+            const badgeIcon = document.getElementById('adm-rank-icon')?.value.trim() || '⚡';
+            const badgeColor = document.getElementById('adm-rank-color')?.value.trim() || '#fbbf24';
+            const emeraldPrice = Number(document.getElementById('adm-rank-emerald-price')?.value || 0);
+            const tlPrice = Number(document.getElementById('adm-rank-tl-price')?.value || 0);
+            const maxPartySize = Number(document.getElementById('adm-rank-party-limit')?.value || 4);
+            const emeraldMultiplier = Number(document.getElementById('adm-rank-multiplier')?.value || 1.0);
+            const supportPriority = document.getElementById('adm-rank-priority')?.value || 'HIGH';
+            const canCreateParty = document.getElementById('adm-rank-can-party')?.value === 'true';
+
+            const saved = rankService.adminSaveRank(this.session, {
+              id,
+              name,
+              badgeIcon,
+              badgeColor,
+              emeraldPrice,
+              tlPrice,
+              permissions: {
+                canCreateParty,
+                canInvitePlayers: canCreateParty,
+                maxPartySize,
+                emeraldMultiplier,
+                supportPriority,
+                bugPriority: supportPriority,
+                suggestionPriority: supportPriority,
+                maxExtraLives: 2,
+                cosmetics: true,
+                rgbName: emeraldPrice >= 3000,
+                profileEffects: emeraldPrice >= 1500
+              }
+            });
+
+            saveRankForm.reset();
+            window.soundManager.playCorrect();
+            this.showToast(`Rank "${saved.name}" (${saved.id}) saved!`, 'success');
+            this.renderAdminAll();
+          } catch (err) {
+            window.soundManager.playWrong();
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
 
       // Licenses Create & Filter
       const genCodeBtn = document.getElementById('btn-adm-gen-code');
@@ -2481,7 +2735,7 @@
         });
       }
 
-      // Admin VIP Management Form
+      // Admin Rank Shop / VIP Assignment Form (Section 34)
       const grantVipForm = document.getElementById('form-admin-grant-vip');
       const revokeVipBtn = document.getElementById('btn-adm-revoke-vip');
       if (grantVipForm) {
@@ -2489,14 +2743,20 @@
           e.preventDefault();
           try {
             const uname = document.getElementById('adm-vip-username')?.value.trim();
+            const targetRank = document.getElementById('adm-vip-rank-select')?.value || 'VIP';
             const exp = document.getElementById('adm-vip-expires')?.value || null;
-            userService.adminSetVipStatus(this.session, uname, { isVip: true, expiresAt: exp });
+            userService.adminSetVipStatus(this.session, uname, {
+              rank: targetRank,
+              isVip: targetRank !== 'PLAYER',
+              expiresAt: exp
+            });
             economyService._mutateAccount(uname, acc => {
-              acc.isVip = true;
-              if (acc.role !== 'ADMIN') acc.role = 'VIP';
+              acc.rank = targetRank;
+              acc.isVip = targetRank !== 'PLAYER';
+              if (acc.role !== 'ADMIN') acc.role = targetRank === 'PLAYER' ? 'PLAYER' : 'VIP';
             });
             window.soundManager.playCorrect();
-            this.showToast(`👑 VIP granted to ${uname}!`, 'success');
+            this.showToast(`👑 Rank ${targetRank} assigned to ${uname}!`, 'success');
             this.syncEconomyHeaderUI();
             this.renderAdminAll();
           } catch (err) {
@@ -2513,18 +2773,29 @@
             return;
           }
           try {
-            userService.adminSetVipStatus(this.session, uname, { isVip: false, expiresAt: null });
+            userService.adminSetVipStatus(this.session, uname, {
+              rank: 'PLAYER',
+              isVip: false,
+              expiresAt: null
+            });
             economyService._mutateAccount(uname, acc => {
+              acc.rank = 'PLAYER';
               acc.isVip = false;
               if (acc.role === 'VIP') acc.role = 'PLAYER';
             });
-            this.showToast(`Removed VIP from ${uname}.`, 'info');
+            this.showToast(`Reset ${uname} rank to PLAYER.`, 'info');
             this.syncEconomyHeaderUI();
             this.renderAdminAll();
           } catch (err) {
             this.showToast(err.message, 'error');
           }
         });
+      }
+
+      // Admin Payments Status Filter (Section 36)
+      const filterPayments = document.getElementById('filter-adm-payments-status');
+      if (filterPayments) {
+        filterPayments.addEventListener('change', () => this.renderAdminPaymentsTab());
       }
 
       // Admin Suggestions Sort
@@ -2539,7 +2810,7 @@
         searchTx.addEventListener('input', () => this.renderAdminTransactions());
       }
 
-      // Admin Create Backup
+      // Admin Create & Download Backup (Section 37)
       const createBackupBtn = document.getElementById('btn-adm-create-backup');
       if (createBackupBtn) {
         createBackupBtn.addEventListener('click', () => {
@@ -2549,6 +2820,20 @@
             window.soundManager.playCorrect();
             this.showToast(`Backup ${snap.version} (${snap.id}) created!`, 'success');
             this.renderAdminBackups();
+          } catch (err) {
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
+
+      const downloadBackupBtn = document.getElementById('btn-adm-download-latest-backup');
+      if (downloadBackupBtn) {
+        downloadBackupBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          try {
+            const jsonStr = backupService.exportBackupJson(this.session, null);
+            this.downloadJsonFile(`minecraft-milyoner-backup-${Date.now()}.json`, jsonStr);
+            this.showToast('Backup JSON downloaded!', 'success');
           } catch (err) {
             this.showToast(err.message, 'error');
           }
@@ -2609,12 +2894,14 @@
       if (!this.session || authGuard.getEffectiveRole(this.session) !== 'ADMIN') return;
       this.renderAdminDashboard();
       this.renderAdminUsers();
+      this.renderAdminRanksTab();
       this.renderAdminLicenses();
       this.renderAdminParties();
       this.renderAdminLeaderboard();
       this.renderAdminEconomyTab();
       this.renderAdminShopTab();
       this.renderAdminVipTab();
+      this.renderAdminPaymentsTab();
       this.renderAdminSupport();
       this.renderAdminBugs();
       this.renderAdminSuggestions();
@@ -2624,27 +2911,31 @@
       this.renderAdminActivity();
     }
 
-    // 1. Admin Dashboard (Section 20: 10 Cards)
+    // 1. Admin Dashboard (Section 32: 12 Cards)
     renderAdminDashboard() {
       const users = userService.getAllUsers();
       const parties = partyService.listParties(this.session);
       const econProfiles = economyService.getAllProfiles();
-      const txs = economyService.getTransactionHistory(this.session, null);
       const tickets = supportService.listSupportTickets(this.session, false);
       const bugs = supportService.listBugReports(this.session, false);
       const sugs = supportService.listSuggestions(this.session, 'PRIORITY');
       const logs = activityService.getAll();
       const cfg = configService.getConfig();
+      const revMetrics = paymentService.getRevenueMetrics();
 
       const totalUsers = users.length;
       const activeUsers = users.filter(u => u.status === 'ACTIVE').length;
-      const vipUsers = users.filter(u => u.role === 'VIP' || u.role === 'ADMIN' || u.vipStatus?.isVip).length;
+      const vipUsers = users.filter(
+        u => ['VIP', 'VIP_PLUS'].includes(u.rank) || (u.vipStatus?.isVip && !['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(u.rank))
+      ).length;
+      const mvpUsers = users.filter(u =>
+        ['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(u.rank)
+      ).length;
       const totalParties = parties.length;
       const activeParties = parties.filter(p =>
         ['WAITING', 'READY', 'STARTING', 'ACTIVE'].includes(p.status)
       ).length;
       const totalEmeralds = econProfiles.reduce((sum, p) => sum + (p.emeraldCoins || 0), 0);
-      const totalTx = txs.length;
       const openTickets = tickets.filter(t => t.status === 'OPEN' || t.status === 'IN PROGRESS').length;
       const openBugs = bugs.filter(b => b.status !== 'RESOLVED' && b.status !== 'CLOSED').length;
       const openSuggestions = sugs.filter(
@@ -2659,10 +2950,12 @@
       setTxt('adm-card-total-users', totalUsers);
       setTxt('adm-card-active-users', activeUsers);
       setTxt('adm-card-vip-users', vipUsers);
+      setTxt('adm-card-mvp-users', mvpUsers);
       setTxt('adm-card-active-parties', activeParties);
       setTxt('adm-card-total-parties', totalParties);
       setTxt('adm-card-total-emeralds', `${totalEmeralds.toLocaleString('en-US')} 💚`);
-      setTxt('adm-card-total-tx', totalTx);
+      setTxt('adm-card-emeralds-sold', `${revMetrics.emeraldsSold.toLocaleString('en-US')} 💚`);
+      setTxt('adm-card-revenue', `${revMetrics.totalRevenueTL.toLocaleString('en-US')} TL`);
       setTxt('adm-card-open-tickets', openTickets);
       setTxt('adm-card-open-bugs', openBugs);
       setTxt('adm-card-open-suggestions', openSuggestions);
@@ -2692,7 +2985,7 @@
       }
     }
 
-    // 2. Admin Users Page (Section 21)
+    // 2. Admin Users Page (Section 33)
     renderAdminUsers() {
       const wrap = document.getElementById('adm-users-list');
       if (!wrap) return;
@@ -2702,14 +2995,15 @@
       let users = userService.getAllUsers();
 
       if (roleFilter !== 'ALL') {
-        users = users.filter(u => u.role === roleFilter);
+        users = users.filter(u => u.role === roleFilter || u.rank === roleFilter);
       }
       if (q) {
         users = users.filter(
           u =>
             u.minecraftUsername.toLowerCase().includes(q) ||
             u.id.toLowerCase().includes(q) ||
-            u.role.toLowerCase().includes(q)
+            u.role.toLowerCase().includes(q) ||
+            (u.rank || '').toLowerCase().includes(q)
         );
       }
 
@@ -2718,7 +3012,7 @@
           const prof = economyService.getPlayerEconomyProfile(u.minecraftUsername);
           const createdStr = new Date(u.createdAt).toLocaleDateString('en-US');
           const loginStr = new Date(u.lastLogin).toLocaleString('en-US');
-          const vipLabel = u.vipStatus?.isVip ? '👑 YES' : 'NO';
+          const rankLabel = u.rank || u.role || 'PLAYER';
 
           return `
             <div class="adm-row-card">
@@ -2726,11 +3020,11 @@
                 <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
                   <strong>⛏️ ${this.formatUsernameHtml(u.minecraftUsername, prof.rgbOwned && prof.rgbEnabled)}</strong>
                   <span class="meta-muted">(${u.id})</span>
-                  <span class="role-badge role-${u.role.toLowerCase()}">${u.role}</span>
+                  <span class="role-badge role-${u.role.toLowerCase()}">${this.escapeHtml(prof.rankBadge || rankLabel)}</span>
                   <span class="status-pill status-${u.status === 'ACTIVE' ? 'ACTIVE' : 'REVOKED'}">${u.status}</span>
                 </div>
                 <div class="adm-row-sub">
-                  <span>VIP: <strong class="gold-text">${vipLabel}</strong></span>
+                  <span>Rank: <strong class="gold-text">${this.escapeHtml(rankLabel)}</strong></span>
                   <span>⭐ Points: <strong>${prof.totalPoints.toLocaleString('en-US')}</strong></span>
                   <span>💚 Emeralds: <strong class="emerald-text">${prof.emeraldCoins.toLocaleString('en-US')}</strong></span>
                   <span>🎮 Games: <strong>${prof.gamesPlayed} (${prof.gamesWon}W / ${prof.gamesLost}L)</strong></span>
@@ -2739,7 +3033,7 @@
                 </div>
               </div>
               <div class="adm-row-actions">
-                <button type="button" class="act-btn" data-usr-act="role" data-user="${this.escapeHtml(u.minecraftUsername)}" data-role="${u.role}">Change Role</button>
+                <button type="button" class="act-btn" data-usr-act="role" data-user="${this.escapeHtml(u.minecraftUsername)}" data-role="${u.rank || u.role}">Assign Rank / Role</button>
                 <button type="button" class="act-btn emerald" data-usr-act="econ" data-user="${this.escapeHtml(u.minecraftUsername)}">Edit Emeralds</button>
                 <button type="button" class="act-btn ${u.status === 'SUSPENDED' ? 'emerald' : 'danger'}" data-usr-act="suspend" data-user="${this.escapeHtml(u.minecraftUsername)}">${u.status === 'SUSPENDED' ? 'Unsuspend' : 'Suspend'}</button>
                 <button type="button" class="act-btn danger" data-usr-act="reset" data-user="${this.escapeHtml(u.minecraftUsername)}">Reset Account</button>
@@ -2758,13 +3052,20 @@
 
           if (act === 'role') {
             const nextRole = prompt(
-              `Enter new role for ${uname} (PLAYER, VIP, or ADMIN):`,
-              currRole === 'PLAYER' ? 'VIP' : 'PLAYER'
+              `Enter new Rank or Role for ${uname} (PLAYER, VIP, VIP+, MVP, MVP+, ELITE, LEGEND, CHAMPION, MILLIONAIRE, or ADMIN):`,
+              currRole === 'PLAYER' ? 'VIP' : 'MVP'
             );
             if (nextRole) {
               try {
                 userService.adminUpdateUserRole(this.session, uname, nextRole);
-                this.showToast(`Role for ${uname} updated to ${nextRole.toUpperCase()}`, 'success');
+                const normRank = nextRole.trim().toUpperCase().replace(/\+/g, '_PLUS');
+                economyService._mutateAccount(uname, acc => {
+                  acc.rank = normRank;
+                  acc.isVip = normRank !== 'PLAYER';
+                  acc.role = normRank === 'ADMIN' ? 'ADMIN' : normRank === 'PLAYER' ? 'PLAYER' : 'VIP';
+                });
+                this.showToast(`Rank/Role for ${uname} updated to ${nextRole.toUpperCase()}`, 'success');
+                this.syncEconomyHeaderUI();
                 this.renderAdminAll();
               } catch (err) {
                 this.showToast(err.message, 'error');
@@ -2806,7 +3107,80 @@
       });
     }
 
-    // 3. Admin Licenses Page (Section 23)
+    // 3. Admin Ranks Page (Section 6, 7, 34)
+    renderAdminRanksTab() {
+      const wrap = document.getElementById('adm-ranks-list');
+      if (!wrap) return;
+      const ranks = rankService.getAllRanks();
+
+      wrap.innerHTML = ranks
+        .map(r => {
+          const p = r.permissions || {};
+          const isProtected = ['PLAYER', 'VIP', 'ADMIN'].includes(r.id);
+          return `
+            <div class="adm-row-card">
+              <div class="adm-row-main">
+                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
+                  <span style="font-size:1.3rem;">${this.escapeHtml(r.badgeIcon)}</span>
+                  <span class="adm-code-title" style="color:${this.escapeHtml(r.badgeColor)};">${this.escapeHtml(r.name)} (${this.escapeHtml(r.id)})</span>
+                  <strong class="emerald-text">💚 ${(r.emeraldPrice || 0).toLocaleString('en-US')} Emeralds</strong>
+                  <strong class="gold-text">💳 ${(r.tlPrice || 0).toLocaleString('en-US')} TL</strong>
+                </div>
+                <div class="adm-row-sub">
+                  <span>Create Party: <strong>${p.canCreateParty ? 'YES' : 'NO'}</strong></span>
+                  <span>Max Party Size: <strong>${p.maxPartySize >= 999 ? 'Unlimited' : p.maxPartySize}</strong></span>
+                  <span>Emerald Multiplier: <strong>${p.emeraldMultiplier || 1}x</strong></span>
+                  <span>Priority: <strong>${p.supportPriority || 'NORMAL'}</strong></span>
+                  <span>RGB Included: <strong>${p.rgbName ? 'YES' : 'NO'}</strong></span>
+                </div>
+              </div>
+              <div class="adm-row-actions">
+                <button type="button" class="act-btn emerald" data-rnk-act="edit" data-id="${this.escapeHtml(r.id)}">Load into Editor</button>
+                ${
+                  !isProtected
+                    ? `<button type="button" class="act-btn danger" data-rnk-act="delete" data-id="${this.escapeHtml(r.id)}">Delete</button>`
+                    : ''
+                }
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+
+      wrap.querySelectorAll('[data-rnk-act]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const act = btn.getAttribute('data-rnk-act');
+          const id = btn.getAttribute('data-id');
+          const r = rankService.getRankById(id);
+          if (!r) return;
+
+          if (act === 'edit') {
+            document.getElementById('adm-rank-id').value = r.id;
+            document.getElementById('adm-rank-name').value = r.name;
+            document.getElementById('adm-rank-icon').value = r.badgeIcon;
+            document.getElementById('adm-rank-color').value = r.badgeColor;
+            document.getElementById('adm-rank-emerald-price').value = r.emeraldPrice;
+            document.getElementById('adm-rank-tl-price').value = r.tlPrice;
+            document.getElementById('adm-rank-party-limit').value = r.permissions.maxPartySize;
+            document.getElementById('adm-rank-multiplier').value = r.permissions.emeraldMultiplier;
+            document.getElementById('adm-rank-priority').value = r.permissions.supportPriority;
+            document.getElementById('adm-rank-can-party').value = String(r.permissions.canCreateParty);
+            this.showToast(`Loaded rank ${r.name} into editor.`, 'info');
+          } else if (act === 'delete') {
+            try {
+              rankService.adminDeleteRank(this.session, id);
+              this.showToast(`Rank ${id} deleted.`, 'info');
+              this.renderAdminAll();
+            } catch (err) {
+              this.showToast(err.message, 'error');
+            }
+          }
+        });
+      });
+    }
+
+    // 4. Admin Licenses Page
     renderAdminLicenses() {
       const wrap = document.getElementById('adm-licenses-list');
       if (!wrap) return;
@@ -2934,7 +3308,7 @@
       });
     }
 
-    // 4. Admin Parties Page
+    // 5. Admin Parties Page
     renderAdminParties() {
       const wrap = document.getElementById('adm-parties-list');
       if (!wrap) return;
@@ -3034,7 +3408,7 @@
       });
     }
 
-    // 5. Admin Leaderboard Page
+    // 6. Admin Leaderboard Page
     renderAdminLeaderboard() {
       const wrap = document.getElementById('adm-leaderboard-list');
       if (!wrap) return;
@@ -3054,7 +3428,7 @@
               <div class="adm-row-sub">
                 <span>⭐ Points: <strong>${r.totalPoints.toLocaleString('en-US')}</strong></span>
                 <span>💚 Emeralds: <strong class="emerald-text">${r.emeraldCoins.toLocaleString('en-US')}</strong></span>
-                <span>🏆 Wins: <strong>${r.gamesWon}</strong></span>
+                <span>🏆 Wins: <strong>${r.gamesWon} (${r.winRate}%)</strong></span>
                 <span>🎮 Games Played: <strong>${r.gamesPlayed}</strong></span>
               </div>
             </div>
@@ -3064,7 +3438,7 @@
         .join('');
     }
 
-    // 6. Admin Economy Page
+    // 7. Admin Economy Page (Section 35)
     renderAdminEconomyTab() {
       const cfg = configService.getConfig();
       const econProfiles = economyService.getAllProfiles();
@@ -3095,9 +3469,62 @@
       setVal('cfg-extralife-price', cfg.extraLife.price);
       setVal('cfg-extralife-max', cfg.extraLife.maxPerGame);
       setVal('cfg-extralife-enabled', String(cfg.extraLife.enabled));
+
+      // Render Emerald Purchase Packages (500 - 10,000 💚)
+      const pkgWrap = document.getElementById('adm-emerald-packages-list');
+      if (pkgWrap) {
+        const pkgs = paymentService.getEmeraldPackages(true);
+        pkgWrap.innerHTML = pkgs
+          .map(
+            pkg => `
+            <div class="adm-row-card">
+              <div class="adm-row-main">
+                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
+                  <span>${this.escapeHtml(pkg.icon || '💚')}</span>
+                  <strong>${this.escapeHtml(pkg.title)}</strong>
+                  <span class="emerald-text">💚 ${pkg.emeralds.toLocaleString('en-US')} Emeralds</span>
+                  <span class="gold-text">💳 ${pkg.priceTL.toLocaleString('en-US')} TL</span>
+                  <span class="status-pill status-${pkg.enabled !== false ? 'ACTIVE' : 'DISABLED'}">${
+                    pkg.enabled !== false ? 'ENABLED' : 'DISABLED'
+                  }</span>
+                </div>
+              </div>
+              <div class="adm-row-actions">
+                <button type="button" class="act-btn" data-pkg-edit="${this.escapeHtml(pkg.id)}">Edit TL Price</button>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+
+        pkgWrap.querySelectorAll('[data-pkg-edit]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            window.soundManager.playClick();
+            const id = btn.getAttribute('data-pkg-edit');
+            const target = pkgs.find(x => x.id === id);
+            if (!target) return;
+            const rawPrice = prompt(
+              `Enter TL price for ${target.title} (min 100 TL):`,
+              String(target.priceTL)
+            );
+            if (rawPrice !== null && rawPrice.trim() !== '') {
+              try {
+                paymentService.adminSaveEmeraldPackage(this.session, {
+                  ...target,
+                  priceTL: Number(rawPrice)
+                });
+                this.showToast(`Updated ${target.title} price to ${rawPrice} TL.`, 'success');
+                this.renderAdminAll();
+              } catch (err) {
+                this.showToast(err.message, 'error');
+              }
+            }
+          });
+        });
+      }
     }
 
-    // 7. Admin Shop Page
+    // 8. Admin Emerald Shop Page
     renderAdminShopTab() {
       const shopWrap = document.getElementById('adm-shop-items-list');
       if (!shopWrap) return;
@@ -3173,63 +3600,117 @@
       });
     }
 
-    // 8. Admin VIP Management Page (Section 22)
+    // 9. Admin Rank Shop & VIP Management Page (Section 34)
     renderAdminVipTab() {
       const vipWrap = document.getElementById('adm-vip-users-list');
-      const payWrap = document.getElementById('adm-vip-payments-list');
+      if (!vipWrap) return;
 
-      if (vipWrap) {
-        const vipUsers = userService
-          .getAllUsers()
-          .filter(u => u.role === 'VIP' || u.role === 'ADMIN' || u.vipStatus?.isVip);
-        vipWrap.innerHTML =
-          vipUsers.length === 0
-            ? '<div class="empty-state-box">No VIP members found.</div>'
-            : vipUsers
-                .map(
-                  u => `
-                <div class="adm-row-card">
-                  <div class="adm-row-main">
-                    <div style="display:flex; gap:0.5rem; align-items:center;">
-                      <strong>👑 ${this.escapeHtml(u.minecraftUsername)}</strong>
-                      <span class="role-badge role-${u.role.toLowerCase()}">${u.role}</span>
-                    </div>
-                    <div class="adm-row-sub">
-                      <span>Tier: <strong>${u.vipStatus?.tier || 'VIP'}</strong></span>
-                      <span>Expires: <strong>${u.vipStatus?.expiresAt || 'Lifetime'}</strong></span>
+      const rankedUsers = userService
+        .getAllUsers()
+        .filter(u => u.role === 'VIP' || u.role === 'ADMIN' || u.vipStatus?.isVip || (u.rank && u.rank !== 'PLAYER'));
+
+      vipWrap.innerHTML =
+        rankedUsers.length === 0
+          ? '<div class="empty-state-box">No ranked members found.</div>'
+          : rankedUsers
+              .map(u => {
+                const prof = economyService.getPlayerEconomyProfile(u.minecraftUsername);
+                return `
+                  <div class="adm-row-card">
+                    <div class="adm-row-main">
+                      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                        <strong>👑 ${this.escapeHtml(u.minecraftUsername)}</strong>
+                        <span class="role-badge role-${u.role.toLowerCase()}">${this.escapeHtml(prof.rankBadge || u.rank || u.role)}</span>
+                      </div>
+                      <div class="adm-row-sub">
+                        <span>Rank Tier: <strong>${this.escapeHtml(u.rank || u.vipStatus?.tier || 'VIP')}</strong></span>
+                        <span>Max Party Size: <strong>${prof.permissions?.maxPartySize || 4}</strong></span>
+                        <span>Expires: <strong>${u.rankExpiration || u.vipStatus?.expiresAt || 'Lifetime'}</strong></span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              `
-                )
-                .join('');
-      }
-
-      if (payWrap) {
-        const intents = paymentService.listPaymentIntents(this.session);
-        payWrap.innerHTML =
-          intents.length === 0
-            ? '<div class="empty-state-box">No VIP payment checkout intents recorded yet.</div>'
-            : intents
-                .map(
-                  p => `
-                <div class="adm-row-card">
-                  <div class="adm-row-main">
-                    <div><strong>${this.escapeHtml(p.id)}</strong> — ${this.escapeHtml(p.username)} (${p.amount} ${p.currency})</div>
-                    <div class="adm-row-sub">
-                      <span>Package: ${this.escapeHtml(p.title)}</span>
-                      <span>Status: <strong>${p.status}</strong></span>
-                      <span>Time: ${new Date(p.createdAt).toLocaleString('en-US')}</span>
-                    </div>
-                  </div>
-                </div>
-              `
-                )
-                .join('');
-      }
+                `;
+              })
+              .join('');
     }
 
-    // 9. Admin Support Tickets Page (Section 14 & 17)
+    // 10. Admin Payments Page (Section 25, 36)
+    renderAdminPaymentsTab() {
+      const payWrap = document.getElementById('adm-vip-payments-list');
+      if (!payWrap) return;
+
+      const statusFilter = document.getElementById('filter-adm-payments-status')?.value || 'ALL';
+      let payments = paymentService.listPaymentIntents(this.session);
+      if (statusFilter !== 'ALL') {
+        payments = payments.filter(p => p.status === statusFilter);
+      }
+
+      if (payments.length === 0) {
+        payWrap.innerHTML =
+          '<div class="empty-state-box">No Stripe payment sessions recorded for this filter.</div>';
+        return;
+      }
+
+      payWrap.innerHTML = payments
+        .map(p => {
+          const statusClass =
+            p.status === 'PAID'
+              ? 'ACTIVE'
+              : p.status === 'PENDING'
+              ? 'WAITING'
+              : 'REVOKED';
+          return `
+            <div class="adm-row-card">
+              <div class="adm-row-main">
+                <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                  <span class="adm-code-title">${this.escapeHtml(p.id)}</span>
+                  <span class="status-pill status-${statusClass}">${this.escapeHtml(p.status)}</span>
+                  <strong>⛏️ ${this.escapeHtml(p.username)}</strong>
+                  <strong class="gold-text">${p.amount} ${this.escapeHtml(p.currency)}</strong>
+                </div>
+                <div class="adm-row-sub">
+                  <span>Item: <strong>${this.escapeHtml(p.title)}</strong></span>
+                  <span>Type: <strong>${this.escapeHtml(p.type || 'EMERALDS')}</strong></span>
+                  ${p.webhookEventId ? `<span>Webhook Event: <code>${this.escapeHtml(p.webhookEventId)}</code></span>` : ''}
+                  <span>Created: ${new Date(p.createdAt).toLocaleString('en-US')}</span>
+                </div>
+              </div>
+              <div class="adm-row-actions">
+                ${
+                  p.status === 'PAID'
+                    ? `<button type="button" class="act-btn danger" data-pay-act="refund" data-id="${this.escapeHtml(p.id)}">Refund</button>`
+                    : ''
+                }
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+
+      payWrap.querySelectorAll('[data-pay-act="refund"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const id = btn.getAttribute('data-id');
+          this.askConfirmation(
+            '💸 Refund Payment',
+            `Are you sure you want to mark payment ${id} as REFUNDED and reverse credited Emeralds?`,
+            'Confirm Refund',
+            () => {
+              try {
+                paymentService.adminRefundPayment(this.session, id, 'Admin Panel Refund');
+                this.showToast(`Payment ${id} refunded.`, 'info');
+                this.syncEconomyHeaderUI();
+                this.renderAdminAll();
+              } catch (err) {
+                this.showToast(err.message, 'error');
+              }
+            }
+          );
+        });
+      });
+    }
+
+    // 11. Admin Support Tickets Page (Section 28 & 30)
     renderAdminSupport() {
       const wrap = document.getElementById('adm-support-list');
       if (!wrap) return;
@@ -3244,15 +3725,13 @@
               <div class="adm-row-card">
                 <div class="adm-row-main">
                   <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${t.priority}">${
-                      t.priority === 'HIGH' ? '🔥 VIP PRIORITY' : t.priority
-                    }</span>
+                    <span class="priority-pill priority-${t.priority.replace(/\s+/g, '_')}">${this.escapeHtml(t.priority)} PRIORITY</span>
                     <strong>${this.escapeHtml(t.title)}</strong>
                     <span class="status-pill status-${t.status === 'RESOLVED' ? 'ACTIVE' : 'WAITING'}">${t.status}</span>
                   </div>
                   <div class="adm-row-sub">
                     <span>Ticket ID: <strong>${t.id}</strong></span>
-                    <span>User: <strong>${this.escapeHtml(t.username)} (${t.role})</strong></span>
+                    <span>User: <strong>${this.escapeHtml(t.username)} (${this.escapeHtml(t.rank || t.role)})</strong></span>
                     <span>Category: <strong>${this.escapeHtml(t.category)}</strong></span>
                     <span>Created: ${new Date(t.createdAt).toLocaleString('en-US')}</span>
                   </div>
@@ -3292,7 +3771,7 @@
       });
     }
 
-    // 10. Admin Bug Reports Page (Section 15 & 17)
+    // 12. Admin Bug Reports Page (Section 28 & 30)
     renderAdminBugs() {
       const wrap = document.getElementById('adm-bugs-list');
       if (!wrap) return;
@@ -3308,15 +3787,13 @@
               <div class="adm-row-card">
                 <div class="adm-row-main">
                   <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${b.priority}">${
-                      b.priority === 'HIGH' ? '🔥 VIP PRIORITY (HIGH)' : b.priority
-                    }</span>
+                    <span class="priority-pill priority-${b.priority.replace(/\s+/g, '_')}">${this.escapeHtml(b.priority)} PRIORITY</span>
                     <strong>${this.escapeHtml(b.title)}</strong>
                     <span class="status-pill status-WAITING">${b.status}</span>
                   </div>
                   <div class="adm-row-sub">
                     <span>ID: <strong>${b.id}</strong></span>
-                    <span>User: <strong>${this.escapeHtml(b.username)} (${b.isVip ? '👑 VIP' : 'PLAYER'})</strong></span>
+                    <span>User: <strong>${this.escapeHtml(b.username)} (${this.escapeHtml(b.rank || (b.isVip ? 'VIP' : 'PLAYER'))})</strong></span>
                     <span>Category: <strong>${this.escapeHtml(b.category)}</strong></span>
                     ${b.relatedParty ? `<span>Party: <strong>${this.escapeHtml(b.relatedParty)}</strong></span>` : ''}
                     <span>Created: ${new Date(b.createdAt).toLocaleString('en-US')}</span>
@@ -3347,7 +3824,7 @@
       });
     }
 
-    // 11. Admin Suggestions Page (Section 16 & 17)
+    // 13. Admin Suggestions Page (Section 29 & 30)
     renderAdminSuggestions() {
       const wrap = document.getElementById('adm-suggestions-list');
       if (!wrap) return;
@@ -3364,16 +3841,14 @@
               <div class="adm-row-card">
                 <div class="adm-row-main">
                   <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${s.priority}">${
-                      s.priority === 'HIGH' ? '👑 VIP PRIORITY' : s.priority
-                    }</span>
+                    <span class="priority-pill priority-${s.priority.replace(/\s+/g, '_')}">${this.escapeHtml(s.priority)} PRIORITY</span>
                     <strong>${this.escapeHtml(s.title)}</strong>
                     <span class="status-pill status-ACTIVE">${s.status}</span>
                     <span class="gold-text">👍 ${s.votes || 0} Votes</span>
                   </div>
                   <div class="adm-row-sub">
                     <span>ID: <strong>${s.id}</strong></span>
-                    <span>User: <strong>${this.escapeHtml(s.username)} (${s.role})</strong></span>
+                    <span>User: <strong>${this.escapeHtml(s.username)} (${this.escapeHtml(s.rank || s.role)})</strong></span>
                     <span>Category: <strong>${this.escapeHtml(s.category)}</strong></span>
                     <span>Created: ${new Date(s.createdAt).toLocaleString('en-US')}</span>
                   </div>
@@ -3403,7 +3878,7 @@
       });
     }
 
-    // 12. Admin Transactions Page (Section 25)
+    // 14. Admin Transactions Page
     renderAdminTransactions() {
       const txListEl = document.getElementById('adm-tx-history-list');
       if (!txListEl) return;
@@ -3445,7 +3920,7 @@
               .join('');
     }
 
-    // 13. Admin Achievements Page
+    // 15. Admin Achievements Page
     renderAdminAchievements() {
       const wrap = document.getElementById('adm-achievements-list');
       if (!wrap) return;
@@ -3471,7 +3946,7 @@
         .join('');
     }
 
-    // 14. Admin Backups Page (Section 4)
+    // 16. Admin Backups Page (Section 37)
     renderAdminBackups() {
       const wrap = document.getElementById('adm-backups-list');
       if (!wrap) return;
@@ -3493,11 +3968,13 @@
                 <span>📁 <code>backup/parties/</code> (${b.counts.parties})</span>
                 <span>📁 <code>backup/licenses/</code> (${b.counts.licenses})</span>
                 <span>📁 <code>backup/transactions/</code> (${b.counts.transactions})</span>
+                <span>📁 <code>backup/payments/</code> (${b.counts.payments || 0})</span>
                 <span>📁 <code>backup/settings/</code> (Ready)</span>
               </div>
             </div>
             <div class="adm-row-actions">
-              <button type="button" class="act-btn emerald" data-bkp-act="export" data-id="${b.id}">Export JSON</button>
+              <button type="button" class="act-btn emerald" data-bkp-act="download" data-id="${b.id}">⬇️ Download Backup</button>
+              <button type="button" class="act-btn" data-bkp-act="export" data-id="${b.id}">Copy JSON</button>
               <button type="button" class="act-btn danger" data-bkp-act="restore" data-id="${b.id}">Restore Snapshot</button>
             </div>
           </div>
@@ -3513,7 +3990,11 @@
           const target = backups.find(x => x.id === id);
           if (!target) return;
 
-          if (act === 'export') {
+          if (act === 'download') {
+            const jsonStr = JSON.stringify(target, null, 2);
+            this.downloadJsonFile(`minecraft-milyoner-${target.id}.json`, jsonStr);
+            this.showToast(`Downloaded ${target.id}.json!`, 'success');
+          } else if (act === 'export') {
             this.copyToClipboard(
               JSON.stringify(target, null, 2),
               `Backup ${target.id} JSON copied to clipboard!`
@@ -3534,7 +4015,7 @@
       });
     }
 
-    // 15. Admin Activity Logs
+    // 17. Admin Activity Logs
     renderAdminActivity() {
       const wrap = document.getElementById('adm-full-activity-list');
       if (!wrap) return;
@@ -3557,6 +4038,22 @@
     // ==========================================
     // UTILITIES
     // ==========================================
+    downloadJsonFile(filename, content) {
+      try {
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (e) {
+        this.copyToClipboard(content, 'Backup JSON copied to clipboard!');
+      }
+    }
+
     copyToClipboard(text, successMsg) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard

@@ -1,15 +1,15 @@
 /**
- * MINECRAFT MILYONER — ECONOMY, LEADERBOARD, SHOP, RANKS, RGB COSMETICS & EXTRA LIFE SERVICES
+ * MINECRAFT MILYONER — FULL PRODUCTION ECONOMY, RANKS, SHOP, LEADERBOARD & EXTRA LIFE SERVICES
  *
  * Modular Services:
- * - configService (Normal & VIP Rewards, Extra Life Config)
- * - rankService (Configurable Ranks: VIP, MVP, MVP+, LEGEND, CHAMPION, MILLIONAIRE)
- * - economyService (Persistent Emerald Balances, VIP Bonus, Admin Controls, Full Audit Ledger)
- * - shopService (Categories: Gameplay, Ranks, Cosmetics, VIP, Special + Eligibility Checks)
+ * - configService (Normal & VIP Rewards, 5 Emeralds = 1 TL Conversion, Extra Life Config)
+ * - rankService (Data-Driven Ranks: PLAYER, VIP, VIP+, MVP, MVP+, ELITE, LEGEND, CHAMPION, MILLIONAIRE, ADMIN)
+ * - economyService (Persistent Emerald Balances, Rank Multiplier, Stripe Webhook Credit, Admin Controls, Ledger)
+ * - shopService (Categories: Emeralds, Gameplay, Ranks, Cosmetics, Special + Eligibility Checks)
  * - extraLifeService (Atomic Extra Life Consumption & Anti-Duplicate Protection)
- * - dailyRewardService (Normal +25 💚 / VIP +50 💚 Daily Reward & Streak)
+ * - dailyRewardService (Rank Multiplier Daily Reward & Streak)
  * - achievementService (Automatic Milestone Unlocking)
- * - leaderboardService (Sort by Points, Wins, Emeralds, Games Played + Top 3 Podium)
+ * - leaderboardService (Sort by Points, Wins, Emeralds, Games Played + Top 3 Podium + Win Rate)
  */
 
 (function () {
@@ -21,8 +21,8 @@
     CONFIG: 'mcm_econ_config_v3',
     ACCOUNTS: 'mcm_econ_accounts_v2',
     TRANSACTIONS: 'mcm_econ_transactions_v2',
-    SHOP_ITEMS: 'mcm_econ_shop_items_v3',
-    RANKS: 'mcm_econ_ranks_v3',
+    SHOP_ITEMS: 'mcm_econ_shop_items_v4',
+    RANKS: 'mcm_econ_ranks_v4',
     PURCHASES: 'mcm_econ_purchases_v2',
     EXTRA_LIVES: 'mcm_econ_extralives_v2',
     ACHIEVEMENTS: 'mcm_econ_achievements_v2'
@@ -60,9 +60,11 @@
   };
 
   // ==========================================
-  // 1. CONFIGURABLE REWARD & EXTRA LIFE SETTINGS (Sections 10, 21, 25)
+  // 1. CONFIGURABLE REWARD & EXTRA LIFE SETTINGS (Sections 10, 14, 19, 27)
   // ==========================================
   const DEFAULT_CONFIG = {
+    emeraldsPerTL: 5, // 5 Emeralds = 1 TL (500 Emeralds = 100 TL)
+    minEmeraldPurchase: 500,
     gameCompletedReward: 25,
     vipGameCompletedReward: 40,
     gameWonReward: 100,
@@ -191,105 +193,528 @@
   };
 
   // ==========================================
-  // 2. CONFIGURABLE RANK SYSTEM (Section 12)
+  // 2. DATA-DRIVEN RANK & PERMISSIONS SYSTEM (Sections 5, 6, 7, 8, 9, 10, 13, 26)
   // ==========================================
+  // Ranks: PLAYER, VIP, VIP+, MVP, MVP+, ELITE, LEGEND, CHAMPION, MILLIONAIRE (+ ADMIN)
   const DEFAULT_RANKS = [
     {
       id: 'PLAYER',
+      name: 'PLAYER',
       displayName: 'Player',
       badge: '⛏️ PLAYER',
+      prefix: '[PLAYER]',
       color: '#a6b4d0',
-      permissions: ['JOIN_PARTY', 'USE_SHOP'],
-      grantsVip: false,
+      gradient: 'linear-gradient(90deg, #94a3b8, #cbd5e1)',
+      permissions: {
+        canCreateParty: false,
+        canInvitePlayers: false,
+        maxPartySize: 0,
+        emeraldMultiplier: 1.0,
+        supportPriority: 'NORMAL',
+        bugPriority: 'NORMAL',
+        suggestionPriority: 'NORMAL',
+        maxExtraLives: 3,
+        cosmetics: false,
+        rgbName: false,
+        profileEffects: false
+      },
+      benefits: ['Join Parties', 'Emerald Shop Access', 'Standard Leaderboard'],
+      emeraldBonus: 1.0,
+      priorityLevel: 'NORMAL',
       price: 0,
-      currency: 'EMERALD'
+      emeraldPrice: 0,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
+      grantsVip: false,
+      enabled: true
     },
     {
       id: 'VIP',
+      name: 'VIP',
       displayName: 'VIP',
       badge: '👑 VIP',
+      prefix: '[VIP]',
       color: '#ffbe2e',
-      permissions: ['CREATE_PARTY', 'INVITE_PLAYER', 'PRIORITY_SUPPORT', 'VIP_BONUS', 'VIP_SHOP'],
-      grantsVip: true,
+      gradient: 'linear-gradient(90deg, #f59e0b, #fde047)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 4,
+        emeraldMultiplier: 1.25,
+        supportPriority: 'HIGH',
+        bugPriority: 'HIGH',
+        suggestionPriority: 'HIGH',
+        maxExtraLives: 5,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'Create Parties (Up to 4 Players)',
+        'Invite Players',
+        '1.25x Emerald Bonus Multiplier',
+        'HIGH Priority Support, Bugs & Suggestions',
+        'RGB Username & VIP Badge'
+      ],
+      emeraldBonus: 1.25,
+      priorityLevel: 'HIGH',
       price: 200,
-      emeraldPrice: 2000,
-      currency: 'TRY'
+      emeraldPrice: 1000,
+      currency: 'TRY',
+      duration: 'LIFETIME',
+      grantsVip: true,
+      enabled: true
+    },
+    {
+      id: 'VIP_PLUS',
+      name: 'VIP+',
+      displayName: 'VIP+',
+      badge: '👑 VIP+',
+      prefix: '[VIP+]',
+      color: '#ff9f1c',
+      gradient: 'linear-gradient(90deg, #fb923c, #facc15)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 6,
+        emeraldMultiplier: 1.5,
+        supportPriority: 'HIGH',
+        bugPriority: 'HIGH',
+        suggestionPriority: 'HIGH',
+        maxExtraLives: 6,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'Everything in VIP',
+        'Create Parties (Up to 6 Players)',
+        '1.50x Emerald Bonus Multiplier',
+        'Up to 6 Extra Lives Capacity',
+        'VIP+ Golden Badge & Profile Effects'
+      ],
+      emeraldBonus: 1.5,
+      priorityLevel: 'HIGH',
+      price: 350,
+      emeraldPrice: 1750,
+      currency: 'TRY',
+      duration: 'LIFETIME',
+      grantsVip: true,
+      enabled: true
     },
     {
       id: 'MVP',
+      name: 'MVP',
       displayName: 'MVP',
       badge: '⚔️ MVP',
+      prefix: '[MVP]',
       color: '#36e2ec',
-      permissions: ['JOIN_PARTY', 'USE_SHOP', 'MVP_BADGE'],
-      grantsVip: false,
-      price: 1500,
-      currency: 'EMERALD'
+      gradient: 'linear-gradient(90deg, #06b6d4, #67e8f9)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 8,
+        emeraldMultiplier: 1.75,
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
+        maxExtraLives: 7,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'Everything in VIP+',
+        'Create Parties (Up to 8 Players)',
+        '1.75x Emerald Bonus Multiplier',
+        'VERY HIGH Priority Support, Bugs & Suggestions',
+        'Exclusive MVP Prefix & Diamond Border'
+      ],
+      emeraldBonus: 1.75,
+      priorityLevel: 'VERY HIGH',
+      price: 500,
+      emeraldPrice: 2500,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
+      grantsVip: true,
+      enabled: true
     },
     {
       id: 'MVP_PLUS',
+      name: 'MVP+',
       displayName: 'MVP+',
       badge: '🌟 MVP+',
-      color: '#36e2ec',
-      permissions: ['CREATE_PARTY', 'INVITE_PLAYER', 'PRIORITY_SUPPORT', 'VIP_BONUS', 'VIP_SHOP'],
+      prefix: '[MVP+]',
+      color: '#00f5d4',
+      gradient: 'linear-gradient(90deg, #00f5d4, #38bdf8)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 10,
+        emeraldMultiplier: 2.0,
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
+        maxExtraLives: 8,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'Everything in MVP',
+        'Create Parties (Up to 10 Players)',
+        '2.00x Emerald Bonus Multiplier',
+        'VERY HIGH Priority Queue',
+        'Animated Profile Effects & MVP+ Badge'
+      ],
+      emeraldBonus: 2.0,
+      priorityLevel: 'VERY HIGH',
+      price: 750,
+      emeraldPrice: 3750,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
       grantsVip: true,
-      price: 2200,
-      currency: 'EMERALD'
+      enabled: true
+    },
+    {
+      id: 'ELITE',
+      name: 'ELITE',
+      displayName: 'ELITE',
+      badge: '⚡ ELITE',
+      prefix: '[ELITE]',
+      color: '#a855f7',
+      gradient: 'linear-gradient(90deg, #a855f7, #ec4899)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 12,
+        emeraldMultiplier: 2.25,
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
+        maxExtraLives: 8,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'Create Parties (Up to 12 Players)',
+        '2.25x Emerald Bonus Multiplier',
+        'VERY HIGH Priority Queue',
+        'Amethyst ELITE Badge & RGB Cosmetics'
+      ],
+      emeraldBonus: 2.25,
+      priorityLevel: 'VERY HIGH',
+      price: 900,
+      emeraldPrice: 4500,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
+      grantsVip: true,
+      enabled: true
     },
     {
       id: 'LEGEND',
+      name: 'LEGEND',
       displayName: 'LEGEND',
       badge: '🔱 LEGEND',
+      prefix: '[LEGEND]',
       color: '#ff6b6b',
-      permissions: ['CREATE_PARTY', 'INVITE_PLAYER', 'PRIORITY_SUPPORT', 'VIP_BONUS', 'VIP_SHOP'],
+      gradient: 'linear-gradient(90deg, #ef4444, #f97316)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 14,
+        emeraldMultiplier: 2.5,
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
+        maxExtraLives: 9,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'Create Parties (Up to 14 Players)',
+        '2.50x Emerald Bonus Multiplier',
+        'VERY HIGH Priority Queue',
+        'Crimson 🔱 LEGEND Badge'
+      ],
+      emeraldBonus: 2.5,
+      priorityLevel: 'VERY HIGH',
+      price: 1200,
+      emeraldPrice: 3000,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
       grantsVip: true,
-      price: 3000,
-      currency: 'EMERALD'
+      enabled: true
     },
     {
       id: 'CHAMPION',
+      name: 'CHAMPION',
       displayName: 'CHAMPION',
       badge: '🏆 CHAMPION',
+      prefix: '[CHAMPION]',
       color: '#ffd700',
-      permissions: ['CREATE_PARTY', 'INVITE_PLAYER', 'PRIORITY_SUPPORT', 'VIP_BONUS', 'VIP_SHOP'],
+      gradient: 'linear-gradient(90deg, #facc15, #f59e0b)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 16,
+        emeraldMultiplier: 2.75,
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
+        maxExtraLives: 10,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'Create Parties (Up to 16 Players)',
+        '2.75x Emerald Bonus Multiplier',
+        'VERY HIGH Priority Queue',
+        'Golden 🏆 CHAMPION Tournament Badge'
+      ],
+      emeraldBonus: 2.75,
+      priorityLevel: 'VERY HIGH',
+      price: 1600,
+      emeraldPrice: 4000,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
       grantsVip: true,
-      price: 4000,
-      currency: 'EMERALD'
+      enabled: true
     },
     {
       id: 'MILLIONAIRE',
+      name: 'MILLIONAIRE',
       displayName: 'MILLIONAIRE',
       badge: '💎 MILLIONAIRE',
+      prefix: '[MILLIONAIRE]',
       color: '#23d160',
-      permissions: ['CREATE_PARTY', 'INVITE_PLAYER', 'PRIORITY_SUPPORT', 'VIP_BONUS', 'VIP_SHOP', 'RGB_NAME'],
+      gradient: 'linear-gradient(90deg, #17dd62, #36e2ec, #ffbe2e)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 20,
+        emeraldMultiplier: 3.0,
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
+        maxExtraLives: 10,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'Create Parties (Up to 20 Players)',
+        '3.00x Emerald Bonus Multiplier',
+        'Automatic RGB & Animated Username',
+        'Ultimate 💎 MILLIONAIRE Crown'
+      ],
+      emeraldBonus: 3.0,
+      priorityLevel: 'VERY HIGH',
+      price: 2000,
+      emeraldPrice: 5000,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
       grantsVip: true,
-      price: 5000,
-      currency: 'EMERALD'
+      enabled: true
     },
     {
       id: 'ADMIN',
+      name: 'ADMIN',
       displayName: 'ADMIN',
       badge: '🛡️ ADMIN',
+      prefix: '[ADMIN]',
       color: '#ff5252',
-      permissions: ['ALL'],
-      grantsVip: true,
+      gradient: 'linear-gradient(90deg, #ff5252, #ffbe2e)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 999,
+        emeraldMultiplier: 3.0,
+        supportPriority: 'CRITICAL',
+        bugPriority: 'CRITICAL',
+        suggestionPriority: 'CRITICAL',
+        maxExtraLives: 10,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: ['Full Platform Administration', 'Unlimited Party Capacity', 'CRITICAL Priority'],
+      emeraldBonus: 3.0,
+      priorityLevel: 'CRITICAL',
       price: 0,
-      currency: 'EMERALD'
+      emeraldPrice: 0,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
+      grantsVip: true,
+      enabled: true
     }
   ];
 
   const rankService = {
-    getRanks() {
-      const saved = store.get(ECON_KEYS.RANKS, null);
-      if (saved && Array.isArray(saved) && saved.length > 0) return saved;
-      store.set(ECON_KEYS.RANKS, DEFAULT_RANKS);
-      return DEFAULT_RANKS;
+    getRanks(includeDisabled = true) {
+      let saved = store.get(ECON_KEYS.RANKS, null);
+      if (!saved || !Array.isArray(saved) || saved.length < 9) {
+        store.set(ECON_KEYS.RANKS, DEFAULT_RANKS);
+        saved = DEFAULT_RANKS;
+      }
+      return includeDisabled ? saved : saved.filter(r => r.enabled !== false);
+    },
+
+    _saveRanks(ranks) {
+      store.set(ECON_KEYS.RANKS, ranks);
     },
 
     getRankById(rankId) {
-      const all = this.getRanks();
-      return (
-        all.find(r => r.id.toUpperCase() === String(rankId || 'PLAYER').toUpperCase()) || all[0]
+      const cleanId = String(rankId || 'PLAYER')
+        .trim()
+        .toUpperCase()
+        .replace(/\+/g, '_PLUS');
+      const all = this.getRanks(true);
+      return all.find(r => r.id.toUpperCase() === cleanId || r.name.toUpperCase() === cleanId) || all[0];
+    },
+
+    getPermissionsForRank(rankId) {
+      const rank = this.getRankById(rankId);
+      if (rank && rank.permissions && typeof rank.permissions === 'object' && !Array.isArray(rank.permissions)) {
+        return { ...rank.permissions };
+      }
+      return { ...DEFAULT_RANKS[0].permissions };
+    },
+
+    // Section 26: Admin Create / Edit / Delete Rank
+    adminSaveRank(session, rankData) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const rawId = String(rankData.id || rankData.name || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\+/g, '_PLUS')
+        .replace(/[^A-Z0-9_]/g, '_');
+      if (!rawId) throw new Error('Rank ID / Name is required.');
+
+      const all = this.getRanks(true);
+      const existing = all.find(r => r.id === rawId);
+
+      const pIn = rankData.permissions || {};
+      const priority =
+        rankData.priorityLevel ||
+        rankData.supportPriority ||
+        pIn.supportPriority ||
+        'HIGH';
+      const mult = Math.max(
+        1,
+        Number(rankData.emeraldMultiplier || rankData.emeraldBonus || pIn.emeraldMultiplier) || 1.25
       );
+      const maxParty = Math.max(
+        0,
+        Math.round(Number(rankData.maxPartySize ?? pIn.maxPartySize ?? 4))
+      );
+      const maxLives = Math.max(
+        1,
+        Math.round(Number(rankData.maxExtraLives || pIn.maxExtraLives) || 5)
+      );
+      const priceTL = Math.max(0, Math.round(Number(rankData.price ?? rankData.tlPrice) || 0));
+      const emeraldPrice = Math.max(
+        0,
+        Math.round(Number(rankData.emeraldPrice) || priceTL * 5 || 1000)
+      );
+
+      const permissions = {
+        canCreateParty:
+          rankData.canCreateParty !== undefined
+            ? Boolean(rankData.canCreateParty)
+            : pIn.canCreateParty !== undefined
+              ? Boolean(pIn.canCreateParty)
+              : maxParty > 0,
+        canInvitePlayers:
+          rankData.canInvitePlayers !== undefined
+            ? Boolean(rankData.canInvitePlayers)
+            : pIn.canInvitePlayers !== undefined
+              ? Boolean(pIn.canInvitePlayers)
+              : maxParty > 0,
+        maxPartySize: maxParty,
+        emeraldMultiplier: mult,
+        supportPriority: priority,
+        bugPriority: priority,
+        suggestionPriority: priority,
+        maxExtraLives: maxLives,
+        cosmetics: (rankData.cosmetics ?? pIn.cosmetics) !== false,
+        rgbName: (rankData.rgbName ?? pIn.rgbName) !== false,
+        profileEffects: (rankData.profileEffects ?? pIn.profileEffects) !== false
+      };
+
+      const displayName = String(rankData.displayName || rankData.name || rawId).trim();
+      const badge = String(rankData.badge || `👑 ${displayName}`).trim();
+
+      if (existing) {
+        existing.name = String(rankData.name || existing.name).trim();
+        existing.displayName = displayName;
+        existing.badge = badge;
+        existing.prefix = String(rankData.prefix || `[${displayName}]`).trim();
+        existing.color = rankData.color || existing.color || '#ffbe2e';
+        existing.permissions = permissions;
+        existing.emeraldBonus = mult;
+        existing.priorityLevel = priority;
+        existing.price = priceTL;
+        existing.emeraldPrice = emeraldPrice;
+        if (rankData.currency) existing.currency = rankData.currency;
+        if (rankData.enabled !== undefined) existing.enabled = Boolean(rankData.enabled);
+        existing.grantsVip = permissions.canCreateParty;
+      } else {
+        all.push({
+          id: rawId,
+          name: displayName,
+          displayName,
+          badge,
+          prefix: `[${displayName}]`,
+          color: rankData.color || '#ffbe2e',
+          gradient: 'linear-gradient(90deg, #f59e0b, #fde047)',
+          permissions,
+          benefits: rankData.benefits || [
+            `Create Parties (Up to ${maxParty} Players)`,
+            `${mult}x Emerald Bonus Multiplier`,
+            `${priority} Priority Queue`
+          ],
+          emeraldBonus: mult,
+          priorityLevel: priority,
+          price: priceTL,
+          emeraldPrice,
+          currency: rankData.currency || 'EMERALD',
+          duration: rankData.duration || 'LIFETIME',
+          grantsVip: permissions.canCreateParty,
+          enabled: rankData.enabled !== false
+        });
+      }
+
+      this._saveRanks(all);
+      activityService.log(
+        'RANK_SAVED',
+        session.username,
+        `Admin ${session.username} saved rank "${displayName}" (Multiplier: ${mult}x, Party Size: ${maxParty}, Priority: ${priority})`
+      );
+      return this.getRankById(rawId);
+    },
+
+    adminDeleteRank(session, rankId) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const protectedIds = ['PLAYER', 'VIP', 'ADMIN'];
+      const cleanId = String(rankId || '').toUpperCase();
+      if (protectedIds.includes(cleanId)) {
+        throw new Error(`Cannot delete core system rank (${cleanId}).`);
+      }
+      const all = this.getRanks(true);
+      const idx = all.findIndex(r => r.id === cleanId);
+      if (idx === -1) throw new Error('Rank not found.');
+      const removed = all.splice(idx, 1)[0];
+      this._saveRanks(all);
+      activityService.log(
+        'RANK_DELETED',
+        session.username,
+        `Admin ${session.username} deleted rank "${removed.displayName}"`
+      );
+      return removed;
     }
   };
 
@@ -299,31 +724,45 @@
   function normalizeAccount(acc) {
     if (!acc) return null;
     const u = userService ? userService.getUserByUsername(acc.username) : null;
-    const balance = Number(acc.balance ?? acc.emeraldCoins ?? u?.emeraldBalance ?? 0);
-    const points = Number(acc.points ?? acc.totalPoints ?? u?.points ?? 0);
+    const balance = Math.max(0, Number(acc.balance ?? acc.emeraldCoins ?? u?.emeraldBalance ?? 0));
+    const points = Math.max(0, Number(acc.points ?? acc.totalPoints ?? u?.points ?? 0));
     const gamesPlayed = Number(acc.gamesPlayed || u?.gamesPlayed || 0);
     const gamesWon = Number(acc.gamesWon || u?.gamesWon || 0);
     const gamesLost = Number(acc.gamesLost || u?.gamesLost || 0);
-    const extraLives = Number(acc.extraLives ?? acc.inventory?.extraLives ?? u?.extraLives ?? 0);
+    const extraLives = Math.max(
+      0,
+      Number(acc.extraLives ?? acc.inventory?.extraLives ?? u?.extraLives ?? 0)
+    );
     const secondChanceOwned = Number(acc.secondChanceOwned ?? acc.inventory?.secondChance ?? 0);
     const scoreBoosterOwned = Number(acc.scoreBoosterOwned ?? acc.inventory?.scoreBooster ?? 0);
-    const emeraldBoosterOwned = Number(acc.emeraldBoosterOwned ?? acc.inventory?.emeraldBooster ?? 0);
-    const tournamentTickets = Number(acc.tournamentTickets ?? acc.inventory?.tournamentTickets ?? 0);
+    const emeraldBoosterOwned = Number(
+      acc.emeraldBoosterOwned ?? acc.inventory?.emeraldBooster ?? 0
+    );
+    const tournamentTickets = Number(
+      acc.tournamentTickets ?? acc.inventory?.tournamentTickets ?? 0
+    );
     const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0;
     const averageScore = gamesPlayed > 0 ? Math.round(points / gamesPlayed) : 0;
 
     const effectiveRole = u ? u.role : acc.role || 'PLAYER';
+    const rankId = u?.rank || u?.rankId || acc.equippedRank || effectiveRole;
+    const rankObj = rankService.getRankById(rankId);
+    const perms = rankService.getPermissionsForRank(rankId);
     const isVip = Boolean(
       effectiveRole === 'VIP' ||
         effectiveRole === 'ADMIN' ||
         u?.vipStatus?.isVip ||
-        acc.isVip
+        acc.isVip ||
+        perms.canCreateParty
     );
-    const rankId = u?.rankId || acc.equippedRank || effectiveRole;
-    const rankObj = rankService.getRankById(rankId);
-    const rgbOwned = Boolean(acc.rgbOwned || u?.cosmetics?.rgbOwned || effectiveRole === 'ADMIN');
+    const rgbOwned = Boolean(
+      acc.rgbOwned || u?.cosmetics?.rgbOwned || perms.rgbName || effectiveRole === 'ADMIN'
+    );
     const rgbEnabled = Boolean(
       u?.cosmetics?.rgbEnabled !== undefined ? u.cosmetics.rgbEnabled : acc.rgbEnabled
+    );
+    const animatedNameOwned = Boolean(
+      acc.animatedNameOwned || u?.cosmetics?.animatedNameOwned || effectiveRole === 'ADMIN'
     );
 
     return {
@@ -331,13 +770,17 @@
       userId: u?.id || acc.playerId,
       role: effectiveRole,
       isVip,
-      vipStatus: u?.vipStatus || { isVip, tier: isVip ? 'VIP' : 'NONE', expiresAt: null },
-      rankId,
+      vipStatus: u?.vipStatus || { isVip, tier: isVip ? rankObj.id : 'NONE', expiresAt: null },
+      rank: rankObj.id,
+      rankId: rankObj.id,
+      rankDisplayName: rankObj.displayName,
       rankBadge: rankObj.badge,
       rankColor: rankObj.color,
+      rankPermissions: perms,
       rgbOwned,
       rgbEnabled,
-      ownedRanks: acc.ownedRanks || [effectiveRole],
+      animatedNameOwned,
+      ownedRanks: acc.ownedRanks || [rankObj.id],
       balance,
       emeraldBalance: balance,
       emeraldCoins: balance,
@@ -365,7 +808,7 @@
   }
 
   // ==========================================
-  // 4. EMERALD ECONOMY SERVICE (Sections 10, 20, 21, 25)
+  // 4. EMERALD ECONOMY SERVICE (Sections 10, 14, 15, 16, 17, 27)
   // ==========================================
   const economyService = {
     _ensureAccounts() {
@@ -385,6 +828,7 @@
           ownedRanks: ['ADMIN', 'VIP', 'MILLIONAIRE'],
           rgbOwned: true,
           rgbEnabled: true,
+          animatedNameOwned: true,
           balance: 2450,
           points: 14850,
           gamesPlayed: 18,
@@ -408,10 +852,11 @@
           username: 'DragonSlayer99',
           role: 'VIP',
           isVip: true,
-          equippedRank: 'VIP',
-          ownedRanks: ['VIP'],
+          equippedRank: 'VIP_PLUS',
+          ownedRanks: ['VIP', 'VIP_PLUS'],
           rgbOwned: true,
           rgbEnabled: true,
+          animatedNameOwned: false,
           balance: 1820,
           points: 12450,
           gamesPlayed: 16,
@@ -436,15 +881,16 @@
           role: 'VIP',
           isVip: true,
           equippedRank: 'MVP_PLUS',
-          ownedRanks: ['VIP', 'MVP_PLUS'],
-          rgbOwned: false,
+          ownedRanks: ['VIP', 'MVP', 'MVP_PLUS'],
+          rgbOwned: true,
           rgbEnabled: false,
+          animatedNameOwned: true,
           balance: 1540,
           points: 10820,
           gamesPlayed: 15,
           gamesWon: 8,
           gamesLost: 7,
-          extraLives: 1,
+          extraLives: 2,
           extraLivesUsed: 2,
           scoreBoosterOwned: 1,
           emeraldBoosterOwned: 0,
@@ -464,8 +910,9 @@
           isVip: true,
           equippedRank: 'VIP',
           ownedRanks: ['VIP'],
-          rgbOwned: false,
+          rgbOwned: true,
           rgbEnabled: false,
+          animatedNameOwned: false,
           balance: 1290,
           points: 9450,
           gamesPlayed: 14,
@@ -493,6 +940,7 @@
           ownedRanks: ['PLAYER'],
           rgbOwned: false,
           rgbEnabled: false,
+          animatedNameOwned: false,
           balance: 980,
           points: 8920,
           gamesPlayed: 12,
@@ -520,6 +968,7 @@
           ownedRanks: ['PLAYER'],
           rgbOwned: false,
           rgbEnabled: false,
+          animatedNameOwned: false,
           balance: 650,
           points: 6540,
           gamesPlayed: 9,
@@ -561,7 +1010,7 @@
           username: 'DragonSlayer99',
           amount: 150,
           type: 'VIP_GAME_WIN',
-          reason: 'VIP Game Victory (+150 💚)',
+          reason: 'VIP+ Game Victory (+150 💚)',
           previousBalance: 1670,
           newBalance: 1820,
           source: 'System',
@@ -615,15 +1064,17 @@
       if (!acc) {
         const now = new Date().toISOString();
         const u = userService ? userService.getUserByUsername(cleanName) : null;
+        const initRank = u?.rank || u?.rankId || role;
         acc = {
           playerId: u?.id || 'USR-' + Date.now().toString(36).toUpperCase(),
           username: cleanName,
           role: u?.role || role,
           isVip: Boolean(u?.vipStatus?.isVip || role === 'VIP' || role === 'ADMIN'),
-          equippedRank: u?.rankId || role,
-          ownedRanks: [u?.rankId || role],
+          equippedRank: initRank,
+          ownedRanks: [initRank],
           rgbOwned: Boolean(u?.cosmetics?.rgbOwned || role === 'ADMIN'),
           rgbEnabled: Boolean(u?.cosmetics?.rgbEnabled || role === 'ADMIN'),
+          animatedNameOwned: Boolean(u?.cosmetics?.animatedNameOwned || role === 'ADMIN'),
           balance: 250,
           points: 0,
           gamesPlayed: 0,
@@ -696,12 +1147,13 @@
       const tx = {
         id: 'TX-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
         playerId,
+        userId: playerId,
         username,
         amount: Number(amount),
         type,
         reason,
-        previousBalance: Number(previousBalance),
-        newBalance: Number(newBalance),
+        previousBalance: Math.max(0, Number(previousBalance)),
+        newBalance: Math.max(0, Number(newBalance)),
         gameId,
         partyId,
         source,
@@ -754,7 +1206,49 @@
       return { ...acc };
     },
 
-    // Section 10 & 21: Gameplay Completion Reward (with VIP Emerald Bonus!)
+    // Section 16 & 17: Internal method called ONLY by verified Stripe Webhook handler
+    _creditVerifiedStripePurchase({
+      username,
+      emeralds,
+      paymentId,
+      stripePaymentId,
+      productTitle
+    }) {
+      const amount = Math.max(0, Math.round(Number(emeralds) || 0));
+      if (amount < 500) {
+        throw new Error('Minimum Stripe Emerald credit is 500 Emeralds.');
+      }
+
+      let prevBal = 0;
+      let newBal = 0;
+      const updated = this._mutateAccount(username, acc => {
+        prevBal = acc.balance;
+        acc.balance += amount;
+        acc.totalEarned += amount;
+        newBal = acc.balance;
+      });
+
+      const tx = this._recordTransaction({
+        playerId: updated.playerId,
+        username: updated.username,
+        amount,
+        type: 'STRIPE_PURCHASE',
+        reason: `Stripe Verified: ${productTitle} (${stripePaymentId || paymentId})`,
+        previousBalance: prevBal,
+        newBalance: newBal,
+        source: 'Stripe Webhook'
+      });
+
+      achievementService.checkAndUnlock(username);
+
+      return {
+        account: updated,
+        profile: normalizeAccount(updated),
+        transaction: tx
+      };
+    },
+
+    // Section 10: Gameplay Completion Reward (with Data-Driven Rank Emerald Multiplier!)
     recordGameOutcome(session, outcome = {}) {
       authGuard.verifySession(session);
       const won = Boolean(outcome.won);
@@ -767,21 +1261,28 @@
       const gameId = outcome.gameId || 'GAME-' + Date.now();
       const cfg = configService.getConfig();
       const isVip = authGuard.isVipOrAdmin(session);
+      const perms = authGuard.getUserPermissions(session);
+      const rankId = authGuard.getEffectiveRankId(session);
       const lockKey = `game_outcome_${session.username}_${gameId}`;
       acquireLock(lockKey);
 
       try {
         let earnedEmeralds = isVip ? cfg.vipGameCompletedReward : cfg.gameCompletedReward;
         let earnedPoints = questionsAnswered * cfg.pointsPerCorrectAnswer;
-        let reasonParts = [isVip ? 'VIP Game Completed' : 'Game Completed'];
+        let reasonParts = [isVip ? `${rankId} Game Completed` : 'Game Completed'];
 
         if (won) {
           earnedEmeralds += isVip ? cfg.vipGameWonReward : cfg.gameWonReward;
           earnedPoints += cfg.pointsPerGameWin;
-          reasonParts = [isVip ? '👑 VIP Game Victory Bonus' : 'Game Victory'];
+          reasonParts = [isVip ? `👑 ${rankId} Game Victory Bonus` : 'Game Victory'];
         } else if (questionsAnswered >= 10) {
           earnedEmeralds += Math.round(cfg.top3FinishReward * 0.5);
           reasonParts = ['High Stage Reached (10+)'];
+        }
+
+        // Apply higher rank multiplier if rank multiplier > 1.25 (e.g., VIP+ 1.5x, MVP 1.75x, MVP+ 2.0x)
+        if (perms.emeraldMultiplier && perms.emeraldMultiplier > 1.25) {
+          earnedEmeralds = Math.round(earnedEmeralds * (perms.emeraldMultiplier / 1.25));
         }
 
         let prevBal = 0;
@@ -832,7 +1333,7 @@
           previousBalance: prevBal,
           newBalance: newBal,
           gameId,
-          source: isVip ? 'System (VIP Bonus)' : 'System'
+          source: isVip ? `System (${rankId} Bonus)` : 'System'
         });
 
         const unlocked = achievementService.checkAndUnlock(session.username);
@@ -853,7 +1354,7 @@
       }
     },
 
-    // Section 25: ADMIN ECONOMY CONTROLS
+    // Section 27: ADMIN ECONOMY CONTROLS (Never allows negative balances!)
     adminModifyBalance(session, arg1, mode, amountValue, customReason = '') {
       authGuard.requireRole(session, ['ADMIN']);
       let targetUsername = arg1;
@@ -879,7 +1380,7 @@
         } else if (mode === 'REMOVE') {
           acc.balance = Math.max(0, acc.balance - val);
         } else if (mode === 'SET') {
-          acc.balance = val;
+          acc.balance = Math.max(0, val);
         } else if (mode === 'RESET') {
           acc.balance = 0;
         }
@@ -922,8 +1423,9 @@
   };
 
   // ==========================================
-  // 5. EMERALD SHOP, RANK SHOP & COSMETICS SERVICE (Sections 9, 11, 12, 13, 33)
+  // 5. EMERALD SHOP, RANK SHOP & COSMETICS SERVICE (Sections 15, 18, 19)
   // ==========================================
+  // Categories: Emeralds, Gameplay, Ranks, Cosmetics, Special (+ VIP)
   const shopService = {
     _ensureShopItems() {
       let items = store.get(ECON_KEYS.SHOP_ITEMS, null);
@@ -934,7 +1436,7 @@
       const cfg = configService.getConfig();
       const now = new Date().toISOString();
       items = [
-        // GAMEPLAY CATEGORY
+        // ❤️ GAMEPLAY CATEGORY
         {
           id: 'ITEM-EXTRA-LIFE',
           name: 'Extra Life',
@@ -943,7 +1445,7 @@
           currency: 'EMERALD',
           category: 'Gameplay',
           requiredRole: 'ANY',
-          description: 'Use an Extra Life to return to the game after losing.',
+          description: 'Use an Extra Life to return to the game after losing (500 Emeralds).',
           enabled: true,
           purchaseLimit: cfg.extraLifeMaxPerPlayer,
           effect: 'EXTRA_LIFE',
@@ -953,7 +1455,7 @@
           id: 'ITEM-SCORE-BOOSTER',
           name: 'Score Booster',
           icon: '⭐',
-          price: 400,
+          price: 750,
           currency: 'EMERALD',
           category: 'Gameplay',
           requiredRole: 'ANY',
@@ -977,7 +1479,38 @@
           effect: 'SECOND_CHANCE',
           createdAt: now
         },
-        // SPECIAL CATEGORY
+        // 🎨 COSMETICS CATEGORY (Section 18: RGB Username 1000 💚 & Animated Name 1500 💚)
+        {
+          id: 'ITEM-RGB-NAME',
+          name: 'RGB Username',
+          icon: '🌈',
+          price: 1000,
+          currency: 'EMERALD',
+          category: 'Cosmetics',
+          requiredRole: 'ANY',
+          description:
+            'Unlock smooth animated RGB gradient username styling across Profile, Parties & Leaderboard!',
+          enabled: true,
+          purchaseLimit: 1,
+          effect: 'RGB_NAME',
+          createdAt: now
+        },
+        {
+          id: 'ITEM-ANIMATED-NAME',
+          name: 'Animated Name',
+          icon: '🎨',
+          price: 1500,
+          currency: 'EMERALD',
+          category: 'Cosmetics',
+          requiredRole: 'ANY',
+          description:
+            'Unlock sparkling Minecraft enchantment aura & animated name flair on your profile!',
+          enabled: true,
+          purchaseLimit: 1,
+          effect: 'ANIMATED_NAME',
+          createdAt: now
+        },
+        // ⭐ SPECIAL & VIP CATEGORY
         {
           id: 'ITEM-EMERALD-BOOSTER',
           name: 'Emerald Booster',
@@ -1006,22 +1539,6 @@
           effect: 'TOURNAMENT_TICKET',
           createdAt: now
         },
-        // COSMETICS CATEGORY (Section 13: RGB Name)
-        {
-          id: 'ITEM-RGB-NAME',
-          name: 'RGB Name',
-          icon: '🌈',
-          price: 1000,
-          currency: 'EMERALD',
-          category: 'Cosmetics',
-          requiredRole: 'ANY',
-          description: 'Unlock smooth animated RGB gradient username styling across Profile, Parties & Leaderboard!',
-          enabled: true,
-          purchaseLimit: 1,
-          effect: 'RGB_NAME',
-          createdAt: now
-        },
-        // VIP CATEGORY
         {
           id: 'ITEM-VIP-CROWN-PACK',
           name: 'VIP Emerald Pack',
@@ -1036,16 +1553,18 @@
           effect: 'VIP_PACK',
           createdAt: now
         },
-        // RANKS CATEGORY (Section 12: Purchasable Ranks)
+        // 👑 RANKS CATEGORY (Sections 5, 6, 7, 8, 9, 18)
         {
           id: 'ITEM-RANK-VIP',
-          name: 'VIP Rank (Emerald Pass)',
+          name: 'VIP Rank',
           icon: '👑',
-          price: 2000,
+          price: 1000,
+          priceTL: 200,
           currency: 'EMERALD',
           category: 'Ranks',
           requiredRole: 'ANY',
-          description: 'Unlocks full VIP Membership: Create Parties, Invite Players, Priority Support & VIP Emerald Bonus!',
+          description:
+            'Unlocks VIP: Create Parties (up to 4), Invite Players, HIGH Priority Support & 1.25x Emerald Bonus!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_VIP',
@@ -1053,14 +1572,33 @@
           createdAt: now
         },
         {
-          id: 'ITEM-RANK-MVP',
-          name: 'MVP Rank',
-          icon: '⚔️',
-          price: 1500,
+          id: 'ITEM-RANK-VIP-PLUS',
+          name: 'VIP+ Rank',
+          icon: '👑',
+          price: 1750,
+          priceTL: 350,
           currency: 'EMERALD',
           category: 'Ranks',
           requiredRole: 'ANY',
-          description: 'Prestigious aqua MVP rank badge displayed on Leaderboard and Profile.',
+          description:
+            'Everything in VIP + 6-Player Parties, 1.50x Emerald Multiplier, 6 Extra Lives capacity & VIP+ Badge!',
+          enabled: true,
+          purchaseLimit: 1,
+          effect: 'RANK_VIP_PLUS',
+          rankId: 'VIP_PLUS',
+          createdAt: now
+        },
+        {
+          id: 'ITEM-RANK-MVP',
+          name: 'MVP Rank',
+          icon: '⚔️',
+          price: 2500,
+          priceTL: 500,
+          currency: 'EMERALD',
+          category: 'Ranks',
+          requiredRole: 'ANY',
+          description:
+            'Everything in VIP+ + 8-Player Parties, 1.75x Emerald Multiplier & VERY HIGH Support/Bug Priority!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_MVP',
@@ -1071,11 +1609,13 @@
           id: 'ITEM-RANK-MVP-PLUS',
           name: 'MVP+ Rank',
           icon: '🌟',
-          price: 2200,
+          price: 3750,
+          priceTL: 750,
           currency: 'EMERALD',
           category: 'Ranks',
           requiredRole: 'ANY',
-          description: 'Includes all VIP party creation & priority permissions plus the 🌟 MVP+ badge.',
+          description:
+            'Everything in MVP + 10-Player Parties, 2.00x Emerald Multiplier, Animated Profile & 🌟 MVP+ Badge!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_MVP_PLUS',
@@ -1083,14 +1623,33 @@
           createdAt: now
         },
         {
+          id: 'ITEM-RANK-ELITE',
+          name: 'ELITE Rank',
+          icon: '⚡',
+          price: 4500,
+          priceTL: 900,
+          currency: 'EMERALD',
+          category: 'Ranks',
+          requiredRole: 'ANY',
+          description:
+            '12-Player Parties, 2.25x Emerald Multiplier, VERY HIGH Priority & Amethyst ⚡ ELITE Badge!',
+          enabled: true,
+          purchaseLimit: 1,
+          effect: 'RANK_ELITE',
+          rankId: 'ELITE',
+          createdAt: now
+        },
+        {
           id: 'ITEM-RANK-LEGEND',
           name: 'LEGEND Rank',
           icon: '🔱',
           price: 3000,
+          priceTL: 1200,
           currency: 'EMERALD',
           category: 'Ranks',
           requiredRole: 'ANY',
-          description: 'Crimson 🔱 LEGEND rank badge + full VIP party & priority benefits.',
+          description:
+            '14-Player Parties, 2.50x Emerald Multiplier, VERY HIGH Priority & Crimson 🔱 LEGEND Badge!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_LEGEND',
@@ -1102,10 +1661,12 @@
           name: 'CHAMPION Rank',
           icon: '🏆',
           price: 4000,
+          priceTL: 1600,
           currency: 'EMERALD',
           category: 'Ranks',
           requiredRole: 'ANY',
-          description: 'Golden 🏆 CHAMPION tournament rank + full VIP privileges.',
+          description:
+            '16-Player Parties, 2.75x Emerald Multiplier, VERY HIGH Priority & Golden 🏆 CHAMPION Badge!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_CHAMPION',
@@ -1117,10 +1678,12 @@
           name: 'MILLIONAIRE Rank',
           icon: '💎',
           price: 5000,
+          priceTL: 2000,
           currency: 'EMERALD',
           category: 'Ranks',
           requiredRole: 'ANY',
-          description: 'Ultimate 💎 MILLIONAIRE rank! Unlocks full VIP privileges + automatic RGB Username.',
+          description:
+            'Ultimate 💎 MILLIONAIRE Rank! 20-Player Parties, 3.00x Emerald Multiplier + Automatic RGB Username!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_MILLIONAIRE',
@@ -1142,7 +1705,25 @@
     },
 
     listShopItems(includeDisabled = false, categoryFilter = 'ALL') {
-      const all = this.listItems().map(item => ({
+      // Include Emerald Packages when viewing ALL or Emeralds category
+      const packagesAsItems = paymentService
+        .listEmeraldPackages(includeDisabled)
+        .map(pkg => ({
+          id: pkg.id,
+          name: pkg.name,
+          icon: pkg.icon || '💚',
+          price: pkg.priceTL,
+          emeraldsGranted: pkg.emeralds,
+          currency: 'TRY',
+          category: 'Emeralds',
+          requiredRole: 'ANY',
+          description: `Buy ${pkg.emeralds.toLocaleString('en-US')} 💚 Emerald Coins via Stripe Checkout (Rate: 5 💚 = 1 TL).`,
+          enabled: pkg.enabled !== false,
+          purchaseLimit: 99,
+          effect: 'EMERALD_PACKAGE'
+        }));
+
+      const rawItems = this.listItems().map(item => ({
         ...item,
         currency: item.currency || 'EMERALD',
         category: item.category || 'Gameplay',
@@ -1151,6 +1732,8 @@
         effectType: item.effect || item.effectType || 'EXTRA_LIFE',
         maxPerGame: item.purchaseLimit || item.maxPurchase || 1
       }));
+
+      const all = [...packagesAsItems, ...rawItems];
       const enabledFiltered = includeDisabled ? all : all.filter(i => i.enabled);
       if (!categoryFilter || categoryFilter === 'ALL') return enabledFiltered;
       return enabledFiltered.filter(
@@ -1169,6 +1752,7 @@
 
       const profile = economyService.getPlayerEconomyProfile(session.username);
       const isVip = authGuard.isVipOrAdmin(session);
+      const perms = authGuard.getUserPermissions(session);
 
       if (item.requiredRole === 'VIP' && !isVip) {
         return { canBuy: false, reason: 'Requires VIP', buttonLabel: '🔒 Requires VIP' };
@@ -1182,6 +1766,14 @@
         };
       }
 
+      if (item.effect === 'ANIMATED_NAME' && profile.animatedNameOwned) {
+        return {
+          canBuy: false,
+          reason: 'Already Owned',
+          buttonLabel: '✅ Owned'
+        };
+      }
+
       if (item.rankId && (profile.ownedRanks || []).includes(item.rankId)) {
         return {
           canBuy: false,
@@ -1190,19 +1782,20 @@
         };
       }
 
-      if (item.effect === 'EXTRA_LIFE' && profile.extraLives >= (item.purchaseLimit || 5)) {
+      const maxLivesAllowed = Math.max(perms.maxExtraLives || 5, item.purchaseLimit || 5);
+      if (item.effect === 'EXTRA_LIFE' && profile.extraLives >= maxLivesAllowed) {
         return {
           canBuy: false,
-          reason: `Max Extra Lives (${item.purchaseLimit || 5}) reached`,
+          reason: `Max Extra Lives (${maxLivesAllowed}) reached`,
           buttonLabel: 'Max Owned'
         };
       }
 
-      if (item.currency === 'TRY') {
+      if (item.currency === 'TRY' || item.effect === 'EMERALD_PACKAGE') {
         return {
           canBuy: true,
-          reason: 'Real-money VIP package via paymentService',
-          buttonLabel: `💳 BUY (${item.price} TL)`
+          reason: 'Secure Stripe Checkout (5 💚 = 1 TL)',
+          buttonLabel: `💳 Buy (${item.price} TL)`
         };
       }
 
@@ -1223,6 +1816,25 @@
 
     purchaseItem(session, itemId) {
       authGuard.verifySession(session);
+
+      // Check if itemId is an Emerald Package first
+      const pkg = paymentService
+        .listEmeraldPackages(true)
+        .find(p => p.id.toUpperCase() === String(itemId || '').toUpperCase());
+      if (pkg) {
+        if (pkg.enabled === false) {
+          throw new Error(`"${pkg.name}" is currently disabled.`);
+        }
+        return paymentService.createCheckoutSession(session, {
+          productType: 'EMERALD_PACKAGE',
+          packageId: pkg.id,
+          title: pkg.name,
+          emeraldsGranted: pkg.emeralds,
+          priceTL: pkg.priceTL,
+          currency: 'TRY'
+        });
+      }
+
       const items = this._ensureShopItems();
       const normalizedId = String(itemId || '')
         .toUpperCase()
@@ -1244,14 +1856,18 @@
       }
 
       if (item.requiredRole === 'VIP' && !authGuard.isVipOrAdmin(session)) {
-        throw new Error('Requires VIP: Only VIP and ADMIN members can purchase this item.');
+        throw new Error('Requires VIP: Only VIP and higher rank members can purchase this item.');
       }
 
       if (item.currency === 'TRY') {
-        return paymentService.initiateCheckout(session, {
+        return paymentService.createCheckoutSession(session, {
+          productType: item.rankId ? 'RANK' : 'ITEM',
           packageId: item.id,
           title: item.name,
-          priceTL: item.price
+          emeraldsGranted: 0,
+          rankGranted: item.rankId || null,
+          priceTL: item.price,
+          currency: 'TRY'
         });
       }
 
@@ -1271,27 +1887,38 @@
         }
 
         const acc = accounts[accIdx];
-        const limit = item.purchaseLimit || item.maxPurchase || 5;
+        const perms = authGuard.getUserPermissions(session);
+        const limit =
+          item.effect === 'EXTRA_LIFE'
+            ? Math.max(perms.maxExtraLives || 5, item.purchaseLimit || 5)
+            : item.purchaseLimit || item.maxPurchase || 5;
 
         if (item.effect === 'EXTRA_LIFE' && acc.extraLives >= limit) {
-          throw new Error(`Maximum Extra Life limit (${limit}) reached! Use one before buying more.`);
+          throw new Error(
+            `Maximum Extra Life limit (${limit}) reached! Use one before buying more.`
+          );
         }
         if (item.effect === 'RGB_NAME' && acc.rgbOwned) {
-          throw new Error('You already own the RGB Name cosmetic!');
+          throw new Error('You already own the RGB Username cosmetic!');
+        }
+        if (item.effect === 'ANIMATED_NAME' && acc.animatedNameOwned) {
+          throw new Error('You already own the Animated Name cosmetic!');
         }
         if (item.rankId && (acc.ownedRanks || []).includes(item.rankId)) {
           throw new Error(`You already own the ${item.name}!`);
         }
 
         if (acc.balance < price) {
-          throw new Error(`Not enough Emeralds! Required: ${price} 💚, Balance: ${acc.balance} 💚`);
+          throw new Error(
+            `Not enough Emeralds! Required: ${price} 💚, Balance: ${acc.balance} 💚`
+          );
         }
 
         const snapshot = JSON.stringify(acc);
 
         try {
           const prevBal = acc.balance;
-          acc.balance -= price;
+          acc.balance = Math.max(0, acc.balance - price);
           acc.totalSpent += price;
 
           const eff = item.effect || item.effectType;
@@ -1326,6 +1953,20 @@
                 userService._saveAllRaw(allUsers);
               }
             }
+          } else if (eff === 'ANIMATED_NAME') {
+            acc.animatedNameOwned = true;
+            if (userService) {
+              const allUsers = userService._getAllRaw();
+              const u = allUsers.find(
+                x => x.minecraftUsername.toLowerCase() === session.username.toLowerCase()
+              );
+              if (u) {
+                u.cosmetics = u.cosmetics || {};
+                u.cosmetics.animatedNameOwned = true;
+                u.cosmetics.animatedNameEnabled = true;
+                userService._saveAllRaw(allUsers);
+              }
+            }
           } else if (item.rankId || String(eff).startsWith('RANK_')) {
             const targetRank = item.rankId || String(eff).replace('RANK_', '');
             acc.ownedRanks = acc.ownedRanks || ['PLAYER'];
@@ -1333,39 +1974,16 @@
             acc.equippedRank = targetRank;
 
             const rankDef = rankService.getRankById(targetRank);
-            if (rankDef && rankDef.grantsVip) {
+            if (rankDef && (rankDef.grantsVip || rankDef.permissions?.canCreateParty)) {
               acc.isVip = true;
               if (acc.role !== 'ADMIN') acc.role = 'VIP';
             }
-            if (targetRank === 'MILLIONAIRE') {
+            if (rankDef?.permissions?.rgbName || targetRank === 'MILLIONAIRE') {
               acc.rgbOwned = true;
               acc.rgbEnabled = true;
             }
-
             if (userService) {
-              const allUsers = userService._getAllRaw();
-              const u = allUsers.find(
-                x => x.minecraftUsername.toLowerCase() === session.username.toLowerCase()
-              );
-              if (u) {
-                u.rankId = targetRank;
-                u.cosmetics = u.cosmetics || {};
-                u.cosmetics.equippedRank = targetRank;
-                if (rankDef && rankDef.grantsVip) {
-                  if (u.role !== 'ADMIN') u.role = 'VIP';
-                  u.vipStatus = {
-                    isVip: true,
-                    tier: targetRank,
-                    expiresAt: null,
-                    grantedAt: new Date().toISOString()
-                  };
-                }
-                if (targetRank === 'MILLIONAIRE') {
-                  u.cosmetics.rgbOwned = true;
-                  u.cosmetics.rgbEnabled = true;
-                }
-                userService._saveAllRaw(allUsers);
-              }
+              userService._grantRankInternal(session.username, targetRank, null);
             }
           }
 
@@ -1409,7 +2027,7 @@
       }
     },
 
-    // ADMIN SHOP MANAGEMENT (Section 25)
+    // ADMIN SHOP MANAGEMENT
     createShopItem(session, itemData) {
       authGuard.requireRole(session, ['ADMIN']);
       const items = this._ensureShopItems();
@@ -1419,14 +2037,18 @@
       const newItem = {
         id: 'ITEM-' + Date.now().toString(36).toUpperCase(),
         name,
-        description: String(itemData.description || '').trim() || 'Special Minecraft tournament item.',
+        description:
+          String(itemData.description || '').trim() || 'Special Minecraft tournament item.',
         icon: String(itemData.icon || '💎').trim(),
         price: Math.max(0, Math.round(Number(itemData.price) || 100)),
         currency: itemData.currency || 'EMERALD',
         category: itemData.category || 'Gameplay',
         requiredRole: itemData.requiredRole || 'ANY',
         enabled: itemData.enabled !== false,
-        purchaseLimit: Math.max(1, Math.round(Number(itemData.purchaseLimit || itemData.maxPurchase) || 3)),
+        purchaseLimit: Math.max(
+          1,
+          Math.round(Number(itemData.purchaseLimit || itemData.maxPurchase) || 3)
+        ),
         effect: itemData.effect || itemData.effectType || 'EXTRA_LIFE',
         createdAt: new Date().toISOString()
       };
@@ -1436,7 +2058,7 @@
       activityService.log(
         'SHOP_ITEM_CREATED',
         session.username,
-        `Admin ${session.username} created shop item "${newItem.name}" (${newItem.price} 💚)`
+        `Admin ${session.username} created shop item "${newItem.name}" (${newItem.price} ${newItem.currency})`
       );
       return newItem;
     },
@@ -1448,9 +2070,12 @@
       if (!target) throw new Error('Shop item not found.');
 
       if (updates.name !== undefined) target.name = String(updates.name).trim();
-      if (updates.description !== undefined) target.description = String(updates.description).trim();
+      if (updates.description !== undefined)
+        target.description = String(updates.description).trim();
       if (updates.icon !== undefined) target.icon = String(updates.icon).trim();
-      if (updates.price !== undefined) target.price = Math.max(0, Math.round(Number(updates.price)));
+      if (updates.price !== undefined)
+        target.price = Math.max(0, Math.round(Number(updates.price)));
+      if (updates.currency !== undefined) target.currency = updates.currency;
       if (updates.category !== undefined) target.category = updates.category;
       if (updates.requiredRole !== undefined) target.requiredRole = updates.requiredRole;
       if (updates.enabled !== undefined) target.enabled = Boolean(updates.enabled);
@@ -1482,7 +2107,7 @@
   };
 
   // ==========================================
-  // 6. EXTRA LIFE SERVICE (Section 26)
+  // 6. EXTRA LIFE SERVICE (Section 19)
   // ==========================================
   const extraLifeService = {
     canOfferExtraLife(username, gameId, levelNumber) {
@@ -1509,7 +2134,11 @@
       }
       const cfg = configService.getConfig();
       if (!cfg.extraLife.enabled) {
-        return { canUse: false, availableCount: 0, reason: 'Extra Life feature is disabled by Admin' };
+        return {
+          canUse: false,
+          availableCount: 0,
+          reason: 'Extra Life feature is disabled by Admin'
+        };
       }
       const elimKey = `${session.username}::${gameId}::L${levelNumber}`;
       if (consumedEliminationKeys.has(elimKey)) {
@@ -1618,7 +2247,7 @@
   };
 
   // ==========================================
-  // 7. DAILY LOGIN REWARD SERVICE (Section 10: Normal +25 💚 / VIP +50 💚)
+  // 7. DAILY LOGIN REWARD SERVICE
   // ==========================================
   const dailyRewardService = {
     getStatus(username) {
@@ -1794,14 +2423,40 @@
 
     getUnlockedForPlayer(username) {
       const map = store.get(ECON_KEYS.ACHIEVEMENTS, {
-        Mashallah: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER', 'ACH_QUIZ_MASTER', 'ACH_SECOND_CHANCE', 'ACH_MILLIONAIRE', 'ACH_CHAMPION'],
-        DragonSlayer99: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER', 'ACH_QUIZ_MASTER', 'ACH_SECOND_CHANCE', 'ACH_MILLIONAIRE'],
-        NetherKing_TR: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER', 'ACH_QUIZ_MASTER', 'ACH_SECOND_CHANCE', 'ACH_MILLIONAIRE'],
-        OrganizerAlex: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER', 'ACH_QUIZ_MASTER', 'ACH_SECOND_CHANCE'],
+        Mashallah: [
+          'ACH_FIRST_WIN',
+          'ACH_EMERALD_HUNTER',
+          'ACH_QUIZ_MASTER',
+          'ACH_SECOND_CHANCE',
+          'ACH_MILLIONAIRE',
+          'ACH_CHAMPION'
+        ],
+        DragonSlayer99: [
+          'ACH_FIRST_WIN',
+          'ACH_EMERALD_HUNTER',
+          'ACH_QUIZ_MASTER',
+          'ACH_SECOND_CHANCE',
+          'ACH_MILLIONAIRE'
+        ],
+        NetherKing_TR: [
+          'ACH_FIRST_WIN',
+          'ACH_EMERALD_HUNTER',
+          'ACH_QUIZ_MASTER',
+          'ACH_SECOND_CHANCE',
+          'ACH_MILLIONAIRE'
+        ],
+        OrganizerAlex: [
+          'ACH_FIRST_WIN',
+          'ACH_EMERALD_HUNTER',
+          'ACH_QUIZ_MASTER',
+          'ACH_SECOND_CHANCE'
+        ],
         DiamondHunter: ['ACH_FIRST_WIN', 'ACH_QUIZ_MASTER', 'ACH_SECOND_CHANCE'],
         Steve: ['ACH_FIRST_WIN', 'ACH_SECOND_CHANCE']
       });
-      const key = Object.keys(map).find(k => k.toLowerCase() === String(username).toLowerCase());
+      const key = Object.keys(map).find(
+        k => k.toLowerCase() === String(username).toLowerCase()
+      );
       return key ? map[key] : [];
     },
 
@@ -1817,7 +2472,8 @@
       const acc = economyService.getOrCreateAccount(username);
       const map = store.get(ECON_KEYS.ACHIEVEMENTS, {});
       const key =
-        Object.keys(map).find(k => k.toLowerCase() === String(username).toLowerCase()) || username;
+        Object.keys(map).find(k => k.toLowerCase() === String(username).toLowerCase()) ||
+        username;
       const unlocked = new Set(map[key] || []);
       const newlyUnlocked = [];
 
@@ -1849,7 +2505,7 @@
   };
 
   // ==========================================
-  // 9. LEADERBOARD SERVICE (Section 24: Sort by Points, Wins, Emeralds, Games Played)
+  // 9. LEADERBOARD SERVICE (Section 20: Rank, Username, Rank Badge, Points, Emeralds, Wins, Games, Win Rate)
   // ==========================================
   const leaderboardService = {
     getSortedLeaderboard(limit = 50, searchQuery = '', sortBy = 'POINTS') {
