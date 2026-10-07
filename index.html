@@ -17,6 +17,43 @@
   <!-- Interactive Particle Burst Canvas (Emeralds, XP, Confetti) -->
   <canvas id="fx-canvas" aria-hidden="true"></canvas>
 
+  <!-- ==========================================
+       GİRİŞ KODU EKRANI (ACCESS GATE: xxqnetwork)
+       ========================================== -->
+  <div id="access-gate" class="access-gate-overlay" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+    <div class="gate-card mc-panel">
+      <div class="gate-lock-badge">🔒 ÖZEL ERİŞİM KORUMASI</div>
+      <h2 id="gate-title" class="mc-title gate-heading">GİRİŞ KODU GEREKLİ</h2>
+      <p class="gate-desc">
+        <strong>Kim Milyoner Olmak İster? — Minecraft Edition</strong> yarışmasına erişmek için yetkili giriş kodunu yazın.
+      </p>
+
+      <form id="access-gate-form" class="gate-form" autocomplete="off">
+        <div class="gate-input-wrap">
+          <input
+            type="password"
+            id="access-code-input"
+            class="mc-input"
+            placeholder="Erişim kodunu girin..."
+            required
+            autofocus
+          />
+          <button type="button" id="btn-toggle-code-vis" class="mc-icon-btn gate-eye-btn" title="Kodu Göster / Gizle" aria-label="Kodu Göster veya Gizle">
+            👁️
+          </button>
+        </div>
+
+        <p id="access-gate-error" class="gate-error hidden" role="alert">
+          ❌ Hatalı giriş kodu! Lütfen tekrar deneyin.
+        </p>
+
+        <button type="submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
+          <span class="btn-inner">🔑 SİTEYE GİRİŞ YAP</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <!-- Top Persistent Audio, Atmosphere & Quick Navigation Bar -->
   <header class="top-bar">
     <div class="brand-mini" id="top-brand-btn" role="button" tabindex="0" title="Ana Menüye Dön">
