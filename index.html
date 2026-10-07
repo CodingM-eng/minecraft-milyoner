@@ -3,74 +3,118 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kim Milyoner Olmak İster? — Minecraft Edition</title>
-  <!-- Google Fonts with full Turkish character support (Ç, Ğ, İ, I, Ö, Ş, Ü) -->
+  <title>Minecraft Milyoner — Tournament, Party &amp; Emerald Platform</title>
+  <!-- Google Fonts with full character support -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Press+Start+2P&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="atmos-night">
-  <!-- Animated Minecraft Day/Night Sky, Floating Blocks, Emerald & Diamond Particles -->
+  <!-- Animated Minecraft Sky & Particle Canvases -->
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
-
-  <!-- Interactive Particle Burst Canvas (Emeralds, XP, Confetti) -->
   <canvas id="fx-canvas" aria-hidden="true"></canvas>
 
   <!-- ==========================================
-       1. LICENSE CODE LOGIN SYSTEM
+       1 & 2. STEP-BY-STEP LOGIN & WELCOME BACK GATE
        ========================================== -->
   <div id="access-gate" class="access-gate-overlay" role="dialog" aria-modal="true" aria-labelledby="gate-title">
     <div class="gate-card mc-panel">
-      <div class="gate-lock-badge">🛡️ MINECRAFT MİLYONER PLATFORM</div>
+      <div class="gate-lock-badge">🛡️ MINECRAFT MILYONER PLATFORM</div>
       <h2 id="gate-title" class="mc-title gate-heading">Minecraft Milyoner</h2>
-      <p class="gate-desc">
-        "Enter your license code to continue" — Devam etmek için lisans kodunuzu girin.
-      </p>
 
-      <form id="access-gate-form" class="gate-form" autocomplete="off">
-        <div class="gate-field-group">
-          <label for="access-username-input" class="gate-field-label">Minecraft Kullanıcı Adı (İsteğe Bağlı)</label>
-          <input
-            type="text"
-            id="access-username-input"
-            class="mc-input mc-input-sm"
-            placeholder="Örn: Steve, Mashallah..."
-            maxlength="24"
-          />
+      <!-- STEP A: WELCOME BACK (Shown on future visits when account is remembered) -->
+      <div id="gate-step-welcome-back" class="gate-step-pane hidden">
+        <p class="gate-desc">WELCOME BACK</p>
+        <div class="welcome-back-profile-box mc-panel-inset">
+          <div class="wb-avatar">⛏️</div>
+          <div class="wb-name" id="wb-username-display">Mashallah</div>
+          <div class="wb-badges">
+            <span id="wb-role-badge" class="role-badge role-player">PLAYER</span>
+            <span id="wb-license-badge" class="meta-muted">Saved License</span>
+          </div>
         </div>
+        <button type="button" id="btn-wb-continue" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
+          <span class="btn-inner">🚀 Continue</span>
+        </button>
+        <button type="button" id="btn-wb-switch-account" class="mc-btn mc-btn-stone mc-btn-small" style="width:100%; margin-top:0.5rem;">
+          <span class="btn-inner">🔄 Switch Account / Change License</span>
+        </button>
+      </div>
 
+      <!-- STEP B: STEP 1 — ENTER LICENSE CODE -->
+      <form id="gate-form-license" class="gate-form" autocomplete="off">
+        <p class="gate-desc">Enter your license code to continue</p>
         <div class="gate-field-group">
-          <label for="access-code-input" class="gate-field-label">Lisans Kodu (License Code)</label>
+          <label for="access-code-input" class="gate-field-label">License Code</label>
           <div class="gate-input-wrap">
             <input
               type="password"
               id="access-code-input"
               class="mc-input"
-              placeholder="LICENSE CODE INPUT"
+              placeholder="Enter License Code..."
               required
               autofocus
             />
-            <button type="button" id="btn-toggle-code-vis" class="mc-icon-btn gate-eye-btn" title="Kodu Göster / Gizle" aria-label="Kodu Göster veya Gizle">
+            <button type="button" id="btn-toggle-code-vis" class="mc-icon-btn gate-eye-btn" title="Show / Hide Code" aria-label="Show or Hide Code">
               👁️
             </button>
           </div>
         </div>
 
-        <!-- Loading indicator while validating -->
         <div id="access-gate-loading" class="gate-loading hidden" aria-live="polite">
           <span class="mc-spinner">⛏️</span>
-          <span>Lisans doğrulanıyor ve yetkiler kontrol ediliyor...</span>
+          <span>Validating license...</span>
         </div>
 
-        <!-- Error feedback for invalid/expired/revoked licenses -->
         <p id="access-gate-error" class="gate-error hidden" role="alert">
-          ❌ Geçersiz, süresi dolmuş veya iptal edilmiş lisans kodu!
+          ❌ Invalid, expired, or revoked license code!
         </p>
 
         <button type="submit" id="btn-license-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
-          <span class="btn-inner" id="btn-license-submit-text">🔑 Continue (Devam Et)</span>
+          <span class="btn-inner">🔑 Continue</span>
         </button>
+      </form>
+
+      <!-- STEP C: STEP 2 — ENTER MINECRAFT USERNAME -->
+      <form id="gate-form-username" class="gate-form hidden" autocomplete="off">
+        <div class="verified-lic-banner mc-panel-inset">
+          <span>✅ License Verified:</span>
+          <strong id="gate-verified-lic-name" class="emerald-text">Standard License</strong>
+        </div>
+
+        <div class="gate-field-group">
+          <label for="access-username-input" class="gate-field-label">Minecraft Username</label>
+          <input
+            type="text"
+            id="access-username-input"
+            class="mc-input"
+            placeholder="e.g. Mashallah, Steve..."
+            maxlength="24"
+            required
+          />
+        </div>
+
+        <div class="gate-field-group">
+          <label for="access-password-input" class="gate-field-label">Account Password (Optional)</label>
+          <input
+            type="password"
+            id="access-password-input"
+            class="mc-input mc-input-sm"
+            placeholder="Leave blank if not set"
+          />
+        </div>
+
+        <p id="access-username-error" class="gate-error hidden" role="alert"></p>
+
+        <div style="display:flex; gap:0.6rem; width:100%;">
+          <button type="button" id="btn-gate-back-to-license" class="mc-btn mc-btn-stone mc-btn-small">
+            <span class="btn-inner">← Back</span>
+          </button>
+          <button type="submit" id="btn-username-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn" style="flex:1;">
+            <span class="btn-inner">⛏️ Continue to Dashboard</span>
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -78,20 +122,20 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-  <!-- Top Persistent Audio, Role Profile, Party, Economy & Quick Navigation Bar -->
+  <!-- Top Persistent Header Bar -->
   <header class="top-bar">
-    <div class="brand-mini" id="top-brand-btn" role="button" tabindex="0" title="Ana Menüye Dön">
+    <div class="brand-mini" id="top-brand-btn" role="button" tabindex="0" title="Return to Dashboard">
       <span class="emerald-svg-wrap" id="header-emerald-icon"></span>
       <span class="brand-mini-text">Minecraft Milyoner</span>
     </div>
 
-    <!-- Main Navigation Bar (Section 30) -->
-    <nav id="main-nav-bar" class="main-nav-bar hidden" aria-label="Ana Navigasyon">
+    <!-- Main Navigation Bar (Desktop / Tablet & Mobile Bottom Nav) -->
+    <nav id="main-nav-bar" class="main-nav-bar hidden" aria-label="Main Navigation">
       <button type="button" class="main-nav-btn active" data-nav-screen="screen-menu">
         <span>🏠</span> <span class="nav-label">Dashboard</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-party">
-        <span>🎮</span> <span class="nav-label">Parties</span>
+        <span>🎉</span> <span class="nav-label">Parties</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-leaderboard">
         <span>🏆</span> <span class="nav-label">Leaderboard</span>
@@ -99,14 +143,20 @@
       <button type="button" class="main-nav-btn" data-nav-screen="screen-shop">
         <span>💚</span> <span class="nav-label">Emerald Shop</span>
       </button>
+      <button type="button" class="main-nav-btn" data-nav-screen="screen-vip-shop">
+        <span>👑</span> <span class="nav-label">VIP Shop</span>
+      </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-profile">
         <span>👤</span> <span class="nav-label">Profile</span>
       </button>
-      <button type="button" class="main-nav-btn" data-nav-screen="screen-history">
-        <span>📜</span> <span class="nav-label">History</span>
+      <button type="button" class="main-nav-btn" data-nav-screen="screen-support">
+        <span>🎧</span> <span class="nav-label">Support</span>
+      </button>
+      <button type="button" class="main-nav-btn" data-nav-screen="screen-account-settings">
+        <span>⚙️</span> <span class="nav-label">Account</span>
       </button>
       <button type="button" id="btn-nav-admin" class="main-nav-btn nav-admin-btn hidden" data-nav-screen="screen-admin">
-        <span>⚙️</span> <span class="nav-label">Admin Panel</span>
+        <span>🛡️</span> <span class="nav-label">Admin Panel</span>
       </button>
     </nav>
 
@@ -126,45 +176,37 @@
       </div>
 
       <!-- Daily Login Reward Button -->
-      <button type="button" id="btn-daily-reward" class="mc-icon-btn mc-icon-btn-emerald hidden" title="Daily Login Emerald Reward (+25 Emeralds)">
+      <button type="button" id="btn-daily-reward" class="mc-icon-btn mc-icon-btn-emerald hidden" title="Claim Daily Emerald Reward">
         <span>🎁</span>
-        <span class="btn-label-desktop" id="daily-reward-label">DAILY REWARD</span>
+        <span class="btn-label-desktop" id="daily-reward-label">DAILY</span>
       </button>
 
       <!-- Active Session User & Role Pill -->
-      <div id="top-session-badge" class="session-profile-pill hidden" role="button" tabindex="0" title="Oyuncu Profilini Aç">
+      <div id="top-session-badge" class="session-profile-pill hidden" role="button" tabindex="0" title="Open Player Profile">
         <span class="session-user-icon">👤</span>
         <span id="top-session-username" class="session-username">Steve</span>
         <span id="top-session-role" class="role-badge role-player">PLAYER</span>
       </div>
 
-      <!-- Admin Panel Quick Switch (ONLY rendered & authorized for ADMIN role) -->
+      <!-- Admin Panel Quick Switch (ONLY visible for ADMIN role) -->
       <button type="button" id="btn-top-admin" class="mc-icon-btn mc-icon-btn-gold hidden" title="Admin Panel">
         <span>🛡️</span>
         <span class="btn-label-desktop">ADMIN</span>
       </button>
 
-      <!-- Party / Lobby Dashboard Button -->
-      <button type="button" id="btn-top-party" class="mc-icon-btn mc-icon-btn-emerald hidden" title="Turnuva & Parti Lobisi">
-        <span>🎉</span>
-      </button>
-
-      <button type="button" id="btn-toggle-atmos" class="mc-icon-btn" title="Gece / Gündüz Atmosferini Değiştir">
+      <button type="button" id="btn-toggle-atmos" class="mc-icon-btn" title="Toggle Day / Night Atmosphere">
         <span class="icon-indicator" id="atmos-icon">🌙</span>
       </button>
-      <button type="button" id="btn-quick-music" class="mc-icon-btn" title="Arka Plan Müziği (Aç/Kapat)" aria-label="Müziği Aç veya Kapat">
+      <button type="button" id="btn-quick-music" class="mc-icon-btn" title="Toggle Music" aria-label="Toggle Music">
         <span class="icon-indicator" id="quick-music-icon">🎵</span>
       </button>
-      <button type="button" id="btn-quick-sfx" class="mc-icon-btn" title="Ses Efektleri (Aç/Kapat)" aria-label="Ses Efektlerini Aç veya Kapat">
+      <button type="button" id="btn-quick-sfx" class="mc-icon-btn" title="Toggle SFX" aria-label="Toggle SFX">
         <span class="icon-indicator" id="quick-sfx-icon">🔊</span>
       </button>
-      <button type="button" id="btn-top-stats" class="mc-icon-btn" title="İstatistikler">
-        <span>📊</span>
+      <button type="button" id="btn-top-settings" class="mc-icon-btn" title="Audio Settings">
+        <span>🔊</span>
       </button>
-      <button type="button" id="btn-top-settings" class="mc-icon-btn" title="Ses Ayarları">
-        <span>⚙️</span>
-      </button>
-      <button type="button" id="btn-top-logout" class="mc-icon-btn mc-icon-btn-danger hidden" title="Lisans Değiştir / Çıkış Yap">
+      <button type="button" id="btn-top-logout" class="mc-icon-btn mc-icon-btn-danger hidden" title="Logout">
         <span>🚪</span>
       </button>
     </div>
@@ -174,7 +216,7 @@
   <main class="app-container">
 
     <!-- ==========================================
-         SCREEN 1: ANA MENÜ & DASHBOARD ECONOMY WIDGET
+         SCREEN 1: USER & VIP DASHBOARD (SECTIONS 31 & 32)
          ========================================== -->
     <section id="screen-menu" class="screen active" aria-labelledby="main-title">
       <div class="menu-card mc-panel">
@@ -190,25 +232,108 @@
           <span class="mc-subtitle">MINECRAFT EDITION</span>
         </div>
 
-        <p class="menu-tagline">
-          Minecraft dünyasının sırlarına ne kadar hakimsin? Rastgele seçilen 15 soruyu doğru yanıtla ve <strong>5.000.000 Emerald</strong> büyük ödülün sahibi ol!
-        </p>
-
-        <div class="menu-buttons">
-          <button type="button" id="btn-start-game" class="mc-btn mc-btn-emerald mc-btn-large">
-            <span class="btn-inner">⚔️ OYUNA BAŞLA (SOLO QUIZ)</span>
-          </button>
-          <div class="menu-primary-split">
-            <button type="button" id="btn-open-leaderboard-hero" class="mc-btn mc-btn-gold">
-              <span class="btn-inner">🏆 LEADERBOARD</span>
-            </button>
-            <button type="button" id="btn-open-shop-hero" class="mc-btn mc-btn-emerald">
-              <span class="btn-inner">💚 EMERALD SHOP</span>
+        <!-- Section 31: Personalized Welcome Banner -->
+        <div class="user-dashboard-welcome mc-panel-inset">
+          <div class="ud-welcome-left">
+            <span class="ud-greeting">Welcome, <strong id="dash-welcome-username">Steve</strong></span>
+            <span id="dash-welcome-role-badge" class="role-badge role-player">PLAYER</span>
+            <span id="dash-welcome-rank-badge" class="profile-rank-pill">⛏️ PLAYER</span>
+          </div>
+          <div class="ud-welcome-right">
+            <button type="button" id="btn-widget-claim-daily" class="act-btn emerald">
+              🎁 Claim Daily Reward (+25 💚)
             </button>
           </div>
-          <button type="button" id="btn-open-party-hub" class="mc-btn mc-btn-stone">
-            <span class="btn-inner">🎉 TURNUVA & PARTİ LOBİSİ</span>
+        </div>
+
+        <!-- Section 31: User Dashboard 5 Core Stats -->
+        <div id="dashboard-economy-widget" class="dashboard-economy-widget mc-panel-inset">
+          <div class="econ-widget-grid">
+            <div class="econ-stat-card" id="card-goto-shop" role="button" tabindex="0">
+              <span class="econ-stat-label">💚 Emeralds</span>
+              <strong class="econ-stat-val emerald-text" id="dash-econ-emeralds">0 💚</strong>
+            </div>
+            <div class="econ-stat-card">
+              <span class="econ-stat-label">🏆 Points</span>
+              <strong class="econ-stat-val diamond-text" id="dash-econ-points">0</strong>
+            </div>
+            <div class="econ-stat-card" id="card-goto-leaderboard" role="button" tabindex="0">
+              <span class="econ-stat-label">🥇 Leaderboard Rank</span>
+              <strong class="econ-stat-val gold-text" id="dash-econ-rank">#1</strong>
+            </div>
+            <div class="econ-stat-card">
+              <span class="econ-stat-label">🎮 Games</span>
+              <strong class="econ-stat-val" id="dash-econ-games">0</strong>
+            </div>
+            <div class="econ-stat-card" id="card-goto-profile" role="button" tabindex="0">
+              <span class="econ-stat-label">❤️ Extra Lives</span>
+              <strong class="econ-stat-val wrong-text" id="dash-econ-extralives">0</strong>
+            </div>
+            <div class="econ-stat-card">
+              <span class="econ-stat-label">🏅 Games Won</span>
+              <strong class="econ-stat-val gold-text" id="dash-econ-wins">0</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 32: VIP Dashboard Panel (Shown for VIP & ADMIN users) -->
+        <div id="vip-dashboard-panel" class="vip-dashboard-panel mc-panel-inset hidden">
+          <div class="vip-dash-header">
+            <div>
+              <span class="vip-crown-pill">👑 VIP MEMBERSHIP ACTIVE</span>
+              <span class="meta-muted" id="vip-dash-expiry">Lifetime Access</span>
+            </div>
+            <div class="vip-dash-actions">
+              <button type="button" id="btn-vip-dash-create-party" class="act-btn emerald">➕ Create Party</button>
+              <button type="button" id="btn-vip-dash-manage-party" class="act-btn">🛠️ Manage Party</button>
+              <button type="button" data-nav-screen="screen-vip-shop" class="act-btn">👑 VIP Benefits</button>
+            </div>
+          </div>
+          <div class="vip-benefits-mini-grid">
+            <span>✓ Create Party</span>
+            <span>✓ Invite Players</span>
+            <span>✓ Priority Support</span>
+            <span>✓ Priority Bugs</span>
+            <span>✓ Priority Suggestions</span>
+            <span>✓ Bonus Emeralds</span>
+            <span>✓ RGB Username</span>
+            <span>✓ VIP Badge</span>
+          </div>
+        </div>
+
+        <!-- Primary Action Buttons (Section 31) -->
+        <div class="menu-buttons">
+          <button type="button" id="btn-start-game" class="mc-btn mc-btn-emerald mc-btn-large">
+            <span class="btn-inner">⚔️ OYUNA BAŞLA (PLAY SOLO QUIZ)</span>
           </button>
+
+          <div class="dashboard-quick-grid">
+            <button type="button" id="btn-open-party-hub" class="mc-btn mc-btn-emerald">
+              <span class="btn-inner">🎉 Join Party</span>
+            </button>
+            <button type="button" id="btn-open-leaderboard-hero" class="mc-btn mc-btn-gold">
+              <span class="btn-inner">🏆 Leaderboard</span>
+            </button>
+            <button type="button" id="btn-open-shop-hero" class="mc-btn mc-btn-emerald">
+              <span class="btn-inner">💚 Emerald Shop</span>
+            </button>
+            <button type="button" class="mc-btn mc-btn-gold" data-nav-screen="screen-vip-shop">
+              <span class="btn-inner">👑 VIP Shop</span>
+            </button>
+            <button type="button" class="mc-btn mc-btn-stone" data-nav-screen="screen-profile">
+              <span class="btn-inner">👤 Profile</span>
+            </button>
+            <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="support">
+              <span class="btn-inner">🎧 Support</span>
+            </button>
+            <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="bug">
+              <span class="btn-inner">🐛 Report Bug</span>
+            </button>
+            <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="suggestion">
+              <span class="btn-inner">💡 Suggestion</span>
+            </button>
+          </div>
+
           <div class="menu-secondary-grid">
             <button type="button" id="btn-open-rules" class="mc-btn mc-btn-stone">
               <span class="btn-inner">📖 NASIL OYNANIR?</span>
@@ -219,42 +344,6 @@
             <button type="button" id="btn-open-audio" class="mc-btn mc-btn-stone">
               <span class="btn-inner">🔊 SES AYARLARI</span>
             </button>
-          </div>
-        </div>
-
-        <!-- Section 31: Dashboard Economy Widget -->
-        <div id="dashboard-economy-widget" class="dashboard-economy-widget mc-panel-inset">
-          <div class="econ-widget-header">
-            <span class="econ-widget-title">🟩 PLAYER ECONOMY & TOURNAMENT STATUS</span>
-            <button type="button" id="btn-widget-claim-daily" class="act-btn emerald">
-              🎁 Daily Login (+25 Emeralds)
-            </button>
-          </div>
-          <div class="econ-widget-grid">
-            <div class="econ-stat-card" id="card-goto-leaderboard" role="button" tabindex="0">
-              <span class="econ-stat-label">🏆 Leaderboard Rank</span>
-              <strong class="econ-stat-val gold-text" id="dash-econ-rank">#1</strong>
-            </div>
-            <div class="econ-stat-card">
-              <span class="econ-stat-label">⭐ Total Points</span>
-              <strong class="econ-stat-val diamond-text" id="dash-econ-points">0</strong>
-            </div>
-            <div class="econ-stat-card" id="card-goto-shop" role="button" tabindex="0">
-              <span class="econ-stat-label">💚 Emerald Balance</span>
-              <strong class="econ-stat-val emerald-text" id="dash-econ-emeralds">0 Emerald Coins</strong>
-            </div>
-            <div class="econ-stat-card">
-              <span class="econ-stat-label">🎮 Games Played</span>
-              <strong class="econ-stat-val" id="dash-econ-games">0</strong>
-            </div>
-            <div class="econ-stat-card">
-              <span class="econ-stat-label">🏆 Games Won</span>
-              <strong class="econ-stat-val gold-text" id="dash-econ-wins">0</strong>
-            </div>
-            <div class="econ-stat-card" id="card-goto-profile" role="button" tabindex="0">
-              <span class="econ-stat-label">❤️ Extra Lives</span>
-              <strong class="econ-stat-val wrong-text" id="dash-econ-extralives">0</strong>
-            </div>
           </div>
         </div>
 
@@ -277,20 +366,17 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 2: OYUN EKRANI
+         SCREEN 2: OYUN EKRANI (QUIZ GAME)
          ========================================== -->
     <section id="screen-game" class="screen" aria-label="Oyun Ekranı">
       <div class="game-layout">
-
-        <!-- Left / Center Main Quiz Stage -->
         <div class="quiz-stage">
-          <!-- Stage Header Info Bar -->
           <div class="stage-status-bar mc-panel-inset">
             <div class="status-left">
               <span class="level-badge" id="current-level-badge">Soru 1 / 15</span>
               <span class="difficulty-badge" id="current-difficulty-badge">Kolay</span>
               <span class="category-badge" id="current-category-badge">Mobs</span>
-              <span class="extralife-stage-pill" id="game-extralife-pill" title="Sahip olunan Extra Life sayısı">
+              <span class="extralife-stage-pill" id="game-extralife-pill" title="Available Extra Lives">
                 ❤️ Extra Life: <strong id="game-extralife-count">0</strong>
               </span>
             </div>
@@ -299,13 +385,12 @@
                 <span class="prize-label">Soru Ödülü:</span>
                 <span class="prize-amount emerald-text" id="current-target-prize">100 Emerald</span>
               </div>
-              <button type="button" id="btn-quit-menu" class="mc-btn mc-btn-small mc-btn-danger" title="Oyundan çık ve Ana Menüye dön">
+              <button type="button" id="btn-quit-menu" class="mc-btn mc-btn-small mc-btn-danger">
                 <span class="btn-inner">🚪 ANA MENÜ</span>
               </button>
             </div>
           </div>
 
-          <!-- Extra Life Revive Notification Banner (Section 23) -->
           <div id="extralife-revive-banner" class="extralife-revive-banner mc-panel hidden" role="status" aria-live="polite">
             <span class="revive-heart-icon">❤️</span>
             <div class="revive-banner-text">
@@ -314,26 +399,25 @@
             </div>
           </div>
 
-          <!-- 4 Interactive Joker Buttons -->
           <div class="jokers-bar mc-panel" aria-label="Jokerler">
             <div class="jokers-title">JOKERLER:</div>
             <div class="jokers-grid">
-              <button type="button" id="joker-5050" class="joker-btn" title="%50 / 50 — İki yanlış cevabı kaldırır (Klavye: 1)">
+              <button type="button" id="joker-5050" class="joker-btn">
                 <span class="joker-icon">🌓</span>
                 <span class="joker-name">%50 / 50</span>
                 <span class="joker-key">1</span>
               </button>
-              <button type="button" id="joker-audience" class="joker-btn" title="Seyirciye Sor — Minecraft seyircisinin yüzdelik oylaması (Klavye: 2)">
+              <button type="button" id="joker-audience" class="joker-btn">
                 <span class="joker-icon">👥</span>
                 <span class="joker-name">SEYİRCİYE SOR</span>
                 <span class="joker-key">2</span>
               </button>
-              <button type="button" id="joker-villager" class="joker-btn" title="Köylüye Sor — Minecraft köylüsü ipucu verir (Klavye: 3)">
+              <button type="button" id="joker-villager" class="joker-btn">
                 <span class="joker-icon">🧑‍🌾</span>
                 <span class="joker-name">KÖYLÜYE SOR</span>
                 <span class="joker-key">3</span>
               </button>
-              <button type="button" id="joker-change" class="joker-btn" title="Soruyu Değiştir — Aynı zorlukta yeni bir soru getirir (Klavye: 4)">
+              <button type="button" id="joker-change" class="joker-btn">
                 <span class="joker-icon">🔄</span>
                 <span class="joker-name">SORUYU DEĞİŞTİR</span>
                 <span class="joker-key">4</span>
@@ -341,24 +425,17 @@
             </div>
           </div>
 
-          <!-- Active Joker Feedback Panel (Villager Dialogue or Audience Chart) -->
-          <div id="joker-feedback-panel" class="joker-feedback-panel mc-panel hidden" aria-live="polite">
-            <!-- Dynamically populated when Seyirciye Sor or Köylüye Sor joker is used -->
-          </div>
+          <div id="joker-feedback-panel" class="joker-feedback-panel mc-panel hidden" aria-live="polite"></div>
 
-          <!-- Big Center Question Display Panel -->
           <div id="question-card" class="question-card mc-panel">
             <div class="question-header-ornament">
               <span class="pixel-diamond">◆</span>
               <span id="question-number-title">Soru 1 / 15</span>
               <span class="pixel-diamond">◆</span>
             </div>
-            <p id="question-text" class="question-text">
-              Soru yükleniyor...
-            </p>
+            <p id="question-text" class="question-text">Soru yükleniyor...</p>
           </div>
 
-          <!-- Four Answer Buttons (A, B, C, D) -->
           <div class="answers-grid" role="group" aria-label="Cevap Seçenekleri">
             <button type="button" class="answer-btn" data-index="0" id="answer-btn-0">
               <span class="answer-letter">A)</span>
@@ -382,7 +459,6 @@
             </button>
           </div>
 
-          <!-- Post-Answer Explanation & Next Question Box -->
           <div id="explanation-panel" class="explanation-panel mc-panel hidden" aria-live="polite">
             <div class="explanation-content">
               <div class="explanation-badge" id="explanation-status-badge">✅ DOĞRU CEVAP!</div>
@@ -394,22 +470,18 @@
           </div>
         </div>
 
-        <!-- Right Side: Minecraft Style Emerald Prize Ladder -->
         <aside class="ladder-sidebar mc-panel" aria-label="Ödül Merdiveni">
           <div class="ladder-header">
             <span class="ladder-emerald-icon" id="sidebar-emerald-icon"></span>
             <h2>ÖDÜL MERDİVENİ</h2>
           </div>
-          <ul id="money-ladder-list" class="money-ladder-list">
-            <!-- Populated dynamically from 15 down to 1 -->
-          </ul>
+          <ul id="money-ladder-list" class="money-ladder-list"></ul>
         </aside>
-
       </div>
     </section>
 
     <!-- ==========================================
-         SCREEN 3: VICTORY / KAZANMA EKRANI
+         SCREEN 3: VICTORY EKRANI
          ========================================== -->
     <section id="screen-victory" class="screen" aria-labelledby="victory-title">
       <div class="result-card victory-card mc-panel">
@@ -450,7 +522,7 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 4: OYUN BİTTİ EKRANI
+         SCREEN 4: GAMEOVER EKRANI
          ========================================== -->
     <section id="screen-gameover" class="screen" aria-labelledby="gameover-title">
       <div class="result-card gameover-card mc-panel">
@@ -458,7 +530,6 @@
         <h2 id="gameover-title" class="mc-title gameover-heading">OYUN BİTTİ!</h2>
         <p class="result-subtitle" id="gameover-reason-text">Verdiğin cevap maalesef yanlıştı.</p>
 
-        <!-- Reveal Wrong & Correct Answer Box -->
         <div class="wrong-reveal-box mc-panel-inset" id="gameover-reveal-box">
           <div class="reveal-row">
             <span class="reveal-label">Yanlış Cevap (Senin Seçimin):</span>
@@ -502,92 +573,112 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 5: USER & PARTY DASHBOARD (PLAYER / ORGANIZER / ADMIN)
+         SCREEN 5: PARTIES SYSTEM (SECTIONS 6, 7, 8)
+         Normal PLAYER: [ Join Party ] ONLY.
+         VIP & ADMIN: [ Create Party ], [ Join Party ], [ Invite Player ]
          ========================================== -->
-    <section id="screen-party" class="screen" aria-label="Turnuva ve Parti Lobisi">
+    <section id="screen-party" class="screen" aria-label="Parties">
       <div class="party-hub-wrapper">
-        <!-- Welcome & Role Banner -->
         <div class="party-welcome-bar mc-panel">
           <div class="welcome-user-info">
             <span class="welcome-greeting" id="party-welcome-title">Welcome, Steve</span>
             <div class="welcome-meta">
               <span id="party-user-role-badge" class="role-badge role-player">PLAYER</span>
-              <span id="party-user-license-name" class="meta-muted">Standart Lisans</span>
+              <span id="party-user-license-name" class="meta-muted">Active Account</span>
             </div>
           </div>
           <div class="welcome-actions">
-            <!-- ONLY visible & authorized for ADMIN and ORGANIZER -->
+            <!-- ONLY visible & authorized for VIP and ADMIN -->
             <button type="button" id="btn-open-create-party" class="mc-btn mc-btn-emerald mc-btn-small hidden">
-              <span class="btn-inner">➕ Create Party (Parti Oluştur)</span>
+              <span class="btn-inner">➕ Create Party</span>
             </button>
             <button type="button" id="btn-party-play-solo" class="mc-btn mc-btn-gold mc-btn-small">
-              <span class="btn-inner">⚔️ Hızlı Quiz Başlat</span>
+              <span class="btn-inner">⚔️ Play Solo Quiz</span>
             </button>
             <button type="button" id="btn-party-back-menu" class="mc-btn mc-btn-stone mc-btn-small">
-              <span class="btn-inner">🏠 Ana Menü</span>
+              <span class="btn-inner">🏠 Dashboard</span>
             </button>
           </div>
         </div>
 
         <div class="party-hub-grid">
-          <!-- Left Column: Join by Invite Code + Party List -->
+          <!-- Left Column: Join Party + (VIP/Admin Create Party) + Party List -->
           <div class="party-left-col">
-            <!-- Join Party via Invite Code Card -->
+            <!-- Section 8: Simple Join Party Card -->
             <div class="mc-panel party-join-card">
-              <h3 class="panel-sec-title">🎟️ Davet Kodu ile Partiye Katıl (Join Party)</h3>
-              <p class="panel-sec-desc">Organizatör tarafından paylaşılan davet kodunu (Örn: <code>MCM-8K2P</code>) girerek partiye katılın.</p>
+              <h3 class="panel-sec-title">🎟️ Join Party</h3>
+              <p class="panel-sec-desc">Enter a Party Code (e.g. <code>MCM-8K2P</code> or <code>MCM-VIP9</code>) to join immediately.</p>
               <form id="form-join-party" class="inline-join-form" autocomplete="off">
                 <input
                   type="text"
                   id="input-join-invite-code"
                   class="mc-input mc-input-sm"
-                  placeholder="MCM-XXXX"
-                  maxlength="14"
+                  placeholder="Enter Party Code (MCM-XXXX)"
+                  maxlength="16"
                   required
                 />
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">Katıl (Join)</span>
+                  <span class="btn-inner">Join</span>
                 </button>
               </form>
             </div>
 
-            <!-- Create Party Card (Strictly Authorized for ADMIN & ORGANIZER ONLY) -->
+            <!-- Section 7: Create Party Card (Strictly Authorized for VIP & ADMIN ONLY) -->
             <div id="organizer-create-party-box" class="mc-panel party-create-card hidden">
-              <h3 class="panel-sec-title">🏆 Yeni Parti Oluştur (Create Party)</h3>
+              <h3 class="panel-sec-title">👑 Create Party (VIP / Admin)</h3>
               <form id="form-create-party" class="stack-form" autocomplete="off">
                 <div class="form-row">
-                  <label for="input-party-name">Party Name (Parti Adı)</label>
+                  <label for="input-party-name">Party Name</label>
                   <input
                     type="text"
                     id="input-party-name"
                     class="mc-input mc-input-sm"
-                    placeholder="Örn: Minecraft Championship #2"
+                    placeholder="e.g. Diamond Championship #2"
                     maxlength="40"
                     required
                   />
                 </div>
                 <div class="form-row">
-                  <label for="input-party-max">Maximum Players (Maks. Oyuncu)</label>
+                  <label for="input-party-max">Maximum Players</label>
                   <select id="input-party-max" class="mc-select">
-                    <option value="2">2 Oyuncu</option>
-                    <option value="4" selected>4 Oyuncu</option>
-                    <option value="8">8 Oyuncu</option>
-                    <option value="12">12 Oyuncu</option>
-                    <option value="16">16 Oyuncu</option>
+                    <option value="2">2 Players</option>
+                    <option value="4" selected>4 Players</option>
+                    <option value="8">8 Players</option>
+                    <option value="12">12 Players</option>
+                    <option value="16">16 Players</option>
                   </select>
                 </div>
+                <div class="form-row">
+                  <label for="input-party-mode">Game Mode</label>
+                  <select id="input-party-mode" class="mc-select">
+                    <option value="Classic Millionaire (15 Qs)" selected>Classic Millionaire (15 Qs)</option>
+                    <option value="Speed Blitz">Speed Blitz</option>
+                    <option value="Hardcore Nether">Hardcore Nether</option>
+                    <option value="Redstone Masters">Redstone Masters</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="input-party-desc">Optional Description</label>
+                  <input
+                    type="text"
+                    id="input-party-desc"
+                    class="mc-input mc-input-sm"
+                    placeholder="Optional notes or tournament rules..."
+                    maxlength="120"
+                  />
+                </div>
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">✨ Partiyi Kur</span>
+                  <span class="btn-inner">✨ Create Party</span>
                 </button>
               </form>
             </div>
 
-            <!-- Your Parties List -->
+            <!-- Active Parties List -->
             <div class="mc-panel party-list-card">
               <div class="panel-header-row">
-                <h3 class="panel-sec-title">📋 Your Party / Aktif Partiler</h3>
+                <h3 class="panel-sec-title">📋 Parties</h3>
                 <select id="filter-user-party-status" class="mc-select mc-select-xs">
-                  <option value="ALL">Tüm Durumlar</option>
+                  <option value="ALL">All Statuses</option>
                   <option value="WAITING">WAITING</option>
                   <option value="READY">READY</option>
                   <option value="STARTING">STARTING</option>
@@ -596,36 +687,33 @@
                   <option value="CANCELLED">CANCELLED</option>
                 </select>
               </div>
-              <div id="user-parties-list" class="user-parties-list">
-                <!-- Populated dynamically -->
-              </div>
+              <div id="user-parties-list" class="user-parties-list"></div>
             </div>
           </div>
 
-          <!-- Right Column: Selected Party Details & Owner Management Dashboard -->
+          <!-- Right Column: Selected Party Details -->
           <div class="party-right-col">
-            <div id="party-detail-container" class="mc-panel party-detail-card">
-              <!-- Populated dynamically when a party is selected -->
-            </div>
+            <div id="party-detail-container" class="mc-panel party-detail-card"></div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- ==========================================
-         SCREEN 6: LEADERBOARD SYSTEM (SECTION 19)
+         SCREEN 6: LEADERBOARD SYSTEM (SECTION 24)
+         Sort by: Points, Wins, Emeralds, Games Played
          ========================================== -->
     <section id="screen-leaderboard" class="screen" aria-label="Minecraft Milyoner Leaderboard">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
             <h2 class="hub-page-title">🏆 Minecraft Milyoner Leaderboard</h2>
-            <p class="hub-page-sub">Turnuva ve Solo yarışmalarda en yüksek puana ulaşan Minecraft efsaneleri</p>
+            <p class="hub-page-sub">Official Tournament Rankings — Sort by Points, Wins, Emeralds, or Games Played</p>
           </div>
           <div class="hub-header-actions">
             <span class="live-refresh-badge" id="leaderboard-live-indicator">● LIVE AUTO-REFRESH</span>
             <button type="button" id="btn-leaderboard-refresh" class="mc-btn mc-btn-stone mc-btn-small">
-              <span class="btn-inner">🔄 Yenile</span>
+              <span class="btn-inner">🔄 Refresh</span>
             </button>
             <button type="button" class="mc-btn mc-btn-emerald mc-btn-small" data-nav-screen="screen-shop">
               <span class="btn-inner">💚 Emerald Shop</span>
@@ -633,97 +721,198 @@
           </div>
         </div>
 
-        <!-- Current User Position Highlight Banner -->
-        <div id="leaderboard-current-user-banner" class="lb-user-banner mc-panel-inset">
-          <!-- Populated dynamically -->
-        </div>
+        <div id="leaderboard-current-user-banner" class="lb-user-banner mc-panel-inset"></div>
 
-        <!-- Attractive Podium for Top 3 Players -->
-        <div id="leaderboard-podium" class="lb-podium-grid">
-          <!-- Populated dynamically (#2 Silver, #1 Gold, #3 Bronze) -->
-        </div>
+        <!-- Top 3 Podium (1st, 2nd, 3rd) -->
+        <div id="leaderboard-podium" class="lb-podium-grid"></div>
 
-        <!-- Filter & Search Controls -->
+        <!-- Filter, Sort & Search Controls -->
         <div class="lb-controls-bar">
           <div class="lb-limit-tabs" role="group" aria-label="Leaderboard Limit">
             <button type="button" class="lb-limit-btn active" data-lb-limit="10">Top 10</button>
             <button type="button" class="lb-limit-btn" data-lb-limit="25">Top 25</button>
             <button type="button" class="lb-limit-btn" data-lb-limit="50">Top 50</button>
           </div>
+
+          <div class="lb-limit-tabs" role="group" aria-label="Sort Leaderboard By">
+            <button type="button" class="lb-sort-btn active" data-lb-sort="POINTS">🏆 Points</button>
+            <button type="button" class="lb-sort-btn" data-lb-sort="WINS">⚔️ Wins</button>
+            <button type="button" class="lb-sort-btn" data-lb-sort="EMERALDS">💚 Emeralds</button>
+            <button type="button" class="lb-sort-btn" data-lb-sort="GAMES">🎮 Games Played</button>
+          </div>
+
           <div class="lb-search-wrap">
             <input
               type="text"
               id="input-leaderboard-search"
               class="mc-input mc-input-sm"
-              placeholder="🔍 Oyuncu ara (Search player username)..."
+              placeholder="🔍 Search Minecraft username..."
             />
           </div>
         </div>
 
-        <!-- Tournament Leaderboard Table -->
         <div class="lb-table-container mc-panel-inset">
           <table class="lb-table">
             <thead>
               <tr>
                 <th>Rank</th>
                 <th>Minecraft Username</th>
+                <th>Rank Badge</th>
                 <th>⭐ Total Points</th>
                 <th>💚 Emerald Balance</th>
-                <th>🎮 Games</th>
-                <th>🏆 Won</th>
-                <th>💀 Lost</th>
+                <th>🎮 Games Played</th>
+                <th>🏆 Wins</th>
                 <th>❤️ Extra Lives Used</th>
               </tr>
             </thead>
-            <tbody id="leaderboard-table-body">
-              <!-- Populated dynamically -->
-            </tbody>
+            <tbody id="leaderboard-table-body"></tbody>
           </table>
         </div>
       </div>
     </section>
 
     <!-- ==========================================
-         SCREEN 7: EMERALD SHOP (SECTION 22)
+         SCREEN 7: EMERALD SHOP, RANK SHOP & COSMETICS (SECTIONS 11, 12, 13, 33)
          ========================================== -->
     <section id="screen-shop" class="screen" aria-label="Emerald Shop">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
             <h2 class="hub-page-title">💚 Emerald Shop</h2>
-            <p class="hub-page-sub">Kazandığın <strong>Emerald Coins</strong> ile yarışmada seni kurtaracak güçlendirmeler satın al!</p>
+            <p class="hub-page-sub">Spend your <strong>Emerald Coins</strong> on Gameplay items, Ranks, RGB Cosmetics, VIP bundles &amp; Special boosters!</p>
           </div>
           <div class="shop-balance-banner">
             <div class="shop-wallet-box">
               <span class="wallet-label">Emerald Balance:</span>
               <strong class="wallet-amount emerald-text" id="shop-emerald-balance">💚 0 Emerald Coins</strong>
             </div>
+            <button type="button" class="mc-btn mc-btn-gold mc-btn-small" data-nav-screen="screen-vip-shop">
+              <span class="btn-inner">👑 VIP Shop</span>
+            </button>
             <button type="button" class="mc-btn mc-btn-stone mc-btn-small" data-nav-screen="screen-history">
-              <span class="btn-inner">📜 Emerald History</span>
+              <span class="btn-inner">📜 Transactions</span>
             </button>
           </div>
         </div>
 
+        <!-- Shop Category Tabs (Section 11 & 33) -->
+        <div class="shop-category-tabs" role="group" aria-label="Shop Categories">
+          <button type="button" class="shop-cat-btn active" data-shop-cat="ALL">💚 All Items</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Gameplay">❤️ Gameplay</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Ranks">👑 Ranks</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Cosmetics">🎨 Cosmetics</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="VIP">🔥 VIP</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Special">⭐ Special</button>
+        </div>
+
         <!-- Player Current Inventory Bar -->
         <div class="shop-inventory-bar mc-panel-inset">
-          <span class="inv-bar-title">🎒 SENİN ENVANTERİN (OWNED ITEMS):</span>
+          <span class="inv-bar-title">🎒 YOUR INVENTORY:</span>
           <div class="inv-pills-wrap">
             <span class="inv-pill">❤️ Extra Life: <strong id="shop-inv-extralife">0</strong></span>
             <span class="inv-pill">🔥 Second Chance: <strong id="shop-inv-secondchance">0</strong></span>
             <span class="inv-pill">⭐ Score Booster: <strong id="shop-inv-scorebooster">0</strong></span>
+            <span class="inv-pill">💎 Emerald Booster: <strong id="shop-inv-emeraldbooster">0</strong></span>
             <span class="inv-pill">🎟️ Tournament Ticket: <strong id="shop-inv-ticket">0</strong></span>
+            <span class="inv-pill">🌈 RGB Name: <strong id="shop-inv-rgb">Locked</strong></span>
           </div>
         </div>
 
-        <!-- Shop Items Grid -->
-        <div id="emerald-shop-grid" class="emerald-shop-grid">
-          <!-- Populated dynamically -->
+        <div id="emerald-shop-grid" class="emerald-shop-grid"></div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SCREEN 7B: SEPARATE VIP SHOP (SECTION 9 & 10)
+         ========================================== -->
+    <section id="screen-vip-shop" class="screen" aria-label="VIP Shop">
+      <div class="hub-page-wrapper mc-panel">
+        <div class="hub-page-header mc-panel-inset">
+          <div>
+            <h2 class="hub-page-title">👑 VIP Shop</h2>
+            <p class="hub-page-sub">Unlock Party Creation, Player Invitations, Priority Support, VIP Emerald Bonuses &amp; RGB Cosmetics</p>
+          </div>
+          <div class="hub-header-actions">
+            <span id="vip-shop-user-status" class="role-badge role-player">PLAYER</span>
+            <button type="button" class="mc-btn mc-btn-emerald mc-btn-small" data-nav-screen="screen-shop">
+              <span class="btn-inner">💚 Emerald Shop &amp; Ranks</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="vip-showcase-grid">
+          <!-- Main 200 TL VIP Package Card -->
+          <div class="vip-package-card mc-panel-inset">
+            <div class="vip-pkg-divider">━━━━━━━━━━━━━━━━━━━━</div>
+            <div class="vip-pkg-header">
+              <span class="vip-pkg-crown">👑</span>
+              <h3 class="vip-pkg-title">VIP</h3>
+              <div class="vip-pkg-price">200 TL</div>
+            </div>
+            <div class="vip-pkg-divider">━━━━━━━━━━━━━━━━━━━━</div>
+
+            <ul class="vip-feature-checklist">
+              <li><span>✓</span> <strong>Create Parties</strong> — Host your own tournament lobbies</li>
+              <li><span>✓</span> <strong>Invite Players</strong> — Send direct party invitations &amp; codes</li>
+              <li><span>✓</span> <strong>VIP Badge</strong> — Exclusive 👑 VIP badge across the platform</li>
+              <li><span>✓</span> <strong>VIP Profile Styling</strong> — Golden frame &amp; VIP dashboard</li>
+              <li><span>✓</span> <strong>Priority Support</strong> — 🔥 VIP PRIORITY support tickets</li>
+              <li><span>✓</span> <strong>Priority Bug Reports</strong> — Automatic HIGH priority bug queue</li>
+              <li><span>✓</span> <strong>Priority Suggestions</strong> — Featured at the top for Admins</li>
+              <li><span>✓</span> <strong>VIP Emerald Bonus</strong> — +150 💚 per Win &amp; +50 💚 Daily Reward</li>
+              <li><span>✓</span> <strong>VIP-Only Shop Items</strong> — Access exclusive VIP bundles</li>
+              <li><span>✓</span> <strong>RGB Username</strong> — Smooth animated RGB gradient username</li>
+              <li><span>✓</span> <strong>Exclusive Cosmetics</strong> — Special tournament flair</li>
+            </ul>
+
+            <button type="button" id="btn-buy-vip-package" class="mc-btn mc-btn-gold mc-btn-large" style="width:100%; margin-top:1rem;">
+              <span class="btn-inner">👑 BUY VIP (200 TL)</span>
+            </button>
+          </div>
+
+          <!-- VIP Bonus Comparison & Emerald Rank Alternative -->
+          <div class="vip-comparison-col">
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">💚 VIP Emerald Bonus Comparison (Section 10)</h3>
+              <div class="vip-bonus-compare-grid">
+                <div class="vip-cmp-box">
+                  <span class="meta-muted">Normal Game Win</span>
+                  <strong id="cmp-normal-win">+100 💚</strong>
+                </div>
+                <div class="vip-cmp-box vip-highlight">
+                  <span class="gold-text">👑 VIP Game Win</span>
+                  <strong class="emerald-text" id="cmp-vip-win">+150 💚</strong>
+                </div>
+                <div class="vip-cmp-box">
+                  <span class="meta-muted">Normal Daily Reward</span>
+                  <strong id="cmp-normal-daily">+25 💚</strong>
+                </div>
+                <div class="vip-cmp-box vip-highlight">
+                  <span class="gold-text">👑 VIP Daily Reward</span>
+                  <strong class="emerald-text" id="cmp-vip-daily">+50 💚</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="mc-panel-inset dash-box" style="margin-top:1rem;">
+              <h3 class="panel-sec-title">💎 Unlock VIP with Emerald Coins</h3>
+              <p class="panel-sec-desc">Earned enough Emerald Coins from playing quizzes? You can also unlock <strong>👑 VIP Rank (2,000 💚)</strong>, <strong>🌟 MVP+</strong>, <strong>🔱 LEGEND</strong>, or <strong>💎 MILLIONAIRE</strong> directly in the Rank Shop!</p>
+              <button type="button" id="btn-goto-rank-shop" class="mc-btn mc-btn-emerald mc-btn-small" style="margin-top:0.65rem;">
+                <span class="btn-inner">👑 Open Rank Shop</span>
+              </button>
+            </div>
+
+            <div id="payment-service-status-box" class="mc-panel-inset dash-box hidden" style="margin-top:1rem; border-color:var(--gold-main);">
+              <h4 class="gold-text">💳 Payment Service Abstraction Notice</h4>
+              <p id="payment-service-status-msg" class="panel-sec-desc" style="margin-top:0.35rem;"></p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- ==========================================
-         SCREEN 8: PLAYER PROFILE & ACHIEVEMENTS (SECTION 25 & 33)
+         SCREEN 8: PLAYER PROFILE, COSMETICS & ACHIEVEMENTS (SECTIONS 13, 25, 33)
          ========================================== -->
     <section id="screen-profile" class="screen" aria-label="Player Profile">
       <div class="hub-page-wrapper mc-panel">
@@ -736,20 +925,34 @@
                 <span id="profile-role-badge" class="role-badge role-player">PLAYER</span>
                 <span class="profile-rank-pill" id="profile-rank-badge">Rank #1</span>
               </div>
-              <p class="hub-page-sub">Minecraft Milyoner Oyuncu Profili, Ekonomi Özeti ve Başarımlar</p>
+              <p class="hub-page-sub" id="profile-immutable-id">Account ID: USR-1001</p>
             </div>
           </div>
           <div class="hub-header-actions">
+            <button type="button" class="mc-btn mc-btn-stone mc-btn-small" data-nav-screen="screen-account-settings">
+              <span class="btn-inner">⚙️ Account Settings</span>
+            </button>
             <button type="button" class="mc-btn mc-btn-emerald mc-btn-small" data-nav-screen="screen-shop">
               <span class="btn-inner">💚 Emerald Shop</span>
-            </button>
-            <button type="button" class="mc-btn mc-btn-gold mc-btn-small" data-nav-screen="screen-leaderboard">
-              <span class="btn-inner">🏆 Leaderboard</span>
             </button>
           </div>
         </div>
 
-        <!-- Profile Statistics Grid (Section 25) -->
+        <!-- Section 13: RGB Username Cosmetic Quick Control -->
+        <div class="mc-panel-inset dash-box" style="margin-bottom:0.85rem;">
+          <div class="panel-header-row">
+            <div>
+              <h3 class="panel-sec-title">🌈 Cosmetics — RGB Username</h3>
+              <p class="panel-sec-desc">Preview: <strong id="profile-rgb-preview" class="rgb-username-text">Mashallah</strong> — Smooth animated RGB gradient username (respects reduced-motion).</p>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <span id="profile-rgb-status-pill" class="status-pill status-DISABLED">LOCKED</span>
+              <button type="button" id="btn-profile-rgb-enable" class="act-btn emerald">Enable</button>
+              <button type="button" id="btn-profile-rgb-disable" class="act-btn danger">Disable</button>
+            </div>
+          </div>
+        </div>
+
         <div class="profile-stats-grid">
           <div class="stat-box mc-panel-inset">
             <span class="stat-box-label">🏆 Leaderboard Rank</span>
@@ -797,32 +1000,29 @@
           </div>
           <div class="stat-box mc-panel-inset">
             <span class="stat-box-label">🔥 Daily Login Streak</span>
-            <strong class="stat-box-value gold-text" id="prof-stat-streak">0 Gün</strong>
+            <strong class="stat-box-value gold-text" id="prof-stat-streak">0 Days</strong>
           </div>
         </div>
 
-        <!-- Achievements & Badges Section (Section 33) -->
         <div class="profile-achievements-sec mc-panel-inset">
           <div class="panel-header-row">
-            <h3 class="panel-sec-title">🎖️ Achievements & Badges (Başarımlar)</h3>
+            <h3 class="panel-sec-title">🎖️ Achievements &amp; Badges</h3>
             <span class="meta-muted" id="prof-achievements-counter">0 / 6 Unlocked</span>
           </div>
-          <div id="profile-achievements-grid" class="achievements-grid">
-            <!-- Populated dynamically -->
-          </div>
+          <div id="profile-achievements-grid" class="achievements-grid"></div>
         </div>
       </div>
     </section>
 
     <!-- ==========================================
-         SCREEN 9: EMERALD TRANSACTION HISTORY (SECTION 26)
+         SCREEN 9: EMERALD TRANSACTION HISTORY
          ========================================== -->
     <section id="screen-history" class="screen" aria-label="Emerald History">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
-            <h2 class="hub-page-title">📜 Emerald History</h2>
-            <p class="hub-page-sub">Tüm Emerald Coin kazanç, harcama, Extra Life kullanımı ve ödül geçmişin</p>
+            <h2 class="hub-page-title">📜 Emerald Transactions</h2>
+            <p class="hub-page-sub">Complete ledger of your Emerald Coin earnings, shop purchases, and Extra Life usage</p>
           </div>
           <div class="hub-header-actions">
             <span class="wallet-amount emerald-text" id="history-emerald-balance">💚 0 Emerald Coins</span>
@@ -832,24 +1032,270 @@
           </div>
         </div>
 
-        <div id="player-history-list" class="tx-history-list mc-panel-inset">
-          <!-- Populated dynamically -->
+        <div id="player-history-list" class="tx-history-list mc-panel-inset"></div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SCREEN 10: SUPPORT, BUG REPORTS & SUGGESTIONS (SECTIONS 14, 15, 16, 17)
+         ========================================== -->
+    <section id="screen-support" class="screen" aria-label="Support, Bugs & Suggestions">
+      <div class="hub-page-wrapper mc-panel">
+        <div class="hub-page-header mc-panel-inset">
+          <div>
+            <h2 class="hub-page-title">🎧 Support, Bug Reports &amp; Suggestions</h2>
+            <p class="hub-page-sub">Need help, found a bug, or have an idea? VIP members automatically receive <strong>🔥 VIP PRIORITY</strong>!</p>
+          </div>
+          <div class="hub-header-actions">
+            <span id="support-priority-indicator" class="status-pill status-ACTIVE">STANDARD PRIORITY</span>
+          </div>
+        </div>
+
+        <div class="shop-category-tabs" role="tablist">
+          <button type="button" class="support-tab-btn active" data-support-pane="support">🎧 Support</button>
+          <button type="button" class="support-tab-btn" data-support-pane="bug">🐛 Report Bug</button>
+          <button type="button" class="support-tab-btn" data-support-pane="suggestion">💡 Suggestion</button>
+        </div>
+
+        <!-- PANE 1: SUPPORT (Section 14) -->
+        <div id="support-pane-support" class="support-pane active">
+          <div class="party-hub-grid">
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">🎧 Create Support Request</h3>
+              <form id="form-submit-support" class="stack-form" autocomplete="off">
+                <div class="form-row">
+                  <label for="sup-category">Category</label>
+                  <select id="sup-category" class="mc-select">
+                    <option value="Technical Problem">Technical Problem</option>
+                    <option value="Account Problem">Account Problem</option>
+                    <option value="Party Problem">Party Problem</option>
+                    <option value="Payment Problem">Payment Problem</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="sup-title">Subject / Title</label>
+                  <input type="text" id="sup-title" class="mc-input mc-input-sm" placeholder="Brief summary of your issue..." required />
+                </div>
+                <div class="form-row">
+                  <label for="sup-desc">Description</label>
+                  <textarea id="sup-desc" class="mc-input mc-input-sm" rows="4" placeholder="Describe your problem in detail..." required></textarea>
+                </div>
+                <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">📨 Submit Support Ticket</span>
+                </button>
+              </form>
+            </div>
+
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">📋 Your Support Tickets</h3>
+              <div id="user-support-tickets-list" class="tx-history-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE 2: BUG REPORT (Section 15) -->
+        <div id="support-pane-bug" class="support-pane hidden">
+          <div class="party-hub-grid">
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">🐛 Submit Bug Report</h3>
+              <form id="form-submit-bug" class="stack-form" autocomplete="off">
+                <div class="form-row">
+                  <label for="bug-title">Title</label>
+                  <input type="text" id="bug-title" class="mc-input mc-input-sm" placeholder="e.g. Party code button alignment on mobile..." required />
+                </div>
+                <div class="form-row">
+                  <label for="bug-category">Category</label>
+                  <select id="bug-category" class="mc-select">
+                    <option value="Gameplay">Gameplay</option>
+                    <option value="Party System">Party System</option>
+                    <option value="Economy / Shop">Economy / Shop</option>
+                    <option value="UI / Mobile">UI / Mobile</option>
+                    <option value="Audio">Audio</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="bug-party">Related Party ID (Optional)</label>
+                  <input type="text" id="bug-party" class="mc-input mc-input-sm" placeholder="e.g. PRT-1001" />
+                </div>
+                <div class="form-row">
+                  <label for="bug-attachment">Screenshot / Attachment Link (Optional)</label>
+                  <input type="text" id="bug-attachment" class="mc-input mc-input-sm" placeholder="https://..." />
+                </div>
+                <div class="form-row">
+                  <label for="bug-desc">Description</label>
+                  <textarea id="bug-desc" class="mc-input mc-input-sm" rows="3" placeholder="Steps to reproduce the bug..." required></textarea>
+                </div>
+                <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">🐛 Submit Bug Report</span>
+                </button>
+              </form>
+            </div>
+
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">📋 Reported Bugs</h3>
+              <div id="user-bug-reports-list" class="tx-history-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE 3: SUGGESTIONS (Section 16) -->
+        <div id="support-pane-suggestion" class="support-pane hidden">
+          <div class="party-hub-grid">
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">💡 Submit Suggestion</h3>
+              <form id="form-submit-suggestion" class="stack-form" autocomplete="off">
+                <div class="form-row">
+                  <label for="sug-title">Title</label>
+                  <input type="text" id="sug-title" class="mc-input mc-input-sm" placeholder="Your feature idea..." required />
+                </div>
+                <div class="form-row">
+                  <label for="sug-category">Category</label>
+                  <select id="sug-category" class="mc-select">
+                    <option value="Game Modes">Game Modes</option>
+                    <option value="Questions">Questions</option>
+                    <option value="Emerald Shop">Emerald Shop</option>
+                    <option value="Cosmetics">Cosmetics</option>
+                    <option value="Tournaments">Tournaments</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="sug-desc">Description</label>
+                  <textarea id="sug-desc" class="mc-input mc-input-sm" rows="4" placeholder="Explain how this feature would improve Minecraft Milyoner..." required></textarea>
+                </div>
+                <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">💡 Submit Suggestion</span>
+                </button>
+              </form>
+            </div>
+
+            <div class="mc-panel-inset dash-box">
+              <div class="panel-header-row">
+                <h3 class="panel-sec-title">🌟 Community Suggestions</h3>
+                <select id="filter-user-suggestions-sort" class="mc-select mc-select-xs">
+                  <option value="PRIORITY">Sort: Priority (VIP First)</option>
+                  <option value="MOST_VOTES">Sort: Most Votes</option>
+                  <option value="NEWEST">Sort: Newest</option>
+                  <option value="OLDEST">Sort: Oldest</option>
+                </select>
+              </div>
+              <div id="user-suggestions-list" class="tx-history-list"></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- ==========================================
-         SCREEN 6: ADMIN PANEL (FULL TOURNAMENT, LICENSE & ECONOMY MANAGEMENT)
+         SCREEN 11: ACCOUNT SETTINGS (SECTION 27)
+         Username, Password, License, Security, Notifications, Cosmetics
+         ========================================== -->
+    <section id="screen-account-settings" class="screen" aria-label="Account Settings">
+      <div class="hub-page-wrapper mc-panel">
+        <div class="hub-page-header mc-panel-inset">
+          <div>
+            <h2 class="hub-page-title">⚙️ Account Settings</h2>
+            <p class="hub-page-sub">Manage your Minecraft Username, Password Hash Security, License Association, Notifications &amp; RGB Cosmetics</p>
+          </div>
+          <div class="hub-header-actions">
+            <button type="button" id="btn-acc-logout" class="mc-btn mc-btn-danger mc-btn-small">
+              <span class="btn-inner">🚪 Logout / Switch Account</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="party-hub-grid">
+          <div class="party-left-col">
+            <!-- 1. Change Username (Immutable Account ID preserved) -->
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">⛏️ Change Minecraft Username</h3>
+              <p class="panel-sec-desc">Changing your username updates your display name while preserving your immutable User ID, License, Emeralds, VIP status, and Leaderboard points.</p>
+              <form id="form-acc-username" class="inline-join-form" style="margin-top:0.6rem;" autocomplete="off">
+                <input type="text" id="inp-acc-new-username" class="mc-input mc-input-sm" placeholder="New Minecraft Username" maxlength="24" required />
+                <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">Save Username</span>
+                </button>
+              </form>
+            </div>
+
+            <!-- 2. Password & Security (Salted SHA-256 Hash Only) -->
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">🔒 Password &amp; Security</h3>
+              <p class="panel-sec-desc">Passwords are never stored in plaintext. Only an irreversible salted SHA-256 hash is stored.</p>
+              <form id="form-acc-password" class="stack-form" style="margin-top:0.6rem;" autocomplete="off">
+                <div class="form-row">
+                  <label for="inp-acc-curr-pwd">Current Password (leave blank if setting for the first time)</label>
+                  <input type="password" id="inp-acc-curr-pwd" class="mc-input mc-input-sm" placeholder="Current password..." />
+                </div>
+                <div class="form-row">
+                  <label for="inp-acc-new-pwd">New Password</label>
+                  <input type="password" id="inp-acc-new-pwd" class="mc-input mc-input-sm" placeholder="At least 4 characters..." required />
+                </div>
+                <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">🔐 Update Password Hash</span>
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div class="party-right-col">
+            <!-- 3. License & Account Identity -->
+            <div class="mc-panel-inset dash-box">
+              <h3 class="panel-sec-title">🔑 License &amp; Account Identity</h3>
+              <ul class="sys-status-list" style="margin-top:0.5rem;">
+                <li><span>Immutable User ID:</span> <strong id="acc-info-userid">USR-1001</strong></li>
+                <li><span>Minecraft Username:</span> <strong id="acc-info-username" class="emerald-text">Steve</strong></li>
+                <li><span>Role &amp; Rank:</span> <strong id="acc-info-role" class="gold-text">PLAYER</strong></li>
+                <li><span>VIP Membership:</span> <strong id="acc-info-vip">Inactive</strong></li>
+                <li><span>Bound License ID:</span> <strong id="acc-info-license">LIC-COMMUNITY-XXQ</strong></li>
+                <li><span>Password Protection:</span> <strong id="acc-info-pwd-status" class="emerald-text">SHA-256 Ready</strong></li>
+              </ul>
+            </div>
+
+            <!-- 4. Cosmetics & Accessibility Notifications -->
+            <div class="mc-panel-inset dash-box" style="margin-top:0.85rem;">
+              <h3 class="panel-sec-title">🌈 Cosmetics &amp; Preferences</h3>
+              <div class="sys-status-list" style="margin-top:0.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.07);">
+                  <div>
+                    <strong>🌈 RGB Username Effect</strong>
+                    <div class="meta-muted">Smooth RGB gradient animation on your username</div>
+                  </div>
+                  <div style="display:flex; gap:0.4rem;">
+                    <button type="button" id="btn-acc-rgb-enable" class="act-btn emerald">Enable</button>
+                    <button type="button" id="btn-acc-rgb-disable" class="act-btn danger">Disable</button>
+                  </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.45rem 0;">
+                  <div>
+                    <strong>🔔 Platform Notifications</strong>
+                    <div class="meta-muted">Show toast notifications for rewards &amp; party invites</div>
+                  </div>
+                  <input type="checkbox" id="chk-acc-notifications" checked style="width:20px; height:20px;" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SCREEN 12: ADMIN PANEL — 100% ENGLISH ONLY (SECTIONS 18-25)
+         Sidebar with 16 dedicated pages:
+         Dashboard, Users, Licenses, Parties, Leaderboard, Economy,
+         Shop, VIP, Support, Bug Reports, Suggestions, Transactions,
+         Achievements, Backups, Activity Logs, Settings
          ========================================== -->
     <section id="screen-admin" class="screen" aria-label="Admin Panel">
       <div class="admin-shell mc-panel">
-        <!-- Admin Top Header -->
+        <!-- Admin Top Bar -->
         <div class="admin-topbar mc-panel-inset">
           <div class="admin-brand">
             <span class="admin-shield-icon">🛡️</span>
             <div>
               <div class="admin-brand-title">Minecraft Milyoner</div>
-              <div class="admin-brand-sub">Admin Panel — Tournament, License & Emerald Economy Management</div>
+              <div class="admin-brand-sub">Admin Panel</div>
             </div>
           </div>
 
@@ -862,19 +1308,19 @@
               </div>
             </div>
             <button type="button" id="btn-admin-go-game" class="mc-btn mc-btn-emerald mc-btn-small">
-              <span class="btn-inner">🎮 Oyuna Geç</span>
+              <span class="btn-inner">🏠 Return to Platform</span>
             </button>
           </div>
         </div>
 
         <div class="admin-body">
-          <!-- Responsive Sidebar Navigation -->
-          <aside class="admin-sidebar mc-panel-inset" aria-label="Admin Menü">
+          <!-- Admin Sidebar Navigation (16 English Sections) -->
+          <aside class="admin-sidebar mc-panel-inset" aria-label="Admin Navigation">
             <button type="button" class="admin-nav-btn active" data-admin-tab="dashboard">
               <span>📊</span> <span>Dashboard</span>
             </button>
-            <button type="button" class="admin-nav-btn" data-admin-tab="economy">
-              <span>💚</span> <span>Economy & Shop</span>
+            <button type="button" class="admin-nav-btn" data-admin-tab="users">
+              <span>👥</span> <span>Users</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="licenses">
               <span>🔑</span> <span>Licenses</span>
@@ -882,109 +1328,256 @@
             <button type="button" class="admin-nav-btn" data-admin-tab="parties">
               <span>🎉</span> <span>Parties</span>
             </button>
-            <button type="button" class="admin-nav-btn" data-admin-tab="players">
-              <span>🧑‍🌾</span> <span>Players</span>
+            <button type="button" class="admin-nav-btn" data-admin-tab="leaderboard">
+              <span>🏆</span> <span>Leaderboard</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="economy">
+              <span>💚</span> <span>Economy</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="shop">
+              <span>🛒</span> <span>Shop</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="vip">
+              <span>👑</span> <span>VIP</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="support">
+              <span>🎧</span> <span>Support</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="bugs">
+              <span>🐛</span> <span>Bug Reports</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="suggestions">
+              <span>💡</span> <span>Suggestions</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="transactions">
+              <span>💳</span> <span>Transactions</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="achievements">
+              <span>🎖️</span> <span>Achievements</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="backups">
+              <span>💾</span> <span>Backups</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="activity">
-              <span>📜</span> <span>Activity Log</span>
+              <span>📜</span> <span>Activity Logs</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="settings">
               <span>⚙️</span> <span>Settings</span>
             </button>
           </aside>
 
-          <!-- Admin Content Views -->
+          <!-- Admin Content Views (100% English) -->
           <div class="admin-content">
 
-            <!-- TAB 1: DASHBOARD -->
+            <!-- 1. DASHBOARD (Section 20: 10 Cards) -->
             <div id="admin-tab-dashboard" class="admin-tab-pane active">
               <div class="admin-section-header">
-                <h3>📊 Sistem Özeti (Dashboard)</h3>
+                <h3>📊 Admin Dashboard Overview</h3>
                 <span class="system-status-pill">● SYSTEM ONLINE — PROTECTED</span>
               </div>
 
               <div class="admin-metrics-grid">
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Total Licenses</span>
-                  <strong class="m-value" id="adm-metric-total-lic">0</strong>
+                  <span class="m-label">Total Users</span>
+                  <strong class="m-value" id="adm-card-total-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Active Licenses</span>
-                  <strong class="m-value emerald-text" id="adm-metric-active-lic">0</strong>
+                  <span class="m-label">Active Users</span>
+                  <strong class="m-value emerald-text" id="adm-card-active-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Revoked Licenses</span>
-                  <strong class="m-value wrong-text" id="adm-metric-revoked-lic">0</strong>
-                </div>
-                <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Total Parties</span>
-                  <strong class="m-value gold-text" id="adm-metric-total-parties">0</strong>
+                  <span class="m-label">VIP Users</span>
+                  <strong class="m-value gold-text" id="adm-card-vip-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
                   <span class="m-label">Active Parties</span>
-                  <strong class="m-value emerald-text" id="adm-metric-active-parties">0</strong>
+                  <strong class="m-value emerald-text" id="adm-card-active-parties">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Total Participants</span>
-                  <strong class="m-value" id="adm-metric-total-participants">0</strong>
+                  <span class="m-label">Total Parties</span>
+                  <strong class="m-value" id="adm-card-total-parties">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">💚 Emeralds in Circulation</span>
-                  <strong class="m-value emerald-text" id="adm-metric-total-emeralds">0</strong>
+                  <span class="m-label">Total Emeralds</span>
+                  <strong class="m-value emerald-text" id="adm-card-total-emeralds">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">❤️ Extra Lives Used</span>
-                  <strong class="m-value wrong-text" id="adm-metric-extralives-used">0</strong>
+                  <span class="m-label">Total Transactions</span>
+                  <strong class="m-value" id="adm-card-total-tx">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Open Tickets</span>
+                  <strong class="m-value gold-text" id="adm-card-open-tickets">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Open Bug Reports</span>
+                  <strong class="m-value wrong-text" id="adm-card-open-bugs">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Open Suggestions</span>
+                  <strong class="m-value diamond-text" id="adm-card-open-suggestions">0</strong>
                 </div>
               </div>
 
               <div class="admin-dash-split">
                 <div class="mc-panel-inset dash-box">
                   <div class="panel-header-row">
-                    <h4>📜 Recent Activity (Son Hareketler)</h4>
+                    <h4>📜 Recent System Activity</h4>
                     <button type="button" class="mc-btn mc-btn-stone mc-btn-small" id="btn-dash-view-all-logs">
-                      <span class="btn-inner">Tümünü Gör</span>
+                      <span class="btn-inner">View All Logs</span>
                     </button>
                   </div>
                   <div id="adm-dash-recent-activity" class="activity-feed-list"></div>
                 </div>
 
                 <div class="mc-panel-inset dash-box">
-                  <h4>🛡️ System Status & Security</h4>
+                  <h4>🛡️ Platform Security &amp; Architecture Status</h4>
                   <ul class="sys-status-list">
-                    <li><span>Role-Based Access Control (RBAC):</span> <strong class="emerald-text">ACTIVE</strong></li>
+                    <li><span>Role-Based Access Control (ADMIN / VIP / PLAYER):</span> <strong class="emerald-text">ACTIVE</strong></li>
                     <li><span>License Signature Verification:</span> <strong class="emerald-text">SHA-256 VERIFIED</strong></li>
-                    <li><span>Emerald Economy Anti-Exploit Lock:</span> <strong class="emerald-text">ATOMIC PROTECTED</strong></li>
+                    <li><span>Password Storage Policy:</span> <strong class="emerald-text">SALTED HASH ONLY</strong></li>
                     <li><span>Extra Life Revive Engine:</span> <strong class="emerald-text" id="adm-status-extralife">ENABLED</strong></li>
-                    <li><span>Question Database:</span> <strong class="gold-text">115 Questions Ready</strong></li>
+                    <li><span>VIP Priority Queue Sorting:</span> <strong class="gold-text">HIGH PRIORITY FIRST</strong></li>
                   </ul>
                 </div>
               </div>
             </div>
 
-            <!-- TAB 1B: ECONOMY, SHOP & REWARD CONFIG (SECTIONS 27, 28, 29) -->
-            <div id="admin-tab-economy" class="admin-tab-pane">
+            <!-- 2. USERS (Section 21) -->
+            <div id="admin-tab-users" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>💚 Emerald Economy, Shop & Extra Life Management</h3>
+                <h3>👥 Users Management</h3>
+              </div>
+              <div class="admin-filter-bar">
+                <input type="text" id="search-adm-users" class="mc-input mc-input-sm" placeholder="🔍 Search username, role, or ID..." />
+                <select id="filter-adm-users-role" class="mc-select">
+                  <option value="ALL">All Roles</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="VIP">VIP</option>
+                  <option value="PLAYER">PLAYER</option>
+                </select>
+              </div>
+              <div id="adm-users-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- 3. LICENSES (Section 23) -->
+            <div id="admin-tab-licenses" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🔑 License Management</h3>
               </div>
 
-              <!-- 1. Admin Economy Controls: Give / Remove / Set / Reset Emeralds -->
-              <div class="mc-panel-inset admin-create-bar">
-                <h4 class="panel-sec-title">💰 Player Emerald Balance Controls (Section 27)</h4>
-                <p class="panel-sec-desc">Oyunculara Emerald Coin ekleyin, çıkarın, bakiyesini belirleyin veya sıfırlayın. Tüm işlemler onay gerektirir ve kayıt altına alınır.</p>
+              <form id="form-admin-create-license" class="mc-panel-inset admin-create-bar" autocomplete="off">
                 <div class="create-grid">
                   <div>
-                    <label>Player (Oyuncu Seç veya Yaz)</label>
-                    <input type="text" id="adm-econ-username" list="adm-econ-players-datalist" class="mc-input mc-input-sm" placeholder="Örn: Steve, Mashallah..." />
+                    <label>License Name</label>
+                    <input type="text" id="adm-lic-name" class="mc-input mc-input-sm" placeholder="e.g. VIP Tournament Pass" required />
+                  </div>
+                  <div>
+                    <label>License Code</label>
+                    <div class="input-with-btn">
+                      <input type="text" id="adm-lic-code" class="mc-input mc-input-sm" placeholder="MCVP-XXXX-XXXX" required />
+                      <button type="button" id="btn-adm-gen-code" class="mc-icon-btn" title="Generate Random Code">🎲</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label>Assign Role</label>
+                    <select id="adm-lic-role" class="mc-select">
+                      <option value="PLAYER">PLAYER</option>
+                      <option value="VIP">VIP</option>
+                      <option value="ADMIN">ADMIN</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Expiration Date</label>
+                    <input type="date" id="adm-lic-expires" class="mc-input mc-input-sm" />
+                  </div>
+                  <div>
+                    <label>Assigned Username (Optional)</label>
+                    <input type="text" id="adm-lic-user" class="mc-input mc-input-sm" placeholder="e.g. Steve" />
+                  </div>
+                </div>
+                <div class="create-bar-actions">
+                  <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                    <span class="btn-inner">➕ Create License</span>
+                  </button>
+                </div>
+              </form>
+
+              <div class="admin-filter-bar">
+                <input type="text" id="search-adm-licenses" class="mc-input mc-input-sm" placeholder="🔍 Search license code, name, or user..." />
+                <select id="filter-adm-licenses" class="mc-select">
+                  <option value="ALL">All Statuses</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="DISABLED">DISABLED</option>
+                  <option value="EXPIRED">EXPIRED</option>
+                  <option value="REVOKED">REVOKED</option>
+                </select>
+              </div>
+
+              <div id="adm-licenses-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- 4. PARTIES -->
+            <div id="admin-tab-parties" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🎉 Party Management &amp; Admin Override</h3>
+                <button type="button" id="btn-adm-quick-party" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">➕ Open Party Lobby</span>
+                </button>
+              </div>
+
+              <div class="admin-filter-bar">
+                <input type="text" id="search-adm-parties" class="mc-input mc-input-sm" placeholder="🔍 Search party name, owner, or invite code..." />
+                <select id="filter-adm-parties" class="mc-select">
+                  <option value="ALL">All Statuses</option>
+                  <option value="WAITING">WAITING</option>
+                  <option value="READY">READY</option>
+                  <option value="STARTING">STARTING</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="FINISHED">FINISHED</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                </select>
+              </div>
+
+              <div id="adm-parties-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- 5. LEADERBOARD (Admin View) -->
+            <div id="admin-tab-leaderboard" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🏆 Leaderboard Management</h3>
+                <select id="adm-lb-sort" class="mc-select mc-select-xs">
+                  <option value="POINTS">Sort by: Points</option>
+                  <option value="WINS">Sort by: Wins</option>
+                  <option value="EMERALDS">Sort by: Emeralds</option>
+                  <option value="GAMES">Sort by: Games Played</option>
+                </select>
+              </div>
+              <div id="adm-leaderboard-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- 6. ECONOMY (Section 25) -->
+            <div id="admin-tab-economy" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>💚 Economy &amp; Reward Configuration</h3>
+              </div>
+
+              <div class="mc-panel-inset admin-create-bar">
+                <h4 class="panel-sec-title">💰 Player Emerald Balance Controls</h4>
+                <p class="panel-sec-desc">Give Emeralds, Remove Emeralds, Set Balance, or Reset Balance. All changes are logged in Transactions.</p>
+                <div class="create-grid">
+                  <div>
+                    <label>Player Username</label>
+                    <input type="text" id="adm-econ-username" list="adm-econ-players-datalist" class="mc-input mc-input-sm" placeholder="e.g. Steve, Mashallah..." />
                     <datalist id="adm-econ-players-datalist"></datalist>
                   </div>
                   <div>
-                    <label>Amount (Emerald Miktarı)</label>
+                    <label>Emerald Amount</label>
                     <input type="number" id="adm-econ-amount" class="mc-input mc-input-sm" min="0" value="250" />
                   </div>
                   <div>
-                    <label>Reason / Note (Açıklama)</label>
-                    <input type="text" id="adm-econ-reason" class="mc-input mc-input-sm" placeholder="Örn: Turnuva Ödülü / Bonus" />
+                    <label>Reason / Audit Note</label>
+                    <input type="text" id="adm-econ-reason" class="mc-input mc-input-sm" placeholder="e.g. Tournament Prize" />
                   </div>
                 </div>
                 <div class="adm-row-actions" style="justify-content: flex-end; margin-top: 0.4rem;">
@@ -1003,32 +1596,39 @@
                 </div>
               </div>
 
-              <!-- 2. Emerald Reward & Extra Life Configuration (Sections 21 & 29) -->
               <form id="form-admin-economy-config" class="mc-panel-inset admin-create-bar" autocomplete="off">
-                <h4 class="panel-sec-title">⚙️ Reward Amounts & Extra Life Rules Configuration (Sections 21 & 29)</h4>
+                <h4 class="panel-sec-title">⚙️ Configure Normal &amp; VIP Rewards &amp; Extra Life Rules</h4>
                 <div class="create-grid">
                   <div>
-                    <label>Game Completed (+Emeralds)</label>
+                    <label>Normal Game Completed (+💚)</label>
                     <input type="number" id="cfg-reward-completed" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Game Won (+Emeralds)</label>
+                    <label>Normal Game Win (+💚)</label>
                     <input type="number" id="cfg-reward-won" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Top 3 Finish (+Emeralds)</label>
-                    <input type="number" id="cfg-reward-top3" class="mc-input mc-input-sm" min="0" required />
+                    <label>👑 VIP Game Win (+💚)</label>
+                    <input type="number" id="cfg-reward-vip-won" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Tournament Winner (+Emeralds)</label>
-                    <input type="number" id="cfg-reward-tournament" class="mc-input mc-input-sm" min="0" required />
-                  </div>
-                  <div>
-                    <label>Daily Login (+Emeralds)</label>
+                    <label>Normal Daily Login (+💚)</label>
                     <input type="number" id="cfg-reward-daily" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Extra Life Price (Emeralds)</label>
+                    <label>👑 VIP Daily Login (+💚)</label>
+                    <input type="number" id="cfg-reward-vip-daily" class="mc-input mc-input-sm" min="0" required />
+                  </div>
+                  <div>
+                    <label>Top 3 Finish (+💚)</label>
+                    <input type="number" id="cfg-reward-top3" class="mc-input mc-input-sm" min="0" required />
+                  </div>
+                  <div>
+                    <label>Tournament Winner (+💚)</label>
+                    <input type="number" id="cfg-reward-tournament" class="mc-input mc-input-sm" min="0" required />
+                  </div>
+                  <div>
+                    <label>Extra Life Price (💚)</label>
                     <input type="number" id="cfg-extralife-price" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
@@ -1036,35 +1636,57 @@
                     <input type="number" id="cfg-extralife-max" class="mc-input mc-input-sm" min="1" max="5" required />
                   </div>
                   <div>
-                    <label>Extra Life Feature Status</label>
+                    <label>Extra Life Status</label>
                     <select id="cfg-extralife-enabled" class="mc-select">
-                      <option value="true">ENABLED (Aktif)</option>
-                      <option value="false">DISABLED (Devre Dışı)</option>
+                      <option value="true">ENABLED</option>
+                      <option value="false">DISABLED</option>
                     </select>
                   </div>
                 </div>
                 <div class="create-bar-actions">
                   <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                    <span class="btn-inner">💾 Save Economy & Extra Life Configuration</span>
+                    <span class="btn-inner">💾 Save Economy Configuration</span>
                   </button>
                 </div>
               </form>
+            </div>
 
-              <!-- 3. Admin Shop Management (Section 28) -->
+            <!-- 7. SHOP -->
+            <div id="admin-tab-shop" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🛒 Shop &amp; Rank Items Management</h3>
+              </div>
               <div class="mc-panel-inset admin-create-bar">
-                <h4 class="panel-sec-title">🛒 Emerald Shop Items Management (Section 28)</h4>
+                <h4 class="panel-sec-title">➕ Create New Shop Item</h4>
                 <form id="form-admin-create-shop-item" class="create-grid" autocomplete="off">
                   <div>
                     <label>Item Name</label>
-                    <input type="text" id="adm-shop-name" class="mc-input mc-input-sm" placeholder="Örn: Diamond Shield" required />
+                    <input type="text" id="adm-shop-name" class="mc-input mc-input-sm" placeholder="e.g. Totem of Undying" required />
                   </div>
                   <div>
-                    <label>Icon (Emoji)</label>
-                    <input type="text" id="adm-shop-icon" class="mc-input mc-input-sm" placeholder="🛡️" maxlength="4" value="💎" required />
+                    <label>Icon</label>
+                    <input type="text" id="adm-shop-icon" class="mc-input mc-input-sm" value="💎" maxlength="4" required />
                   </div>
                   <div>
                     <label>Price (Emeralds)</label>
                     <input type="number" id="adm-shop-price" class="mc-input mc-input-sm" min="1" value="600" required />
+                  </div>
+                  <div>
+                    <label>Category</label>
+                    <select id="adm-shop-category" class="mc-select">
+                      <option value="Gameplay">Gameplay</option>
+                      <option value="Ranks">Ranks</option>
+                      <option value="Cosmetics">Cosmetics</option>
+                      <option value="VIP">VIP</option>
+                      <option value="Special">Special</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Required Role</label>
+                    <select id="adm-shop-req-role" class="mc-select">
+                      <option value="ANY">ANY (All Players)</option>
+                      <option value="VIP">VIP Only</option>
+                    </select>
                   </div>
                   <div>
                     <label>Effect Type</label>
@@ -1072,153 +1694,149 @@
                       <option value="EXTRA_LIFE">Extra Life (+1 Revive)</option>
                       <option value="SECOND_CHANCE">Second Chance Protection</option>
                       <option value="SCORE_BOOSTER">Score Booster (+50% Score)</option>
-                      <option value="TOURNAMENT_TICKET">Tournament Ticket</option>
+                      <option value="EMERALD_BOOSTER">Emerald Booster (+50% 💚)</option>
+                      <option value="RGB_NAME">RGB Username Cosmetic</option>
                     </select>
                   </div>
-                  <div>
+                  <div style="grid-column: 1 / -1;">
                     <label>Description</label>
-                    <input type="text" id="adm-shop-desc" class="mc-input mc-input-sm" placeholder="Eşya açıklaması..." required />
+                    <input type="text" id="adm-shop-desc" class="mc-input mc-input-sm" placeholder="Item description shown in Emerald Shop..." required />
                   </div>
-                  <div style="display:flex; align-items:flex-end;">
-                    <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small" style="width:100%;">
+                  <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
+                    <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
                       <span class="btn-inner">➕ Create Shop Item</span>
                     </button>
                   </div>
                 </form>
+              </div>
+              <div id="adm-shop-items-list" class="admin-table-wrap"></div>
+            </div>
 
-                <div id="adm-shop-items-list" class="admin-table-wrap" style="margin-top: 0.75rem;"></div>
+            <!-- 8. VIP MANAGEMENT (Section 22) -->
+            <div id="admin-tab-vip" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>👑 VIP Membership Management</h3>
               </div>
 
-              <!-- 4. All Players' Emerald Transaction History (Section 26) -->
+              <div class="mc-panel-inset admin-create-bar">
+                <h4 class="panel-sec-title">👑 Grant / Update / Remove VIP Status</h4>
+                <form id="form-admin-grant-vip" class="create-grid" autocomplete="off">
+                  <div>
+                    <label>Minecraft Username</label>
+                    <input type="text" id="adm-vip-username" list="adm-econ-players-datalist" class="mc-input mc-input-sm" placeholder="e.g. Steve" required />
+                  </div>
+                  <div>
+                    <label>VIP Expiration (Leave blank for Lifetime)</label>
+                    <input type="date" id="adm-vip-expires" class="mc-input mc-input-sm" />
+                  </div>
+                  <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+                    <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                      <span class="btn-inner">👑 Grant / Update VIP</span>
+                    </button>
+                    <button type="button" id="btn-adm-revoke-vip" class="mc-btn mc-btn-danger mc-btn-small">
+                      <span class="btn-inner">✖ Remove VIP</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="mc-panel-inset dash-box" style="margin-bottom:0.85rem;">
+                <h4 class="panel-sec-title">👑 Active VIP &amp; Admin Members</h4>
+                <div id="adm-vip-users-list" class="admin-table-wrap"></div>
+              </div>
+
               <div class="mc-panel-inset dash-box">
-                <div class="panel-header-row">
-                  <h4>📜 Global Emerald Transaction History (Tüm Oyuncuların İşlem Geçmişi)</h4>
-                  <input type="text" id="search-adm-tx-history" class="mc-input mc-input-sm" style="max-width:260px;" placeholder="🔍 Oyuncu veya işlem ara..." />
-                </div>
-                <div id="adm-tx-history-list" class="tx-history-list"></div>
+                <h4 class="panel-sec-title">💳 VIP Checkout Intents (paymentService Log)</h4>
+                <div id="adm-vip-payments-list" class="admin-table-wrap"></div>
               </div>
             </div>
 
-            <!-- TAB 2: LICENSES -->
-            <div id="admin-tab-licenses" class="admin-tab-pane">
+            <!-- 9. SUPPORT TICKETS (Section 14 & 17) -->
+            <div id="admin-tab-support" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🔑 License Management (Lisans Yönetimi)</h3>
+                <h3>🎧 Support Tickets (VIP Priority Sorted First)</h3>
               </div>
+              <div id="adm-support-list" class="admin-table-wrap"></div>
+            </div>
 
-              <!-- Create License Form -->
-              <form id="form-admin-create-license" class="mc-panel-inset admin-create-bar" autocomplete="off">
-                <div class="create-grid">
-                  <div>
-                    <label>Lisans Adı (Custom Name)</label>
-                    <input type="text" id="adm-lic-name" class="mc-input mc-input-sm" placeholder="Örn: VIP Oyuncu Lisansı" required />
-                  </div>
-                  <div>
-                    <label>Lisans Kodu (Code)</label>
-                    <div class="input-with-btn">
-                      <input type="text" id="adm-lic-code" class="mc-input mc-input-sm" placeholder="MCML-XXXX-XXXX" required />
-                      <button type="button" id="btn-adm-gen-code" class="mc-icon-btn" title="Rastgele Kod Üret">🎲</button>
-                    </div>
-                  </div>
-                  <div>
-                    <label>Rol (Role)</label>
-                    <select id="adm-lic-role" class="mc-select">
-                      <option value="PLAYER">PLAYER</option>
-                      <option value="ORGANIZER">ORGANIZER</option>
-                      <option value="ADMIN">ADMIN</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label>Bitiş Tarihi (Expires)</label>
-                    <input type="date" id="adm-lic-expires" class="mc-input mc-input-sm" />
-                  </div>
-                  <div>
-                    <label>Atanan Kullanıcı (Opsiyonel)</label>
-                    <input type="text" id="adm-lic-user" class="mc-input mc-input-sm" placeholder="Örn: Steve" />
-                  </div>
-                </div>
-                <div class="create-bar-actions">
-                  <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                    <span class="btn-inner">➕ Create License (Lisans Oluştur)</span>
-                  </button>
-                </div>
-              </form>
+            <!-- 10. BUG REPORTS (Section 15 & 17) -->
+            <div id="admin-tab-bugs" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🐛 Bug Reports (VIP Priority Sorted First)</h3>
+              </div>
+              <div id="adm-bugs-list" class="admin-table-wrap"></div>
+            </div>
 
-              <!-- Search & Filter Bar -->
-              <div class="admin-filter-bar">
-                <input type="text" id="search-adm-licenses" class="mc-input mc-input-sm" placeholder="🔍 Lisans kodu, isim veya kullanıcı ara..." />
-                <select id="filter-adm-licenses" class="mc-select">
-                  <option value="ALL">Tüm Lisanslar</option>
-                  <option value="ACTIVE">Active (Aktif)</option>
-                  <option value="DISABLED">Disabled (Devre Dışı)</option>
-                  <option value="EXPIRED">Expired (Süresi Dolmuş)</option>
-                  <option value="REVOKED">Revoked (İptal Edilmiş)</option>
+            <!-- 11. SUGGESTIONS (Section 16 & 17) -->
+            <div id="admin-tab-suggestions" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>💡 Player Suggestions</h3>
+                <select id="adm-suggestions-sort" class="mc-select mc-select-xs">
+                  <option value="PRIORITY">Sort: Priority (VIP First)</option>
+                  <option value="MOST_VOTES">Sort: Most Votes</option>
+                  <option value="NEWEST">Sort: Newest</option>
+                  <option value="OLDEST">Sort: Oldest</option>
                 </select>
               </div>
-
-              <div id="adm-licenses-list" class="admin-table-wrap"></div>
+              <div id="adm-suggestions-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- TAB 3: PARTIES (ADMIN OVERRIDE) -->
-            <div id="admin-tab-parties" class="admin-tab-pane">
+            <!-- 12. TRANSACTIONS (Section 25) -->
+            <div id="admin-tab-transactions" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🎉 Party Management & Admin Override</h3>
-                <button type="button" id="btn-adm-quick-party" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">➕ Yeni Parti Aç</span>
+                <h3>💳 Emerald Transaction Ledger</h3>
+                <input type="text" id="search-adm-tx-history" class="mc-input mc-input-sm" style="max-width:260px;" placeholder="🔍 Search user, ID, or reason..." />
+              </div>
+              <div id="adm-tx-history-list" class="tx-history-list"></div>
+            </div>
+
+            <!-- 13. ACHIEVEMENTS -->
+            <div id="admin-tab-achievements" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🎖️ Platform Achievements Catalog</h3>
+              </div>
+              <div id="adm-achievements-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- 14. BACKUPS (Section 4) -->
+            <div id="admin-tab-backups" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>💾 Versioned Backup System (backup/)</h3>
+                <button type="button" id="btn-adm-create-backup" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">➕ Create Versioned Backup</span>
                 </button>
               </div>
-
-              <div class="admin-filter-bar">
-                <input type="text" id="search-adm-parties" class="mc-input mc-input-sm" placeholder="🔍 Parti adı, organizatör veya davet kodu ara..." />
-                <select id="filter-adm-parties" class="mc-select">
-                  <option value="ALL">Tüm Durumlar</option>
-                  <option value="WAITING">WAITING</option>
-                  <option value="READY">READY</option>
-                  <option value="STARTING">STARTING</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="FINISHED">FINISHED</option>
-                  <option value="CANCELLED">CANCELLED</option>
-                </select>
-              </div>
-
-              <div id="adm-parties-list" class="admin-table-wrap"></div>
+              <p class="panel-sec-desc" style="margin-bottom:0.75rem;">
+                Structured backup namespaces: <code>backup/users/</code>, <code>backup/parties/</code>, <code>backup/licenses/</code>, <code>backup/transactions/</code>, <code>backup/settings/</code>. Plaintext passwords are never stored.
+              </p>
+              <div id="adm-backups-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- TAB 4: PLAYERS -->
-            <div id="admin-tab-players" class="admin-tab-pane">
-              <div class="admin-section-header">
-                <h3>🧑‍🌾 Kayıtlı Oyuncular ve Ekonomi Profilleri (Players)</h3>
-              </div>
-              <div class="admin-filter-bar">
-                <input type="text" id="search-adm-players" class="mc-input mc-input-sm" placeholder="🔍 Oyuncu adı veya rol ara..." />
-              </div>
-              <div id="adm-players-list" class="admin-table-wrap"></div>
-            </div>
-
-            <!-- TAB 5: ACTIVITY LOG -->
+            <!-- 15. ACTIVITY LOGS -->
             <div id="admin-tab-activity" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>📜 Sistem Hareket Kayıtları (Activity Log)</h3>
+                <h3>📜 System Activity Logs</h3>
                 <button type="button" id="btn-adm-clear-logs" class="mc-btn mc-btn-danger mc-btn-small">
-                  <span class="btn-inner">🗑️ Kayıtları Temizle</span>
+                  <span class="btn-inner">🗑️ Clear Activity Logs</span>
                 </button>
               </div>
               <div id="adm-full-activity-list" class="activity-feed-list full-log"></div>
             </div>
 
-            <!-- TAB 6: SETTINGS -->
+            <!-- 16. SETTINGS -->
             <div id="admin-tab-settings" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>⚙️ Sistem ve Oturum Ayarları (Settings)</h3>
+                <h3>⚙️ System Settings &amp; Session Security</h3>
               </div>
               <div class="mc-panel-inset dash-box">
-                <h4>Aktif Yönetici Oturumu</h4>
-                <p class="panel-sec-desc">Şu anda tam yetkili <strong>ADMIN</strong> oturumu açıktır. Lisansınızı değiştirebilir veya ses/istatistik ayarlarını yönetebilirsiniz.</p>
-                <div class="settings-action-row">
+                <h4>Active Administrator Session</h4>
+                <p class="panel-sec-desc">You are signed in with full <strong>ADMIN</strong> privileges. You can configure audio settings, create a system backup, or sign out below.</p>
+                <div class="settings-action-row" style="margin-top:0.75rem;">
                   <button type="button" id="btn-adm-open-audio" class="mc-btn mc-btn-stone mc-btn-small">
-                    <span class="btn-inner">🔊 Ses Ayarları</span>
+                    <span class="btn-inner">🔊 Audio Settings</span>
                   </button>
                   <button type="button" id="btn-adm-logout" class="mc-btn mc-btn-danger mc-btn-small">
-                    <span class="btn-inner">🚪 Oturumu Kapat / Lisans Değiştir</span>
+                    <span class="btn-inner">🚪 Logout Administrator Session</span>
                   </button>
                 </div>
               </div>
@@ -1232,7 +1850,7 @@
   </main>
 
   <!-- ==========================================
-       MODAL: EXTRA LIFE REVIVE PROMPT (SECTION 23)
+       MODAL: EXTRA LIFE REVIVE PROMPT (SECTION 26)
        ========================================== -->
   <div id="modal-extralife" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="extralife-modal-title">
     <div class="modal-box mc-panel extralife-modal-box">
@@ -1241,8 +1859,8 @@
       </div>
       <div class="modal-body extralife-modal-body">
         <div class="extralife-heart-showcase">❤️</div>
-        <p class="extralife-prompt-title">You have an <strong>Extra Life</strong> available.</p>
-        <p class="extralife-prompt-sub">Would you like to return to the game and continue from <strong id="extralife-question-label">Soru 1</strong>?</p>
+        <p class="extralife-prompt-title">❤️ Extra Life Available</p>
+        <p class="extralife-prompt-sub">Would you like to consume 1 Extra Life and continue from <strong id="extralife-question-label">Question 1</strong>?</p>
         <div class="extralife-available-pill mc-panel-inset">
           <span>Available Extra Lives:</span>
           <strong class="emerald-text" id="extralife-modal-count">❤️ 1</strong>
@@ -1250,23 +1868,23 @@
       </div>
       <div class="modal-footer modal-footer-split">
         <button type="button" id="btn-skip-extralife" class="mc-btn mc-btn-danger mc-btn-small">
-          <span class="btn-inner">🚪 EXIT (Oyunu Bitir)</span>
+          <span class="btn-inner">🚪 Leave Game</span>
         </button>
         <button type="button" id="btn-use-extralife" class="mc-btn mc-btn-emerald">
-          <span class="btn-inner">❤️ USE EXTRA LIFE (Oyuna Dön)</span>
+          <span class="btn-inner">❤️ Use Extra Life</span>
         </button>
       </div>
     </div>
   </div>
 
   <!-- ==========================================
-       MODAL: INVITATION CARD (DAVETİYE)
+       MODAL: INVITATION CARD
        ========================================== -->
   <div id="modal-invite" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
     <div class="modal-box mc-panel">
       <div class="modal-header">
         <h3 id="invite-modal-title">✉️ Minecraft Milyoner Party Invitation</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-invite" aria-label="Kapat">✖</button>
+        <button type="button" class="modal-close-btn" data-close="modal-invite" aria-label="Close">✖</button>
       </div>
       <div class="modal-body">
         <div class="invitation-ticket mc-panel-inset">
@@ -1276,7 +1894,7 @@
             <strong id="inv-party-name" class="gold-text">Minecraft Championship #1</strong>
           </div>
           <div class="ticket-row">
-            <span>Organizer:</span>
+            <span>Owner:</span>
             <strong id="inv-party-organizer">Mashallah</strong>
           </div>
           <div class="ticket-row">
@@ -1287,33 +1905,33 @@
       </div>
       <div class="modal-footer modal-footer-split">
         <button type="button" class="mc-btn mc-btn-stone mc-btn-small" data-close="modal-invite">
-          <span class="btn-inner">Kapat</span>
+          <span class="btn-inner">Close</span>
         </button>
         <button type="button" id="btn-copy-invitation" class="mc-btn mc-btn-emerald">
-          <span class="btn-inner">📋 Copy Invitation (Daveti Kopyala)</span>
+          <span class="btn-inner">📋 Copy Invitation</span>
         </button>
       </div>
     </div>
   </div>
 
   <!-- ==========================================
-       MODAL: CONFIRMATION DIALOG (ONAY PENCERESİ)
+       MODAL: CONFIRMATION DIALOG
        ========================================== -->
   <div id="modal-confirm" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
     <div class="modal-box mc-panel confirm-modal-box">
       <div class="modal-header">
-        <h3 id="confirm-modal-title">⚠️ İşlemi Onayla</h3>
-        <button type="button" class="modal-close-btn" id="btn-confirm-close" aria-label="Kapat">✖</button>
+        <h3 id="confirm-modal-title">⚠️ Confirm Action</h3>
+        <button type="button" class="modal-close-btn" id="btn-confirm-close" aria-label="Close">✖</button>
       </div>
       <div class="modal-body">
-        <p id="confirm-modal-message" class="confirm-message">Bu işlemi yapmak istediğinize emin misiniz?</p>
+        <p id="confirm-modal-message" class="confirm-message">Are you sure you want to proceed?</p>
       </div>
       <div class="modal-footer modal-footer-split">
         <button type="button" id="btn-confirm-cancel" class="mc-btn mc-btn-stone mc-btn-small">
-          <span class="btn-inner">Cancel (İptal)</span>
+          <span class="btn-inner">Cancel</span>
         </button>
         <button type="button" id="btn-confirm-accept" class="mc-btn mc-btn-danger mc-btn-small">
-          <span class="btn-inner" id="btn-confirm-accept-text">Onayla</span>
+          <span class="btn-inner" id="btn-confirm-accept-text">Confirm</span>
         </button>
       </div>
     </div>
@@ -1326,34 +1944,14 @@
     <div class="modal-box mc-panel">
       <div class="modal-header">
         <h3 id="rules-modal-title">📖 NASIL OYNANIR?</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-rules" aria-label="Kapat">✖</button>
+        <button type="button" class="modal-close-btn" data-close="modal-rules" aria-label="Close">✖</button>
       </div>
       <div class="modal-body">
         <ul class="rules-list">
-          <li>
-            <strong>🎯 Amaç:</strong> Toplam 15 Minecraft sorusuna doğru cevap vererek <strong>5.000.000 Emerald</strong> ödülüne ulaşmak!
-          </li>
-          <li>
-            <strong>💚 Emerald Coin Ekonomisi ve Market:</strong> Oynadığınız ve kazandığınız oyunlardan, günlük girişlerden (Daily Login) ve turnuva derecelerinden <strong>Emerald Coins</strong> kazanırsınız. Emerald Shop üzerinden <strong>❤️ Extra Life</strong>, <strong>🔥 Second Chance</strong> ve <strong>⭐ Score Booster</strong> alabilirsiniz.
-          </li>
-          <li>
-            <strong>❤️ Extra Life (Ekstra Can) Sistemi:</strong> Envanterinizde Extra Life varsa yanlış cevap verdiğinizde elenmezsiniz! <em>"USE EXTRA LIFE"</em> seçeneğine basarak yanlış şık elenmiş şekilde yarışmaya kaldığınız yerden devam edebilirsiniz.
-          </li>
-          <li>
-            <strong>🛡️ Baraj Soruları:</strong> <strong>5. soru (2.000 Emerald)</strong> ve <strong>10. soru (100.000 Emerald)</strong> güvenlik barajlarıdır. Barajı geçtikten sonra yanlış cevap verseniz bile baraj ödülünü kazanırsınız.
-          </li>
-          <li>
-            <strong>🃏 4 Joker Hakkı (Her oyunda birer kez kullanılabilir):</strong>
-            <ul>
-              <li><strong>%50 / 50:</strong> İki yanlış şıkkı kaldırır, geriye bir doğru ve bir yanlış şık kalır.</li>
-              <li><strong>Seyirciye Sor:</strong> A, B, C ve D şıkları için seyirci yüzdelerini gösterir.</li>
-              <li><strong>Köylüye Sor:</strong> Minecraft köylüsü size tahminini söyler (dikkat: köylü her zaman %100 emin olmayabilir!).</li>
-              <li><strong>Soruyu Değiştir:</strong> Mevcut soruyu aynı zorluk seviyesinden yeni bir soruyla değiştirir.</li>
-            </ul>
-          </li>
-          <li>
-            <strong>⌨️ Klavye Kısayolları:</strong> Cevaplar için <kbd>A</kbd>, <kbd>B</kbd>, <kbd>C</kbd>, <kbd>D</kbd>; Jokerler için <kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd>, <kbd>4</kbd>; Sonraki soru için <kbd>Enter</kbd> veya <kbd>Boşluk</kbd>.
-          </li>
+          <li><strong>🎯 Amaç:</strong> Toplam 15 Minecraft sorusuna doğru cevap vererek <strong>5.000.000 Emerald</strong> ödülüne ulaşmak!</li>
+          <li><strong>💚 Emerald Coin &amp; VIP Bonus:</strong> Oyunlardan ve günlük girişlerden Emerald Coins kazanırsınız. VIP oyuncular oyun kazanmada <strong>+150 💚</strong> ve günlük girişte <strong>+50 💚</strong> kazanır.</li>
+          <li><strong>❤️ Extra Life:</strong> Envanterinizde Extra Life varsa yanlış cevap verdiğinizde elenmezsiniz ve kaldığınız sorudan devam edersiniz.</li>
+          <li><strong>🎉 Party System:</strong> Normal oyuncular davet kodu ile partilere katılabilir. VIP ve Admin kullanıcılar yeni parti oluşturabilir ve oyuncu davet edebilir.</li>
         </ul>
       </div>
       <div class="modal-footer">
@@ -1371,12 +1969,12 @@
     <div class="modal-box mc-panel">
       <div class="modal-header">
         <h3 id="audio-modal-title">🔊 SES AYARLARI</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-audio" aria-label="Kapat">✖</button>
+        <button type="button" class="modal-close-btn" data-close="modal-audio" aria-label="Close">✖</button>
       </div>
       <div class="modal-body">
         <div class="audio-setting-row">
           <div class="audio-row-top">
-            <label for="slider-music-vol">🎵 Müzik Aç / Kapat & Müzik Ses Seviyesi</label>
+            <label for="slider-music-vol">🎵 Müzik Aç / Kapat &amp; Ses Seviyesi</label>
             <button type="button" id="toggle-music-btn" class="mc-btn mc-btn-small mc-btn-emerald">
               <span class="btn-inner" id="toggle-music-text">AÇIK</span>
             </button>
@@ -1389,7 +1987,7 @@
 
         <div class="audio-setting-row">
           <div class="audio-row-top">
-            <label for="slider-sfx-vol">🔊 Ses Efektleri Aç / Kapat & Efekt Ses Seviyesi</label>
+            <label for="slider-sfx-vol">🔊 Ses Efektleri Aç / Kapat &amp; Ses Seviyesi</label>
             <button type="button" id="toggle-sfx-btn" class="mc-btn mc-btn-small mc-btn-emerald">
               <span class="btn-inner" id="toggle-sfx-text">AÇIK</span>
             </button>
@@ -1424,7 +2022,7 @@
     <div class="modal-box mc-panel">
       <div class="modal-header">
         <h3 id="stats-modal-title">📊 İSTATİSTİKLER</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-stats" aria-label="Kapat">✖</button>
+        <button type="button" class="modal-close-btn" data-close="modal-stats" aria-label="Close">✖</button>
       </div>
       <div class="modal-body">
         <div class="stats-cards-grid">

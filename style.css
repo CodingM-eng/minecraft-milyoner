@@ -3227,6 +3227,353 @@ input[type="range"] {
   font-size: 1.05rem;
 }
 
+/* ==========================================
+   NEW PLATFORM ARCHITECTURE STYLES (SECTIONS 2-33)
+   ========================================== */
+
+/* Role VIP Badge */
+.role-badge.role-vip {
+  background: rgba(255, 190, 26, 0.22);
+  color: var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(255, 190, 26, 0.25);
+}
+
+/* Section 13: RGB Animated Username Cosmetic */
+@keyframes rgbNameFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.rgb-username-text {
+  background: linear-gradient(90deg, #ff5e62, #ffbe2e, #23d160, #36e2ec, #a864fd, #ff5e62);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rgbNameFlow 4.5s ease infinite;
+  font-weight: 800;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.75));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rgb-username-text {
+    animation: none;
+    background: linear-gradient(90deg, #ffbe2e, #23d160, #36e2ec);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+/* Section 2: Welcome Back & Step-by-Step Login Gate */
+.gate-step-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+}
+
+.welcome-back-profile-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 1.2rem;
+  border: 2px solid var(--emerald);
+  background: rgba(23, 221, 98, 0.08);
+}
+
+.wb-avatar {
+  font-size: 2.3rem;
+}
+
+.wb-name {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.wb-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.verified-lic-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.9rem;
+  border: 2px solid var(--emerald);
+  background: rgba(23, 221, 98, 0.1);
+  font-size: 0.85rem;
+}
+
+/* Section 31 & 32: User & VIP Dashboard */
+.user-dashboard-welcome {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.15rem;
+  margin-bottom: 0.85rem;
+}
+
+.ud-welcome-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.ud-greeting {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: #fff;
+}
+
+.vip-dashboard-panel {
+  width: 100%;
+  border: 2px solid var(--gold);
+  background: linear-gradient(135deg, rgba(255, 190, 26, 0.14), rgba(15, 19, 30, 0.92));
+  padding: 1rem 1.2rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vip-dash-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.vip-crown-pill {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--gold);
+  font-size: 0.95rem;
+  margin-right: 0.6rem;
+}
+
+.vip-dash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.vip-benefits-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: #e9f1ff;
+}
+
+.vip-benefits-mini-grid span {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 190, 26, 0.3);
+  padding: 0.35rem 0.6rem;
+  font-weight: 600;
+}
+
+.dashboard-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.65rem;
+  width: 100%;
+}
+
+/* Section 11, 24 & 33: Category Tabs, Sort Buttons & VIP Shop */
+.shop-category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.shop-cat-btn,
+.support-tab-btn,
+.lb-sort-btn {
+  background: rgba(12, 16, 26, 0.9);
+  border: 2px solid #2b3550;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.95rem;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.shop-cat-btn:hover,
+.support-tab-btn:hover,
+.lb-sort-btn:hover {
+  color: #fff;
+  border-color: var(--emerald);
+}
+
+.shop-cat-btn.active,
+.support-tab-btn.active,
+.lb-sort-btn.active {
+  background: rgba(23, 221, 98, 0.16);
+  border-color: var(--emerald);
+  color: var(--emerald);
+}
+
+/* Section 9: Separate VIP Shop */
+.vip-showcase-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.vip-package-card {
+  border: 3px solid var(--gold);
+  background: linear-gradient(180deg, rgba(255, 190, 26, 0.14) 0%, rgba(12, 15, 24, 0.96) 100%);
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.vip-pkg-divider {
+  color: var(--gold);
+  font-weight: 800;
+  letter-spacing: 2px;
+  opacity: 0.75;
+  margin: 0.35rem 0;
+}
+
+.vip-pkg-crown {
+  font-size: 2.8rem;
+  display: block;
+}
+
+.vip-pkg-title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--gold);
+  margin: 0.2rem 0;
+}
+
+.vip-pkg-price {
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.vip-feature-checklist {
+  list-style: none;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 1rem 0;
+  font-size: 0.92rem;
+}
+
+.vip-feature-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.65rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 3px solid var(--gold);
+}
+
+.vip-feature-checklist li span {
+  color: var(--emerald);
+  font-weight: 800;
+}
+
+.vip-bonus-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.vip-cmp-box {
+  background: rgba(10, 13, 21, 0.85);
+  border: 2px solid #283149;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.vip-cmp-box.vip-highlight {
+  border-color: var(--gold);
+  background: rgba(255, 190, 26, 0.1);
+}
+
+/* Section 14-17: Support, Bug Reports, Suggestions & Priority Badges */
+.support-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.support-pane.hidden {
+  display: none !important;
+}
+
+.priority-pill {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.72rem;
+  padding: 0.18rem 0.55rem;
+  border: 1px solid currentColor;
+  text-transform: uppercase;
+}
+
+.priority-CRITICAL {
+  color: #ff5252;
+  background: rgba(255, 82, 82, 0.18);
+}
+
+.priority-HIGH {
+  color: var(--gold);
+  background: rgba(255, 190, 26, 0.2);
+}
+
+.priority-NORMAL {
+  color: #a6b4d0;
+  background: rgba(166, 180, 208, 0.12);
+}
+
+/* Responsive Refinements (Section 30) */
+@media (max-width: 1024px) {
+  .vip-showcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-quick-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-body {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 3px solid #08090e;
+  }
+}
+
 @media (max-width: 900px) {
   .lb-podium-grid {
     grid-template-columns: 1fr;
@@ -3242,6 +3589,10 @@ input[type="range"] {
     grid-template-columns: 1fr;
   }
 
+  .dashboard-quick-grid {
+    grid-template-columns: 1fr;
+  }
+
   .menu-primary-split {
     grid-template-columns: 1fr;
   }
@@ -3250,4 +3601,3 @@ input[type="range"] {
     display: none;
   }
 }
-
