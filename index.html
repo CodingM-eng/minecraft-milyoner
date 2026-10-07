@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kim Milyoner Olmak İster? — Minecraft Edition</title>
+  <!-- Google Fonts with full Turkish character support (Ç, Ğ, İ, I, Ö, Ş, Ü) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Press+Start+2P&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="atmos-night">
+  <!-- Animated Minecraft Day/Night Sky, Floating Blocks, Emerald & Diamond Particles -->
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+  <!-- Interactive Particle Burst Canvas (Emeralds, XP, Confetti) -->
+  <canvas id="fx-canvas" aria-hidden="true"></canvas>
+
+  <!-- Top Persistent Audio, Atmosphere & Quick Navigation Bar -->
+  <header class="top-bar">
+    <div class="brand-mini" id="top-brand-btn" role="button" tabindex="0" title="Ana Menüye Dön">
+      <span class="emerald-svg-wrap" id="header-emerald-icon"></span>
+      <span class="brand-mini-text">MC MİLYONER</span>
+    </div>
+
+    <div class="top-controls">
+      <button type="button" id="btn-toggle-atmos" class="mc-icon-btn" title="Gece / Gündüz Atmosferini Değiştir">
+        <span class="icon-indicator" id="atmos-icon">🌙</span>
+        <span class="btn-label-desktop" id="atmos-label">ATMOSFER: GECE</span>
+      </button>
+      <button type="button" id="btn-quick-music" class="mc-icon-btn" title="Arka Plan Müziği (Aç/Kapat)" aria-label="Müziği Aç veya Kapat">
+        <span class="icon-indicator" id="quick-music-icon">🎵</span>
+        <span class="btn-label-desktop" id="quick-music-label">MÜZİK: AÇIK</span>
+      </button>
+      <button type="button" id="btn-quick-sfx" class="mc-icon-btn" title="Ses Efektleri (Aç/Kapat)" aria-label="Ses Efektlerini Aç veya Kapat">
+        <span class="icon-indicator" id="quick-sfx-icon">🔊</span>
+        <span class="btn-label-desktop" id="quick-sfx-label">EFEKT: AÇIK</span>
+      </button>
+      <button type="button" id="btn-top-stats" class="mc-icon-btn" title="İstatistikler">
+        <span>📊</span>
+        <span class="btn-label-desktop">İSTATİSTİKLER</span>
+      </button>
+      <button type="button" id="btn-top-settings" class="mc-icon-btn" title="Ses Ayarları">
+        <span>⚙️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN APPLICATION CONTAINER -->
+  <main class="app-container">
+
+    <!-- ==========================================
+         SCREEN 1: ANA MENÜ
+         ========================================== -->
+    <section id="screen-menu" class="screen active" aria-labelledby="main-title">
+      <div class="menu-card mc-panel">
+        <!-- Floating Emerald & Diamond Badges -->
+        <div class="hero-emblems">
+          <div class="floating-item delay-1" id="hero-emerald-left" title="Emerald"></div>
+          <div class="crown-badge">5.000.000 EMERALD ÖDÜL</div>
+          <div class="floating-item delay-2" id="hero-diamond-right" title="Diamond"></div>
+        </div>
+
+        <h1 id="main-title" class="mc-title">KİM MİLYONER OLMAK İSTER?</h1>
+        <div class="mc-subtitle-banner">
+          <span class="mc-subtitle">MINECRAFT EDITION</span>
+        </div>
+
+        <p class="menu-tagline">
+          Minecraft dünyasının sırlarına ne kadar hakimsin? Rastgele seçilen 15 soruyu doğru yanıtla ve <strong>5.000.000 Emerald</strong> büyük ödülün sahibi ol!
+        </p>
+
+        <div class="menu-buttons">
+          <button type="button" id="btn-start-game" class="mc-btn mc-btn-emerald mc-btn-large">
+            <span class="btn-inner">⚔️ OYUNA BAŞLA</span>
+          </button>
+          <div class="menu-secondary-grid">
+            <button type="button" id="btn-open-rules" class="mc-btn mc-btn-stone">
+              <span class="btn-inner">📖 NASIL OYNANIR?</span>
+            </button>
+            <button type="button" id="btn-open-stats" class="mc-btn mc-btn-gold">
+              <span class="btn-inner">🏆 İSTATİSTİKLER</span>
+            </button>
+            <button type="button" id="btn-open-audio" class="mc-btn mc-btn-stone">
+              <span class="btn-inner">🔊 SES AYARLARI</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mini Live Stats Preview on Main Menu -->
+        <div class="menu-footer-stats">
+          <div class="mini-stat-pill">
+            <span class="stat-label">En Yüksek Ödül:</span>
+            <strong id="menu-best-prize" class="emerald-text">0 Emerald</strong>
+          </div>
+          <div class="mini-stat-pill">
+            <span class="stat-label">En Yüksek Soru:</span>
+            <strong id="menu-best-level" class="gold-text">0 / 15</strong>
+          </div>
+          <div class="mini-stat-pill">
+            <span class="stat-label">Oynanan Oyun:</span>
+            <strong id="menu-games-played">0</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SCREEN 2: OYUN EKRANI
+         ========================================== -->
+    <section id="screen-game" class="screen" aria-label="Oyun Ekranı">
+      <div class="game-layout">
+
+        <!-- Left / Center Main Quiz Stage -->
+        <div class="quiz-stage">
+          <!-- Stage Header Info Bar -->
+          <div class="stage-status-bar mc-panel-inset">
+            <div class="status-left">
+              <span class="level-badge" id="current-level-badge">Soru 1 / 15</span>
+              <span class="difficulty-badge" id="current-difficulty-badge">Kolay</span>
+              <span class="category-badge" id="current-category-badge">Mobs</span>
+            </div>
+            <div class="status-right">
+              <div class="current-prize-box">
+                <span class="prize-label">Soru Ödülü:</span>
+                <span class="prize-amount emerald-text" id="current-target-prize">100 Emerald</span>
+              </div>
+              <button type="button" id="btn-quit-menu" class="mc-btn mc-btn-small mc-btn-danger" title="Oyundan çık ve Ana Menüye dön">
+                <span class="btn-inner">🚪 ANA MENÜ</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 4 Interactive Joker Buttons -->
+          <div class="jokers-bar mc-panel" aria-label="Jokerler">
+            <div class="jokers-title">JOKERLER:</div>
+            <div class="jokers-grid">
+              <button type="button" id="joker-5050" class="joker-btn" title="%50 / 50 — İki yanlış cevabı kaldırır (Klavye: 1)">
+                <span class="joker-icon">🌓</span>
+                <span class="joker-name">%50 / 50</span>
+                <span class="joker-key">1</span>
+              </button>
+              <button type="button" id="joker-audience" class="joker-btn" title="Seyirciye Sor — Minecraft seyircisinin yüzdelik oylaması (Klavye: 2)">
+                <span class="joker-icon">👥</span>
+                <span class="joker-name">SEYİRCİYE SOR</span>
+                <span class="joker-key">2</span>
+              </button>
+              <button type="button" id="joker-villager" class="joker-btn" title="Köylüye Sor — Minecraft köylüsü ipucu verir (Klavye: 3)">
+                <span class="joker-icon">🧑‍🌾</span>
+                <span class="joker-name">KÖYLÜYE SOR</span>
+                <span class="joker-key">3</span>
+              </button>
+              <button type="button" id="joker-change" class="joker-btn" title="Soruyu Değiştir — Aynı zorlukta yeni bir soru getirir (Klavye: 4)">
+                <span class="joker-icon">🔄</span>
+                <span class="joker-name">SORUYU DEĞİŞTİR</span>
+                <span class="joker-key">4</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Joker Feedback Panel (Villager Dialogue or Audience Chart) -->
+          <div id="joker-feedback-panel" class="joker-feedback-panel mc-panel hidden" aria-live="polite">
+            <!-- Dynamically populated when Seyirciye Sor or Köylüye Sor joker is used -->
+          </div>
+
+          <!-- Big Center Question Display Panel -->
+          <div id="question-card" class="question-card mc-panel">
+            <div class="question-header-ornament">
+              <span class="pixel-diamond">◆</span>
+              <span id="question-number-title">Soru 1 / 15</span>
+              <span class="pixel-diamond">◆</span>
+            </div>
+            <p id="question-text" class="question-text">
+              Soru yükleniyor...
+            </p>
+          </div>
+
+          <!-- Four Answer Buttons (A, B, C, D) -->
+          <div class="answers-grid" role="group" aria-label="Cevap Seçenekleri">
+            <button type="button" class="answer-btn" data-index="0" id="answer-btn-0">
+              <span class="answer-letter">A)</span>
+              <span class="answer-text" id="answer-text-0">Seçenek A</span>
+              <span class="answer-percent-tag hidden" id="answer-percent-0">%0</span>
+            </button>
+            <button type="button" class="answer-btn" data-index="1" id="answer-btn-1">
+              <span class="answer-letter">B)</span>
+              <span class="answer-text" id="answer-text-1">Seçenek B</span>
+              <span class="answer-percent-tag hidden" id="answer-percent-1">%0</span>
+            </button>
+            <button type="button" class="answer-btn" data-index="2" id="answer-btn-2">
+              <span class="answer-letter">C)</span>
+              <span class="answer-text" id="answer-text-2">Seçenek C</span>
+              <span class="answer-percent-tag hidden" id="answer-percent-2">%0</span>
+            </button>
+            <button type="button" class="answer-btn" data-index="3" id="answer-btn-3">
+              <span class="answer-letter">D)</span>
+              <span class="answer-text" id="answer-text-3">Seçenek D</span>
+              <span class="answer-percent-tag hidden" id="answer-percent-3">%0</span>
+            </button>
+          </div>
+
+          <!-- Post-Answer Explanation & Next Question Box -->
+          <div id="explanation-panel" class="explanation-panel mc-panel hidden" aria-live="polite">
+            <div class="explanation-content">
+              <div class="explanation-badge" id="explanation-status-badge">✅ DOĞRU CEVAP!</div>
+              <p id="explanation-text" class="explanation-text"></p>
+            </div>
+            <button type="button" id="btn-next-question" class="mc-btn mc-btn-emerald">
+              <span class="btn-inner" id="btn-next-label">SONRAKİ SORU ➔</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Side: Minecraft Style Emerald Prize Ladder -->
+        <aside class="ladder-sidebar mc-panel" aria-label="Ödül Merdiveni">
+          <div class="ladder-header">
+            <span class="ladder-emerald-icon" id="sidebar-emerald-icon"></span>
+            <h2>ÖDÜL MERDİVENİ</h2>
+          </div>
+          <ul id="money-ladder-list" class="money-ladder-list">
+            <!-- Populated dynamically from 15 down to 1 -->
+          </ul>
+        </aside>
+
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SCREEN 3: VICTORY / KAZANMA EKRANI
+         ========================================== -->
+    <section id="screen-victory" class="screen" aria-labelledby="victory-title">
+      <div class="result-card victory-card mc-panel">
+        <div class="victory-emerald-showcase" id="victory-huge-emerald"></div>
+        <div class="victory-crown-tag">🏆 TEBRİKLER! 🏆</div>
+        <h2 id="victory-title" class="mc-title victory-heading">SEN MİLYONER OLDUN!</h2>
+        <p class="result-subtitle">15 sorunun tamamını doğru cevaplayarak Minecraft bilgi zirvesine ulaştın!</p>
+
+        <div class="final-prize-banner mc-panel-inset">
+          <span class="final-prize-label">KAZANILAN BÜYÜK ÖDÜL:</span>
+          <div class="final-prize-value" id="victory-prize-display">5.000.000 Emerald</div>
+        </div>
+
+        <div class="result-stats-grid">
+          <div class="result-stat-item">
+            <span class="r-label">Ulaşılan Soru</span>
+            <strong class="r-value gold-text">15 / 15</strong>
+          </div>
+          <div class="result-stat-item">
+            <span class="r-label">Doğru Cevap Sayısı</span>
+            <strong class="r-value emerald-text">15</strong>
+          </div>
+          <div class="result-stat-item">
+            <span class="r-label">Kullanılan Joker</span>
+            <strong class="r-value" id="victory-jokers-used">0 / 4</strong>
+          </div>
+        </div>
+
+        <div class="result-actions">
+          <button type="button" id="btn-victory-restart" class="mc-btn mc-btn-emerald mc-btn-large">
+            <span class="btn-inner">🔄 YENİDEN OYNA</span>
+          </button>
+          <button type="button" id="btn-victory-menu" class="mc-btn mc-btn-stone mc-btn-large">
+            <span class="btn-inner">🏠 ANA MENÜ</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SCREEN 4: OYUN BİTTİ EKRANI
+         ========================================== -->
+    <section id="screen-gameover" class="screen" aria-labelledby="gameover-title">
+      <div class="result-card gameover-card mc-panel">
+        <div class="gameover-skull-icon">💀</div>
+        <h2 id="gameover-title" class="mc-title gameover-heading">OYUN BİTTİ!</h2>
+        <p class="result-subtitle" id="gameover-reason-text">Verdiğin cevap maalesef yanlıştı.</p>
+
+        <!-- Reveal Wrong & Correct Answer Box -->
+        <div class="wrong-reveal-box mc-panel-inset" id="gameover-reveal-box">
+          <div class="reveal-row">
+            <span class="reveal-label">Yanlış Cevap (Senin Seçimin):</span>
+            <span class="reveal-val wrong-text" id="gameover-user-answer">-</span>
+          </div>
+          <div class="reveal-row">
+            <span class="reveal-label">Doğru Cevap:</span>
+            <span class="reveal-val emerald-text" id="gameover-correct-answer">-</span>
+          </div>
+          <p class="reveal-explanation" id="gameover-explanation"></p>
+        </div>
+
+        <div class="result-stats-grid">
+          <div class="result-stat-item">
+            <span class="r-label">Son Ulaşılan Soru</span>
+            <strong class="r-value gold-text" id="gameover-level">1 / 15</strong>
+          </div>
+          <div class="result-stat-item">
+            <span class="r-label">Kazanılan Emerald</span>
+            <strong class="r-value emerald-text" id="gameover-prize">0 Emerald</strong>
+          </div>
+          <div class="result-stat-item">
+            <span class="r-label">Doğru Cevap Sayısı</span>
+            <strong class="r-value" id="gameover-correct-count">0</strong>
+          </div>
+          <div class="result-stat-item">
+            <span class="r-label">Yanlış Cevap</span>
+            <strong class="r-value wrong-text" id="gameover-wrong-count">1</strong>
+          </div>
+        </div>
+
+        <div class="result-actions">
+          <button type="button" id="btn-gameover-restart" class="mc-btn mc-btn-emerald mc-btn-large">
+            <span class="btn-inner">🔄 YENİDEN OYNA</span>
+          </button>
+          <button type="button" id="btn-gameover-menu" class="mc-btn mc-btn-stone mc-btn-large">
+            <span class="btn-inner">🏠 ANA MENÜ</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================
+       MODAL 1: NASIL OYNANIR?
+       ========================================== -->
+  <div id="modal-rules" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rules-modal-title">
+    <div class="modal-box mc-panel">
+      <div class="modal-header">
+        <h3 id="rules-modal-title">📖 NASIL OYNANIR?</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-rules" aria-label="Kapat">✖</button>
+      </div>
+      <div class="modal-body">
+        <ul class="rules-list">
+          <li>
+            <strong>🎯 Amaç:</strong> Toplam 15 Minecraft sorusuna doğru cevap vererek <strong>5.000.000 Emerald</strong> ödülüne ulaşmak!
+          </li>
+          <li>
+            <strong>🎲 Rastgele ve Adil Zorluk Sistemi:</strong> Her yeni oyunda 115+ soruluk havuzdan tamamen rastgele ve tekrarsız sorular seçilir:
+            <ul>
+              <li><strong>1–5. Sorular:</strong> Kolay</li>
+              <li><strong>6–10. Sorular:</strong> Orta</li>
+              <li><strong>11–15. Sorular:</strong> Zor</li>
+            </ul>
+          </li>
+          <li>
+            <strong>🛡️ Baraj Soruları:</strong> <strong>5. soru (2.000 Emerald)</strong> ve <strong>10. soru (100.000 Emerald)</strong> güvenlik barajlarıdır. Barajı geçtikten sonra yanlış cevap verseniz bile baraj ödülünü kazanırsınız.
+          </li>
+          <li>
+            <strong>🃏 4 Joker Hakkı (Her oyunda birer kez kullanılabilir):</strong>
+            <ul>
+              <li><strong>%50 / 50:</strong> İki yanlış şıkkı kaldırır, geriye bir doğru ve bir yanlış şık kalır.</li>
+              <li><strong>Seyirciye Sor:</strong> A, B, C ve D şıkları için seyirci yüzdelerini gösterir.</li>
+              <li><strong>Köylüye Sor:</strong> Minecraft köylüsü size tahminini söyler (dikkat: köylü her zaman %100 emin olmayabilir!).</li>
+              <li><strong>Soruyu Değiştir:</strong> Mevcut soruyu aynı zorluk seviyesinden yeni bir soruyla değiştirir.</li>
+            </ul>
+          </li>
+          <li>
+            <strong>⌨️ Klavye Kısayolları:</strong> Cevaplar için <kbd>A</kbd>, <kbd>B</kbd>, <kbd>C</kbd>, <kbd>D</kbd>; Jokerler için <kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd>, <kbd>4</kbd>; Sonraki soru için <kbd>Enter</kbd> veya <kbd>Boşluk</kbd>.
+          </li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="mc-btn mc-btn-emerald" data-close="modal-rules">
+          <span class="btn-inner">ANLADIM!</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 2: SES AYARLARI
+       ========================================== -->
+  <div id="modal-audio" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="audio-modal-title">
+    <div class="modal-box mc-panel">
+      <div class="modal-header">
+        <h3 id="audio-modal-title">🔊 SES AYARLARI</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-audio" aria-label="Kapat">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="audio-setting-row">
+          <div class="audio-row-top">
+            <label for="slider-music-vol">🎵 Müzik Aç / Kapat & Müzik Ses Seviyesi</label>
+            <button type="button" id="toggle-music-btn" class="mc-btn mc-btn-small mc-btn-emerald">
+              <span class="btn-inner" id="toggle-music-text">AÇIK</span>
+            </button>
+          </div>
+          <div class="slider-wrap">
+            <input type="range" id="slider-music-vol" min="0" max="100" value="50" />
+            <span id="music-vol-label" class="vol-percent">%50</span>
+          </div>
+        </div>
+
+        <div class="audio-setting-row">
+          <div class="audio-row-top">
+            <label for="slider-sfx-vol">🔊 Ses Efektleri Aç / Kapat & Efekt Ses Seviyesi</label>
+            <button type="button" id="toggle-sfx-btn" class="mc-btn mc-btn-small mc-btn-emerald">
+              <span class="btn-inner" id="toggle-sfx-text">AÇIK</span>
+            </button>
+          </div>
+          <div class="slider-wrap">
+            <input type="range" id="slider-sfx-vol" min="0" max="100" value="75" />
+            <span id="sfx-vol-label" class="vol-percent">%75</span>
+          </div>
+        </div>
+
+        <div class="audio-test-bar">
+          <button type="button" id="btn-test-villager" class="mc-btn mc-btn-stone mc-btn-small">
+            <span class="btn-inner">🧑‍🌾 Köylü Sesini Test Et</span>
+          </button>
+          <button type="button" id="btn-test-levelup" class="mc-btn mc-btn-stone mc-btn-small">
+            <span class="btn-inner">✨ Doğru Cevap Sesini Test Et</span>
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="mc-btn mc-btn-emerald" data-close="modal-audio">
+          <span class="btn-inner">KAYDET VE KAPAT</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 3: İSTATİSTİKLER
+       ========================================== -->
+  <div id="modal-stats" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="stats-modal-title">
+    <div class="modal-box mc-panel">
+      <div class="modal-header">
+        <h3 id="stats-modal-title">📊 İSTATİSTİKLER</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-stats" aria-label="Kapat">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="stats-cards-grid">
+          <div class="stat-box mc-panel-inset">
+            <span class="stat-box-label">En Yüksek Ödül</span>
+            <strong class="stat-box-value emerald-text" id="stat-highest-prize">0 Emerald</strong>
+          </div>
+          <div class="stat-box mc-panel-inset">
+            <span class="stat-box-label">En Yüksek Soru</span>
+            <strong class="stat-box-value gold-text" id="stat-highest-level">0 / 15</strong>
+          </div>
+          <div class="stat-box mc-panel-inset">
+            <span class="stat-box-label">Oynanan Oyun Sayısı</span>
+            <strong class="stat-box-value" id="stat-total-games">0</strong>
+          </div>
+          <div class="stat-box mc-panel-inset">
+            <span class="stat-box-label">Toplam Doğru Cevap</span>
+            <strong class="stat-box-value emerald-text" id="stat-correct-answers">0</strong>
+          </div>
+          <div class="stat-box mc-panel-inset">
+            <span class="stat-box-label">Toplam Yanlış Cevap</span>
+            <strong class="stat-box-value wrong-text" id="stat-wrong-answers">0</strong>
+          </div>
+          <div class="stat-box mc-panel-inset">
+            <span class="stat-box-label">Kazanılan Toplam Emerald</span>
+            <strong class="stat-box-value emerald-text" id="stat-total-emeralds">0 Emerald</strong>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer modal-footer-split">
+        <button type="button" id="btn-reset-stats" class="mc-btn mc-btn-danger mc-btn-small">
+          <span class="btn-inner">🗑️ İstatistikleri Sıfırla</span>
+        </button>
+        <button type="button" class="mc-btn mc-btn-emerald" data-close="modal-stats">
+          <span class="btn-inner">KAPAT</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="questions.js"></script>
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

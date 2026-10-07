@@ -1,0 +1,14 @@
+# Exclude Minecraft Server Files & Directories
+backups/
+logs/
+plugins/
+world/
+world_nether/
+world_the_end/
+*.jar
+*.yml
+*.txt
+*.json
+*.properties
+*.bat
+SUNUCU.md
