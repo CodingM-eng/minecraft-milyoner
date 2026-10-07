@@ -189,8 +189,8 @@
         throw new Error('Security Violation: Oturum yetki imzası doğrulanamadı.');
       }
 
-      // If not master admin, verify license is still active in store
-      if (!session.isMasterAdmin) {
+      // If not master admin or built-in community license, verify license is still active in store
+      if (!session.isMasterAdmin && session.licenseId !== 'LIC-COMMUNITY-XXQ') {
         const lic = licenseService._findRawById(session.licenseId);
         if (!lic) {
           throw new Error('Lisans bulunamadı veya silindi.');

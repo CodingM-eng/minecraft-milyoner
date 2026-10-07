@@ -560,6 +560,10 @@
       if (target) {
         target.classList.add('active');
       }
+      // Sync top navigation active state
+      document.querySelectorAll('.main-nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-nav-screen') === screenId);
+      });
     }
 
     // ==========================================
@@ -567,6 +571,7 @@
     // ==========================================
     startNewGame() {
       this.clearTimers();
+      this.currentGameId = `GAME-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       this.currentLevelIndex = 0;
       this.usedQuestionIds.clear();
       this.eliminatedIndices.clear();
@@ -579,10 +584,16 @@
         change: false
       };
 
+      const reviveBanner = document.getElementById('extralife-revive-banner');
+      if (reviveBanner) reviveBanner.classList.add('hidden');
+
       this.statsManager.recordGameStart();
       this.updateJokerButtonsUI();
       this.showScreen('screen-game');
       window.soundManager.startMusic('game');
+      if (window.mcmPlatform) {
+        window.mcmPlatform.syncEconomyHeaderUI();
+      }
       this.loadCurrentLevelQuestion();
     }
 
@@ -592,6 +603,9 @@
       this.showScreen('screen-menu');
       window.soundManager.startMusic('menu');
       this.statsManager.updateUI();
+      if (window.mcmPlatform) {
+        window.mcmPlatform.syncEconomyHeaderUI();
+      }
     }
 
     clearTimers() {
@@ -612,6 +626,9 @@
     loadCurrentLevelQuestion(isChangedQuestion = false) {
       this.state = 'QUESTION';
       this.eliminatedIndices.clear();
+
+      const reviveBanner = document.getElementById('extralife-revive-banner');
+      if (reviveBanner) reviveBanner.classList.add('hidden');
 
       const levelNumber = this.currentLevelIndex + 1;
       const difficulty = this.getDifficultyForLevel(levelNumber);
@@ -665,6 +682,9 @@
 
       this.updateMoneyLadderUI();
       this.updateJokerButtonsUI();
+      if (window.mcmPlatform) {
+        window.mcmPlatform.syncEconomyHeaderUI();
+      }
     }
 
     // ==========================================
@@ -744,7 +764,6 @@
         // YANLIŞ CEVAP!
         this.state = 'WRONG_REVEAL';
         if (selectedBtn) selectedBtn.classList.add('wrong');
-        if (correctBtn) correctBtn.classList.add('correct');
 
         window.soundManager.playWrong();
 
@@ -758,11 +777,67 @@
           );
         }
 
+        // SECTION 23: Check if player owns an Extra Life before full elimination
+        const levelNumber = this.currentLevelIndex + 1;
+        if (
+          window.mcmPlatform &&
+          window.mcmPlatform.canOfferExtraLife(this.currentGameId, levelNumber)
+        ) {
+          this.suspenseTimeout = setTimeout(() => {
+            window.mcmPlatform.promptExtraLifeRevive(
+              this.currentGameId,
+              levelNumber,
+              () => {
+                // Player clicked USE EXTRA LIFE -> Revive on current question with wrong option eliminated!
+                this.reviveWithExtraLife(selectedIndex);
+              },
+              () => {
+                // Player clicked EXIT -> Reveal correct answer and end game
+                if (correctBtn) correctBtn.classList.add('correct');
+                this.triggerGameOver(selectedIndex);
+              }
+            );
+          }, 850);
+          return;
+        }
+
+        if (correctBtn) correctBtn.classList.add('correct');
+
         // Oyuncu doğru cevabı yeşil olarak gördükten 1.8 saniye sonra Oyun Bitti ekranına geç
         this.suspenseTimeout = setTimeout(() => {
           this.triggerGameOver(selectedIndex);
         }, 1800);
       }
+    }
+
+    reviveWithExtraLife(wrongIndex) {
+      // Eliminate the wrong choice and restore active QUESTION state
+      this.eliminatedIndices.add(wrongIndex);
+      const wrongBtn = document.getElementById(`answer-btn-${wrongIndex}`);
+      if (wrongBtn) {
+        wrongBtn.classList.remove('wrong', 'selected');
+        wrongBtn.classList.add('eliminated');
+        wrongBtn.disabled = true;
+      }
+
+      for (let i = 0; i < 4; i++) {
+        if (!this.eliminatedIndices.has(i)) {
+          const btn = document.getElementById(`answer-btn-${i}`);
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      this.state = 'QUESTION';
+      this.updateJokerButtonsUI();
+
+      // Show visual notification banner: ❤️ EXTRA LIFE USED — "You have returned to the game!"
+      const reviveBanner = document.getElementById('extralife-revive-banner');
+      if (reviveBanner) {
+        reviveBanner.classList.remove('hidden');
+      }
+
+      window.soundManager.playCorrect();
+      this.particles.spawnBurst(window.innerWidth / 2, window.innerHeight / 2, 'emerald', 55);
     }
 
     proceedToNextQuestion() {
@@ -808,6 +883,15 @@
       document.getElementById('gameover-correct-count').textContent = `${this.currentLevelIndex}`;
       document.getElementById('gameover-wrong-count').textContent = '1';
 
+      if (window.mcmPlatform) {
+        window.mcmPlatform.onGameFinished({
+          won: false,
+          questionsAnswered: this.currentLevelIndex,
+          emeraldScoreReached: guaranteedPrize,
+          gameId: this.currentGameId
+        });
+      }
+
       this.showScreen('screen-gameover');
     }
 
@@ -820,6 +904,15 @@
 
       const usedCount = Object.values(this.jokers).filter(Boolean).length;
       document.getElementById('victory-jokers-used').textContent = `${usedCount} / 4`;
+
+      if (window.mcmPlatform) {
+        window.mcmPlatform.onGameFinished({
+          won: true,
+          questionsAnswered: 15,
+          emeraldScoreReached: 5000000,
+          gameId: this.currentGameId
+        });
+      }
 
       this.showScreen('screen-victory');
 

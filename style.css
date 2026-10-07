@@ -2503,3 +2503,751 @@ input[type="range"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   SECTIONS 19–35: LEADERBOARD, EMERALD COIN ECONOMY, SHOP, EXTRA LIFE & PROFILE
+   ========================================================================== */
+
+.diamond-text {
+  color: var(--diamond);
+}
+
+/* Top Main Navigation Bar */
+.main-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.main-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.72rem;
+  background: rgba(18, 22, 34, 0.85);
+  border: 2px solid #283048;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.main-nav-btn:hover {
+  color: #fff;
+  border-color: var(--emerald);
+  background: rgba(23, 221, 98, 0.12);
+}
+
+.main-nav-btn.active {
+  background: rgba(23, 221, 98, 0.22);
+  border-color: var(--emerald);
+  color: #86ffac;
+  box-shadow: 0 0 12px rgba(23, 221, 98, 0.25);
+}
+
+.main-nav-btn.nav-admin-btn {
+  border-color: rgba(255, 190, 26, 0.5);
+  color: var(--gold);
+}
+
+.main-nav-btn.nav-admin-btn.active {
+  background: rgba(255, 190, 26, 0.2);
+  border-color: var(--gold);
+  color: #fde047;
+}
+
+/* Persistent Emerald Coin Balance Pill */
+.emerald-balance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(8, 32, 18, 0.9);
+  border: 2px solid var(--emerald);
+  padding: 0.32rem 0.75rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: #86ffac;
+  box-shadow: 0 0 12px rgba(23, 221, 98, 0.2);
+}
+
+.emerald-pill-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  cursor: pointer;
+}
+
+.emerald-pill-unit {
+  font-size: 0.75rem;
+  color: var(--emerald);
+  opacity: 0.9;
+}
+
+.emerald-pill-divider {
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.menu-primary-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* Section 31: Dashboard Economy Widget */
+.dashboard-economy-widget {
+  margin-top: 1.35rem;
+  padding: 1.1rem 1.25rem;
+  border: 2px solid rgba(23, 221, 98, 0.38);
+  background: rgba(9, 14, 22, 0.88);
+  text-align: left;
+}
+
+.econ-widget-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.econ-widget-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.88rem;
+  letter-spacing: 0.8px;
+  color: var(--emerald);
+}
+
+.econ-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+}
+
+.econ-stat-card {
+  background: rgba(15, 20, 32, 0.92);
+  border: 2px solid #252d44;
+  padding: 0.65rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  transition: border-color 0.14s ease, transform 0.12s ease;
+}
+
+.econ-stat-card[role="button"]:hover {
+  border-color: var(--emerald);
+  transform: translateY(-2px);
+}
+
+.econ-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.econ-stat-val {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+/* Game Screen Extra Life Pill & Revive Banner */
+.extralife-stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(255, 59, 59, 0.16);
+  border: 2px solid #ff4d4d;
+  color: #fecaca;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+}
+
+.extralife-revive-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem 1.2rem;
+  background: linear-gradient(90deg, rgba(23, 221, 98, 0.22), rgba(255, 59, 59, 0.22));
+  border: 3px solid var(--emerald);
+  animation: screenFadeIn 0.3s ease;
+}
+
+.revive-heart-icon {
+  font-size: 1.9rem;
+}
+
+.revive-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.revive-banner-text strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  color: #86ffac;
+  letter-spacing: 1px;
+}
+
+.revive-banner-text span {
+  font-size: 0.9rem;
+  color: #fff;
+}
+
+/* Extra Life Modal */
+.extralife-modal-box {
+  max-width: 480px;
+  border-top: 5px solid var(--redstone);
+  text-align: center;
+}
+
+.extralife-modal-header h3 {
+  color: #ff5252;
+  font-size: 1.45rem;
+  letter-spacing: 1px;
+}
+
+.extralife-modal-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.extralife-heart-showcase {
+  font-size: 3.6rem;
+  filter: drop-shadow(0 0 18px rgba(255, 59, 59, 0.65));
+  animation: pulseHeart 1.1s ease-in-out infinite;
+}
+
+@keyframes pulseHeart {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.14); }
+}
+
+.extralife-prompt-title {
+  font-size: 1.12rem;
+  color: #fff;
+}
+
+.extralife-prompt-sub {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.extralife-available-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 1.1rem;
+  border: 2px solid var(--emerald);
+  font-family: var(--font-display);
+}
+
+/* Shared Hub Page Layout (Leaderboard, Shop, Profile, History) */
+.hub-page-wrapper {
+  width: 100%;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  border-top: 4px solid var(--emerald);
+}
+
+.hub-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.35rem;
+}
+
+.hub-page-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.5rem;
+  color: var(--gold);
+  margin-bottom: 0.25rem;
+}
+
+.hub-page-sub {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.hub-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.live-refresh-badge {
+  background: rgba(23, 221, 98, 0.14);
+  border: 2px solid var(--emerald);
+  color: #86ffac;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.74rem;
+  padding: 0.3rem 0.65rem;
+  letter-spacing: 0.7px;
+}
+
+/* Section 19: Leaderboard Podium & Table */
+.lb-user-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+  border: 2px solid var(--gold);
+  background: rgba(255, 190, 26, 0.1);
+}
+
+.lb-podium-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  align-items: end;
+  padding: 0.5rem 0;
+}
+
+.podium-card {
+  background: rgba(13, 17, 27, 0.95);
+  border: 3px solid #2b334d;
+  padding: 1.2rem 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  position: relative;
+}
+
+.podium-rank-1 {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(255, 190, 26, 0.18), rgba(13, 17, 27, 0.96));
+  min-height: 225px;
+  box-shadow: 0 0 24px rgba(255, 190, 26, 0.22);
+}
+
+.podium-rank-2 {
+  border-color: #cbd5e1;
+  background: linear-gradient(180deg, rgba(203, 213, 225, 0.14), rgba(13, 17, 27, 0.96));
+  min-height: 195px;
+}
+
+.podium-rank-3 {
+  border-color: #d97706;
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.15), rgba(13, 17, 27, 0.96));
+  min-height: 180px;
+}
+
+.podium-medal {
+  font-size: 2.3rem;
+}
+
+.podium-username {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.18rem;
+  color: #fff;
+}
+
+.podium-points {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--gold);
+}
+
+.podium-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.lb-controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.lb-limit-tabs {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.lb-limit-btn {
+  background: #141926;
+  border: 2px solid #2b344d;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.86rem;
+  padding: 0.5rem 0.95rem;
+  cursor: pointer;
+}
+
+.lb-limit-btn.active,
+.lb-limit-btn:hover {
+  border-color: var(--emerald);
+  color: #86ffac;
+  background: rgba(23, 221, 98, 0.16);
+}
+
+.lb-search-wrap {
+  flex: 1;
+  max-width: 340px;
+}
+
+.lb-table-container {
+  overflow-x: auto;
+}
+
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.lb-table th,
+.lb-table td {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.lb-table th {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  background: rgba(8, 10, 16, 0.85);
+}
+
+.lb-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lb-table tbody tr.lb-current-user-row {
+  background: rgba(23, 221, 98, 0.15);
+  border-left: 4px solid var(--emerald);
+}
+
+.lb-rank-cell {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.02rem;
+}
+
+/* Section 22: Emerald Shop */
+.shop-balance-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.shop-wallet-box {
+  background: rgba(8, 32, 18, 0.88);
+  border: 2px solid var(--emerald);
+  padding: 0.5rem 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.wallet-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.wallet-amount {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.shop-inventory-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.15rem;
+}
+
+.inv-bar-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--gold);
+}
+
+.inv-pills-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.inv-pill {
+  background: rgba(15, 20, 32, 0.92);
+  border: 2px solid #2b334c;
+  padding: 0.32rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.emerald-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+  gap: 1.15rem;
+}
+
+.shop-item-card {
+  background: rgba(12, 16, 26, 0.94);
+  border: 3px solid #28314a;
+  padding: 1.35rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: border-color 0.16s ease, transform 0.14s ease;
+}
+
+.shop-item-card:hover {
+  border-color: var(--emerald);
+  transform: translateY(-3px);
+}
+
+.shop-item-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.shop-item-icon {
+  font-size: 2.4rem;
+  background: rgba(23, 221, 98, 0.1);
+  border: 2px solid rgba(23, 221, 98, 0.35);
+  width: 58px;
+  height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shop-item-price-tag {
+  background: rgba(8, 36, 19, 0.95);
+  border: 2px solid var(--emerald);
+  color: #86ffac;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.7rem;
+}
+
+.shop-item-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: #fff;
+  margin-top: 0.6rem;
+}
+
+.shop-item-desc {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin-top: 0.35rem;
+}
+
+.shop-item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Section 25 & 33: Player Profile & Achievements */
+.profile-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.profile-big-avatar {
+  width: 64px;
+  height: 64px;
+  background: rgba(23, 221, 98, 0.15);
+  border: 3px solid var(--emerald);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+}
+
+.profile-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.profile-rank-pill {
+  background: rgba(255, 190, 26, 0.18);
+  border: 2px solid var(--gold);
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.85rem;
+}
+
+.profile-achievements-sec {
+  padding: 1.25rem;
+}
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0.85rem;
+}
+
+.achievement-card {
+  background: rgba(11, 14, 22, 0.92);
+  border: 2px solid #27304a;
+  padding: 0.95rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  opacity: 0.55;
+}
+
+.achievement-card.unlocked {
+  opacity: 1;
+  border-color: var(--gold);
+  background: rgba(255, 190, 26, 0.09);
+}
+
+.ach-icon {
+  font-size: 2rem;
+}
+
+.ach-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.ach-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #fff;
+}
+
+.ach-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Section 26: Emerald Transaction History */
+.tx-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-height: 520px;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.tx-row {
+  background: rgba(12, 15, 24, 0.9);
+  border: 2px solid #242c42;
+  border-left: 4px solid var(--emerald);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.tx-row.tx-negative {
+  border-left-color: var(--redstone);
+}
+
+.tx-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tx-reason {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.tx-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.tx-amount {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+@media (max-width: 900px) {
+  .lb-podium-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .econ-widget-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .econ-widget-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-primary-split {
+    grid-template-columns: 1fr;
+  }
+
+  .main-nav-bar .nav-label {
+    display: none;
+  }
+}
+

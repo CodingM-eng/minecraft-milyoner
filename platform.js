@@ -13,6 +13,13 @@
     partyService,
     playerService,
     activityService,
+    configService,
+    economyService,
+    shopService,
+    extraLifeService,
+    dailyRewardService,
+    achievementService,
+    leaderboardService,
     PARTY_STATUSES
   } = window.MCMServices;
 
@@ -22,6 +29,9 @@
       this.selectedPartyId = null;
       this.currentInvitationText = '';
       this.confirmCallback = null;
+      this.leaderboardLimit = 10;
+      this.extraLifeCallbacks = null;
+      this.leaderboardRefreshTimer = null;
 
       this.init();
     }
@@ -30,9 +40,22 @@
       this.bindLicenseGate();
       this.bindTopBar();
       this.bindPartyLobby();
+      this.bindLeaderboardScreen();
+      this.bindEmeraldShopScreen();
+      this.bindExtraLifeModal();
       this.bindAdminPanel();
       this.bindConfirmModal();
       this.bindInvitationModal();
+
+      // Live automatic refresh for Leaderboard & Economy header
+      this.leaderboardRefreshTimer = setInterval(() => {
+        if (!this.session) return;
+        const lbScreen = document.getElementById('screen-leaderboard');
+        if (lbScreen && lbScreen.classList.contains('active')) {
+          this.renderLeaderboard();
+        }
+        this.syncEconomyHeaderUI();
+      }, 12000);
 
       // Check if a valid signed session already exists in storage
       const existingSession = licenseService.getActiveSession();
@@ -61,7 +84,7 @@
         toast.style.transform = 'translateX(20px)';
         toast.style.transition = 'all 0.25s ease';
         setTimeout(() => toast.remove(), 260);
-      }, 3400);
+      }, 3600);
     }
 
     // ==========================================
@@ -211,6 +234,7 @@
       }
 
       this.updateTopBarSessionUI();
+      this.syncEconomyHeaderUI();
 
       // Route based on Role when logging in
       if (isFreshLogin) {
@@ -236,9 +260,13 @@
     }
 
     // ==========================================
-    // TOP BAR & NAVIGATION
+    // TOP BAR, NAVIGATION & DASHBOARD ECONOMY WIDGET
     // ==========================================
     updateTopBarSessionUI() {
+      const navBar = document.getElementById('main-nav-bar');
+      const navAdminBtn = document.getElementById('btn-nav-admin');
+      const emeraldPill = document.getElementById('top-emerald-pill');
+      const dailyBtn = document.getElementById('btn-daily-reward');
       const badge = document.getElementById('top-session-badge');
       const nameEl = document.getElementById('top-session-username');
       const roleEl = document.getElementById('top-session-role');
@@ -247,6 +275,9 @@
       const logoutBtn = document.getElementById('btn-top-logout');
 
       if (!this.session) {
+        if (navBar) navBar.classList.add('hidden');
+        if (emeraldPill) emeraldPill.classList.add('hidden');
+        if (dailyBtn) dailyBtn.classList.add('hidden');
         if (badge) badge.classList.add('hidden');
         if (adminBtn) adminBtn.classList.add('hidden');
         if (partyBtn) partyBtn.classList.add('hidden');
@@ -254,6 +285,10 @@
         return;
       }
 
+      if (navBar) navBar.classList.remove('hidden');
+      if (navAdminBtn) navAdminBtn.classList.toggle('hidden', this.session.role !== 'ADMIN');
+      if (emeraldPill) emeraldPill.classList.remove('hidden');
+      if (dailyBtn) dailyBtn.classList.remove('hidden');
       if (badge) badge.classList.remove('hidden');
       if (nameEl) nameEl.textContent = this.session.username;
       if (roleEl) {
@@ -261,7 +296,6 @@
         roleEl.className = `role-badge role-${this.session.role.toLowerCase()}`;
       }
 
-      // Strictly show Admin Panel button ONLY if role === 'ADMIN'
       if (adminBtn) {
         adminBtn.classList.toggle('hidden', this.session.role !== 'ADMIN');
       }
@@ -269,11 +303,123 @@
       if (logoutBtn) logoutBtn.classList.remove('hidden');
     }
 
+    syncEconomyHeaderUI() {
+      if (!this.session) return;
+      const profile = leaderboardService.getPlayerRankAndSummary(this.session.username);
+      const extraLivesTotal =
+        (profile.inventory?.extraLives || 0) + (profile.inventory?.secondChance || 0);
+      const dailyStatus = dailyRewardService.canClaimDailyReward(this.session.username);
+      const cfg = configService.getConfig();
+
+      // Top Header Emerald Pill
+      const topBal = document.getElementById('top-emerald-balance');
+      const topLives = document.getElementById('top-extralives-count');
+      if (topBal) topBal.textContent = profile.emeraldCoins.toLocaleString('tr-TR');
+      if (topLives) topLives.textContent = extraLivesTotal;
+
+      // Game Screen Extra Life Pill
+      const gameLives = document.getElementById('game-extralife-count');
+      if (gameLives) gameLives.textContent = extraLivesTotal;
+
+      // Daily Reward Button
+      const dailyBtn = document.getElementById('btn-daily-reward');
+      const dailyLabel = document.getElementById('daily-reward-label');
+      const widgetDailyBtn = document.getElementById('btn-widget-claim-daily');
+      if (dailyLabel) {
+        dailyLabel.textContent = dailyStatus.canClaim
+          ? `CLAIM +${cfg.rewards.dailyLogin} 💚`
+          : 'CLAIMED ✓';
+      }
+      if (dailyBtn) {
+        dailyBtn.disabled = !dailyStatus.canClaim;
+      }
+      if (widgetDailyBtn) {
+        widgetDailyBtn.disabled = !dailyStatus.canClaim;
+        widgetDailyBtn.textContent = dailyStatus.canClaim
+          ? `🎁 Claim Daily Reward (+${cfg.rewards.dailyLogin} Emeralds)`
+          : `✅ Daily Reward Claimed (Streak: ${dailyStatus.currentStreak}d)`;
+      }
+
+      // Section 31: Dashboard Economy Widget
+      const dRank = document.getElementById('dash-econ-rank');
+      const dPoints = document.getElementById('dash-econ-points');
+      const dEmeralds = document.getElementById('dash-econ-emeralds');
+      const dGames = document.getElementById('dash-econ-games');
+      const dWins = document.getElementById('dash-econ-wins');
+      const dLives = document.getElementById('dash-econ-extralives');
+
+      if (dRank) dRank.textContent = `#${profile.rank}`;
+      if (dPoints) dPoints.textContent = `${profile.totalPoints.toLocaleString('tr-TR')} Points`;
+      if (dEmeralds) {
+        dEmeralds.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Emerald Coins`;
+      }
+      if (dGames) dGames.textContent = profile.gamesPlayed.toLocaleString('tr-TR');
+      if (dWins) dWins.textContent = profile.gamesWon.toLocaleString('tr-TR');
+      if (dLives) dLives.textContent = `${extraLivesTotal}`;
+    }
+
+    navigateToScreen(screenId) {
+      try {
+        authGuard.verifySession(this.session);
+      } catch (err) {
+        this.showToast(err.message, 'error');
+        this.lockWithLicenseGate();
+        return;
+      }
+
+      if (screenId === 'screen-admin') {
+        this.openAdminPanel();
+        return;
+      }
+      if (screenId === 'screen-party') {
+        this.openPartyLobby();
+        return;
+      }
+      if (screenId === 'screen-menu') {
+        if (window.mcQuizGame) window.mcQuizGame.returnToMainMenu();
+        return;
+      }
+
+      if (window.mcQuizGame) {
+        window.mcQuizGame.showScreen(screenId);
+      }
+
+      this.syncEconomyHeaderUI();
+
+      if (screenId === 'screen-leaderboard') {
+        this.renderLeaderboard();
+      } else if (screenId === 'screen-shop') {
+        this.renderEmeraldShop();
+      } else if (screenId === 'screen-profile') {
+        this.renderPlayerProfile();
+      } else if (screenId === 'screen-history') {
+        this.renderEmeraldHistory();
+      }
+    }
+
     bindTopBar() {
       const adminBtn = document.getElementById('btn-top-admin');
       const partyBtn = document.getElementById('btn-top-party');
       const menuPartyBtn = document.getElementById('btn-open-party-hub');
       const logoutBtn = document.getElementById('btn-top-logout');
+      const dailyBtn = document.getElementById('btn-daily-reward');
+      const widgetDailyBtn = document.getElementById('btn-widget-claim-daily');
+      const pillShopBtn = document.getElementById('btn-pill-open-shop');
+      const sessionBadge = document.getElementById('top-session-badge');
+      const heroLbBtn = document.getElementById('btn-open-leaderboard-hero');
+      const heroShopBtn = document.getElementById('btn-open-shop-hero');
+      const cardLb = document.getElementById('card-goto-leaderboard');
+      const cardShop = document.getElementById('card-goto-shop');
+      const cardProf = document.getElementById('card-goto-profile');
+
+      // All [data-nav-screen] buttons across header and pages
+      document.querySelectorAll('[data-nav-screen]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const target = btn.getAttribute('data-nav-screen');
+          this.navigateToScreen(target);
+        });
+      });
 
       if (adminBtn) {
         adminBtn.addEventListener('click', () => {
@@ -296,12 +442,530 @@
         });
       }
 
+      if (heroLbBtn) {
+        heroLbBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-leaderboard');
+        });
+      }
+
+      if (heroShopBtn) {
+        heroShopBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-shop');
+        });
+      }
+
+      if (pillShopBtn) {
+        pillShopBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-shop');
+        });
+      }
+
+      if (sessionBadge) {
+        sessionBadge.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-profile');
+        });
+      }
+
+      if (cardLb) {
+        cardLb.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-leaderboard');
+        });
+      }
+      if (cardShop) {
+        cardShop.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-shop');
+        });
+      }
+      if (cardProf) {
+        cardProf.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-profile');
+        });
+      }
+
+      if (dailyBtn) {
+        dailyBtn.addEventListener('click', () => this.claimDailyReward());
+      }
+      if (widgetDailyBtn) {
+        widgetDailyBtn.addEventListener('click', () => this.claimDailyReward());
+      }
+
       if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
           window.soundManager.playClick();
           this.handleLogout();
         });
       }
+    }
+
+    // ==========================================
+    // SECTION 32: DAILY EMERALD REWARD
+    // ==========================================
+    claimDailyReward() {
+      try {
+        const res = dailyRewardService.claimDailyReward(this.session);
+        window.soundManager.playCorrect();
+        if (window.mcQuizGame) {
+          window.mcQuizGame.particles.spawnBurst(
+            window.innerWidth / 2,
+            window.innerHeight / 2,
+            'emerald',
+            50
+          );
+        }
+        this.showToast(
+          `🎁 +${res.rewardAmount} Emerald Coins Claimed! (Daily Login Streak: ${res.streak}d)`,
+          'success'
+        );
+        this.syncEconomyHeaderUI();
+      } catch (err) {
+        window.soundManager.playWrong();
+        this.showToast(err.message, 'error');
+      }
+    }
+
+    // ==========================================
+    // SECTION 23 & 24: EXTRA LIFE REVIVE SYSTEM
+    // ==========================================
+    canOfferExtraLife(gameId, questionNumber) {
+      if (!this.session) return false;
+      const check = extraLifeService.canUseExtraLife(this.session, gameId, questionNumber);
+      return check.canUse;
+    }
+
+    promptExtraLifeRevive(gameId, questionNumber, onRevive, onExit) {
+      const check = extraLifeService.canUseExtraLife(this.session, gameId, questionNumber);
+      if (!check.canUse) {
+        if (typeof onExit === 'function') onExit();
+        return;
+      }
+
+      const modal = document.getElementById('modal-extralife');
+      const qLabel = document.getElementById('extralife-question-label');
+      const countEl = document.getElementById('extralife-modal-count');
+
+      if (qLabel) qLabel.textContent = `Soru ${questionNumber} / 15`;
+      if (countEl) countEl.textContent = `❤️ ${check.availableCount}`;
+
+      this.extraLifeCallbacks = { gameId, questionNumber, onRevive, onExit };
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    bindExtraLifeModal() {
+      const modal = document.getElementById('modal-extralife');
+      const useBtn = document.getElementById('btn-use-extralife');
+      const skipBtn = document.getElementById('btn-skip-extralife');
+
+      if (useBtn) {
+        useBtn.addEventListener('click', () => {
+          if (!this.extraLifeCallbacks) return;
+          const { gameId, questionNumber, onRevive, onExit } = this.extraLifeCallbacks;
+          this.extraLifeCallbacks = null;
+          if (modal) modal.classList.add('hidden');
+
+          try {
+            extraLifeService.useExtraLifeInGame(this.session, gameId, questionNumber);
+            this.syncEconomyHeaderUI();
+            this.showToast('❤️ EXTRA LIFE USED — "You have returned to the game!"', 'success');
+            if (typeof onRevive === 'function') onRevive();
+          } catch (err) {
+            this.showToast(err.message, 'error');
+            if (typeof onExit === 'function') onExit();
+          }
+        });
+      }
+
+      if (skipBtn) {
+        skipBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const cb = this.extraLifeCallbacks?.onExit;
+          this.extraLifeCallbacks = null;
+          if (modal) modal.classList.add('hidden');
+          if (typeof cb === 'function') cb();
+        });
+      }
+    }
+
+    // ==========================================
+    // SECTION 21: GAME OUTCOME -> EMERALD & LEADERBOARD REWARDS
+    // ==========================================
+    onGameFinished(outcome) {
+      if (!this.session) return;
+      try {
+        const res = economyService.recordGameOutcome(this.session, outcome);
+        this.syncEconomyHeaderUI();
+
+        if (res.emeraldReward > 0 || res.pointsEarned > 0) {
+          this.showToast(
+            `🟩 +${res.emeraldReward} Emerald Coins & ⭐ +${res.pointsEarned} Leaderboard Points kazandın!`,
+            'success'
+          );
+        }
+
+        if (res.newlyUnlocked && res.newlyUnlocked.length > 0) {
+          res.newlyUnlocked.forEach(ach => {
+            this.showToast(`🎖️ Achievement Unlocked: ${ach.icon} ${ach.title}!`, 'info');
+          });
+        }
+      } catch (err) {
+        console.warn('Game outcome economy error:', err);
+      }
+    }
+
+    // ==========================================
+    // SECTION 19: LEADERBOARD SYSTEM UI
+    // ==========================================
+    bindLeaderboardScreen() {
+      document.querySelectorAll('[data-lb-limit]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.leaderboardLimit = Number(btn.getAttribute('data-lb-limit')) || 10;
+          document.querySelectorAll('[data-lb-limit]').forEach(b => {
+            b.classList.toggle('active', b === btn);
+          });
+          this.renderLeaderboard();
+        });
+      });
+
+      const searchInp = document.getElementById('input-leaderboard-search');
+      if (searchInp) {
+        searchInp.addEventListener('input', () => this.renderLeaderboard());
+      }
+
+      const refreshBtn = document.getElementById('btn-leaderboard-refresh');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.renderLeaderboard();
+          this.showToast('Leaderboard güncellendi!', 'info');
+        });
+      }
+    }
+
+    renderLeaderboard() {
+      if (!this.session) return;
+      const searchQ = document.getElementById('input-leaderboard-search')?.value || '';
+      const allRanked = leaderboardService.getLeaderboard({ limit: 50, search: '' });
+      const filteredRanked = leaderboardService.getLeaderboard({
+        limit: this.leaderboardLimit,
+        search: searchQ
+      });
+      const currentUserSummary = leaderboardService.getPlayerRankAndSummary(this.session.username);
+
+      // 1. Current User Position Banner
+      const bannerEl = document.getElementById('leaderboard-current-user-banner');
+      if (bannerEl) {
+        bannerEl.innerHTML = `
+          <div>
+            <span>👤 Senin Sıralaman (Your Position): </span>
+            <strong class="gold-text">#${currentUserSummary.rank} ${this.escapeHtml(
+              currentUserSummary.username
+            )}</strong>
+          </div>
+          <div style="display:flex; gap:1.1rem; flex-wrap:wrap;">
+            <span>⭐ Points: <strong>${currentUserSummary.totalPoints.toLocaleString(
+              'tr-TR'
+            )} Points</strong></span>
+            <span>💚 Emerald Balance: <strong class="emerald-text">${currentUserSummary.emeraldCoins.toLocaleString(
+              'tr-TR'
+            )} Emerald Coins</strong></span>
+            <span>🏆 Wins: <strong>${currentUserSummary.gamesWon}</strong></span>
+          </div>
+        `;
+      }
+
+      // 2. Top 3 Podium (#2 Silver, #1 Gold, #3 Bronze)
+      const podiumEl = document.getElementById('leaderboard-podium');
+      if (podiumEl) {
+        const top1 = allRanked[0];
+        const top2 = allRanked[1];
+        const top3 = allRanked[2];
+        const podiumOrder = [
+          { data: top2, rank: 2, medal: '🥈', cls: 'podium-rank-2' },
+          { data: top1, rank: 1, medal: '🥇', cls: 'podium-rank-1' },
+          { data: top3, rank: 3, medal: '🥉', cls: 'podium-rank-3' }
+        ];
+
+        podiumEl.innerHTML = podiumOrder
+          .filter(item => item.data)
+          .map(
+            item => `
+            <div class="podium-card ${item.cls}">
+              <div class="podium-medal">${item.medal}</div>
+              <div class="podium-username">${this.escapeHtml(item.data.username)}</div>
+              <div class="podium-points">${item.data.totalPoints.toLocaleString('tr-TR')} Points</div>
+              <div class="podium-meta">
+                <span class="emerald-text">💚 ${item.data.emeraldCoins.toLocaleString(
+                  'tr-TR'
+                )} Emeralds</span>
+                <span>🏆 ${item.data.gamesWon} Wins</span>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+      }
+
+      // 3. Leaderboard Table Rows
+      const tbody = document.getElementById('leaderboard-table-body');
+      if (!tbody) return;
+
+      if (filteredRanked.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align:center; padding:1.5rem; color:var(--text-muted);">
+              Aramanıza uygun oyuncu bulunamadı.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filteredRanked
+        .map(row => {
+          const isMe = row.username.toLowerCase() === this.session.username.toLowerCase();
+          const rankBadge =
+            row.rank === 1
+              ? '🥇 1'
+              : row.rank === 2
+              ? '🥈 2'
+              : row.rank === 3
+              ? '🥉 3'
+              : `#${row.rank}`;
+
+          return `
+            <tr class="${isMe ? 'lb-current-user-row' : ''}">
+              <td class="lb-rank-cell">${rankBadge}</td>
+              <td>
+                <strong>⛏️ ${this.escapeHtml(row.username)}</strong>
+                ${isMe ? '<span class="role-badge role-player" style="margin-left:0.4rem;">SEN</span>' : ''}
+              </td>
+              <td><strong class="gold-text">${row.totalPoints.toLocaleString('tr-TR')} Points</strong></td>
+              <td><strong class="emerald-text">💚 ${row.emeraldCoins.toLocaleString('tr-TR')} Emerald Coins</strong></td>
+              <td>${row.gamesPlayed}</td>
+              <td class="emerald-text">${row.gamesWon}</td>
+              <td class="wrong-text">${row.gamesLost}</td>
+              <td>❤️ ${row.extraLivesUsed}</td>
+            </tr>
+          `;
+        })
+        .join('');
+    }
+
+    // ==========================================
+    // SECTION 22 & 35: EMERALD SHOP UI
+    // ==========================================
+    bindEmeraldShopScreen() {
+      // Bound dynamically in renderEmeraldShop
+    }
+
+    renderEmeraldShop() {
+      if (!this.session) return;
+      const profile = economyService.getPlayerEconomyProfile(this.session.username);
+      const items = shopService.listShopItems(false);
+
+      const balEl = document.getElementById('shop-emerald-balance');
+      if (balEl) {
+        balEl.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Emerald Coins`;
+      }
+
+      const invExtra = document.getElementById('shop-inv-extralife');
+      const invSecond = document.getElementById('shop-inv-secondchance');
+      const invBoost = document.getElementById('shop-inv-scorebooster');
+      const invTicket = document.getElementById('shop-inv-ticket');
+
+      if (invExtra) invExtra.textContent = profile.inventory?.extraLives || 0;
+      if (invSecond) invSecond.textContent = profile.inventory?.secondChance || 0;
+      if (invBoost) invBoost.textContent = profile.inventory?.scoreBooster || 0;
+      if (invTicket) invTicket.textContent = profile.inventory?.tournamentTickets || 0;
+
+      const grid = document.getElementById('emerald-shop-grid');
+      if (!grid) return;
+
+      grid.innerHTML = items
+        .map(item => {
+          const canAfford = profile.emeraldCoins >= item.price;
+          return `
+            <div class="shop-item-card">
+              <div>
+                <div class="shop-item-top">
+                  <div class="shop-item-icon">${this.escapeHtml(item.icon)}</div>
+                  <span class="shop-item-price-tag">💚 ${item.price.toLocaleString(
+                    'tr-TR'
+                  )} Emeralds</span>
+                </div>
+                <h3 class="shop-item-title">${this.escapeHtml(item.name)}</h3>
+                <p class="shop-item-desc">"${this.escapeHtml(item.description)}"</p>
+              </div>
+              <div class="shop-item-footer">
+                <span class="meta-muted">Limit: ${item.maxPerGame} / game</span>
+                <button
+                  type="button"
+                  class="mc-btn ${canAfford ? 'mc-btn-emerald' : 'mc-btn-stone'} mc-btn-small btn-buy-shop-item"
+                  data-item-id="${this.escapeHtml(item.id)}"
+                >
+                  <span class="btn-inner">🛒 BUY (${item.price.toLocaleString('tr-TR')} 💚)</span>
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+
+      grid.querySelectorAll('.btn-buy-shop-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const itemId = btn.getAttribute('data-item-id');
+          btn.disabled = true;
+          try {
+            const res = shopService.purchaseItem(this.session, itemId);
+            window.soundManager.playCorrect();
+            if (window.mcQuizGame) {
+              const rect = btn.getBoundingClientRect();
+              window.mcQuizGame.particles.spawnBurst(
+                rect.left + rect.width / 2,
+                rect.top + rect.height / 2,
+                'emerald',
+                42
+              );
+            }
+            this.showToast(
+              `✅ Purchased ${res.item.icon} ${res.item.name} (-${res.item.price} Emeralds)!`,
+              'success'
+            );
+            this.syncEconomyHeaderUI();
+            this.renderEmeraldShop();
+          } catch (err) {
+            window.soundManager.playWrong();
+            this.showToast(err.message, 'error');
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    // ==========================================
+    // SECTION 25 & 33: PLAYER PROFILE & ACHIEVEMENTS UI
+    // ==========================================
+    renderPlayerProfile() {
+      if (!this.session) return;
+      const summary = leaderboardService.getPlayerRankAndSummary(this.session.username);
+      const achievements = achievementService.getPlayerAchievements(this.session.username);
+      const dailyStatus = dailyRewardService.canClaimDailyReward(this.session.username);
+
+      const uName = document.getElementById('profile-username');
+      const uRole = document.getElementById('profile-role-badge');
+      const uRank = document.getElementById('profile-rank-badge');
+
+      if (uName) uName.textContent = summary.username;
+      if (uRole) {
+        uRole.textContent = this.session.role;
+        uRole.className = `role-badge role-${this.session.role.toLowerCase()}`;
+      }
+      if (uRank) uRank.textContent = `Rank #${summary.rank}`;
+
+      const extraOwned =
+        (summary.inventory?.extraLives || 0) + (summary.inventory?.secondChance || 0);
+
+      document.getElementById('prof-stat-rank').textContent = `#${summary.rank}`;
+      document.getElementById('prof-stat-points').textContent =
+        `${summary.totalPoints.toLocaleString('tr-TR')} Points`;
+      document.getElementById('prof-stat-emeralds').textContent =
+        `💚 ${summary.emeraldCoins.toLocaleString('tr-TR')} Emerald Coins`;
+      document.getElementById('prof-stat-games').textContent =
+        summary.gamesPlayed.toLocaleString('tr-TR');
+      document.getElementById('prof-stat-winloss').textContent =
+        `${summary.gamesWon} W / ${summary.gamesLost} L`;
+      document.getElementById('prof-stat-winrate').textContent = `%${summary.winRate}`;
+      document.getElementById('prof-stat-extralives').textContent =
+        `${extraOwned} Owned / ${summary.extraLivesUsed} Used`;
+      document.getElementById('prof-stat-avgscore').textContent =
+        `${summary.averageScore.toLocaleString('tr-TR')} Emerald`;
+      document.getElementById('prof-stat-bestscore').textContent =
+        `${summary.bestScore.toLocaleString('tr-TR')} Emerald`;
+      document.getElementById('prof-stat-earned').textContent =
+        `+${summary.totalEmeraldsEarned.toLocaleString('tr-TR')} Emeralds`;
+      document.getElementById('prof-stat-spent').textContent =
+        `-${summary.totalEmeraldsSpent.toLocaleString('tr-TR')} Emeralds`;
+      document.getElementById('prof-stat-streak').textContent =
+        `${dailyStatus.currentStreak} Gün`;
+
+      const unlockedCount = achievements.filter(a => a.unlocked).length;
+      const counterEl = document.getElementById('prof-achievements-counter');
+      if (counterEl) {
+        counterEl.textContent = `${unlockedCount} / ${achievements.length} Unlocked`;
+      }
+
+      const achGrid = document.getElementById('profile-achievements-grid');
+      if (achGrid) {
+        achGrid.innerHTML = achievements
+          .map(
+            a => `
+            <div class="achievement-card ${a.unlocked ? 'unlocked' : ''}">
+              <div class="ach-icon">${a.icon}</div>
+              <div class="ach-info">
+                <div class="ach-title">${this.escapeHtml(a.title)} ${
+                  a.unlocked ? '✅' : '🔒'
+                }</div>
+                <div class="ach-desc">${this.escapeHtml(a.description)}</div>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+      }
+    }
+
+    // ==========================================
+    // SECTION 26: EMERALD TRANSACTION HISTORY UI
+    // ==========================================
+    renderEmeraldHistory() {
+      if (!this.session) return;
+      const profile = economyService.getPlayerEconomyProfile(this.session.username);
+      const txs = economyService.getTransactionHistory(this.session, this.session.username);
+
+      const balEl = document.getElementById('history-emerald-balance');
+      if (balEl) {
+        balEl.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Emerald Coins`;
+      }
+
+      const listEl = document.getElementById('player-history-list');
+      if (!listEl) return;
+
+      if (txs.length === 0) {
+        listEl.innerHTML =
+          '<div class="empty-state-box">Henüz Emerald Coin işlem geçmişiniz bulunmuyor.</div>';
+        return;
+      }
+
+      listEl.innerHTML = txs
+        .map(tx => {
+          const isNeg = tx.amount < 0;
+          const sign = tx.amount > 0 ? '+' : '';
+          const amountText =
+            tx.amount === 0
+              ? '❤️ 1 Extra Life Consumed'
+              : `${sign}${tx.amount.toLocaleString('tr-TR')} Emeralds`;
+          return `
+            <div class="tx-row ${isNeg ? 'tx-negative' : ''}">
+              <div class="tx-main">
+                <span class="tx-reason">${this.escapeHtml(tx.reason)}</span>
+                <span class="tx-meta">🕒 ${tx.dateFormatted} • Balance After: 💚 ${tx.balanceAfter.toLocaleString(
+                  'tr-TR'
+                )} Emeralds</span>
+              </div>
+              <div class="tx-amount ${isNeg ? 'wrong-text' : 'emerald-text'}">
+                ${amountText}
+              </div>
+            </div>
+          `;
+        })
+        .join('');
     }
 
     // ==========================================
@@ -911,6 +1575,127 @@
           this.handleLogout();
         });
       }
+
+      // ==========================================
+      // ADMIN ECONOMY CONTROLS (SECTIONS 27, 28, 29)
+      // ==========================================
+      document.querySelectorAll('[data-adm-econ-op]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const op = btn.getAttribute('data-adm-econ-op');
+          const targetUser = (document.getElementById('adm-econ-username')?.value || '').trim();
+          const amountVal = Number(document.getElementById('adm-econ-amount')?.value || 0);
+          const reasonVal = (document.getElementById('adm-econ-reason')?.value || '').trim();
+
+          if (!targetUser) {
+            this.showToast('Lütfen işlem yapılacak oyuncunun kullanıcı adını girin.', 'error');
+            return;
+          }
+
+          const opLabels = {
+            GIVE: `+${amountVal} Emerald Coins eklemek`,
+            REMOVE: `-${amountVal} Emerald Coins çıkarmak`,
+            SET: `Emerald bakiyesini ${amountVal} olarak ayarlamak`,
+            RESET: `Emerald bakiyesini 0 olarak sıfırlamak`
+          };
+
+          this.askConfirmation(
+            `💚 Admin Economy Action (${op})`,
+            `"${targetUser}" adlı oyuncuya ${opLabels[op] || op} istediğinize emin misiniz?`,
+            `Confirm ${op}`,
+            () => {
+              try {
+                economyService.adminModifyBalance(this.session, {
+                  username: targetUser,
+                  operation: op,
+                  amount: amountVal,
+                  reason: reasonVal || `Admin ${op}`
+                });
+                window.soundManager.playCorrect();
+                this.showToast(`"${targetUser}" Emerald bakiyesi güncellendi (${op}).`, 'success');
+                this.syncEconomyHeaderUI();
+                this.renderAdminAll();
+              } catch (err) {
+                window.soundManager.playWrong();
+                this.showToast(err.message, 'error');
+              }
+            }
+          );
+        });
+      });
+
+      // Save Economy & Extra Life Configuration
+      const cfgForm = document.getElementById('form-admin-economy-config');
+      if (cfgForm) {
+        cfgForm.addEventListener('submit', e => {
+          e.preventDefault();
+          try {
+            const newRewards = {
+              gameCompleted: Number(document.getElementById('cfg-reward-completed')?.value || 0),
+              gameWon: Number(document.getElementById('cfg-reward-won')?.value || 0),
+              top3Finish: Number(document.getElementById('cfg-reward-top3')?.value || 0),
+              tournamentWinner: Number(document.getElementById('cfg-reward-tournament')?.value || 0),
+              dailyLogin: Number(document.getElementById('cfg-reward-daily')?.value || 0)
+            };
+            const newExtraLife = {
+              price: Number(document.getElementById('cfg-extralife-price')?.value || 500),
+              maxPerGame: Number(document.getElementById('cfg-extralife-max')?.value || 1),
+              enabled: document.getElementById('cfg-extralife-enabled')?.value === 'true'
+            };
+
+            configService.updateConfig(this.session, {
+              rewards: newRewards,
+              extraLife: newExtraLife
+            });
+
+            window.soundManager.playCorrect();
+            this.showToast('Economy & Extra Life konfigürasyonu kaydedildi!', 'success');
+            this.syncEconomyHeaderUI();
+            this.renderAdminAll();
+          } catch (err) {
+            window.soundManager.playWrong();
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
+
+      // Create New Shop Item
+      const createShopForm = document.getElementById('form-admin-create-shop-item');
+      if (createShopForm) {
+        createShopForm.addEventListener('submit', e => {
+          e.preventDefault();
+          try {
+            const name = document.getElementById('adm-shop-name')?.value || '';
+            const icon = document.getElementById('adm-shop-icon')?.value || '💎';
+            const price = Number(document.getElementById('adm-shop-price')?.value || 500);
+            const effectType = document.getElementById('adm-shop-effect')?.value || 'EXTRA_LIFE';
+            const description = document.getElementById('adm-shop-desc')?.value || '';
+
+            shopService.adminSaveShopItem(this.session, {
+              name,
+              icon,
+              price,
+              effectType,
+              description,
+              enabled: true
+            });
+
+            createShopForm.reset();
+            window.soundManager.playCorrect();
+            this.showToast('Yeni Emerald Shop ürünü oluşturuldu!', 'success');
+            this.renderAdminAll();
+          } catch (err) {
+            window.soundManager.playWrong();
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
+
+      // Global Transaction History Search
+      const searchTx = document.getElementById('search-adm-tx-history');
+      if (searchTx) {
+        searchTx.addEventListener('input', () => this.renderAdminEconomyTab());
+      }
     }
 
     switchAdminTab(tabName) {
@@ -926,6 +1711,7 @@
     renderAdminAll() {
       if (!this.session || this.session.role !== 'ADMIN') return;
       this.renderAdminDashboard();
+      this.renderAdminEconomyTab();
       this.renderAdminLicenses();
       this.renderAdminParties();
       this.renderAdminPlayers();
@@ -936,6 +1722,8 @@
       const licenses = licenseService.listLicensesForAdmin(this.session);
       const parties = partyService.listParties(this.session);
       const logs = activityService.getAll();
+      const econProfiles = economyService.getAllProfiles();
+      const cfg = configService.getConfig();
 
       const totalLic = licenses.length;
       const activeLic = licenses.filter(l => l.effectiveStatus === 'ACTIVE').length;
@@ -947,12 +1735,29 @@
       ).length;
       const totalParticipants = parties.reduce((sum, p) => sum + p.participants.length, 0);
 
+      const totalEmeralds = econProfiles.reduce((sum, p) => sum + (p.emeraldCoins || 0), 0);
+      const totalExtraLivesUsed = econProfiles.reduce(
+        (sum, p) => sum + (p.extraLivesUsed || 0),
+        0
+      );
+
       document.getElementById('adm-metric-total-lic').textContent = totalLic;
       document.getElementById('adm-metric-active-lic').textContent = activeLic;
       document.getElementById('adm-metric-revoked-lic').textContent = revokedLic;
       document.getElementById('adm-metric-total-parties').textContent = totalParties;
       document.getElementById('adm-metric-active-parties').textContent = activeParties;
       document.getElementById('adm-metric-total-participants').textContent = totalParticipants;
+
+      const emEl = document.getElementById('adm-metric-total-emeralds');
+      const exEl = document.getElementById('adm-metric-extralives-used');
+      const stEx = document.getElementById('adm-status-extralife');
+
+      if (emEl) emEl.textContent = `${totalEmeralds.toLocaleString('tr-TR')} 💚`;
+      if (exEl) exEl.textContent = totalExtraLivesUsed;
+      if (stEx) {
+        stEx.textContent = cfg.extraLife.enabled ? 'ENABLED' : 'DISABLED';
+        stEx.className = cfg.extraLife.enabled ? 'emerald-text' : 'wrong-text';
+      }
 
       const recentEl = document.getElementById('adm-dash-recent-activity');
       if (recentEl) {
@@ -970,6 +1775,164 @@
               `
                 )
                 .join('');
+      }
+    }
+
+    renderAdminEconomyTab() {
+      const cfg = configService.getConfig();
+      const econProfiles = economyService.getAllProfiles();
+
+      // Populate players datalist for quick selection
+      const datalist = document.getElementById('adm-econ-players-datalist');
+      if (datalist) {
+        datalist.innerHTML = econProfiles
+          .map(
+            p =>
+              `<option value="${this.escapeHtml(p.username)}">${this.escapeHtml(
+                p.username
+              )} (💚 ${p.emeraldCoins} Emeralds | ⭐ ${p.totalPoints} Pts)</option>`
+          )
+          .join('');
+      }
+
+      // Populate Config Form Inputs
+      const setVal = (id, v) => {
+        const el = document.getElementById(id);
+        if (el && document.activeElement !== el) el.value = v;
+      };
+      setVal('cfg-reward-completed', cfg.rewards.gameCompleted);
+      setVal('cfg-reward-won', cfg.rewards.gameWon);
+      setVal('cfg-reward-top3', cfg.rewards.top3Finish);
+      setVal('cfg-reward-tournament', cfg.rewards.tournamentWinner);
+      setVal('cfg-reward-daily', cfg.rewards.dailyLogin);
+      setVal('cfg-extralife-price', cfg.extraLife.price);
+      setVal('cfg-extralife-max', cfg.extraLife.maxPerGame);
+      setVal('cfg-extralife-enabled', String(cfg.extraLife.enabled));
+
+      // Populate Shop Items List for Admin
+      const shopWrap = document.getElementById('adm-shop-items-list');
+      if (shopWrap) {
+        const items = shopService.listShopItems(true);
+        shopWrap.innerHTML = items
+          .map(
+            item => `
+            <div class="adm-row-card">
+              <div class="adm-row-main">
+                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
+                  <span style="font-size:1.35rem;">${this.escapeHtml(item.icon)}</span>
+                  <span class="adm-code-title">${this.escapeHtml(item.name)}</span>
+                  <span class="status-pill status-${item.enabled ? 'ACTIVE' : 'DISABLED'}">${
+                    item.enabled ? 'ENABLED' : 'DISABLED'
+                  }</span>
+                  <strong class="emerald-text">💚 ${item.price.toLocaleString(
+                    'tr-TR'
+                  )} Emeralds</strong>
+                </div>
+                <div class="adm-row-sub">
+                  <span>Effect: <strong>${item.effectType}</strong></span>
+                  <span>Max/Game: <strong>${item.maxPerGame}</strong></span>
+                  <span>"${this.escapeHtml(item.description)}"</span>
+                </div>
+              </div>
+              <div class="adm-row-actions">
+                <button type="button" class="act-btn" data-shop-adm="price" data-id="${this.escapeHtml(
+                  item.id
+                )}" data-price="${item.price}">Change Price</button>
+                <button type="button" class="act-btn ${
+                  item.enabled ? 'danger' : 'emerald'
+                }" data-shop-adm="toggle" data-id="${this.escapeHtml(item.id)}" data-enabled="${
+                  item.enabled
+                }">${item.enabled ? 'Disable Item' : 'Enable Item'}</button>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+
+        shopWrap.querySelectorAll('[data-shop-adm]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            window.soundManager.playClick();
+            const act = btn.getAttribute('data-shop-adm');
+            const id = btn.getAttribute('data-id');
+            const allItems = shopService.listShopItems(true);
+            const target = allItems.find(x => x.id === id);
+            if (!target) return;
+
+            if (act === 'toggle') {
+              shopService.adminSaveShopItem(this.session, {
+                ...target,
+                enabled: !target.enabled
+              });
+              this.showToast(
+                `${target.name} durumu ${!target.enabled ? 'ENABLED' : 'DISABLED'} yapıldı.`,
+                'info'
+              );
+              this.renderAdminAll();
+            } else if (act === 'price') {
+              const rawNewPrice = prompt(
+                `"${target.name}" için yeni Emerald Coin fiyatını girin:`,
+                String(target.price)
+              );
+              if (rawNewPrice !== null && rawNewPrice.trim() !== '') {
+                const parsed = Math.max(0, Math.floor(Number(rawNewPrice)));
+                if (!Number.isNaN(parsed)) {
+                  shopService.adminSaveShopItem(this.session, {
+                    ...target,
+                    price: parsed
+                  });
+                  this.showToast(`${target.name} fiyatı ${parsed} Emeralds olarak güncellendi.`, 'success');
+                  this.renderAdminAll();
+                }
+              }
+            }
+          });
+        });
+      }
+
+      // Populate Global Transaction History
+      const txListEl = document.getElementById('adm-tx-history-list');
+      if (txListEl) {
+        const q = (document.getElementById('search-adm-tx-history')?.value || '')
+          .toLowerCase()
+          .trim();
+        let allTxs = economyService.getTransactionHistory(this.session, null);
+        if (q) {
+          allTxs = allTxs.filter(
+            tx =>
+              tx.username.toLowerCase().includes(q) ||
+              tx.reason.toLowerCase().includes(q) ||
+              tx.type.toLowerCase().includes(q)
+          );
+        }
+
+        if (allTxs.length === 0) {
+          txListEl.innerHTML = '<div class="empty-state-box">Kayıtlı işlem bulunamadı.</div>';
+        } else {
+          txListEl.innerHTML = allTxs
+            .slice(0, 80)
+            .map(tx => {
+              const isNeg = tx.amount < 0;
+              const sign = tx.amount > 0 ? '+' : '';
+              const amtStr =
+                tx.amount === 0
+                  ? '❤️ 1 Extra Life Used'
+                  : `${sign}${tx.amount.toLocaleString('tr-TR')} Emeralds`;
+              return `
+                <div class="tx-row ${isNeg ? 'tx-negative' : ''}">
+                  <div class="tx-main">
+                    <span class="tx-reason"><strong>⛏️ ${this.escapeHtml(
+                      tx.username
+                    )}</strong> — ${this.escapeHtml(tx.reason)}</span>
+                    <span class="tx-meta">[${tx.dateFormatted}] • Type: ${
+                      tx.type
+                    } • Balance After: 💚 ${tx.balanceAfter.toLocaleString('tr-TR')} Emeralds</span>
+                  </div>
+                  <div class="tx-amount ${isNeg ? 'wrong-text' : 'emerald-text'}">${amtStr}</div>
+                </div>
+              `;
+            })
+            .join('');
+        }
       }
     }
 
@@ -1200,33 +2163,72 @@
       if (!wrap) return;
 
       const q = (document.getElementById('search-adm-players')?.value || '').toLowerCase().trim();
-      let players = playerService.getAllPlayers();
-      if (q) {
-        players = players.filter(
-          p => p.username.toLowerCase().includes(q) || p.role.toLowerCase().includes(q)
-        );
-      }
+      const players = playerService.getAllPlayers();
+      const ranked = leaderboardService.getLeaderboard({ limit: 50, search: q });
 
-      wrap.innerHTML = players
-        .map(p => {
-          const seen = new Date(p.lastSeenAt).toLocaleString('tr-TR');
+      wrap.innerHTML = ranked
+        .map(r => {
+          const pInfo = players.find(
+            x => x.username.toLowerCase() === r.username.toLowerCase()
+          ) || {
+            role: 'PLAYER',
+            status: 'OFFLINE',
+            licenseId: 'STD',
+            lastSeenAt: Date.now()
+          };
+          const seen = new Date(pInfo.lastSeenAt).toLocaleString('tr-TR');
+          const extraOwned =
+            (r.inventory?.extraLives || 0) + (r.inventory?.secondChance || 0);
+
           return `
             <div class="adm-row-card">
               <div class="adm-row-main">
-                <div style="display:flex; align-items:center; gap:0.65rem;">
-                  <strong>⛏️ ${this.escapeHtml(p.username)}</strong>
-                  <span class="role-badge role-${p.role.toLowerCase()}">${p.role}</span>
-                  <span class="status-pill status-${p.status === 'ONLINE' ? 'ACTIVE' : 'DISABLED'}">${p.status}</span>
+                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
+                  <span class="gold-text" style="font-family:var(--font-display); font-weight:800;">#${r.rank}</span>
+                  <strong>⛏️ ${this.escapeHtml(r.username)}</strong>
+                  <span class="role-badge role-${pInfo.role.toLowerCase()}">${pInfo.role}</span>
+                  <span class="status-pill status-${
+                    pInfo.status === 'ONLINE' ? 'ACTIVE' : 'DISABLED'
+                  }">${pInfo.status}</span>
                 </div>
                 <div class="adm-row-sub">
-                  <span>🔑 License ID: ${this.escapeHtml(p.licenseId)}</span>
+                  <span>⭐ Points: <strong class="gold-text">${r.totalPoints.toLocaleString(
+                    'tr-TR'
+                  )}</strong></span>
+                  <span>💚 Balance: <strong class="emerald-text">${r.emeraldCoins.toLocaleString(
+                    'tr-TR'
+                  )} Emerald Coins</strong></span>
+                  <span>🎮 Games: <strong>${r.gamesPlayed} (${r.gamesWon}W / ${
+                    r.gamesLost
+                  }L)</strong></span>
+                  <span>❤️ Extra Lives: <strong>${extraOwned} Owned / ${
+                    r.extraLivesUsed
+                  } Used</strong></span>
                   <span>🕒 Son Görülme: ${seen}</span>
                 </div>
+              </div>
+              <div class="adm-row-actions">
+                <button type="button" class="act-btn emerald btn-adm-manage-player-econ" data-username="${this.escapeHtml(
+                  r.username
+                )}">💚 Manage Emeralds</button>
               </div>
             </div>
           `;
         })
         .join('');
+
+      wrap.querySelectorAll('.btn-adm-manage-player-econ').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const uname = btn.getAttribute('data-username');
+          this.switchAdminTab('economy');
+          const inp = document.getElementById('adm-econ-username');
+          if (inp) {
+            inp.value = uname;
+            inp.focus();
+          }
+        });
+      });
     }
 
     renderAdminActivity() {
