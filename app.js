@@ -403,71 +403,12 @@
       this.suspenseTimeout = null;
       this.victoryConfettiInterval = null;
       this.isUnlocked = false;
-      this.ACCESS_CODE = 'xxqnetwork';
 
-      this.initAccessGate();
       this.initIcons();
       this.buildMoneyLadder();
       this.bindEvents();
       this.syncAudioUI();
       this.statsManager.updateUI();
-    }
-
-    initAccessGate() {
-      const gateEl = document.getElementById('access-gate');
-      const gateCard = gateEl ? gateEl.querySelector('.gate-card') : null;
-      const formEl = document.getElementById('access-gate-form');
-      const inputEl = document.getElementById('access-code-input');
-      const errorEl = document.getElementById('access-gate-error');
-      const visBtn = document.getElementById('btn-toggle-code-vis');
-
-      // Sayfayı başlangıçta kilitle
-      document.body.classList.add('gate-locked');
-
-      if (visBtn && inputEl) {
-        visBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const isPwd = inputEl.type === 'password';
-          inputEl.type = isPwd ? 'text' : 'password';
-          visBtn.textContent = isPwd ? '🙈' : '👁️';
-          inputEl.focus();
-        });
-      }
-
-      if (formEl && inputEl) {
-        formEl.addEventListener('submit', e => {
-          e.preventDefault();
-          const entered = inputEl.value.trim();
-
-          if (entered === this.ACCESS_CODE) {
-            this.isUnlocked = true;
-            document.body.classList.remove('gate-locked');
-            if (errorEl) errorEl.classList.add('hidden');
-            if (gateEl) gateEl.classList.add('hidden');
-
-            window.soundManager.playCorrect();
-            this.particles.spawnBurst(
-              window.innerWidth / 2,
-              window.innerHeight / 2,
-              'emerald',
-              50
-            );
-            if (window.soundManager.musicEnabled) {
-              window.soundManager.startMusic('menu');
-            }
-          } else {
-            window.soundManager.playWrong();
-            if (errorEl) errorEl.classList.remove('hidden');
-            if (gateCard) {
-              gateCard.classList.remove('shake');
-              void gateCard.offsetWidth;
-              gateCard.classList.add('shake');
-            }
-            inputEl.value = '';
-            inputEl.focus();
-          }
-        });
-      }
     }
 
     initIcons() {

@@ -18,68 +18,114 @@
   <canvas id="fx-canvas" aria-hidden="true"></canvas>
 
   <!-- ==========================================
-       GİRİŞ KODU EKRANI (ACCESS GATE: xxqnetwork)
+       1. LICENSE CODE LOGIN SYSTEM
        ========================================== -->
   <div id="access-gate" class="access-gate-overlay" role="dialog" aria-modal="true" aria-labelledby="gate-title">
     <div class="gate-card mc-panel">
-      <div class="gate-lock-badge">🔒 ÖZEL ERİŞİM KORUMASI</div>
-      <h2 id="gate-title" class="mc-title gate-heading">GİRİŞ KODU GEREKLİ</h2>
+      <div class="gate-lock-badge">🛡️ MINECRAFT MİLYONER PLATFORM</div>
+      <h2 id="gate-title" class="mc-title gate-heading">Minecraft Milyoner</h2>
       <p class="gate-desc">
-        <strong>Kim Milyoner Olmak İster? — Minecraft Edition</strong> yarışmasına erişmek için yetkili giriş kodunu yazın.
+        "Enter your license code to continue" — Devam etmek için lisans kodunuzu girin.
       </p>
 
       <form id="access-gate-form" class="gate-form" autocomplete="off">
-        <div class="gate-input-wrap">
+        <div class="gate-field-group">
+          <label for="access-username-input" class="gate-field-label">Minecraft Kullanıcı Adı (İsteğe Bağlı)</label>
           <input
-            type="password"
-            id="access-code-input"
-            class="mc-input"
-            placeholder="Erişim kodunu girin..."
-            required
-            autofocus
+            type="text"
+            id="access-username-input"
+            class="mc-input mc-input-sm"
+            placeholder="Örn: Steve, Mashallah..."
+            maxlength="24"
           />
-          <button type="button" id="btn-toggle-code-vis" class="mc-icon-btn gate-eye-btn" title="Kodu Göster / Gizle" aria-label="Kodu Göster veya Gizle">
-            👁️
-          </button>
         </div>
 
+        <div class="gate-field-group">
+          <label for="access-code-input" class="gate-field-label">Lisans Kodu (License Code)</label>
+          <div class="gate-input-wrap">
+            <input
+              type="password"
+              id="access-code-input"
+              class="mc-input"
+              placeholder="LICENSE CODE INPUT"
+              required
+              autofocus
+            />
+            <button type="button" id="btn-toggle-code-vis" class="mc-icon-btn gate-eye-btn" title="Kodu Göster / Gizle" aria-label="Kodu Göster veya Gizle">
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <!-- Loading indicator while validating -->
+        <div id="access-gate-loading" class="gate-loading hidden" aria-live="polite">
+          <span class="mc-spinner">⛏️</span>
+          <span>Lisans doğrulanıyor ve yetkiler kontrol ediliyor...</span>
+        </div>
+
+        <!-- Error feedback for invalid/expired/revoked licenses -->
         <p id="access-gate-error" class="gate-error hidden" role="alert">
-          ❌ Hatalı giriş kodu! Lütfen tekrar deneyin.
+          ❌ Geçersiz, süresi dolmuş veya iptal edilmiş lisans kodu!
         </p>
 
-        <button type="submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
-          <span class="btn-inner">🔑 SİTEYE GİRİŞ YAP</span>
+        <button type="submit" id="btn-license-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
+          <span class="btn-inner" id="btn-license-submit-text">🔑 Continue (Devam Et)</span>
         </button>
       </form>
     </div>
   </div>
 
-  <!-- Top Persistent Audio, Atmosphere & Quick Navigation Bar -->
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Top Persistent Audio, Role Profile, Party & Quick Navigation Bar -->
   <header class="top-bar">
     <div class="brand-mini" id="top-brand-btn" role="button" tabindex="0" title="Ana Menüye Dön">
       <span class="emerald-svg-wrap" id="header-emerald-icon"></span>
-      <span class="brand-mini-text">MC MİLYONER</span>
+      <span class="brand-mini-text">Minecraft Milyoner</span>
     </div>
 
     <div class="top-controls">
+      <!-- Active Session User & Role Pill -->
+      <div id="top-session-badge" class="session-profile-pill hidden">
+        <span class="session-user-icon">👤</span>
+        <span id="top-session-username" class="session-username">Steve</span>
+        <span id="top-session-role" class="role-badge role-player">PLAYER</span>
+      </div>
+
+      <!-- Admin Panel Quick Switch (ONLY rendered & authorized for ADMIN role) -->
+      <button type="button" id="btn-top-admin" class="mc-icon-btn mc-icon-btn-gold hidden" title="Admin Panel">
+        <span>🛡️</span>
+        <span class="btn-label-desktop">ADMIN PANEL</span>
+      </button>
+
+      <!-- Party / Lobby Dashboard Button -->
+      <button type="button" id="btn-top-party" class="mc-icon-btn mc-icon-btn-emerald hidden" title="Turnuva & Parti Lobisi">
+        <span>🎉</span>
+        <span class="btn-label-desktop">PARTİ LOBİSİ</span>
+      </button>
+
       <button type="button" id="btn-toggle-atmos" class="mc-icon-btn" title="Gece / Gündüz Atmosferini Değiştir">
         <span class="icon-indicator" id="atmos-icon">🌙</span>
-        <span class="btn-label-desktop" id="atmos-label">ATMOSFER: GECE</span>
+        <span class="btn-label-desktop" id="atmos-label">GECE</span>
       </button>
       <button type="button" id="btn-quick-music" class="mc-icon-btn" title="Arka Plan Müziği (Aç/Kapat)" aria-label="Müziği Aç veya Kapat">
         <span class="icon-indicator" id="quick-music-icon">🎵</span>
-        <span class="btn-label-desktop" id="quick-music-label">MÜZİK: AÇIK</span>
+        <span class="btn-label-desktop" id="quick-music-label">MÜZİK</span>
       </button>
       <button type="button" id="btn-quick-sfx" class="mc-icon-btn" title="Ses Efektleri (Aç/Kapat)" aria-label="Ses Efektlerini Aç veya Kapat">
         <span class="icon-indicator" id="quick-sfx-icon">🔊</span>
-        <span class="btn-label-desktop" id="quick-sfx-label">EFEKT: AÇIK</span>
+        <span class="btn-label-desktop" id="quick-sfx-label">EFEKT</span>
       </button>
       <button type="button" id="btn-top-stats" class="mc-icon-btn" title="İstatistikler">
         <span>📊</span>
-        <span class="btn-label-desktop">İSTATİSTİKLER</span>
       </button>
       <button type="button" id="btn-top-settings" class="mc-icon-btn" title="Ses Ayarları">
         <span>⚙️</span>
+      </button>
+      <button type="button" id="btn-top-logout" class="mc-icon-btn mc-icon-btn-danger hidden" title="Lisans Değiştir / Çıkış Yap">
+        <span>🚪</span>
+        <span class="btn-label-desktop">LİSANS DEĞİŞTİR</span>
       </button>
     </div>
   </header>
@@ -110,13 +156,16 @@
 
         <div class="menu-buttons">
           <button type="button" id="btn-start-game" class="mc-btn mc-btn-emerald mc-btn-large">
-            <span class="btn-inner">⚔️ OYUNA BAŞLA</span>
+            <span class="btn-inner">⚔️ OYUNA BAŞLA (SOLO QUIZ)</span>
+          </button>
+          <button type="button" id="btn-open-party-hub" class="mc-btn mc-btn-gold mc-btn-large">
+            <span class="btn-inner">🎉 TURNUVA & PARTİ LOBİSİ</span>
           </button>
           <div class="menu-secondary-grid">
             <button type="button" id="btn-open-rules" class="mc-btn mc-btn-stone">
               <span class="btn-inner">📖 NASIL OYNANIR?</span>
             </button>
-            <button type="button" id="btn-open-stats" class="mc-btn mc-btn-gold">
+            <button type="button" id="btn-open-stats" class="mc-btn mc-btn-stone">
               <span class="btn-inner">🏆 İSTATİSTİKLER</span>
             </button>
             <button type="button" id="btn-open-audio" class="mc-btn mc-btn-stone">
@@ -356,7 +405,420 @@
       </div>
     </section>
 
+    <!-- ==========================================
+         SCREEN 5: USER & PARTY DASHBOARD (PLAYER / ORGANIZER / ADMIN)
+         ========================================== -->
+    <section id="screen-party" class="screen" aria-label="Turnuva ve Parti Lobisi">
+      <div class="party-hub-wrapper">
+        <!-- Welcome & Role Banner -->
+        <div class="party-welcome-bar mc-panel">
+          <div class="welcome-user-info">
+            <span class="welcome-greeting" id="party-welcome-title">Welcome, Steve</span>
+            <div class="welcome-meta">
+              <span id="party-user-role-badge" class="role-badge role-player">PLAYER</span>
+              <span id="party-user-license-name" class="meta-muted">Standart Lisans</span>
+            </div>
+          </div>
+          <div class="welcome-actions">
+            <!-- ONLY visible & authorized for ADMIN and ORGANIZER -->
+            <button type="button" id="btn-open-create-party" class="mc-btn mc-btn-emerald mc-btn-small hidden">
+              <span class="btn-inner">➕ Create Party (Parti Oluştur)</span>
+            </button>
+            <button type="button" id="btn-party-play-solo" class="mc-btn mc-btn-gold mc-btn-small">
+              <span class="btn-inner">⚔️ Hızlı Quiz Başlat</span>
+            </button>
+            <button type="button" id="btn-party-back-menu" class="mc-btn mc-btn-stone mc-btn-small">
+              <span class="btn-inner">🏠 Ana Menü</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="party-hub-grid">
+          <!-- Left Column: Join by Invite Code + Party List -->
+          <div class="party-left-col">
+            <!-- Join Party via Invite Code Card -->
+            <div class="mc-panel party-join-card">
+              <h3 class="panel-sec-title">🎟️ Davet Kodu ile Partiye Katıl (Join Party)</h3>
+              <p class="panel-sec-desc">Organizatör tarafından paylaşılan davet kodunu (Örn: <code>MCM-8K2P</code>) girerek partiye katılın.</p>
+              <form id="form-join-party" class="inline-join-form" autocomplete="off">
+                <input
+                  type="text"
+                  id="input-join-invite-code"
+                  class="mc-input mc-input-sm"
+                  placeholder="MCM-XXXX"
+                  maxlength="14"
+                  required
+                />
+                <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">Katıl (Join)</span>
+                </button>
+              </form>
+            </div>
+
+            <!-- Create Party Card (Strictly Authorized for ADMIN & ORGANIZER ONLY) -->
+            <div id="organizer-create-party-box" class="mc-panel party-create-card hidden">
+              <h3 class="panel-sec-title">🏆 Yeni Parti Oluştur (Create Party)</h3>
+              <form id="form-create-party" class="stack-form" autocomplete="off">
+                <div class="form-row">
+                  <label for="input-party-name">Party Name (Parti Adı)</label>
+                  <input
+                    type="text"
+                    id="input-party-name"
+                    class="mc-input mc-input-sm"
+                    placeholder="Örn: Minecraft Championship #2"
+                    maxlength="40"
+                    required
+                  />
+                </div>
+                <div class="form-row">
+                  <label for="input-party-max">Maximum Players (Maks. Oyuncu)</label>
+                  <select id="input-party-max" class="mc-select">
+                    <option value="2">2 Oyuncu</option>
+                    <option value="4" selected>4 Oyuncu</option>
+                    <option value="8">8 Oyuncu</option>
+                    <option value="12">12 Oyuncu</option>
+                    <option value="16">16 Oyuncu</option>
+                  </select>
+                </div>
+                <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">✨ Partiyi Kur</span>
+                </button>
+              </form>
+            </div>
+
+            <!-- Your Parties List -->
+            <div class="mc-panel party-list-card">
+              <div class="panel-header-row">
+                <h3 class="panel-sec-title">📋 Your Party / Aktif Partiler</h3>
+                <select id="filter-user-party-status" class="mc-select mc-select-xs">
+                  <option value="ALL">Tüm Durumlar</option>
+                  <option value="WAITING">WAITING</option>
+                  <option value="READY">READY</option>
+                  <option value="STARTING">STARTING</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="FINISHED">FINISHED</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                </select>
+              </div>
+              <div id="user-parties-list" class="user-parties-list">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Selected Party Details & Owner Management Dashboard -->
+          <div class="party-right-col">
+            <div id="party-detail-container" class="mc-panel party-detail-card">
+              <!-- Populated dynamically when a party is selected -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         SCREEN 6: ADMIN PANEL (FULL TOURNAMENT & LICENSE MANAGEMENT)
+         ========================================== -->
+    <section id="screen-admin" class="screen" aria-label="Admin Panel">
+      <div class="admin-shell mc-panel">
+        <!-- Admin Top Header -->
+        <div class="admin-topbar mc-panel-inset">
+          <div class="admin-brand">
+            <span class="admin-shield-icon">🛡️</span>
+            <div>
+              <div class="admin-brand-title">Minecraft Milyoner</div>
+              <div class="admin-brand-sub">Admin Panel — Tournament & License Management</div>
+            </div>
+          </div>
+
+          <div class="admin-profile-bar">
+            <div class="admin-profile-chip">
+              <span class="profile-avatar">👑</span>
+              <div class="profile-text">
+                <strong id="admin-profile-name">Mashallah</strong>
+                <span class="role-badge role-admin">ADMIN</span>
+              </div>
+            </div>
+            <button type="button" id="btn-admin-go-game" class="mc-btn mc-btn-emerald mc-btn-small">
+              <span class="btn-inner">🎮 Oyuna Geç</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="admin-body">
+          <!-- Responsive Sidebar Navigation -->
+          <aside class="admin-sidebar mc-panel-inset" aria-label="Admin Menü">
+            <button type="button" class="admin-nav-btn active" data-admin-tab="dashboard">
+              <span>📊</span> <span>Dashboard</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="licenses">
+              <span>🔑</span> <span>Licenses</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="parties">
+              <span>🎉</span> <span>Parties</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="players">
+              <span>🧑‍🌾</span> <span>Players</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="activity">
+              <span>📜</span> <span>Activity Log</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="settings">
+              <span>⚙️</span> <span>Settings</span>
+            </button>
+          </aside>
+
+          <!-- Admin Content Views -->
+          <div class="admin-content">
+
+            <!-- TAB 1: DASHBOARD -->
+            <div id="admin-tab-dashboard" class="admin-tab-pane active">
+              <div class="admin-section-header">
+                <h3>📊 Sistem Özeti (Dashboard)</h3>
+                <span class="system-status-pill">● SYSTEM ONLINE — PROTECTED</span>
+              </div>
+
+              <div class="admin-metrics-grid">
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Total Licenses</span>
+                  <strong class="m-value" id="adm-metric-total-lic">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Active Licenses</span>
+                  <strong class="m-value emerald-text" id="adm-metric-active-lic">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Revoked Licenses</span>
+                  <strong class="m-value wrong-text" id="adm-metric-revoked-lic">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Total Parties</span>
+                  <strong class="m-value gold-text" id="adm-metric-total-parties">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Active Parties</span>
+                  <strong class="m-value emerald-text" id="adm-metric-active-parties">0</strong>
+                </div>
+                <div class="metric-card mc-panel-inset">
+                  <span class="m-label">Total Participants</span>
+                  <strong class="m-value" id="adm-metric-total-participants">0</strong>
+                </div>
+              </div>
+
+              <div class="admin-dash-split">
+                <div class="mc-panel-inset dash-box">
+                  <div class="panel-header-row">
+                    <h4>📜 Recent Activity (Son Hareketler)</h4>
+                    <button type="button" class="mc-btn mc-btn-stone mc-btn-small" id="btn-dash-view-all-logs">
+                      <span class="btn-inner">Tümünü Gör</span>
+                    </button>
+                  </div>
+                  <div id="adm-dash-recent-activity" class="activity-feed-list"></div>
+                </div>
+
+                <div class="mc-panel-inset dash-box">
+                  <h4>🛡️ System Status & Security</h4>
+                  <ul class="sys-status-list">
+                    <li><span>Role-Based Access Control (RBAC):</span> <strong class="emerald-text">ACTIVE</strong></li>
+                    <li><span>License Signature Verification:</span> <strong class="emerald-text">SHA-256 VERIFIED</strong></li>
+                    <li><span>Master License Protection:</span> <strong class="emerald-text">HASHED & HIDDEN</strong></li>
+                    <li><span>Question Database:</span> <strong class="gold-text">115 Questions Ready</strong></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 2: LICENSES -->
+            <div id="admin-tab-licenses" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🔑 License Management (Lisans Yönetimi)</h3>
+              </div>
+
+              <!-- Create License Form -->
+              <form id="form-admin-create-license" class="mc-panel-inset admin-create-bar" autocomplete="off">
+                <div class="create-grid">
+                  <div>
+                    <label>Lisans Adı (Custom Name)</label>
+                    <input type="text" id="adm-lic-name" class="mc-input mc-input-sm" placeholder="Örn: VIP Oyuncu Lisansı" required />
+                  </div>
+                  <div>
+                    <label>Lisans Kodu (Code)</label>
+                    <div class="input-with-btn">
+                      <input type="text" id="adm-lic-code" class="mc-input mc-input-sm" placeholder="MCML-XXXX-XXXX" required />
+                      <button type="button" id="btn-adm-gen-code" class="mc-icon-btn" title="Rastgele Kod Üret">🎲</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label>Rol (Role)</label>
+                    <select id="adm-lic-role" class="mc-select">
+                      <option value="PLAYER">PLAYER</option>
+                      <option value="ORGANIZER">ORGANIZER</option>
+                      <option value="ADMIN">ADMIN</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Bitiş Tarihi (Expires)</label>
+                    <input type="date" id="adm-lic-expires" class="mc-input mc-input-sm" />
+                  </div>
+                  <div>
+                    <label>Atanan Kullanıcı (Opsiyonel)</label>
+                    <input type="text" id="adm-lic-user" class="mc-input mc-input-sm" placeholder="Örn: Steve" />
+                  </div>
+                </div>
+                <div class="create-bar-actions">
+                  <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
+                    <span class="btn-inner">➕ Create License (Lisans Oluştur)</span>
+                  </button>
+                </div>
+              </form>
+
+              <!-- Search & Filter Bar -->
+              <div class="admin-filter-bar">
+                <input type="text" id="search-adm-licenses" class="mc-input mc-input-sm" placeholder="🔍 Lisans kodu, isim veya kullanıcı ara..." />
+                <select id="filter-adm-licenses" class="mc-select">
+                  <option value="ALL">Tüm Lisanslar</option>
+                  <option value="ACTIVE">Active (Aktif)</option>
+                  <option value="DISABLED">Disabled (Devre Dışı)</option>
+                  <option value="EXPIRED">Expired (Süresi Dolmuş)</option>
+                  <option value="REVOKED">Revoked (İptal Edilmiş)</option>
+                </select>
+              </div>
+
+              <div id="adm-licenses-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- TAB 3: PARTIES (ADMIN OVERRIDE) -->
+            <div id="admin-tab-parties" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🎉 Party Management & Admin Override</h3>
+                <button type="button" id="btn-adm-quick-party" class="mc-btn mc-btn-emerald mc-btn-small">
+                  <span class="btn-inner">➕ Yeni Parti Aç</span>
+                </button>
+              </div>
+
+              <div class="admin-filter-bar">
+                <input type="text" id="search-adm-parties" class="mc-input mc-input-sm" placeholder="🔍 Parti adı, organizatör veya davet kodu ara..." />
+                <select id="filter-adm-parties" class="mc-select">
+                  <option value="ALL">Tüm Durumlar</option>
+                  <option value="WAITING">WAITING</option>
+                  <option value="READY">READY</option>
+                  <option value="STARTING">STARTING</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="FINISHED">FINISHED</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                </select>
+              </div>
+
+              <div id="adm-parties-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- TAB 4: PLAYERS -->
+            <div id="admin-tab-players" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>🧑‍🌾 Kayıtlı Oyuncular ve Oturumlar (Players)</h3>
+              </div>
+              <div class="admin-filter-bar">
+                <input type="text" id="search-adm-players" class="mc-input mc-input-sm" placeholder="🔍 Oyuncu adı veya rol ara..." />
+              </div>
+              <div id="adm-players-list" class="admin-table-wrap"></div>
+            </div>
+
+            <!-- TAB 5: ACTIVITY LOG -->
+            <div id="admin-tab-activity" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>📜 Sistem Hareket Kayıtları (Activity Log)</h3>
+                <button type="button" id="btn-adm-clear-logs" class="mc-btn mc-btn-danger mc-btn-small">
+                  <span class="btn-inner">🗑️ Kayıtları Temizle</span>
+                </button>
+              </div>
+              <div id="adm-full-activity-list" class="activity-feed-list full-log"></div>
+            </div>
+
+            <!-- TAB 6: SETTINGS -->
+            <div id="admin-tab-settings" class="admin-tab-pane">
+              <div class="admin-section-header">
+                <h3>⚙️ Sistem ve Oturum Ayarları (Settings)</h3>
+              </div>
+              <div class="mc-panel-inset dash-box">
+                <h4>Aktif Yönetici Oturumu</h4>
+                <p class="panel-sec-desc">Şu anda tam yetkili <strong>ADMIN</strong> oturumu açıktır. Lisansınızı değiştirebilir veya ses/istatistik ayarlarını yönetebilirsiniz.</p>
+                <div class="settings-action-row">
+                  <button type="button" id="btn-adm-open-audio" class="mc-btn mc-btn-stone mc-btn-small">
+                    <span class="btn-inner">🔊 Ses Ayarları</span>
+                  </button>
+                  <button type="button" id="btn-adm-logout" class="mc-btn mc-btn-danger mc-btn-small">
+                    <span class="btn-inner">🚪 Oturumu Kapat / Lisans Değiştir</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
+
+  <!-- ==========================================
+       MODAL: INVITATION CARD (DAVETİYE)
+       ========================================== -->
+  <div id="modal-invite" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
+    <div class="modal-box mc-panel">
+      <div class="modal-header">
+        <h3 id="invite-modal-title">✉️ Minecraft Milyoner Party Invitation</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-invite" aria-label="Kapat">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="invitation-ticket mc-panel-inset">
+          <div class="ticket-title">MINECRAFT MILYONER PARTY INVITATION</div>
+          <div class="ticket-row">
+            <span>Party:</span>
+            <strong id="inv-party-name" class="gold-text">Minecraft Championship #1</strong>
+          </div>
+          <div class="ticket-row">
+            <span>Organizer:</span>
+            <strong id="inv-party-organizer">Mashallah</strong>
+          </div>
+          <div class="ticket-row">
+            <span>Invite Code:</span>
+            <strong id="inv-party-code" class="emerald-text ticket-code">MCM-8K2P</strong>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer modal-footer-split">
+        <button type="button" class="mc-btn mc-btn-stone mc-btn-small" data-close="modal-invite">
+          <span class="btn-inner">Kapat</span>
+        </button>
+        <button type="button" id="btn-copy-invitation" class="mc-btn mc-btn-emerald">
+          <span class="btn-inner">📋 Copy Invitation (Daveti Kopyala)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: CONFIRMATION DIALOG (ONAY PENCERESİ)
+       ========================================== -->
+  <div id="modal-confirm" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+    <div class="modal-box mc-panel confirm-modal-box">
+      <div class="modal-header">
+        <h3 id="confirm-modal-title">⚠️ İşlemi Onayla</h3>
+        <button type="button" class="modal-close-btn" id="btn-confirm-close" aria-label="Kapat">✖</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message" class="confirm-message">Bu işlemi yapmak istediğinize emin misiniz?</p>
+      </div>
+      <div class="modal-footer modal-footer-split">
+        <button type="button" id="btn-confirm-cancel" class="mc-btn mc-btn-stone mc-btn-small">
+          <span class="btn-inner">Cancel (İptal)</span>
+        </button>
+        <button type="button" id="btn-confirm-accept" class="mc-btn mc-btn-danger mc-btn-small">
+          <span class="btn-inner" id="btn-confirm-accept-text">Onayla</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ==========================================
        MODAL 1: NASIL OYNANIR?
@@ -509,6 +971,8 @@
   <!-- Scripts -->
   <script src="questions.js"></script>
   <script src="audio.js"></script>
+  <script src="services.js"></script>
   <script src="app.js"></script>
+  <script src="platform.js"></script>
 </body>
 </html>
