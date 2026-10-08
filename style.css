@@ -6319,34 +6319,252 @@ body.theme-mc-light {
   display: inline-flex;
   align-items: center;
   gap: 0.32rem;
-  padding: 0.16rem 0.52rem;
+  padding: 0.18rem 0.54rem;
   font-size: 0.72rem;
   font-weight: 800;
+  line-height: 1.2;
   color: #fde68a;
   background: rgba(251, 191, 36, 0.14);
   border: 1px solid rgba(251, 191, 36, 0.5);
   border-radius: 3px;
   vertical-align: middle;
+  max-width: 100%;
 }
 
 .cosmetic-live-preview {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.65rem;
-  padding: 0.65rem 0.8rem;
-  margin-top: 0.35rem;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  margin-top: 0.25rem;
   background: rgba(8, 12, 22, 0.92);
-  border: 1px dashed rgba(148, 163, 184, 0.3);
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 4px;
   font-size: 0.84rem;
+  text-align: left;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .cosmetic-preview-avatar {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  flex-shrink: 0;
   border-radius: 3px;
+  overflow: hidden;
+  border: 2px solid #475569;
+  background: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cosmetic-preview-avatar img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  display: block;
   image-rendering: pixelated;
+}
+
+.cosmetic-preview-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.22rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.cosmetic-preview-username {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.cosmetic-preview-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+/* 5. Anti-Overlap & Clean Spacing Fixes for Names, Cards, Badges & Drawer */
+.drawer-header {
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.85rem;
+}
+
+.drawer-user-summary {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.drawer-user-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+#drawer-user-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.92rem;
+  line-height: 1.25;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-account-chip {
+  max-width: 280px;
+  min-width: 0;
+}
+
+#header-user-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.role-badge {
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.profile-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.4rem;
+  min-width: 0;
+}
+
+#profile-username-display {
+  margin: 0;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.cosmetics-inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+  gap: 0.85rem;
+}
+
+.cosmetic-inv-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem;
+  min-width: 0;
+}
+
+.cos-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cos-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+.cos-info strong {
+  display: block;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.cos-info span {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.25;
+}
+
+.shop-item-card {
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.shop-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.shop-item-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.12rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.shop-item-desc {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.rank-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.rank-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.lb-player-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.pm-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .suggestion-vote-btn.voted-up {
@@ -6360,3 +6578,4 @@ body.theme-mc-light {
   background: rgba(239, 68, 68, 0.2) !important;
   color: #fca5a5 !important;
 }
+

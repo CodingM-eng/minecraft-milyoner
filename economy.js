@@ -1900,10 +1900,16 @@
             profileEffect: null
           })
         };
-        if (item.subCategory === 'Avatar Frames') equipped.avatarFrame = item.id;
-        if (item.subCategory === 'Name Colors') equipped.nameColor = item.id;
-        if (item.subCategory === 'Badges') equipped.badge = item.id;
-        if (item.subCategory === 'Profile Effects') equipped.profileEffect = item.id;
+        const sub = String(item.subCategory || '').trim();
+        if (sub === 'Avatar Frames' || sub === 'Avatar Çerçevesi' || String(item.id || '').startsWith('FRAME_')) {
+          equipped.avatarFrame = item.id;
+        } else if (sub === 'Name Colors' || sub === 'Ad Rengi' || sub === 'İsim Rengi' || String(item.id || '').startsWith('NAME_COLOR_')) {
+          equipped.nameColor = item.id;
+        } else if (sub === 'Profile Effects' || sub === 'Profil Efekti' || String(item.id || '').startsWith('EFFECT_')) {
+          equipped.profileEffect = item.id;
+        } else {
+          equipped.badge = item.id;
+        }
         syncPayload.ownedCosmetics = ownedItems;
         syncPayload.equippedCosmetics = equipped;
       }
@@ -2197,15 +2203,15 @@
       if (!item) throw new Error('Kozmetik ürün bulunamadı.');
 
       const equipped = { ...(user.equippedCosmetics || {}) };
-      const sub = item.subCategory || item.category;
-      if (sub === 'Avatar Frames') {
+      const sub = String(item.subCategory || item.category || '').trim();
+      if (sub === 'Avatar Frames' || sub === 'Avatar Çerçevesi' || String(item.id || '').startsWith('FRAME_')) {
         equipped.avatarFrame = equipped.avatarFrame === itemId ? null : itemId;
-      } else if (sub === 'Name Colors') {
+      } else if (sub === 'Name Colors' || sub === 'Ad Rengi' || sub === 'İsim Rengi' || String(item.id || '').startsWith('NAME_COLOR_')) {
         equipped.nameColor = equipped.nameColor === itemId ? null : itemId;
-      } else if (sub === 'Badges') {
-        equipped.badge = equipped.badge === itemId ? null : itemId;
-      } else if (sub === 'Profile Effects') {
+      } else if (sub === 'Profile Effects' || sub === 'Profil Efekti' || String(item.id || '').startsWith('EFFECT_')) {
         equipped.profileEffect = equipped.profileEffect === itemId ? null : itemId;
+      } else {
+        equipped.badge = equipped.badge === itemId ? null : itemId;
       }
 
       userService.syncUserFields(user.username, { equippedCosmetics: equipped });

@@ -266,7 +266,14 @@
       if (!key) return this.getEmeraldSvg(size);
       const upper = key.toUpperCase();
 
-      if (key === '🟢' || upper === 'EMERALD' || upper === 'FRAME_EMERALD' || upper === 'EMERALD_COLLECTOR') {
+      // Orijinal Minecraft eşyaları / blokları / varlıkları -> Minecraft Piksel SVG
+      if (
+        key === '🟢' ||
+        upper === 'EMERALD' ||
+        upper === 'FRAME_EMERALD' ||
+        upper === 'EMERALD_COLLECTOR' ||
+        upper.startsWith('PACK_EMERALD_')
+      ) {
         return this.getEmeraldSvg(size);
       }
       if (key === '⬛' || upper === 'NETHERITE') {
@@ -281,14 +288,8 @@
       if (key === '💖' || upper === 'HEART_BUNDLE' || upper === 'ITEM_EXTRA_LIFE_BUNDLE_3') {
         return this.getHeartBundleSvg(size);
       }
-      if (key === '👑' || key === '✨' || upper === 'CROWN' || upper === 'MVIP_PLUS' || upper === 'NAME_COLOR_GOLD') {
-        return this.getCrownSvg(size);
-      }
       if (key === '🔥' || upper === 'FLAME' || upper === 'MVIP' || upper === 'FRAME_NETHERITE_FLAME' || upper === 'STREAK_10') {
         return this.getFlameSvg(size);
-      }
-      if (key === '🌟' || key === '🌈' || upper === 'STAR' || upper === 'VIP_PLUS' || upper === 'NAME_COLOR_RGB') {
-        return this.getStarSvg(size);
       }
       if (key === '🧨' || upper === 'CREEPER' || upper === 'BADGE_CREEPER_HUNTER') {
         return this.getCreeperSvg(size);
@@ -311,15 +312,21 @@
       if (key === '⛏️' || upper === 'PICKAXE' || upper === 'FIRST_GAME') {
         return this.getPickaxeSvg(size);
       }
-      if (key === '🏆' || key === '🏅' || upper === 'TROPHY' || upper === 'FIRST_WIN') {
-        return this.getTrophySvg(size);
-      }
-      if (key === '🚀' || key === '🎉' || upper === 'ROCKET' || upper === 'ITEM_TOURNAMENT_BOOST' || upper === 'PARTY_CHAMPION') {
-        return this.getRocketSvg(size);
-      }
-      if (key === '💳' || key === '🏦' || key === '🛍️' || key === '🎁' || key === '🛒' || upper === 'CHEST') {
+      if (upper === 'CHEST') {
         return this.getChestSvg(size);
       }
+
+      // Minecraft'ta doğrudan eşya karşılığı olmayan genel kavramlar -> Temiz standart ikon
+      if (upper === 'CROWN' || upper === 'MVIP_PLUS') return '👑';
+      if (upper === 'NAME_COLOR_GOLD') return '✨';
+      if (upper === 'NAME_COLOR_RGB') return '🌈';
+      if (upper === 'STAR' || upper === 'VIP_PLUS') return '🌟';
+      if (upper === 'TROPHY' || upper === 'FIRST_WIN') return '🏆';
+      if (upper === 'ROCKET' || upper === 'ITEM_TOURNAMENT_BOOST') return '🚀';
+      if (upper === 'PARTY_CHAMPION') return '🎉';
+      if (upper === 'STRIPE_EMERALD_1000') return '💳';
+      if (upper === 'STRIPE_EMERALD_5000') return '🏦';
+
       return `<span>${key}</span>`;
     },
 
@@ -335,15 +342,11 @@
         .replace(/🧨/g, this.getCreeperSvg(size))
         .replace(/⚡/g, this.getRedstoneSvg(size))
         .replace(/🐉/g, this.getEnderSvg(size))
-        .replace(/👑/g, this.getCrownSvg(size))
         .replace(/🔥/g, this.getFlameSvg(size))
-        .replace(/🌟/g, this.getStarSvg(size))
-        .replace(/🌈/g, this.getStarSvg(size))
         .replace(/⚔️/g, this.getSwordSvg(size))
         .replace(/🛡️/g, this.getShieldSvg(size))
         .replace(/🌱/g, this.getGrassSvg(size))
-        .replace(/⛏️/g, this.getPickaxeSvg(size))
-        .replace(/🏆/g, this.getTrophySvg(size));
+        .replace(/⛏️/g, this.getPickaxeSvg(size));
     }
   };
 

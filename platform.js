@@ -765,17 +765,24 @@
       if (ownedIds.length === 0) {
         cosContainer.innerHTML = `<div class="empty-state-box">Henüz kozmetik ürününüz yok. <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-nav-screen="shop"># MAĞAZA'ya Git</button></div>`;
       } else {
+        const subCatMap = {
+          'Avatar Frames': 'Avatar Çerçevesi',
+          'Name Colors': 'İsim Rengi',
+          'Badges': 'Özel Rozet',
+          'Profile Effects': 'Profil Efekti'
+        };
         cosContainer.innerHTML = ownedIds
           .map(id => {
             const item = allItems.find(i => i.id === id);
             if (!item) return '';
             const isEquipped = Object.values(equipped).includes(item.id);
+            const subLabel = subCatMap[item.subCategory] || item.subCategory || 'Kozmetik';
             return `
               <div class="cosmetic-inv-card ${isEquipped ? 'equipped' : ''}">
                 <span class="cos-icon">${mcIcon(item.id || item.icon, 26)}</span>
                 <div class="cos-info">
                   <strong>${escapeHtml(item.name)}</strong>
-                  <span>${escapeHtml(item.subCategory || 'Kozmetik')} ${isEquipped ? '• ✓ Kuşanıldı' : ''}</span>
+                  <span>${escapeHtml(subLabel)} ${isEquipped ? '• ✓ Kuşanıldı' : ''}</span>
                 </div>
                 <button type="button" class="mc-btn mc-btn-sm ${
                   isEquipped ? 'mc-btn-secondary' : 'mc-btn-primary'
@@ -1053,7 +1060,7 @@
                     <button type="button" class="mc-btn mc-btn-secondary mc-btn-block" data-buy-rank="${escapeHtml(
                       rank.id
                     )}" data-pay-method="STRIPE">
-                      ${mcIcon('CHEST', 15)} Kart ile Al (${rank.priceTry.toLocaleString('tr-TR')} ₺)
+                      💳 Kart ile Al (${rank.priceTry.toLocaleString('tr-TR')} ₺)
                     </button>
                   `
               }
@@ -1061,7 +1068,7 @@
               <button type="button" class="mc-btn mc-btn-gift mc-btn-block" data-gift-rank="${escapeHtml(
                 rank.id
               )}">
-                ${mcIcon('CHEST', 15)} Arkadaşına Hediye Et
+                🎁 Arkadaşına Hediye Et
               </button>
             </div>
           </div>
@@ -1079,6 +1086,24 @@
     const ownedCosmetics = Array.isArray(user.ownedCosmetics) ? user.ownedCosmetics : [];
     const equipped = user.equippedCosmetics || {};
     const avatarSrc = avatarService ? avatarService.getAvatarForUser(user) : '';
+    const fallbackAvatarSrc = avatarService
+      ? avatarService.generatePixelAvatarDataUrl(user.username || 'Steve')
+      : '';
+
+    const catTagMap = {
+      'Avatar Frames': 'Avatar Çerçevesi',
+      'Avatar Çerçevesi': 'Avatar Çerçevesi',
+      'Name Colors': 'İsim Rengi',
+      'Ad Rengi': 'İsim Rengi',
+      'İsim Rengi': 'İsim Rengi',
+      'Badges': 'Özel Rozet',
+      'Özel Rozet': 'Özel Rozet',
+      'Profile Effects': 'Profil Efekti',
+      'Profil Efekti': 'Profil Efekti',
+      'Special': 'Özel Ürün',
+      'Emeralds': 'Zümrüt Paketi',
+      'Cosmetics': 'Kozmetik'
+    };
 
     if (items.length === 0) {
       grid.innerHTML = `<div class="empty-state-box">Bu kategoride henüz ürün bulunmuyor.</div>`;
@@ -1094,32 +1119,57 @@
           Number(item.maxPerUser) === 1 &&
           ownedCosmetics.includes(item.id);
         const isEquipped = Object.values(equipped).includes(item.id);
+        const rawSub = String(item.subCategory || item.category || '').trim();
+        const displayCatTag = catTagMap[rawSub] || rawSub;
 
         // Kozmetik Canlı Önizleme Kutusu
         let previewHtml = '';
         if (item.category === 'Cosmetics') {
-          const sub = item.subCategory || 'Avatar Çerçevesi';
           const cssVal = item.cssValue || '';
-          const previewFrameClass = sub === 'Avatar Çerçevesi' ? cssVal : '';
-          const previewEffectClass = sub === 'Profil Efekti' ? cssVal : '';
-          const previewNameClass = sub === 'Ad Rengi' && cssVal === 'rgb-rainbow' ? 'rgb-rainbow-text' : '';
-          const previewNameStyle =
-            sub === 'Ad Rengi' && cssVal && cssVal !== 'rgb-rainbow' ? `style="color:${escapeHtml(cssVal)}"` : '';
-          const previewBadgeHtml =
-            sub === 'Özel Rozet'
-              ? `<span class="custom-cosmetic-badge-pill">${replaceEmojis(escapeHtml(cssVal || item.name), 12)}</span>`
+          const isFrame =
+            rawSub === 'Avatar Frames' ||
+            rawSub === 'Avatar Çerçevesi' ||
+            String(item.id || '').startsWith('FRAME_');
+          const isEffect =
+            rawSub === 'Profile Effects' ||
+            rawSub === 'Profil Efekti' ||
+            String(item.id || '').startsWith('EFFECT_');
+          const isColor =
+            rawSub === 'Name Colors' ||
+            rawSub === 'Ad Rengi' ||
+            rawSub === 'İsim Rengi' ||
+            String(item.id || '').startsWith('NAME_COLOR_');
+          const isBadge = !isFrame && !isEffect && !isColor;
+
+          const previewFrameClass = isFrame ? cssVal : '';
+          const previewEffectClass = isEffect ? cssVal : '';
+          const previewNameClass =
+            isColor && cssVal === 'rgb-rainbow'
+              ? 'rgb-rainbow-text'
+              : isColor && cssVal === '#fbbf24'
+              ? 'name-color-gold'
               : '';
+          const previewInlineColor =
+            isColor && cssVal && cssVal !== 'rgb-rainbow' ? `color:${escapeHtml(cssVal)};` : '';
+          const previewBadgeHtml = isBadge
+            ? `<span class="custom-cosmetic-badge-pill">${replaceEmojis(
+                escapeHtml(cssVal || item.name),
+                12
+              )}</span>`
+            : '';
 
           previewHtml = `
             <div class="cosmetic-live-preview ${escapeHtml(previewEffectClass)}">
               <div class="cosmetic-preview-avatar ${escapeHtml(previewFrameClass)}">
-                <img src="${escapeHtml(avatarSrc)}" alt="" />
+                <img src="${escapeHtml(avatarSrc)}" onerror="this.onerror=null;this.src='${escapeHtml(
+            fallbackAvatarSrc
+          )}';" alt="" />
               </div>
-              <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
-                <strong class="${escapeHtml(previewNameClass)}" ${previewNameStyle} style="font-size:0.84rem;">${escapeHtml(
-            user.username
-          )}</strong>
-                ${previewBadgeHtml || `<span style="font-size:0.72rem;color:var(--text-muted);">Canlı Önizleme</span>`}
+              <div class="cosmetic-preview-info">
+                <strong class="cosmetic-preview-username ${escapeHtml(
+                  previewNameClass
+                )}" style="font-size:0.86rem;${previewInlineColor}">${escapeHtml(user.username)}</strong>
+                ${previewBadgeHtml || `<span class="cosmetic-preview-sub">Canlı Önizleme</span>`}
               </div>
             </div>
           `;
@@ -1143,7 +1193,7 @@
             <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
               item.id
             )}" data-item-currency="STRIPE">
-              ${mcIcon('CHEST', 15)} ${Number(item.priceTry || item.price).toLocaleString('tr-TR')} ₺ — Satın Al (Stripe)
+              💳 ${Number(item.priceTry || item.price).toLocaleString('tr-TR')} ₺ — Satın Al (Stripe)
             </button>
           `;
         } else if (item.currency === 'NETHERITE') {
@@ -1190,7 +1240,7 @@
           <div class="shop-item-card">
             <div class="shop-item-top">
               <span class="shop-item-icon">${mcIcon(item.id || item.icon, 28)}</span>
-              <span class="shop-item-cat-tag">${escapeHtml(item.subCategory || item.category)}</span>
+              <span class="shop-item-cat-tag">${escapeHtml(displayCatTag)}</span>
             </div>
             <h4 class="shop-item-title">${escapeHtml(item.name)}</h4>
             <p class="shop-item-desc">${escapeHtml(item.description)}</p>
