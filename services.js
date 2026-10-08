@@ -205,6 +205,13 @@
     return `${prefix}-${ts}${rnd}`;
   }
 
+  function nextMonotonicIso(prevIso = null) {
+    const now = Date.now();
+    const prev = prevIso ? Date.parse(prevIso) : 0;
+    const base = !Number.isNaN(prev) && prev >= now ? prev + 500 : now;
+    return new Date(base).toISOString();
+  }
+
   // ==========================================
   // ÖZEL MINECRAFT PİKSEL SVG İKON SERVİSİ (Zümrüt, Netherite, Elmas, Rütbe, Kozmetik ve UI İkonları)
   // ==========================================
@@ -990,7 +997,7 @@
         ...users[idx],
         ...updates,
         userId: immutableId,
-        updatedAt: new Date().toISOString()
+        updatedAt: nextMonotonicIso(users[idx].updatedAt || users[idx].createdAt)
       };
       this._saveAllUsers(users);
 
@@ -1421,6 +1428,10 @@
         throw new Error('Yeni şifreniz en az 4 karakter olmalıdır.');
       }
 
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
+        await cloudSyncService.syncNow().catch(() => {});
+      }
+
       const user = userService.getUserByUsername(cleanUser);
       if (!user) {
         throw new Error('Bu kullanıcı adına sahip bir hesap bulunamadı.');
@@ -1438,6 +1449,9 @@
         `${AUTH_SALT}::PWD::${user.username.toLowerCase()}::${rawNew}`
       );
       userService.syncUserFields(user.username, { passwordHash: newHash });
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
       return true;
     },
 
@@ -1461,6 +1475,9 @@
         `${AUTH_SALT}::PWD::${user.username.toLowerCase()}::${String(newPassword)}`
       );
       userService.syncUserFields(user.username, { passwordHash: nextHash });
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
       return true;
     },
 
@@ -1663,7 +1680,7 @@
         throw new Error('Bu parti dolu.');
       }
 
-      const nowIso = new Date().toISOString();
+      const nowIso = nextMonotonicIso(activeParty.updatedAt || activeParty.createdAt);
 
       // Kullanıcının başka aktif partisi varsa ondan çıkar
       parties.forEach(p => {
@@ -1675,6 +1692,9 @@
             p.members = p.members.filter(
               m => m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()
             );
+            p.removedMembers = Array.from(
+              new Set([...(p.removedMembers || []), session.username.toLowerCase()])
+            );
             if (p.members.length === 0) p.status = 'CLOSED';
             else if (
               p.leaderUsername &&
@@ -1682,11 +1702,14 @@
             ) {
               p.leaderUsername = p.members[0].username;
             }
-            p.updatedAt = nowIso;
+            p.updatedAt = nextMonotonicIso(p.updatedAt || p.createdAt);
           }
         }
       });
 
+      activeParty.removedMembers = (activeParty.removedMembers || []).filter(
+        u => String(u).toLowerCase() !== session.username.toLowerCase()
+      );
       activeParty.members.push({
         username: session.username,
         joinedAt: nowIso,
@@ -1707,7 +1730,7 @@
         ) {
           inv.status = 'ACCEPTED';
           inv.respondedAt = nowIso;
-          inv.updatedAt = nowIso;
+          inv.updatedAt = nextMonotonicIso(inv.updatedAt || inv.createdAt);
           if (inv.notificationId) {
             notificationService.updateNotificationMeta(session.username, inv.notificationId, {
               invitationStatus: 'ACCEPTED',
@@ -1776,7 +1799,7 @@
 
       const invites = this.getAllInvitations();
       const now = Date.now();
-      const nowIso = new Date(now).toISOString();
+      const nowIso = nextMonotonicIso(party.updatedAt || party.createdAt);
       const existingInvite = invites.find(
         inv =>
           inv &&
@@ -1790,7 +1813,7 @@
       if (invitation) {
         invitation.inviterUsername = session.username;
         invitation.fromUsername = session.username;
-        invitation.updatedAt = nowIso;
+        invitation.updatedAt = nextMonotonicIso(invitation.updatedAt || invitation.createdAt);
         invitation.expiresAt = new Date(now + this.INVITE_TTL_MS).toISOString();
       } else {
         invitation = {
@@ -1846,11 +1869,25 @@
       authGuard.verifySession(session);
       userService.ensureSessionUser(session);
       const invites = this.getAllInvitations();
-      const inv = invites.find(i => i && i.id === invitationId);
+      let inv = invites.find(i => i && i.id === invitationId);
 
+      // Eğer davet kaydı yerel listede yoksa bildirim meta verisinden kurtar
       if (!inv) {
+        const userNotifs = notificationService.getUserNotifications(session.username);
+        const matchedNotif = userNotifs.find(
+          n => n && n.meta && n.meta.invitationId === invitationId && n.meta.partyCode
+        );
+        if (matchedNotif) {
+          const joined = this.joinPartyByCode(session, matchedNotif.meta.partyCode);
+          notificationService.updateNotificationMeta(session.username, matchedNotif.id, {
+            invitationStatus: 'ACCEPTED',
+            inviteStatus: 'ACCEPTED'
+          });
+          return joined;
+        }
         throw new Error('Parti daveti bulunamadı.');
       }
+
       if (inv.recipientUsername.toLowerCase() !== session.username.toLowerCase()) {
         throw new Error('Bu parti daveti size ait değil.');
       }
@@ -1867,7 +1904,7 @@
         throw new Error('Reddedilmiş bir parti daveti kabul edilemez.');
       }
 
-      const nowIso = new Date().toISOString();
+      const nowIso = nextMonotonicIso(party?.updatedAt || inv.updatedAt || inv.createdAt);
       if (
         inv.status === 'EXPIRED' ||
         (inv.expiresAt && new Date(inv.expiresAt).getTime() < Date.now())
@@ -1906,6 +1943,9 @@
             p.members = p.members.filter(
               m => m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()
             );
+            p.removedMembers = Array.from(
+              new Set([...(p.removedMembers || []), session.username.toLowerCase()])
+            );
             if (p.members.length === 0) p.status = 'CLOSED';
             else if (
               p.leaderUsername &&
@@ -1913,10 +1953,14 @@
             ) {
               p.leaderUsername = p.members[0].username;
             }
-            p.updatedAt = nowIso;
+            p.updatedAt = nextMonotonicIso(p.updatedAt || p.createdAt);
           }
         }
       });
+
+      party.removedMembers = (party.removedMembers || []).filter(
+        u => String(u).toLowerCase() !== session.username.toLowerCase()
+      );
 
       if (
         !party.members.some(
@@ -1971,6 +2015,17 @@
       const inv = invites.find(i => i && i.id === invitationId);
 
       if (!inv) {
+        const userNotifs = notificationService.getUserNotifications(session.username);
+        const matchedNotif = userNotifs.find(
+          n => n && n.meta && n.meta.invitationId === invitationId
+        );
+        if (matchedNotif) {
+          notificationService.updateNotificationMeta(session.username, matchedNotif.id, {
+            invitationStatus: 'REJECTED',
+            inviteStatus: 'REJECTED'
+          });
+          return { id: invitationId, status: 'REJECTED' };
+        }
         throw new Error('Parti daveti bulunamadı.');
       }
       if (inv.recipientUsername.toLowerCase() !== session.username.toLowerCase()) {
@@ -1980,7 +2035,7 @@
         return inv;
       }
 
-      const nowIso = new Date().toISOString();
+      const nowIso = nextMonotonicIso(inv.updatedAt || inv.createdAt);
       inv.status = 'REJECTED';
       inv.respondedAt = nowIso;
       inv.updatedAt = nowIso;
@@ -2026,10 +2081,12 @@
         throw new Error('Yalnızca parti lideri oyuncu çıkarabilir.');
       }
 
+      const targetClean = String(targetUsername).trim().toLowerCase();
       party.members = (party.members || []).filter(
-        m => m && m.username && m.username.toLowerCase() !== String(targetUsername).trim().toLowerCase()
+        m => m && m.username && m.username.toLowerCase() !== targetClean
       );
-      party.updatedAt = new Date().toISOString();
+      party.removedMembers = Array.from(new Set([...(party.removedMembers || []), targetClean]));
+      party.updatedAt = nextMonotonicIso(party.updatedAt || party.createdAt);
       this._saveAllParties(parties);
 
       notificationService.notifyUser(targetUsername, {
@@ -2047,13 +2104,15 @@
       const party = parties.find(p => p && p.partyId === partyId);
       if (!party) return true;
 
+      const selfClean = session.username.toLowerCase();
       party.members = (party.members || []).filter(
-        m => m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()
+        m => m && m.username && m.username.toLowerCase() !== selfClean
       );
+      party.removedMembers = Array.from(new Set([...(party.removedMembers || []), selfClean]));
 
       if (party.members.length === 0) {
         party.status = 'CLOSED';
-      } else if (party.leaderUsername.toLowerCase() === session.username.toLowerCase()) {
+      } else if (party.leaderUsername.toLowerCase() === selfClean) {
         party.leaderUsername = party.members[0].username;
         notificationService.notifyUser(party.leaderUsername, {
           type: 'PARTY_UPDATE',
@@ -2062,7 +2121,7 @@
         });
       }
 
-      party.updatedAt = new Date().toISOString();
+      party.updatedAt = nextMonotonicIso(party.updatedAt || party.createdAt);
       this._saveAllParties(parties);
       activityService.log(
         'PARTY_LEAVE',
@@ -2086,7 +2145,7 @@
       }
 
       party.status = 'IN_GAME';
-      party.updatedAt = new Date().toISOString();
+      party.updatedAt = nextMonotonicIso(party.updatedAt || party.createdAt);
       this._saveAllParties(parties);
 
       (party.members || []).forEach(m => {
@@ -2772,16 +2831,20 @@
       return Number.isNaN(t) ? 0 : t;
     },
 
-    _mergePartyMembers(localMembers, remoteMembers) {
+    _mergePartyMembers(localMembers, remoteMembers, removedSet = new Set()) {
       const mMap = new Map();
       (Array.isArray(localMembers) ? localMembers : []).forEach(m => {
         if (m && m.username) {
-          mMap.set(m.username.toLowerCase(), { ...m });
+          const k = m.username.toLowerCase();
+          if (!removedSet.has(k)) {
+            mMap.set(k, { ...m });
+          }
         }
       });
       (Array.isArray(remoteMembers) ? remoteMembers : []).forEach(rm => {
         if (!rm || !rm.username) return;
         const k = rm.username.toLowerCase();
+        if (removedSet.has(k)) return;
         const existing = mMap.get(k);
         if (!existing) {
           mMap.set(k, { ...rm });
@@ -2838,22 +2901,33 @@
             lItem.updatedAt || lItem.respondedAt || lItem.lastLoginAt || lItem.createdAt
           );
           if (idField === 'partyId') {
-            if (rTime > lTime) {
-              const mergedMembers =
-                rItem.status === 'CLOSED'
-                  ? rItem.members || []
-                  : this._mergePartyMembers(lItem.members, rItem.members);
-              map.set(key, { ...lItem, ...rItem, members: mergedMembers });
+            const mergedRemoved = Array.from(
+              new Set([...(lItem.removedMembers || []), ...(rItem.removedMembers || [])])
+            );
+            const removedSet = new Set(mergedRemoved.map(x => String(x).toLowerCase()));
+            const isClosed = lItem.status === 'CLOSED' || rItem.status === 'CLOSED';
+            const mergedMembers = isClosed
+              ? rTime >= lTime
+                ? rItem.members || []
+                : lItem.members || []
+              : this._mergePartyMembers(lItem.members, rItem.members, removedSet);
+
+            const baseParty = rTime >= lTime ? { ...lItem, ...rItem } : { ...rItem, ...lItem };
+            if (isClosed) baseParty.status = 'CLOSED';
+            baseParty.members = mergedMembers;
+            baseParty.removedMembers = mergedRemoved;
+
+            const lMemberNames = (lItem.members || []).map(m => m.username.toLowerCase()).sort().join(',');
+            const rMemberNames = (rItem.members || []).map(m => m.username.toLowerCase()).sort().join(',');
+            const mMemberNames = mergedMembers.map(m => m.username.toLowerCase()).sort().join(',');
+
+            if (rTime > lTime || mMemberNames !== lMemberNames) {
+              map.set(key, baseParty);
               changedLocal = true;
-            } else if (lTime > rTime) {
+            }
+            if (lTime > rTime || mMemberNames !== rMemberNames) {
+              map.set(key, baseParty);
               localHasUnpushed = true;
-            } else {
-              const mergedMembers = this._mergePartyMembers(lItem.members, rItem.members);
-              if (mergedMembers.length !== (lItem.members || []).length) {
-                map.set(key, { ...lItem, ...rItem, members: mergedMembers });
-                changedLocal = true;
-                localHasUnpushed = true;
-              }
             }
           } else if (rTime > lTime) {
             const merged = { ...lItem, ...rItem };
@@ -2986,6 +3060,19 @@
           if (itemMerge.localHasUnpushed) anyNeedsPush = true;
         }
 
+        // 4b. Leaderboard Meta birleştir
+        if (remoteData.leaderboardMeta && typeof remoteData.leaderboardMeta === 'object') {
+          const localLbMeta = storage.get(ECONOMY_STORAGE_KEYS.LEADERBOARD_META, null);
+          const rLbTime = this._parseTime(remoteData.leaderboardMeta.lastResetAt);
+          const lLbTime = this._parseTime(localLbMeta?.lastResetAt);
+          if (rLbTime > lLbTime) {
+            storage.set(ECONOMY_STORAGE_KEYS.LEADERBOARD_META, remoteData.leaderboardMeta);
+            anyLocalChanged = true;
+          } else if (lLbTime > rLbTime) {
+            anyNeedsPush = true;
+          }
+        }
+
         // 5. Partileri ve Davetleri birleştir
         if (Array.isArray(remoteData.parties)) {
           const partyMerge = this._mergeArraysById(
@@ -3027,11 +3114,13 @@
             const lList = Array.isArray(localNotifs[uKey]) ? localNotifs[uKey] : [];
             const rList = Array.isArray(remoteData.notifications[uKey]) ? remoteData.notifications[uKey] : [];
             const byId = new Map();
+            const rIds = new Set();
             lList.forEach(n => {
               if (n && n.id) byId.set(n.id, n);
             });
             rList.forEach(rn => {
               if (!rn || !rn.id) return;
+              rIds.add(rn.id);
               const ln = byId.get(rn.id);
               if (!ln) {
                 byId.set(rn.id, rn);
@@ -3045,6 +3134,11 @@
               ) {
                 byId.set(rn.id, { ...ln, meta: { ...(ln.meta || {}), ...(rn.meta || {}) } });
                 notifChanged = true;
+              }
+            });
+            lList.forEach(ln => {
+              if (ln && ln.id && !rIds.has(ln.id)) {
+                anyNeedsPush = true;
               }
             });
             mergedNotifs[uKey] = Array.from(byId.values())
@@ -3078,6 +3172,22 @@
             if (colMerge.localHasUnpushed) anyNeedsPush = true;
           }
         });
+
+        // 7b. Platform Ayarları ve Moderatör İzinlerini birleştir
+        if (remoteData.platformSettings && typeof remoteData.platformSettings === 'object') {
+          const localPs = storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, null);
+          if (!localPs) {
+            storage.set(STORAGE_KEYS.PLATFORM_SETTINGS, remoteData.platformSettings);
+            anyLocalChanged = true;
+          }
+        }
+        if (remoteData.modPermissions && typeof remoteData.modPermissions === 'object') {
+          const localMp = storage.get(STORAGE_KEYS.MOD_PERMISSIONS, null);
+          if (!localMp) {
+            storage.set(STORAGE_KEYS.MOD_PERMISSIONS, remoteData.modPermissions);
+            anyLocalChanged = true;
+          }
+        }
 
         // 8. Gemini AI Config birleştir
         if (remoteData.aiConfig && typeof remoteData.aiConfig === 'object') {
@@ -3229,32 +3339,38 @@
     },
 
     async syncNow() {
-      if (this._isSyncing) return false;
-      this._isSyncing = true;
-      try {
-        const remoteData = await this.pullFromCloud();
-        if (remoteData) {
-          const { changedLocal, needsPush } = this._mergeAndSave(remoteData);
-          this._lastSyncAt = new Date().toISOString();
-          if (needsPush) {
-            await this.pushToCloud();
-          }
-          if (changedLocal && typeof window !== 'undefined') {
-            window.dispatchEvent(
-              new CustomEvent('mcm:cloud-synced', {
-                detail: { syncedAt: this._lastSyncAt }
-              })
-            );
-          }
-          return true;
-        } else {
-          // Uzak sunucu henüz boşsa yerel veriyi gönder
-          await this.pushToCloud();
-          return true;
-        }
-      } finally {
-        this._isSyncing = false;
+      if (this._syncPromise) {
+        return await this._syncPromise;
       }
+      this._isSyncing = true;
+      this._syncPromise = (async () => {
+        try {
+          const remoteData = await this.pullFromCloud();
+          if (remoteData) {
+            const { changedLocal, needsPush } = this._mergeAndSave(remoteData);
+            this._lastSyncAt = new Date().toISOString();
+            if (needsPush) {
+              await this.pushToCloud();
+            }
+            if (changedLocal && typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('mcm:cloud-synced', {
+                  detail: { syncedAt: this._lastSyncAt }
+                })
+              );
+            }
+            return true;
+          } else {
+            // Uzak sunucu henüz boşsa yerel veriyi gönder
+            await this.pushToCloud();
+            return true;
+          }
+        } finally {
+          this._isSyncing = false;
+          this._syncPromise = null;
+        }
+      })();
+      return await this._syncPromise;
     },
 
     async pullAndMerge(force = false) {
@@ -3266,24 +3382,34 @@
         clearTimeout(this._pushTimer);
         this._pushTimer = null;
       }
-      if (this._isSyncing) return false;
-      this._isSyncing = true;
-      try {
-        const remoteData = await this.pullFromCloud();
-        if (remoteData) {
-          const { changedLocal } = this._mergeAndSave(remoteData);
-          if (changedLocal && typeof window !== 'undefined') {
-            window.dispatchEvent(
-              new CustomEvent('mcm:cloud-synced', {
-                detail: { syncedAt: new Date().toISOString() }
-              })
-            );
-          }
+      if (this._syncPromise) {
+        try {
+          await this._syncPromise;
+        } catch (e) {
+          // ignore prior sync error and proceed with push
         }
-        return await this.pushToCloud();
-      } finally {
-        this._isSyncing = false;
       }
+      this._isSyncing = true;
+      this._syncPromise = (async () => {
+        try {
+          const remoteData = await this.pullFromCloud();
+          if (remoteData) {
+            const { changedLocal } = this._mergeAndSave(remoteData);
+            if (changedLocal && typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('mcm:cloud-synced', {
+                  detail: { syncedAt: new Date().toISOString() }
+                })
+              );
+            }
+          }
+          return await this.pushToCloud();
+        } finally {
+          this._isSyncing = false;
+          this._syncPromise = null;
+        }
+      })();
+      return await this._syncPromise;
     },
 
     schedulePush(delayMs = 300) {
@@ -3340,8 +3466,10 @@
   const DEFAULT_AI_CONFIG = {
     encryptedApiKey: '',
     model: 'gemini-3.8-flash',
+    batchSize: 15,
     enabled: true,
     autoGenerateOnGameStart: true,
+    autoGenerateBeforeMatch: true,
     lastGeneratedAt: null,
     updatedAt: null
   };
@@ -3377,6 +3505,12 @@
     }
   }
 
+  function normalizeQuestionKey(str) {
+    return String(str || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9çğıöşü]/gi, '');
+  }
+
   const aiQuestionService = {
     _isGenerating: false,
 
@@ -3398,6 +3532,10 @@
       return Boolean(key && key.length >= 16);
     },
 
+    hasConfiguredApiKey() {
+      return this.isConfigured();
+    },
+
     getPublicStatus() {
       const cfg = this.getConfig();
       const key = this._getDecryptedApiKey();
@@ -3408,13 +3546,20 @@
       const pool = this.getAllAiQuestions();
       return {
         configured: hasKey,
+        hasKey,
         maskedKey,
         model: cfg.model || 'gemini-3.8-flash',
+        batchSize: Number(cfg.batchSize || 15),
         enabled: cfg.enabled !== false,
         autoGenerateOnGameStart: cfg.autoGenerateOnGameStart !== false,
+        autoGenerateBeforeMatch:
+          cfg.autoGenerateBeforeMatch !== undefined
+            ? cfg.autoGenerateBeforeMatch !== false
+            : cfg.autoGenerateOnGameStart !== false,
         lastGeneratedAt: cfg.lastGeneratedAt || null,
         updatedAt: cfg.updatedAt || null,
         totalPoolCount: pool.length,
+        poolCount: pool.length,
         easyCount: pool.filter(q => q.difficulty === 'easy').length,
         mediumCount: pool.filter(q => q.difficulty === 'medium').length,
         hardCount: pool.filter(q => q.difficulty === 'hard').length,
@@ -3422,7 +3567,19 @@
       };
     },
 
-    updateConfig(session, { apiKey, model, enabled, autoGenerateOnGameStart } = {}) {
+    getAdminViewConfig(session) {
+      const status = this.getPublicStatus();
+      const isAdmin = Boolean(session && (session.role === 'ADMIN' || session.rank === 'ADMIN'));
+      return {
+        ...status,
+        apiKey: isAdmin ? this._getDecryptedApiKey() : status.maskedKey
+      };
+    },
+
+    updateConfig(
+      session,
+      { apiKey, model, batchSize, enabled, autoGenerateOnGameStart, autoGenerateBeforeMatch } = {}
+    ) {
       authGuard.requireRole(session, ['ADMIN']);
       const current = this.getConfig();
       let nextEncryptedKey = current.encryptedApiKey;
@@ -3433,16 +3590,22 @@
         nextEncryptedKey = encodeObfuscatedKey(apiKey.trim());
       }
 
+      const resolvedAutoGen =
+        autoGenerateBeforeMatch !== undefined
+          ? Boolean(autoGenerateBeforeMatch)
+          : autoGenerateOnGameStart !== undefined
+          ? Boolean(autoGenerateOnGameStart)
+          : current.autoGenerateOnGameStart !== false;
+
       const next = {
         ...current,
         encryptedApiKey: nextEncryptedKey,
         model: String(model || current.model || 'gemini-3.8-flash').trim(),
+        batchSize: Math.max(3, Math.min(30, Number(batchSize || current.batchSize || 15))),
         enabled: enabled !== undefined ? Boolean(enabled) : current.enabled !== false,
-        autoGenerateOnGameStart:
-          autoGenerateOnGameStart !== undefined
-            ? Boolean(autoGenerateOnGameStart)
-            : current.autoGenerateOnGameStart !== false,
-        updatedAt: new Date().toISOString()
+        autoGenerateOnGameStart: resolvedAutoGen,
+        autoGenerateBeforeMatch: resolvedAutoGen,
+        updatedAt: nextMonotonicIso(current.updatedAt)
       };
 
       storage.set(STORAGE_KEYS.AI_CONFIG, next);
@@ -3460,8 +3623,16 @@
       return Array.isArray(list) ? list : [];
     },
 
+    getAiQuestionPool() {
+      return this.getAllAiQuestions();
+    },
+
     getQuestionsByDifficulty(difficulty) {
       return this.getAllAiQuestions().filter(q => q && q.difficulty === difficulty);
+    },
+
+    getAiQuestionsByDifficulty(difficulty) {
+      return this.getQuestionsByDifficulty(difficulty);
     },
 
     getSeenQuestions() {
@@ -3469,12 +3640,18 @@
       return new Set(Array.isArray(list) ? list : []);
     },
 
+    getSeenQuestionKeys() {
+      const list = storage.get(STORAGE_KEYS.SEEN_QUESTIONS, []);
+      const arr = Array.isArray(list) ? list : [];
+      return new Set(arr.map(x => normalizeQuestionKey(x)));
+    },
+
     markQuestionsSeen(questions = []) {
       if (!Array.isArray(questions) || questions.length === 0) return;
       const seenList = storage.get(STORAGE_KEYS.SEEN_QUESTIONS, []);
       const safeList = Array.isArray(seenList) ? [...seenList] : [];
       questions.forEach(q => {
-        const text = String(q?.q || q || '').trim();
+        const text = String(q?.q || q?.question || q || '').trim();
         if (text && !safeList.includes(text)) {
           safeList.push(text);
         }
@@ -3491,6 +3668,10 @@
       storage.set(STORAGE_KEYS.AI_QUESTIONS, []);
       cloudSyncService.pushNow().catch(() => {});
       return true;
+    },
+
+    clearAiQuestions(session) {
+      return this.clearAiQuestionPool(session);
     },
 
     async _callGeminiRaw(apiKey, preferredModel, promptText) {
@@ -3631,7 +3812,11 @@
         throw new Error('Yönetici Panelinde kayıtlı geçerli bir Gemini API anahtarı bulunamadı.');
       }
       if (this._isGenerating) {
-        return [];
+        const currentPool = this.getAllAiQuestions();
+        const emptyArr = [];
+        emptyArr.addedCount = 0;
+        emptyArr.totalPool = currentPool.length;
+        return emptyArr;
       }
 
       this._isGenerating = true;
@@ -3642,7 +3827,7 @@
           ...existingPool.slice(0, 20).map(x => x.q)
         ].filter(Boolean);
 
-        const perTier = Math.max(1, Math.floor(count / 3));
+        const perTier = Math.max(1, Math.floor((count || cfg.batchSize || 9) / 3));
         const prompt = `Sen profesyonel bir "Minecraft Kim Milyoner Olmak İster" yarışması soru yazarısın.
 Bana tamamen Türkçe, özgün, doğru ve daha önce sorulmamış ${perTier * 3} adet Minecraft bilgi yarışması sorusu üret:
 - ${perTier} adet "easy" (kolay: temel bloklar, yaratıklar, çalışma masası, madenler, hayatta kalma)
@@ -3685,14 +3870,17 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         if (currentPool.length > 250) currentPool.length = 250;
         storage.set(STORAGE_KEYS.AI_QUESTIONS, currentPool);
 
+        const prevCfg = this.getConfig();
         const nextCfg = {
-          ...this.getConfig(),
+          ...prevCfg,
           lastGeneratedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          updatedAt: nextMonotonicIso(prevCfg.updatedAt)
         };
         storage.set(STORAGE_KEYS.AI_CONFIG, nextCfg);
 
         cloudSyncService.schedulePush(200);
+        added.addedCount = added.length;
+        added.totalPool = currentPool.length;
         return added;
       } finally {
         this._isGenerating = false;

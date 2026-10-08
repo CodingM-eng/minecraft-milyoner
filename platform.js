@@ -215,6 +215,7 @@
     if (norm === 'MVIP') return 'role-badge role-mvip';
     if (norm === 'VIP_PLUS') return 'role-badge role-vip-plus';
     if (norm === 'VIP') return 'role-badge role-vip';
+    if (norm !== 'MEMBER') return 'role-badge role-mvip-plus';
     return 'role-badge role-member';
   }
 
@@ -1328,7 +1329,7 @@
   // ==========================================
   // OYUNCU PROFİL KARTI MODALI (Liderlik, Parti, Admin ve Önerilerden Tıklanabilir)
   // ==========================================
-  function openPlayerProfileModal(username) {
+  function openPlayerProfileModal(username, _isRetry = false) {
     if (!username) return;
     const session = getSession();
     const {
@@ -1339,12 +1340,67 @@
       achievementService
     } = svc();
 
+    const modal = document.getElementById('modal-player-profile');
+    if (!modal) return;
+
+    const modalBody = document.getElementById('modal-player-profile-body');
+    if (modalBody && !document.getElementById('modal-player-profile-hero')) {
+      modalBody.innerHTML = `
+        <div class="profile-hero-card" id="modal-player-profile-hero" style="margin-bottom: 16px;">
+          <div class="profile-avatar-wrapper" id="modal-player-profile-frame">
+            <img id="modal-player-profile-avatar" src="" alt="Oyuncu Avatarı" class="profile-avatar-lg" />
+          </div>
+          <div class="profile-identity-info">
+            <div class="profile-name-row">
+              <h3 id="modal-player-profile-username">Oyuncu</h3>
+              <span id="modal-player-profile-rank" class="role-badge role-member">Üye</span>
+              <span id="modal-player-profile-badge"></span>
+            </div>
+            <p class="profile-mc-sub" id="modal-player-profile-mcname">Minecraft Hesabı: -</p>
+            <p class="profile-joined-sub" id="modal-player-profile-joined">Katılım Tarihi: -</p>
+          </div>
+        </div>
+        <div class="stats-kpi-grid" style="grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px;">
+          <div class="stat-kpi-card">
+            <span class="kpi-label">TOPLAM PUAN</span>
+            <strong class="kpi-val gold-text" id="modal-player-profile-points">₺0</strong>
+          </div>
+          <div class="stat-kpi-card">
+            <span class="kpi-label">KAZANILAN / OYNANAN</span>
+            <strong class="kpi-val" id="modal-player-profile-wins">0 / 0</strong>
+          </div>
+          <div class="stat-kpi-card">
+            <span class="kpi-label">ZÜMRÜT BAKİYESİ</span>
+            <strong class="kpi-val emerald-text" id="modal-player-profile-emeralds">0</strong>
+          </div>
+          <div class="stat-kpi-card">
+            <span class="kpi-label">NETHERITE BAKİYESİ</span>
+            <strong class="kpi-val netherite-text" id="modal-player-profile-netherite">0</strong>
+          </div>
+        </div>
+        <div class="mc-card" style="padding: 12px; margin-bottom: 16px;">
+          <h4 style="margin-bottom: 8px; font-size: 0.9rem;">🏆 Açılan Başarım Rozetleri</h4>
+          <div id="modal-player-profile-achievements" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+        </div>
+        <div class="modal-actions-row" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end;">
+          <button type="button" id="btn-modal-invite-to-party" class="mc-btn mc-btn-primary mc-btn-sm">⚔️ Partiye Davet Et</button>
+          <button type="button" id="btn-modal-gift-rank-player" class="mc-btn mc-btn-gold mc-btn-sm">🎁 Rütbe Hediye Et</button>
+          <button type="button" id="btn-close-player-profile-footer" class="mc-btn mc-btn-secondary mc-btn-sm">Kapat</button>
+        </div>
+      `;
+    }
+
     let user = userService?.getUserByUsername(username);
     if (!user) {
-      try {
-        svc().cloudSyncService?.syncNow();
-      } catch (e) {
-        // ignore
+      if (!_isRetry && svc().cloudSyncService?.syncNow) {
+        svc()
+          .cloudSyncService.syncNow()
+          .then(() => {
+            if (!modal.classList.contains('hidden') && userService?.getUserByUsername(username)) {
+              openPlayerProfileModal(username, true);
+            }
+          })
+          .catch(() => {});
       }
       user = userService?.getUserByUsername(username) || {
         username: String(username).trim(),
@@ -1357,9 +1413,6 @@
         createdAt: new Date().toISOString()
       };
     }
-
-    const modal = document.getElementById('modal-player-profile');
-    if (!modal) return;
 
     const rank = rankService.getUserRank(user.username);
     const cosMeta = getUserCosmeticMeta(user);
@@ -1474,7 +1527,7 @@
     document.getElementById('modal-player-profile')?.classList.add('hidden');
   }
 
-  function proceedGiftRankStep2() {
+  async function proceedGiftRankStep2() {
     const session = getSession();
     if (!session) return;
     const { userService, rankService } = svc();
@@ -1500,7 +1553,15 @@
       return;
     }
 
-    const recipient = userService.getUserByUsername(friendName);
+    let recipient = userService.getUserByUsername(friendName);
+    if (!recipient && svc().cloudSyncService?.syncNow) {
+      try {
+        await svc().cloudSyncService.syncNow();
+        recipient = userService.getUserByUsername(friendName);
+      } catch (e) {
+        // ignore
+      }
+    }
     if (!recipient) {
       showErr(`"${friendName}" adında kayıtlı bir oyuncu bulunamadı!`);
       return;
@@ -1540,6 +1601,7 @@
         paymentMethod: 'NETHERITE'
       });
 
+      svc().cloudSyncService?.pushNow();
       closeGiftRankModal();
       showToast(
         `${res.recipientUsername} adlı arkadaşınıza ${res.rank.name} rütbesi başarıyla hediye edildi!`,
@@ -2773,6 +2835,7 @@
                   <option value="Cosmetics">Kozmetikler (Cosmetics)</option>
                   <option value="Special">Özel Ürünler (Special)</option>
                   <option value="Emeralds">Zümrüt Paketleri (Emeralds)</option>
+                  <option value="Netherite">Netherite Bakiye (Netherite)</option>
                 </select>
               </div>
             </div>
@@ -3226,9 +3289,12 @@
               <div class="input-group">
                 <label>GEMINI MODELİ</label>
                 <select id="adm-ai-model">
+                  <option value="gemini-3.8-flash" ${
+                    aiCfg.model === 'gemini-3.8-flash' ? 'selected' : ''
+                  }>gemini-3.8-flash (Önerilen En Yeni &amp; Hızlı)</option>
                   <option value="gemini-2.5-flash" ${
                     aiCfg.model === 'gemini-2.5-flash' ? 'selected' : ''
-                  }>gemini-2.5-flash (Önerilen Hızlı &amp; Akıllı)</option>
+                  }>gemini-2.5-flash</option>
                   <option value="gemini-2.0-flash" ${
                     aiCfg.model === 'gemini-2.0-flash' ? 'selected' : ''
                   }>gemini-2.0-flash</option>
@@ -3814,6 +3880,11 @@
         const invitationId = acceptInviteBtn.getAttribute('data-accept-party-invite');
         const notifId = acceptInviteBtn.getAttribute('data-notif-id');
         try {
+          try {
+            await svc().cloudSyncService?.syncNow();
+          } catch (syncErr) {
+            // ignore
+          }
           const party = svc().partyService.acceptPartyInvitation(session, invitationId);
           if (notifId) {
             svc().notificationService?.markAsRead(session.username, notifId);
@@ -3861,6 +3932,11 @@
         if (!session) return;
         const code = notifJoinBtn.getAttribute('data-notif-join-party');
         try {
+          try {
+            await svc().cloudSyncService?.syncNow();
+          } catch (syncErr) {
+            // ignore
+          }
           const party = svc().partyService.joinPartyByCode(session, code);
           svc().cloudSyncService?.pushNow();
           showToast(`🎉 "${party.partyName}" partisine katıldınız!`, 'success');
@@ -3878,6 +3954,11 @@
         if (!session) return;
         const code = quickJoinBtn.getAttribute('data-quick-join-party');
         try {
+          try {
+            await svc().cloudSyncService?.syncNow();
+          } catch (syncErr) {
+            // ignore
+          }
           const party = svc().partyService.joinPartyByCode(session, code);
           svc().cloudSyncService?.pushNow();
           showToast(`🎉 "${party.partyName}" partisine katıldınız!`, 'success');
@@ -4483,6 +4564,11 @@
       else if (state.currentScreen === 'shop') renderShop();
       else if (state.currentScreen === 'profile') renderProfile();
       else if (state.currentScreen === 'party') renderParty();
+      else if (state.currentScreen === 'notifications') renderNotifications();
+      else if (state.currentScreen === 'support') renderSupport();
+      else if (state.currentScreen === 'bug-report') renderBugReports();
+      else if (state.currentScreen === 'suggestions') renderSuggestions();
+      else if (state.currentScreen === 'stats') renderStats();
       else if (state.currentScreen === 'admin') {
         const activeTag = document.activeElement?.tagName;
         if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && activeTag !== 'SELECT') {

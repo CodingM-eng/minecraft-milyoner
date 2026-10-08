@@ -1292,9 +1292,20 @@
     const allayEl = document.getElementById('ambient-mob-allay');
     const villagerEl = document.getElementById('ambient-mob-villager');
 
+    const showSpeechBubble = (speechId, duration = 1800) => {
+      const bubble = document.getElementById(speechId);
+      if (!bubble) return;
+      bubble.classList.remove('hidden');
+      if (bubble._hideTimer) clearTimeout(bubble._hideTimer);
+      bubble._hideTimer = setTimeout(() => {
+        bubble.classList.add('hidden');
+      }, duration);
+    };
+
     if (endermanEl) {
       const triggerEndermanTeleport = () => {
         soundEngine.endermanTeleport();
+        showSpeechBubble('ambient-enderman-speech', 1600);
         endermanEl.classList.add('is-teleporting');
         const offsetX = Math.floor((Math.random() - 0.5) * 220);
         const offsetY = Math.floor(Math.random() * -28);
@@ -1316,6 +1327,7 @@
     if (creeperEl) {
       creeperEl.addEventListener('click', () => {
         soundEngine.creeperHissAndBoom();
+        showSpeechBubble('ambient-creeper-speech', 1600);
         creeperEl.classList.remove('is-exploding');
         void creeperEl.offsetWidth;
         creeperEl.classList.add('is-exploding');
@@ -1328,6 +1340,7 @@
     if (allayEl) {
       allayEl.addEventListener('click', () => {
         soundEngine.win();
+        showSpeechBubble('ambient-allay-speech', 1800);
         allayEl.classList.remove('is-dancing');
         void allayEl.offsetWidth;
         allayEl.classList.add('is-dancing');
@@ -1340,6 +1353,7 @@
     if (villagerEl) {
       villagerEl.addEventListener('click', () => {
         soundEngine.villagerHrmmm();
+        showSpeechBubble('ambient-villager-speech', 2200);
         villagerEl.classList.toggle('walked-right');
       });
     }

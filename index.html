@@ -14,7 +14,7 @@
     rel="stylesheet" />
   <link rel="icon" type="image/svg+xml"
     href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%2310b981'/%3E%3Cpath d='M3 3h10v10H3z' fill='%23059669'/%3E%3Ctext x='8' y='12' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='11' fill='%23ffffff'%3E%3F%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="style.css?v=8.4" />
+  <link rel="stylesheet" href="style.css?v=8.6" />
 </head>
 
 <body>
@@ -1345,12 +1345,65 @@
   <!-- 4. 👤 Oyuncu Profil Kartı Modalı (Liderlik Tablosu, Parti ve Yönetici Panelinden Oyuncu İnceleme) -->
   <div id="modal-player-profile" class="mc-modal-overlay hidden" role="dialog" aria-modal="true"
     aria-labelledby="modal-player-profile-title">
-    <div class="mc-modal-card player-profile-modal-card" id="modal-player-profile-card">
+    <div class="mc-modal-card player-profile-modal-card" id="modal-player-profile-card" style="max-width: 560px;">
       <div class="mc-modal-header">
         <h3 id="modal-player-profile-title">👤 Oyuncu Profil Kartı</h3>
         <button type="button" id="btn-close-player-profile-modal" class="drawer-close-btn">✕</button>
       </div>
-      <div class="mc-modal-body" id="modal-player-profile-body"></div>
+      <div class="mc-modal-body" id="modal-player-profile-body">
+        <div class="profile-hero-card" id="modal-player-profile-hero" style="margin-bottom: 14px;">
+          <div class="profile-avatar-wrapper" id="modal-player-profile-frame">
+            <img id="modal-player-profile-avatar" class="profile-avatar-lg"
+              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231e293b'/%3E%3C/svg%3E"
+              alt="Oyuncu Avatarı" />
+          </div>
+          <div class="profile-identity">
+            <div class="profile-name-row" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+              <h3 id="modal-player-profile-username" style="margin:0;">Oyuncu</h3>
+              <span id="modal-player-profile-rank" class="role-badge role-member">🌱 Üye</span>
+              <span id="modal-player-profile-badge"></span>
+            </div>
+            <p id="modal-player-profile-mcname" class="profile-mc-sub" style="margin:6px 0 2px;">🎮 Minecraft Hesabı: -</p>
+            <p id="modal-player-profile-joined" class="profile-joined-sub" style="margin:0;font-size:0.8rem;opacity:0.8;">Katılım Tarihi: -</p>
+          </div>
+        </div>
+
+        <div class="stats-kpi-grid" style="grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px;">
+          <div class="stat-kpi-card">
+            <span class="kpi-label">TOPLAM PUAN</span>
+            <strong class="kpi-val gold-text" id="modal-player-profile-points">0 ₺</strong>
+          </div>
+          <div class="stat-kpi-card">
+            <span class="kpi-label">GALİBİYET / OYUN</span>
+            <strong class="kpi-val" id="modal-player-profile-wins">0 / 0</strong>
+          </div>
+          <div class="stat-kpi-card">
+            <span class="kpi-label">ZÜMRÜT BAKİYESİ</span>
+            <strong class="kpi-val emerald-text" id="modal-player-profile-emeralds">0</strong>
+          </div>
+          <div class="stat-kpi-card">
+            <span class="kpi-label">NETHERITE BAKİYESİ</span>
+            <strong class="kpi-val netherite-text" id="modal-player-profile-netherite">0</strong>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <h4 style="font-size: 0.85rem; margin: 0 0 8px; color: var(--gold);">🏅 Kazanılan Başarım Rozetleri</h4>
+          <div id="modal-player-profile-achievements" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+        </div>
+
+        <div class="mc-modal-actions" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;">
+          <button type="button" id="btn-modal-invite-to-party" class="mc-btn mc-btn-primary">
+            🎉 Partiye Davet Et
+          </button>
+          <button type="button" id="btn-modal-gift-rank-player" class="mc-btn mc-btn-gold">
+            🎁 Rütbe Hediye Et
+          </button>
+          <button type="button" id="btn-close-player-profile-footer" class="mc-btn mc-btn-secondary">
+            Kapat
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1458,12 +1511,12 @@
   </div>
 
   <!-- Servis Katmanları ve Uygulama Kodları -->
-  <script src="questions.js?v=8.5"></script>
-  <script src="audio.js?v=8.5"></script>
-  <script src="services.js?v=8.5"></script>
-  <script src="economy.js?v=8.5"></script>
-  <script src="platform.js?v=8.5"></script>
-  <script src="app.js?v=8.5"></script>
+  <script src="questions.js?v=8.6"></script>
+  <script src="audio.js?v=8.6"></script>
+  <script src="services.js?v=8.6"></script>
+  <script src="economy.js?v=8.6"></script>
+  <script src="platform.js?v=8.6"></script>
+  <script src="app.js?v=8.6"></script>
 </body>
 
 </html>
