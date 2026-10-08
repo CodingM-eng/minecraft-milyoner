@@ -272,7 +272,9 @@
         upper === 'EMERALD' ||
         upper === 'FRAME_EMERALD' ||
         upper === 'EMERALD_COLLECTOR' ||
-        upper.startsWith('PACK_EMERALD_')
+        upper.startsWith('EMERALD_PACK_') ||
+        upper.startsWith('PACK_EMERALD_') ||
+        upper.startsWith('STRIPE_EMERALD_')
       ) {
         return this.getEmeraldSvg(size);
       }
@@ -324,8 +326,11 @@
       if (upper === 'TROPHY' || upper === 'FIRST_WIN') return '🏆';
       if (upper === 'ROCKET' || upper === 'ITEM_TOURNAMENT_BOOST') return '🚀';
       if (upper === 'PARTY_CHAMPION') return '🎉';
-      if (upper === 'STRIPE_EMERALD_1000') return '💳';
-      if (upper === 'STRIPE_EMERALD_5000') return '🏦';
+
+      // Eğer bilinmeyen bir teknik ID (örn: ITEM_123) geldiyse asla düz metin olarak basma
+      if (/^[A-Z0-9_-]{3,}$/i.test(key)) {
+        return this.getEmeraldSvg(size);
+      }
 
       return `<span>${key}</span>`;
     },
