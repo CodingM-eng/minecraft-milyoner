@@ -1,4897 +1,3657 @@
 /**
- * MINECRAFT MİLYONER — TURNUVA, HESAP, PARTİ, VIP, EKONOMİ, AVATAR & ADMİN KONTROLCÜSÜ
+ * Minecraft Milyoner - Platform Arayüz Kontrolcüsü (v6.0)
  *
- * Tüm arayüz ekranlarını 15 modüler servise bağlar:
- * - Adım Adım Lisans -> Kullanıcı Adı Girişi & "Tekrar Hoş Geldin" akışı
- * - Tam Boyutlu Minecraft Yan Menü Çekmecesi (☰ MENÜ) & Mobil Admin Çekmecesi
- * - Oyuncu Profili, Profil Fotoğrafı Yükleme (160x160 Kare Kırpma + Önizleme) & Minecraft Piksel Avatar
- * - Profil Özelleştirme (Çerçeve, Arka Plan, Tema, Gizlilik, Başarım Vitrini, RGB İsim)
- * - Parti Sistemi (Sadece Rütbeli/ADMIN oluşturur & davet eder; Normal oyuncu katılır/ayrılır; Lisansı ASLA sıfırlamaz)
- * - Liderlik Tablosu (Puan, Galibiyet, Zümrüt, Oyun Sayısı sıralaması + İlk 3 Podyumu)
- * - Zümrüt Mağazası, Rütbe Mağazası, Kozmetikler & VIP Mağazası (Stripe Test Modu & Webhook Doğrulaması)
- * - Destek Talepleri, Hata Bildirimleri & Öneriler (VIP Yüksek, VIP+/MVP Çok Yüksek Öncelik)
- * - 18 Sayfalı %100 Türkçe Admin Paneli
+ * Kapsam:
+ * - Sağdan Açılır Kompakt 3 Çizgili Menü Çekmecesi (#5, #6)
+ * - Bildirim Merkezi: Tekli "Okundu olarak işaretle" & "Toplu olarak okundu" (#7)
+ * - Birleşik # MAĞAZA: Zümrüt, Rütbeler, Kozmetikler, Özel Ürünler (#8, #9, #10)
+ * - 🎁 Arkadaşına Rütbe Hediye Et Akışı (#11)
+ * - Stripe Hazırlık Modu: Sahte ödeme yok (#9, #12, #27)
+ * - Günlük Netherite Ödülü (VIP+, MVIP, MVIP+) & +250 Başlangıç Netherite (#13, #14)
+ * - İsteğe Bağlı Minecraft Oyuncu Adı ve Kare Skin Yüzü Avatarı (#4)
+ * - Gerçek Liderlik Tablosu + Admin "Leaderboard'u Sıfırla" Onay Modalı (#17, #18, #19)
+ * - 15 Bölümlü Tam Türkçe Yönetici Paneli (#21)
  */
 
-(function () {
+(function (window) {
   'use strict';
 
-  const {
-    authGuard,
-    authService,
-    userService,
-    licenseService,
-    partyService,
-    supportService,
-    bugService,
-    suggestionService,
-    avatarService,
-    paymentService,
-    backupService,
-    activityService,
-    configService,
-    rankService,
-    economyService,
-    shopService,
-    extraLifeService,
-    dailyRewardService,
-    achievementService,
-    leaderboardService,
-    soundService,
-    PARTY_STATUSES
-  } = window.MCMServices;
-
-  const PARTY_STATUS_LABELS_TR = {
-    WAITING: 'BEKLİYOR',
-    READY: 'HAZIR',
-    STARTING: 'BAŞLIYOR',
-    ACTIVE: 'AKTİF',
-    FINISHED: 'TAMAMLANDI',
-    CANCELLED: 'İPTAL EDİLDİ'
+  const state = {
+    currentScreen: 'welcome',
+    shopCategory: 'Ranks',
+    notifFilter: 'ALL',
+    leaderboardSort: 'points',
+    leaderboardSearch: '',
+    adminTab: 'dashboard',
+    adminPlayerSearch: '',
+    giftModal: {
+      rankId: null,
+      friendUsername: ''
+    },
+    dailyTimerInterval: null
   };
 
-  class TournamentPlatformController {
-    constructor() {
-      this.session = null;
-      this.pendingLicenseToken = null;
-      this.selectedPartyId = null;
-      this.currentInvitationText = '';
-      this.confirmCallback = null;
-      this.leaderboardLimit = 10;
-      this.leaderboardSort = 'POINTS';
-      this.selectedShopCategory = 'ALL';
-      this.extraLifeCallbacks = null;
-      this.leaderboardRefreshTimer = null;
-      this.activeCheckoutSession = null;
-      this.pendingCroppedAvatarDataUrl = null;
+  function svc() {
+    return window.MCMServices || {};
+  }
 
-      this.init();
-    }
+  function getSession() {
+    return svc().authService?.getActiveSession() || null;
+  }
 
-    init() {
-      this.bindLicenseGate();
-      this.bindTopBar();
-      this.bindMainMenuDrawer();
-      this.bindPartyLobby();
-      this.bindLeaderboardScreen();
-      this.bindEmeraldShopScreen();
-      this.bindVipShopScreen();
-      this.bindStripeCheckoutModal();
-      this.bindProfileAndCosmetics();
-      this.bindSupportHub();
-      this.bindAccountSettings();
-      this.bindExtraLifeModal();
-      this.bindAdminPanel();
-      this.bindConfirmModal();
-      this.bindInvitationModal();
-      this.bindGranularAudioSettings();
+  function escapeHtml(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
 
-      // Liderlik tablosu ve üst bar için canlı otomatik yenileme
-      this.leaderboardRefreshTimer = setInterval(() => {
-        if (!this.session) return;
-        const lbScreen = document.getElementById('screen-leaderboard');
-        if (lbScreen && lbScreen.classList.contains('active')) {
-          this.renderLeaderboard();
-        }
-        this.syncEconomyHeaderUI();
-      }, 10000);
-
-      // URL ?invite=MCM-XXXX kontrolü
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const inviteParam = params.get('invite');
-        if (inviteParam) {
-          this.pendingInviteCodeFromUrl = inviteParam.trim().toUpperCase();
-        }
-      } catch (e) {}
-
-      // Tarayıcı Geri/İleri (popstate) navigasyon desteği
-      window.addEventListener('popstate', () => {
-        if (!this.session) return;
-        this.restoreRouteFromHash(true);
+  function formatDateTR(iso) {
+    if (!iso) return '-';
+    try {
+      return new Date(iso).toLocaleString('tr-TR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
-
-      // 1. Aktif oturumu kontrol et
-      const existingSession = licenseService.getActiveSession();
-      if (existingSession) {
-        this.applyAuthenticatedSession(existingSession, false);
-        return;
-      }
-
-      // 2. Kayıtlı hesabı kontrol et ("TEKRAR HOŞ GELDİN" ekranı)
-      const remembered = licenseService.getRememberedUser();
-      if (remembered && remembered.username) {
-        this.lockWithLicenseGate(true);
-      } else {
-        this.lockWithLicenseGate(false);
-      }
-    }
-
-    // ==========================================
-    // BİLDİRİM (TOAST) SİSTEMİ
-    // ==========================================
-    showToast(message, type = 'success') {
-      const container = document.getElementById('toast-container');
-      if (!container) return;
-
-      if (window.soundManager) {
-        if (type === 'info') window.soundManager.playNotification();
-      }
-
-      const toast = document.createElement('div');
-      toast.className = `mc-toast toast-${type}`;
-      const icon = type === 'error' ? '❌' : type === 'info' ? 'ℹ️' : '✅';
-      toast.innerHTML = `<span>${icon}</span><span>${this.escapeHtml(message)}</span>`;
-      container.appendChild(toast);
-
-      setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(20px)';
-        toast.style.transition = 'all 0.25s ease';
-        setTimeout(() => toast.remove(), 260);
-      }, 3600);
-    }
-
-    // ==========================================
-    // ONAY PENCERESİ (CONFIRM MODAL)
-    // ==========================================
-    askConfirmation(title, message, acceptLabel, onConfirm) {
-      const modal = document.getElementById('modal-confirm');
-      const titleEl = document.getElementById('confirm-modal-title');
-      const msgEl = document.getElementById('confirm-modal-message');
-      const acceptText = document.getElementById('btn-confirm-accept-text');
-
-      if (!modal) return;
-      if (titleEl) titleEl.textContent = title || '⚠️ İşlemi Onayla';
-      if (msgEl) msgEl.textContent = message || 'Devam etmek istediğinize emin misiniz?';
-      if (acceptText) acceptText.textContent = acceptLabel || 'Onayla';
-
-      this.confirmCallback = onConfirm;
-      modal.classList.remove('hidden');
-    }
-
-    bindConfirmModal() {
-      const modal = document.getElementById('modal-confirm');
-      const closeBtn = document.getElementById('btn-confirm-close');
-      const cancelBtn = document.getElementById('btn-confirm-cancel');
-      const acceptBtn = document.getElementById('btn-confirm-accept');
-
-      const close = () => {
-        if (modal) modal.classList.add('hidden');
-        this.confirmCallback = null;
-      };
-
-      if (closeBtn) closeBtn.addEventListener('click', close);
-      if (cancelBtn) cancelBtn.addEventListener('click', close);
-      if (acceptBtn) {
-        acceptBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const cb = this.confirmCallback;
-          close();
-          if (typeof cb === 'function') cb();
-        });
-      }
-    }
-
-    // ==========================================
-    // DETAYLI SES AYARLARI BAĞLANTILARI (BÖLÜM 4 & 30)
-    // ==========================================
-    bindGranularAudioSettings() {
-      const menuChk = document.getElementById('chk-audio-menu-sound');
-      const notifChk = document.getElementById('chk-audio-notif-sound');
-      const shopChk = document.getElementById('chk-audio-shop-sound');
-      const accAudioBtn = document.getElementById('btn-acc-open-audio');
-
-      const syncCheckboxes = () => {
-        if (!window.soundManager) return;
-        if (menuChk) menuChk.checked = window.soundManager.menuSoundEnabled !== false;
-        if (notifChk) notifChk.checked = window.soundManager.notificationSoundEnabled !== false;
-        if (shopChk) shopChk.checked = window.soundManager.shopSoundEnabled !== false;
-      };
-
-      syncCheckboxes();
-
-      if (menuChk) {
-        menuChk.addEventListener('change', () => {
-          if (window.soundManager) {
-            window.soundManager.setMenuSoundEnabled(menuChk.checked);
-            window.soundManager.playClick();
-          }
-        });
-      }
-      if (notifChk) {
-        notifChk.addEventListener('change', () => {
-          if (window.soundManager) {
-            window.soundManager.setNotificationSoundEnabled(notifChk.checked);
-            window.soundManager.playNotification();
-          }
-        });
-      }
-      if (shopChk) {
-        shopChk.addEventListener('change', () => {
-          if (window.soundManager) {
-            window.soundManager.setShopSoundEnabled(shopChk.checked);
-            window.soundManager.playPurchase();
-          }
-        });
-      }
-      if (accAudioBtn) {
-        accAudioBtn.addEventListener('click', () => {
-          window.soundManager.playMenuOpen();
-          syncCheckboxes();
-          if (window.mcQuizGame) window.mcQuizGame.openModal('modal-audio');
-        });
-      }
-    }
-
-    // ==========================================
-    // SAĞ TARAFTAN AÇILAN KOMPAKT ANA MENÜ ÇEKMECESİ (☰ MENÜ)
-    // ==========================================
-    bindMainMenuDrawer() {
-      const openBtn = document.getElementById('btn-open-main-drawer');
-      const closeBtn = document.getElementById('btn-close-main-drawer');
-      const backdrop = document.getElementById('main-menu-backdrop');
-      const drawer = document.getElementById('main-menu-drawer');
-      const drawerUserCard = document.getElementById('drawer-user-card');
-
-      const openDrawer = () => {
-        if (!this.session) return;
-        this.syncMainMenuDrawerUI();
-        if (drawer) {
-          drawer.classList.remove('hidden');
-          drawer.setAttribute('aria-hidden', 'false');
-          requestAnimationFrame(() => drawer.classList.add('open'));
-        }
-        if (openBtn) openBtn.setAttribute('aria-expanded', 'true');
-        if (backdrop) backdrop.classList.remove('hidden');
-        if (window.soundManager) window.soundManager.playMenuOpen();
-      };
-
-      const closeDrawer = (playSound = true) => {
-        if (drawer) {
-          drawer.classList.remove('open');
-          drawer.setAttribute('aria-hidden', 'true');
-          setTimeout(() => {
-            if (!drawer.classList.contains('open')) drawer.classList.add('hidden');
-          }, 240);
-        }
-        if (openBtn) openBtn.setAttribute('aria-expanded', 'false');
-        if (backdrop) backdrop.classList.add('hidden');
-        if (playSound && window.soundManager) window.soundManager.playMenuClose();
-      };
-
-      this.openMainMenuDrawer = openDrawer;
-      this.closeMainMenuDrawer = closeDrawer;
-
-      if (openBtn) {
-        openBtn.addEventListener('click', () => {
-          if (drawer && drawer.classList.contains('open')) {
-            closeDrawer(true);
-          } else {
-            openDrawer();
-          }
-        });
-      }
-      if (closeBtn) {
-        closeBtn.addEventListener('click', () => closeDrawer(true));
-      }
-      if (backdrop) {
-        backdrop.addEventListener('click', () => closeDrawer(true));
-      }
-
-      // ESC tuşu ile menüyü kapatma
-      document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && drawer && drawer.classList.contains('open')) {
-          closeDrawer(true);
-        }
-      });
-
-      if (drawerUserCard) {
-        const goProfile = () => {
-          closeDrawer(false);
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-profile');
-        };
-        drawerUserCard.addEventListener('click', goProfile);
-        drawerUserCard.addEventListener('keydown', e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            goProfile();
-          }
-        });
-      }
-
-      // Tüm sağ menü butonlarını bağla (Profil, Destek, Hata Bildir, Öneri Gönder, Zümrüt Mağazası, Rütbe Mağazası, Partiler, İstatistikler, Liderlik Tablosu, Nasıl Oynanır?, Ayarlar, Admin, Çıkış Yap)
-      const drawerEl = document.getElementById('main-menu-drawer');
-      if (drawerEl) {
-        drawerEl.querySelectorAll('.drawer-nav-item').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.preventDefault();
-            window.soundManager.playClick();
-
-            const action = btn.getAttribute('data-drawer-action');
-            const supportTab = btn.getAttribute('data-drawer-support-tab');
-            const shopCat = btn.getAttribute('data-drawer-shop-cat');
-            const targetScreen =
-              btn.getAttribute('data-drawer-screen') || btn.getAttribute('data-drawer-nav');
-
-            closeDrawer(false);
-
-            // 1. Özel Aksiyonlar (İstatistikler Modalı, Nasıl Oynanır Modalı, Çıkış Yap)
-            if (action === 'logout') {
-              this.handleLogout(false);
-              return;
-            }
-            if (action === 'open-stats') {
-              if (window.mcQuizGame) {
-                window.mcQuizGame.renderMenuStats();
-                window.mcQuizGame.openModal('modal-stats');
-              }
-              this.updateActiveDrawerHighlight(null, { action: 'open-stats' });
-              this.pushRouteHash('#stats');
-              return;
-            }
-            if (action === 'open-rules') {
-              if (window.mcQuizGame) {
-                window.mcQuizGame.openModal('modal-rules');
-              }
-              this.updateActiveDrawerHighlight(null, { action: 'open-rules' });
-              this.pushRouteHash('#rules');
-              return;
-            }
-
-            // 2. Destek Sekmeleri (Destek, Hata Bildir, Öneri Gönder)
-            if (supportTab) {
-              this.navigateToScreen('screen-support', { supportTab });
-              return;
-            }
-
-            // 3. Mağaza Kategorisi (Zümrüt Mağazası / Rütbe Mağazası)
-            if (shopCat) {
-              this.selectedShopCategory = shopCat;
-              document.querySelectorAll('[data-shop-cat]').forEach(b => {
-                b.classList.toggle('active', b.getAttribute('data-shop-cat') === shopCat);
-              });
-            }
-
-            // 4. Ekran Navigasyonu
-            if (targetScreen) {
-              this.navigateToScreen(targetScreen, { shopCat });
-            }
-          });
-        });
-      }
-    }
-
-    updateActiveDrawerHighlight(screenId, options = {}) {
-      const drawerEl = document.getElementById('main-menu-drawer');
-      if (!drawerEl) return;
-
-      drawerEl.querySelectorAll('.drawer-nav-item').forEach(btn => {
-        btn.classList.remove('active');
-        const btnAction = btn.getAttribute('data-drawer-action');
-        const btnSupport = btn.getAttribute('data-drawer-support-tab');
-        const btnScreen =
-          btn.getAttribute('data-drawer-screen') || btn.getAttribute('data-drawer-nav');
-        const btnShopCat = btn.getAttribute('data-drawer-shop-cat');
-
-        if (options.action && btnAction === options.action) {
-          btn.classList.add('active');
-          return;
-        }
-        if (screenId === 'screen-support' && options.supportTab && btnSupport === options.supportTab) {
-          btn.classList.add('active');
-          return;
-        }
-        if (screenId && btnScreen === screenId && !btnSupport) {
-          if (screenId === 'screen-shop' && options.shopCat && btnShopCat && btnShopCat !== options.shopCat) {
-            return;
-          }
-          btn.classList.add('active');
-        }
-      });
-    }
-
-    pushRouteHash(hash, replace = false) {
-      if (!hash) return;
-      try {
-        if (window.location.hash === hash) return;
-        const url = `${window.location.pathname}${window.location.search}${hash}`;
-        if (replace) {
-          window.history.replaceState({ hash }, '', url);
-        } else {
-          window.history.pushState({ hash }, '', url);
-        }
-      } catch (e) {}
-    }
-
-    restoreRouteFromHash(fromPopState = false) {
-      if (!this.session) return false;
-      const rawHash = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
-      if (!rawHash || rawHash === 'home' || rawHash === 'menu') {
-        if (fromPopState) {
-          this.navigateToScreen('screen-menu', { skipHistory: true });
-        }
-        return false;
-      }
-
-      const closeOpenModals = () => {
-        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden'));
-      };
-      closeOpenModals();
-
-      switch (rawHash) {
-        case 'profile':
-        case 'profil':
-          this.navigateToScreen('screen-profile', { skipHistory: true });
-          return true;
-        case 'support':
-        case 'destek':
-          this.navigateToScreen('screen-support', { supportTab: 'support', skipHistory: true });
-          return true;
-        case 'bug':
-        case 'hata':
-          this.navigateToScreen('screen-support', { supportTab: 'bug', skipHistory: true });
-          return true;
-        case 'suggestion':
-        case 'oneri':
-          this.navigateToScreen('screen-support', { supportTab: 'suggestion', skipHistory: true });
-          return true;
-        case 'shop':
-        case 'magaza':
-          this.selectedShopCategory = 'ALL';
-          this.navigateToScreen('screen-shop', { shopCat: 'ALL', skipHistory: true });
-          return true;
-        case 'ranks':
-        case 'rutbe':
-        case 'vip':
-          this.navigateToScreen('screen-vip-shop', { skipHistory: true });
-          return true;
-        case 'party':
-        case 'partiler':
-          this.navigateToScreen('screen-party', { skipHistory: true });
-          return true;
-        case 'leaderboard':
-        case 'liderlik':
-          this.navigateToScreen('screen-leaderboard', { skipHistory: true });
-          return true;
-        case 'settings':
-        case 'ayarlar':
-          this.navigateToScreen('screen-account-settings', { skipHistory: true });
-          return true;
-        case 'history':
-        case 'gecmis':
-          this.navigateToScreen('screen-history', { skipHistory: true });
-          return true;
-        case 'admin':
-          if (authGuard.getEffectiveRole(this.session) === 'ADMIN') {
-            this.navigateToScreen('screen-admin', { skipHistory: true });
-            return true;
-          }
-          break;
-        case 'stats':
-        case 'istatistikler':
-          this.navigateToScreen('screen-menu', { skipHistory: true });
-          if (window.mcQuizGame) {
-            window.mcQuizGame.renderMenuStats();
-            window.mcQuizGame.openModal('modal-stats');
-          }
-          this.updateActiveDrawerHighlight(null, { action: 'open-stats' });
-          return true;
-        case 'rules':
-        case 'kurallar':
-          this.navigateToScreen('screen-menu', { skipHistory: true });
-          if (window.mcQuizGame) {
-            window.mcQuizGame.openModal('modal-rules');
-          }
-          this.updateActiveDrawerHighlight(null, { action: 'open-rules' });
-          return true;
-        default:
-          break;
-      }
-      return false;
-    }
-
-    syncMainMenuDrawerUI() {
-      if (!this.session) return;
-      const effRole = authGuard.getEffectiveRole(this.session);
-      const profile = economyService.getPlayerEconomyProfile(this.session.username);
-      const userObj = userService.getUserByUsername(this.session.username);
-      const avatarUrl = avatarService.getUserAvatarUrl(userObj || this.session.username);
-      const borderKey = userObj?.profileBorder || 'stone';
-
-      const dAvatar = document.getElementById('drawer-user-avatar');
-      const dName = document.getElementById('drawer-user-name');
-      const dRole =
-        document.getElementById('drawer-user-rank') || document.getElementById('drawer-user-role');
-      const dEmeralds = document.getElementById('drawer-user-emeralds');
-      const dAdminBtn = document.getElementById('btn-drawer-admin');
-
-      if (dAvatar) {
-        dAvatar.src = avatarUrl;
-        dAvatar.className = `mc-avatar-img mc-avatar-sm avatar-border-${borderKey}`;
-      }
-      if (dName) {
-        dName.innerHTML = this.formatUsernameHtml(
-          this.session.username,
-          profile.rgbOwned && profile.rgbEnabled
-        );
-      }
-      if (dRole) {
-        dRole.textContent = profile.rankBadge || effRole;
-        dRole.className = `role-badge role-${effRole.toLowerCase()}`;
-      }
-      if (dEmeralds) {
-        dEmeralds.textContent = profile.emeraldCoins.toLocaleString('tr-TR');
-      }
-      if (dAdminBtn) {
-        dAdminBtn.classList.toggle('hidden', effRole !== 'ADMIN');
-      }
-    }
-
-    // ==========================================
-    // AVATAR & TEMA YARDIMCILARI (BÖLÜM 9, 10, 11, 29)
-    // ==========================================
-    getAvatarImgHtml(username, sizeClass = 'mc-avatar-xs') {
-      const userObj = userService.getUserByUsername(username);
-      const url = avatarService.getUserAvatarUrl(userObj || username);
-      const border = userObj?.profileBorder || 'stone';
-      return `<img src="${url}" alt="${this.escapeHtml(username)}" class="mc-avatar-img ${sizeClass} avatar-border-${border}" />`;
-    }
-
-    applyUserThemePreference() {
-      if (!this.session) {
-        document.body.classList.remove('theme-mc-light');
-        return;
-      }
-      const userObj = userService.getUserByUsername(this.session.username);
-      const theme = userObj?.settings?.theme || 'dark';
-      document.body.classList.toggle('theme-mc-light', theme === 'light');
-    }
-
-    // ==========================================
-    // KAYIT OL / GİRİŞ YAP / ŞİFREMİ UNUTTUM & TEKRAR HOŞ GELDİN EKRANI
-    // ==========================================
-    switchAuthGateTab(tabName = 'login') {
-      const loginForm = document.getElementById('gate-form-login');
-      const regForm = document.getElementById('gate-form-register');
-      const forgotForm = document.getElementById('gate-form-forgot');
-
-      document.querySelectorAll('[data-auth-tab]').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-auth-tab') === tabName);
-      });
-
-      if (loginForm) loginForm.classList.toggle('hidden', tabName !== 'login');
-      if (regForm) regForm.classList.toggle('hidden', tabName !== 'register');
-      if (forgotForm) forgotForm.classList.toggle('hidden', tabName !== 'forgot');
-
-      ['gate-login-error', 'gate-register-error', 'gate-forgot-error'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-      });
-    }
-
-    lockWithLicenseGate(showWelcomeBack = false) {
-      this.session = null;
-      this.pendingLicenseToken = null;
-      if (window.mcQuizGame) {
-        window.mcQuizGame.isUnlocked = false;
-      }
-      document.body.classList.add('gate-locked');
-      document.body.classList.remove('theme-mc-light');
-
-      const gateEl = document.getElementById('access-gate');
-      const wbStep = document.getElementById('gate-step-welcome-back');
-      const authTabs = document.getElementById('gate-auth-tabs');
-      const loginForm = document.getElementById('gate-form-login');
-      const regForm = document.getElementById('gate-form-register');
-      const forgotForm = document.getElementById('gate-form-forgot');
-
-      if (gateEl) gateEl.classList.remove('hidden');
-
-      const remembered = licenseService.getRememberedUser();
-      if (showWelcomeBack && remembered && remembered.username) {
-        if (wbStep) wbStep.classList.remove('hidden');
-        if (authTabs) authTabs.classList.add('hidden');
-        if (loginForm) loginForm.classList.add('hidden');
-        if (regForm) regForm.classList.add('hidden');
-        if (forgotForm) forgotForm.classList.add('hidden');
-
-        const wbName = document.getElementById('wb-username-display');
-        const wbRole = document.getElementById('wb-role-badge');
-        const wbLic = document.getElementById('wb-license-badge');
-        const wbAvatarBox = document.getElementById('wb-avatar-box');
-
-        if (wbName) wbName.textContent = remembered.username;
-        if (wbRole) {
-          wbRole.textContent = remembered.role || 'PLAYER';
-          wbRole.className = `role-badge role-${String(remembered.role || 'player').toLowerCase()}`;
-        }
-        if (wbLic) wbLic.textContent = remembered.licenseName || 'Kayıtlı Lisans';
-        if (wbAvatarBox) {
-          wbAvatarBox.innerHTML = this.getAvatarImgHtml(remembered.username, 'mc-avatar-sm');
-        }
-      } else {
-        if (wbStep) wbStep.classList.add('hidden');
-        if (authTabs) authTabs.classList.remove('hidden');
-        this.switchAuthGateTab('login');
-        const loginUserInp = document.getElementById('login-username-input');
-        if (loginUserInp) {
-          setTimeout(() => loginUserInp.focus(), 60);
-        }
-      }
-
-      this.updateTopBarSessionUI();
-    }
-
-    bindLicenseGate() {
-      const gateEl = document.getElementById('access-gate');
-      const gateCard = gateEl ? gateEl.querySelector('.gate-card') : null;
-      const wbContinueBtn = document.getElementById('btn-wb-continue');
-      const wbSwitchBtn = document.getElementById('btn-wb-switch-account');
-
-      const loginForm = document.getElementById('gate-form-login');
-      const regForm = document.getElementById('gate-form-register');
-      const forgotForm = document.getElementById('gate-form-forgot');
-      const toggleLoginPwdBtn = document.getElementById('btn-toggle-login-pwd');
-      const loginPwdInp = document.getElementById('login-password-input');
-
-      const shakeGate = () => {
-        if (!gateCard) return;
-        gateCard.classList.remove('shake');
-        void gateCard.offsetWidth;
-        gateCard.classList.add('shake');
-      };
-
-      // Sekme geçişleri (Giriş Yap / Kayıt Ol / Şifremi Unuttum)
-      document.querySelectorAll('[data-auth-tab]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const tab = btn.getAttribute('data-auth-tab') || 'login';
-          this.switchAuthGateTab(tab);
-        });
-      });
-
-      if (toggleLoginPwdBtn && loginPwdInp) {
-        toggleLoginPwdBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const isPwd = loginPwdInp.type === 'password';
-          loginPwdInp.type = isPwd ? 'text' : 'password';
-          toggleLoginPwdBtn.textContent = isPwd ? '🙈' : '👁️';
-          loginPwdInp.focus();
-        });
-      }
-
-      // Tekrar Hoş Geldin -> Devam Et
-      if (wbContinueBtn) {
-        wbContinueBtn.addEventListener('click', () => {
-          window.soundManager.playSuccess();
-          const resumed = licenseService.resumeRememberedAccount();
-          if (resumed) {
-            this.applyAuthenticatedSession(resumed, true);
-          } else {
-            this.lockWithLicenseGate(false);
-          }
-        });
-      }
-
-      // Tekrar Hoş Geldin -> Hesap Değiştir
-      if (wbSwitchBtn) {
-        wbSwitchBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.lockWithLicenseGate(false);
-        });
-      }
-
-      // 1. GİRİŞ YAP FORMU
-      if (loginForm) {
-        loginForm.addEventListener('submit', async e => {
-          e.preventDefault();
-          const username = document.getElementById('login-username-input')?.value || '';
-          const password = document.getElementById('login-password-input')?.value || '';
-          const licenseCode = document.getElementById('login-license-input')?.value || '';
-          const errEl = document.getElementById('gate-login-error');
-          const submitBtn = document.getElementById('btn-login-submit');
-
-          if (errEl) errEl.classList.add('hidden');
-          if (submitBtn) submitBtn.disabled = true;
-
-          const res = await licenseService.loginWithCredentials({
-            username,
-            password,
-            licenseCode
-          });
-
-          if (submitBtn) submitBtn.disabled = false;
-
-          if (!res.ok) {
-            window.soundManager.playError();
-            if (errEl) {
-              errEl.textContent = `❌ ${res.error}`;
-              errEl.classList.remove('hidden');
-            }
-            shakeGate();
-            return;
-          }
-
-          window.soundManager.playSuccess();
-          loginForm.reset();
-          this.applyAuthenticatedSession(res.session, true);
-        });
-      }
-
-      // 2. KAYIT OL FORMU
-      if (regForm) {
-        regForm.addEventListener('submit', async e => {
-          e.preventDefault();
-          const username = document.getElementById('reg-username-input')?.value || '';
-          const password = document.getElementById('reg-password-input')?.value || '';
-          const confirmPassword = document.getElementById('reg-password-confirm-input')?.value || '';
-          const licenseCode = document.getElementById('reg-license-input')?.value || '';
-          const errEl = document.getElementById('gate-register-error');
-          const submitBtn = document.getElementById('btn-register-submit');
-
-          if (errEl) errEl.classList.add('hidden');
-          if (submitBtn) submitBtn.disabled = true;
-
-          const res = await licenseService.registerAccount({
-            username,
-            password,
-            confirmPassword,
-            licenseCode
-          });
-
-          if (submitBtn) submitBtn.disabled = false;
-
-          if (!res.ok) {
-            window.soundManager.playError();
-            if (errEl) {
-              errEl.textContent = `❌ ${res.error}`;
-              errEl.classList.remove('hidden');
-            }
-            shakeGate();
-            return;
-          }
-
-          window.soundManager.playSuccess();
-          regForm.reset();
-          this.applyAuthenticatedSession(res.session, true);
-        });
-      }
-
-      // 3. ŞİFREMİ UNUTTUM FORMU
-      if (forgotForm) {
-        forgotForm.addEventListener('submit', async e => {
-          e.preventDefault();
-          const username = document.getElementById('forgot-username-input')?.value || '';
-          const licenseCode = document.getElementById('forgot-license-input')?.value || '';
-          const newPassword = document.getElementById('forgot-new-password-input')?.value || '';
-          const errEl = document.getElementById('gate-forgot-error');
-          const submitBtn = document.getElementById('btn-forgot-submit');
-
-          if (errEl) errEl.classList.add('hidden');
-          if (submitBtn) submitBtn.disabled = true;
-
-          const res = await licenseService.resetPasswordWithLicenseOrRecovery({
-            username,
-            licenseCode,
-            newPassword
-          });
-
-          if (submitBtn) submitBtn.disabled = false;
-
-          if (!res.ok) {
-            window.soundManager.playError();
-            if (errEl) {
-              errEl.textContent = `❌ ${res.error}`;
-              errEl.classList.remove('hidden');
-            }
-            shakeGate();
-            return;
-          }
-
-          window.soundManager.playSuccess();
-          forgotForm.reset();
-          this.showToast(res.message || 'Şifreniz başarıyla sıfırlandı. Giriş yapabilirsiniz.', 'success');
-          this.switchAuthGateTab('login');
-          const loginUserInp = document.getElementById('login-username-input');
-          if (loginUserInp) loginUserInp.value = username.trim();
-        });
-      }
-    }
-
-    applyAuthenticatedSession(session, isFreshLogin = false) {
-      this.session = licenseService.refreshSessionRole(session) || session;
-      document.body.classList.remove('gate-locked');
-
-      const gateEl = document.getElementById('access-gate');
-      if (gateEl) gateEl.classList.add('hidden');
-
-      // Ekonomi ve kullanıcı profilini senkronize et
-      economyService.getOrCreateAccount(this.session.username, this.session.role);
-      this.applyUserThemePreference();
-
-      // Oyuncu bazlı izole istatistikleri yükle
-      if (window.mcQuizGame) {
-        if (window.mcQuizGame.statsManager && typeof window.mcQuizGame.statsManager.setUserId === 'function') {
-          window.mcQuizGame.statsManager.setUserId(this.session.userId || this.session.username);
-          window.mcQuizGame.renderMenuStats();
-        }
-        window.mcQuizGame.isUnlocked = true;
-        if (isFreshLogin) {
-          window.mcQuizGame.particles.spawnBurst(
-            window.innerWidth / 2,
-            window.innerHeight / 2,
-            'emerald',
-            50
-          );
-        }
-        if (window.soundManager.musicEnabled && !window.soundManager.currentMusicMode) {
-          window.soundManager.startMusic('menu');
-        }
-      }
-
-      this.updateTopBarSessionUI();
-      this.syncEconomyHeaderUI();
-
-      // URL'de ?invite=MCM-XXXX varsa otomatik partiye katıl
-      if (this.pendingInviteCodeFromUrl) {
-        const code = this.pendingInviteCodeFromUrl;
-        this.pendingInviteCodeFromUrl = null;
-        try {
-          const joined = partyService.joinPartyByInviteCode(this.session, code);
-          this.selectedPartyId = joined.id;
-          window.soundManager.playPartyJoin();
-          this.showToast(`"${joined.name}" partisine başarıyla katıldınız!`, 'success');
-          this.navigateToScreen('screen-party');
-          return;
-        } catch (err) {
-          this.showToast(err.message, 'error');
-        }
-      }
-
-      // Sayfa yenilendiğinde (F5) veya doğrudan #hash ile gelindiğinde ilgili ekranı geri yükle
-      const restored = this.restoreRouteFromHash(false);
-      if (!restored) {
-        this.updateActiveDrawerHighlight('screen-menu');
-      }
-
-      if (isFreshLogin) {
-        const effRole = authGuard.getEffectiveRole(this.session);
-        if (effRole === 'ADMIN') {
-          this.showToast(`Tekrar hoş geldin, ${this.session.username}! Admin Paneli aktif.`, 'info');
-        } else if (effRole !== 'PLAYER') {
-          this.showToast(`Hoş geldin, 👑 ${effRole} ${this.session.username}!`, 'success');
-        } else {
-          this.showToast(`Hoş geldin, ${this.session.username}!`, 'success');
-        }
-      }
-    }
-
-    handleLogout(clearRemembered = false) {
-      licenseService.logout(clearRemembered);
-      this.showToast('Çıkış yapıldı. Kayıtlı hesabınızla devam edebilir veya başka bir hesaba giriş yapabilirsiniz.', 'info');
-      if (window.mcQuizGame) {
-        window.mcQuizGame.showScreen('screen-menu');
-      }
-      this.pushRouteHash('#home', true);
-      this.lockWithLicenseGate(!clearRemembered);
-    }
-
-    // ==========================================
-    // RGB KULLANICI ADI YARDIMCISI
-    // ==========================================
-    formatUsernameHtml(username, forceRgb = null) {
-      const clean = this.escapeHtml(username);
-      let isRgb = forceRgb;
-      if (isRgb === null && username) {
-        const prof = economyService.getPlayerEconomyProfile(username);
-        isRgb = Boolean(prof && prof.rgbOwned && prof.rgbEnabled);
-      }
-      if (isRgb) {
-        return `<span class="rgb-username-text">🌈 ${clean}</span>`;
-      }
-      return clean;
-    }
-
-    // ==========================================
-    // ÜST BAR VE KOMPAKT SAĞ MENÜ KULLANICI PANELİ
-    // ==========================================
-    updateTopBarSessionUI() {
-      const openDrawerBtn = document.getElementById('btn-open-main-drawer');
-      const emeraldPill = document.getElementById('top-emerald-pill');
-      const dailyBtn = document.getElementById('btn-daily-reward');
-      const badge = document.getElementById('top-session-badge');
-      const topAvatar = document.getElementById('top-session-avatar');
-      const nameEl = document.getElementById('top-session-username');
-      const roleEl = document.getElementById('top-session-role');
-      const adminBtn = document.getElementById('btn-top-admin');
-      const logoutBtn = document.getElementById('btn-top-logout');
-
-      if (!this.session) {
-        if (openDrawerBtn) openDrawerBtn.classList.add('hidden');
-        if (emeraldPill) emeraldPill.classList.add('hidden');
-        if (dailyBtn) dailyBtn.classList.add('hidden');
-        if (badge) badge.classList.add('hidden');
-        if (adminBtn) adminBtn.classList.add('hidden');
-        if (logoutBtn) logoutBtn.classList.add('hidden');
-        return;
-      }
-
-      const effRole = authGuard.getEffectiveRole(this.session);
-      this.session.role = effRole;
-      const userObj = userService.getUserByUsername(this.session.username);
-      const avatarUrl = avatarService.getUserAvatarUrl(userObj || this.session.username);
-      const borderKey = userObj?.profileBorder || 'stone';
-
-      if (openDrawerBtn) openDrawerBtn.classList.remove('hidden');
-      if (emeraldPill) emeraldPill.classList.remove('hidden');
-      if (dailyBtn) dailyBtn.classList.remove('hidden');
-      if (badge) badge.classList.remove('hidden');
-      if (topAvatar) {
-        topAvatar.src = avatarUrl;
-        topAvatar.className = `mc-avatar-img mc-avatar-xs avatar-border-${borderKey}`;
-      }
-      if (nameEl) {
-        nameEl.innerHTML = this.formatUsernameHtml(this.session.username);
-      }
-      if (roleEl) {
-        roleEl.textContent = effRole;
-        roleEl.className = `role-badge role-${effRole.toLowerCase()}`;
-      }
-      if (adminBtn) {
-        adminBtn.classList.toggle('hidden', effRole !== 'ADMIN');
-      }
-      if (logoutBtn) logoutBtn.classList.remove('hidden');
-
-      this.syncMainMenuDrawerUI();
-    }
-
-    syncEconomyHeaderUI() {
-      if (!this.session) return;
-      this.session = licenseService.refreshSessionRole(this.session) || this.session;
-      const effRole = authGuard.getEffectiveRole(this.session);
-      const profile = economyService.getPlayerEconomyProfile(this.session.username);
-      const rankSummary = leaderboardService.getPlayerRankAndSummary(this.session.username);
-      const dailyStatus = dailyRewardService.canClaimDailyReward(this.session.username);
-      const userObj = userService.getUserByUsername(this.session.username);
-      const avatarUrl = avatarService.getUserAvatarUrl(userObj || this.session.username);
-      const borderKey = userObj?.profileBorder || 'stone';
-
-      const extraOwned =
-        (profile.inventory?.extraLives || 0) + (profile.inventory?.secondChance || 0);
-
-      // Üst Bar Zümrüt & Ekstra Can Göstergesi
-      const topBal = document.getElementById('top-emerald-balance');
-      const topExtra = document.getElementById('top-extralives-count');
-      if (topBal) topBal.textContent = profile.emeraldCoins.toLocaleString('tr-TR');
-      if (topExtra) topExtra.textContent = extraOwned;
-
-      // Oyun Ekranı Ekstra Can Göstergesi
-      const gameExtra = document.getElementById('game-extralife-count');
-      if (gameExtra) gameExtra.textContent = extraOwned;
-
-      // Ana Sayfa Karşılama & VIP Paneli
-      const dashAvatarEl = document.getElementById('dash-welcome-avatar');
-      const dashUserEl = document.getElementById('dash-welcome-username');
-      const dashRoleBadge = document.getElementById('dash-welcome-role-badge');
-      const dashRankBadge = document.getElementById('dash-welcome-rank-badge');
-      const vipDashPanel = document.getElementById('vip-dashboard-panel');
-      const vipDashExpiry = document.getElementById('vip-dash-expiry');
-
-      if (dashAvatarEl) {
-        dashAvatarEl.src = avatarUrl;
-        dashAvatarEl.className = `mc-avatar-img mc-avatar-sm avatar-border-${borderKey}`;
-      }
-      if (dashUserEl) {
-        dashUserEl.innerHTML = this.formatUsernameHtml(
-          this.session.username,
-          profile.rgbOwned && profile.rgbEnabled
-        );
-      }
-      if (dashRoleBadge) {
-        dashRoleBadge.textContent = effRole;
-        dashRoleBadge.className = `role-badge role-${effRole.toLowerCase()}`;
-      }
-      if (dashRankBadge) {
-        dashRankBadge.textContent = profile.rankBadge || `⛏️ ${effRole}`;
-      }
-
-      const isVipOrAdmin = effRole !== 'PLAYER' || profile.isVip;
-      if (vipDashPanel) {
-        vipDashPanel.classList.toggle('hidden', !isVipOrAdmin);
-      }
-      if (vipDashExpiry && profile.vipStatus) {
-        vipDashExpiry.textContent = profile.vipStatus.expiresAt
-          ? `Bitiş: ${new Date(profile.vipStatus.expiresAt).toLocaleDateString('tr-TR')}`
-          : 'Sınırsız VIP Erişimi';
-      }
-
-      // Günlük Ödül Butonu Durumu
-      const dailyBtn = document.getElementById('btn-daily-reward');
-      const dailyLabel = document.getElementById('daily-reward-label');
-      const widgetDailyBtn = document.getElementById('btn-widget-claim-daily');
-      if (dailyBtn && dailyLabel) {
-        if (dailyStatus.canClaim) {
-          dailyLabel.textContent = `GÜNLÜK (+${dailyStatus.rewardAmount} 💚)`;
-          dailyBtn.disabled = false;
-        } else {
-          dailyLabel.textContent = `SERİ: ${dailyStatus.currentStreak} Gün`;
-          dailyBtn.disabled = false;
-        }
-      }
-      if (widgetDailyBtn) {
-        if (dailyStatus.canClaim) {
-          widgetDailyBtn.textContent = `🎁 Günlük Ödülü Al (+${dailyStatus.rewardAmount} 💚)`;
-          widgetDailyBtn.disabled = false;
-        } else {
-          widgetDailyBtn.textContent = `✅ Alındı (Seri: ${dailyStatus.currentStreak} Gün)`;
-          widgetDailyBtn.disabled = true;
-        }
-      }
-
-      // Ana Sayfa Ekonomi Özeti
-      const dRank = document.getElementById('dash-econ-rank');
-      const dPoints = document.getElementById('dash-econ-points');
-      const dEmeralds = document.getElementById('dash-econ-emeralds');
-      const dGames = document.getElementById('dash-econ-games');
-      const dWins = document.getElementById('dash-econ-wins');
-      const dExtra = document.getElementById('dash-econ-extralives');
-
-      if (dRank) dRank.textContent = `#${rankSummary.rank}`;
-      if (dPoints) dPoints.textContent = `${profile.totalPoints.toLocaleString('tr-TR')}`;
-      if (dEmeralds) {
-        dEmeralds.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Zümrüt`;
-      }
-      if (dGames) dGames.textContent = profile.gamesPlayed.toLocaleString('tr-TR');
-      if (dWins) dWins.textContent = profile.gamesWon.toLocaleString('tr-TR');
-      if (dExtra) dExtra.textContent = `❤️ ${extraOwned}`;
-
-      this.syncMainMenuDrawerUI();
-    }
-
-    getHashForScreen(screenId, options = {}) {
-      if (screenId === 'screen-support') {
-        if (options.supportTab === 'bug') return '#bug';
-        if (options.supportTab === 'suggestion') return '#suggestion';
-        return '#support';
-      }
-      const map = {
-        'screen-menu': '#home',
-        'screen-profile': '#profile',
-        'screen-shop': '#shop',
-        'screen-vip-shop': '#ranks',
-        'screen-party': '#party',
-        'screen-leaderboard': '#leaderboard',
-        'screen-account-settings': '#settings',
-        'screen-history': '#history',
-        'screen-admin': '#admin'
-      };
-      return map[screenId] || '#home';
-    }
-
-    navigateToScreen(screenId, options = {}) {
-      try {
-        authGuard.verifySession(this.session);
-      } catch (err) {
-        this.showToast(err.message, 'error');
-        if (!this.session) {
-          this.lockWithLicenseGate(false);
-        }
-        return;
-      }
-
-      if (!options.skipHistory) {
-        this.pushRouteHash(this.getHashForScreen(screenId, options));
-      }
-
-      if (screenId === 'screen-admin') {
-        this.openAdminPanel();
-        this.updateActiveDrawerHighlight('screen-admin', options);
-        return;
-      }
-      if (screenId === 'screen-party') {
-        this.openPartyLobby(Boolean(options.openCreateBox));
-        this.updateActiveDrawerHighlight('screen-party', options);
-        return;
-      }
-
-      if (window.mcQuizGame) {
-        window.mcQuizGame.showScreen(screenId);
-      }
-
-      this.syncEconomyHeaderUI();
-      if (screenId === 'screen-leaderboard') this.renderLeaderboard();
-      if (screenId === 'screen-shop') this.renderEmeraldShop();
-      if (screenId === 'screen-vip-shop') this.renderVipShop();
-      if (screenId === 'screen-profile') this.renderPlayerProfile();
-      if (screenId === 'screen-history') this.renderEmeraldHistory();
-      if (screenId === 'screen-support') {
-        if (options.supportTab) {
-          this.switchSupportTab(options.supportTab);
-        } else {
-          this.renderSupportHub();
-        }
-      }
-      if (screenId === 'screen-account-settings') this.renderAccountSettings();
-
-      this.updateActiveDrawerHighlight(screenId, options);
-    }
-
-    bindTopBar() {
-      const adminBtn = document.getElementById('btn-top-admin');
-      const logoutBtn = document.getElementById('btn-top-logout');
-      const heroPartyBtn = document.getElementById('btn-open-party-hub');
-      const heroLbBtn = document.getElementById('btn-open-leaderboard-hero');
-      const heroShopBtn = document.getElementById('btn-open-shop-hero');
-      const pillShopBtn = document.getElementById('btn-pill-open-shop');
-      const sessionBadge = document.getElementById('top-session-badge');
-      const dailyBtn = document.getElementById('btn-daily-reward');
-      const widgetDailyBtn = document.getElementById('btn-widget-claim-daily');
-      const vipCreatePartyBtn = document.getElementById('btn-vip-dash-create-party');
-      const vipManagePartyBtn = document.getElementById('btn-vip-dash-manage-party');
-
-      document.querySelectorAll('[data-nav-screen]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const target = btn.getAttribute('data-nav-screen');
-          if (target) this.navigateToScreen(target);
-        });
-      });
-
-      document.querySelectorAll('[data-open-support-tab]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const tab = btn.getAttribute('data-open-support-tab') || 'support';
-          this.navigateToScreen('screen-support', { supportTab: tab });
-        });
-      });
-
-      if (adminBtn) {
-        adminBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-admin');
-        });
-      }
-
-      if (heroPartyBtn) {
-        heroPartyBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-party');
-        });
-      }
-
-      if (vipCreatePartyBtn) {
-        vipCreatePartyBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-party', { openCreateBox: true });
-        });
-      }
-
-      if (vipManagePartyBtn) {
-        vipManagePartyBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-party');
-        });
-      }
-
-      if (heroLbBtn) {
-        heroLbBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-leaderboard');
-        });
-      }
-
-      if (heroShopBtn) {
-        heroShopBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-shop');
-        });
-      }
-
-      if (pillShopBtn) {
-        pillShopBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-shop');
-        });
-      }
-
-      if (sessionBadge) {
-        sessionBadge.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-profile');
-        });
-      }
-
-      const cardLb = document.getElementById('card-goto-leaderboard');
-      const cardShop = document.getElementById('card-goto-shop');
-      const cardProf = document.getElementById('card-goto-profile');
-      if (cardLb) cardLb.addEventListener('click', () => this.navigateToScreen('screen-leaderboard'));
-      if (cardShop) cardShop.addEventListener('click', () => this.navigateToScreen('screen-shop'));
-      if (cardProf) cardProf.addEventListener('click', () => this.navigateToScreen('screen-profile'));
-
-      if (dailyBtn) {
-        dailyBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.claimDailyReward();
-        });
-      }
-
-      if (widgetDailyBtn) {
-        widgetDailyBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.claimDailyReward();
-        });
-      }
-
-      if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.handleLogout(false);
-        });
-      }
-    }
-
-    // ==========================================
-    // GÜNLÜK ZÜMRÜT ÖDÜLÜ (Normal +25 / VIP +50)
-    // ==========================================
-    claimDailyReward() {
-      try {
-        const res = dailyRewardService.claimDailyReward(this.session);
-        window.soundManager.playEmeraldGain();
-        if (window.mcQuizGame) {
-          window.mcQuizGame.particles.spawnBurst(
-            window.innerWidth / 2,
-            window.innerHeight / 2,
-            'emerald',
-            50
-          );
-        }
-        this.showToast(
-          `🎁 +${res.rewardAmount} Zümrüt Coin Alındı! (Seri: ${res.streak} Gün)`,
-          'success'
-        );
-        this.syncEconomyHeaderUI();
-      } catch (err) {
-        window.soundManager.playError();
-        this.showToast(err.message, 'error');
-      }
-    }
-
-    // ==========================================
-    // EKSTRA CAN (EXTRA LIFE) DEVAM SİSTEMİ
-    // ==========================================
-    canOfferExtraLife(gameId, questionNumber) {
-      if (!this.session) return false;
-      const check = extraLifeService.canUseExtraLife(this.session, gameId, questionNumber);
-      return check.canUse;
-    }
-
-    promptExtraLifeRevive(gameId, questionNumber, onRevive, onExit) {
-      const check = extraLifeService.canUseExtraLife(this.session, gameId, questionNumber);
-      if (!check.canUse) {
-        if (typeof onExit === 'function') onExit();
-        return;
-      }
-
-      const modal = document.getElementById('modal-extralife');
-      const qLabel = document.getElementById('extralife-question-label');
-      const countEl = document.getElementById('extralife-modal-count');
-
-      if (qLabel) qLabel.textContent = `Soru ${questionNumber} / 15`;
-      if (countEl) countEl.textContent = `❤️ ${check.availableCount}`;
-
-      this.extraLifeCallbacks = { gameId, questionNumber, onRevive, onExit };
-      if (modal) modal.classList.remove('hidden');
-    }
-
-    bindExtraLifeModal() {
-      const modal = document.getElementById('modal-extralife');
-      const useBtn = document.getElementById('btn-use-extralife');
-      const skipBtn = document.getElementById('btn-skip-extralife');
-
-      if (useBtn) {
-        useBtn.addEventListener('click', () => {
-          if (!this.extraLifeCallbacks) return;
-          const { gameId, questionNumber, onRevive, onExit } = this.extraLifeCallbacks;
-          this.extraLifeCallbacks = null;
-          if (modal) modal.classList.add('hidden');
-
-          try {
-            extraLifeService.useExtraLifeInGame(
-              this.session,
-              gameId,
-              questionNumber,
-              this.selectedPartyId
-            );
-            this.syncEconomyHeaderUI();
-            this.showToast('❤️ EKSTRA CAN KULLANILDI — "Oyuna geri döndünüz!"', 'success');
-            if (typeof onRevive === 'function') onRevive();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-            if (typeof onExit === 'function') onExit();
-          }
-        });
-      }
-
-      if (skipBtn) {
-        skipBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const cb = this.extraLifeCallbacks?.onExit;
-          this.extraLifeCallbacks = null;
-          if (modal) modal.classList.add('hidden');
-          if (typeof cb === 'function') cb();
-        });
-      }
-    }
-
-    // ==========================================
-    // OYUN SONUCU -> ZÜMRÜT & LİDERLİK ÖDÜLLERİ
-    // ==========================================
-    onGameFinished(outcome) {
-      if (!this.session) return;
-      try {
-        const res = economyService.recordGameOutcome(this.session, outcome);
-        this.syncEconomyHeaderUI();
-
-        if (res.emeraldReward > 0 || res.pointsEarned > 0) {
-          window.soundManager.playEmeraldGain();
-          this.showToast(
-            `🟩 +${res.emeraldReward} Zümrüt Coin & ⭐ +${res.pointsEarned} Liderlik Puanı kazanıldı!`,
-            'success'
-          );
-        }
-
-        if (res.newlyUnlocked && res.newlyUnlocked.length > 0) {
-          window.soundManager.playAchievementUnlock();
-          res.newlyUnlocked.forEach(ach => {
-            this.showToast(`🎖️ Başarım Açıldı: ${ach.icon} ${ach.title}!`, 'info');
-          });
-        }
-      } catch (err) {
-        console.warn('Oyun sonucu ekonomi hatası:', err);
-      }
-    }
-
-    // ==========================================
-    // LİDERLİK TABLOSU EKRANI
-    // ==========================================
-    bindLeaderboardScreen() {
-      document.querySelectorAll('[data-lb-limit]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.leaderboardLimit = Number(btn.getAttribute('data-lb-limit')) || 10;
-          document.querySelectorAll('[data-lb-limit]').forEach(b => {
-            b.classList.toggle('active', b === btn);
-          });
-          this.renderLeaderboard();
-        });
-      });
-
-      document.querySelectorAll('[data-lb-sort]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.leaderboardSort = btn.getAttribute('data-lb-sort') || 'POINTS';
-          document.querySelectorAll('[data-lb-sort]').forEach(b => {
-            b.classList.toggle('active', b === btn);
-          });
-          this.renderLeaderboard();
-        });
-      });
-
-      const searchInp = document.getElementById('input-leaderboard-search');
-      if (searchInp) {
-        searchInp.addEventListener('input', () => this.renderLeaderboard());
-      }
-
-      const refreshBtn = document.getElementById('btn-leaderboard-refresh');
-      if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.renderLeaderboard();
-          this.showToast('Liderlik tablosu yenilendi!', 'info');
-        });
-      }
-    }
-
-    renderLeaderboard() {
-      if (!this.session) return;
-      const searchQ = document.getElementById('input-leaderboard-search')?.value || '';
-      const allRanked = leaderboardService.getLeaderboard({
-        limit: 50,
-        search: '',
-        sortBy: this.leaderboardSort
-      });
-      const filteredRanked = leaderboardService.getLeaderboard({
-        limit: this.leaderboardLimit,
-        search: searchQ,
-        sortBy: this.leaderboardSort
-      });
-      const currentUserSummary = leaderboardService.getPlayerRank(
-        this.session.username,
-        this.leaderboardSort
-      );
-
-      // 1. Mevcut Oyuncu Sıralama Bandı
-      const bannerEl = document.getElementById('leaderboard-current-user-banner');
-      if (bannerEl) {
-        bannerEl.innerHTML = `
-          <div style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap;">
-            ${this.getAvatarImgHtml(currentUserSummary.username, 'mc-avatar-xs')}
-            <span>Senin Sıralaman: </span>
-            <strong class="gold-text">#${currentUserSummary.rank} ${this.formatUsernameHtml(
-              currentUserSummary.username,
-              currentUserSummary.rgbOwned && currentUserSummary.rgbEnabled
-            )}</strong>
-            <span class="role-badge role-${currentUserSummary.role.toLowerCase()}" style="margin-left:0.25rem;">${currentUserSummary.rankBadge}</span>
-          </div>
-          <div style="display:flex; gap:1.1rem; flex-wrap:wrap;">
-            <span>⭐ Puan: <strong>${currentUserSummary.totalPoints.toLocaleString('tr-TR')}</strong></span>
-            <span>💚 Zümrüt: <strong class="emerald-text">${currentUserSummary.emeraldCoins.toLocaleString('tr-TR')}</strong></span>
-            <span>🏆 Galibiyet: <strong>${currentUserSummary.gamesWon}</strong></span>
-          </div>
-        `;
-      }
-
-      // 2. İlk 3 Podyumu (2. Gümüş, 1. Altın, 3. Bronz)
-      const podiumEl = document.getElementById('leaderboard-podium');
-      if (podiumEl) {
-        const top1 = allRanked[0];
-        const top2 = allRanked[1];
-        const top3 = allRanked[2];
-        const podiumOrder = [
-          { data: top2, rank: '2.', medal: '🥈', cls: 'podium-rank-2' },
-          { data: top1, rank: '1.', medal: '🥇', cls: 'podium-rank-1' },
-          { data: top3, rank: '3.', medal: '🥉', cls: 'podium-rank-3' }
-        ];
-
-        podiumEl.innerHTML = podiumOrder
-          .filter(item => item.data)
-          .map(
-            item => `
-            <div class="podium-card ${item.cls}">
-              <div class="podium-medal">${item.medal} ${item.rank}</div>
-              <div style="margin:0.35rem auto;">${this.getAvatarImgHtml(item.data.username, 'mc-avatar-sm')}</div>
-              <div class="podium-username">${this.formatUsernameHtml(
-                item.data.username,
-                item.data.rgbOwned && item.data.rgbEnabled
-              )}</div>
-              <div style="margin:0.2rem 0;"><span class="role-badge role-${item.data.role.toLowerCase()}">${item.data.rankBadge}</span></div>
-              <div class="podium-points">${item.data.totalPoints.toLocaleString('tr-TR')} Puan</div>
-              <div class="podium-meta">
-                <span class="emerald-text">💚 ${item.data.emeraldCoins.toLocaleString('tr-TR')}</span>
-                <span>🏆 ${item.data.gamesWon} Galibiyet</span>
-              </div>
-            </div>
-          `
-          )
-          .join('');
-      }
-
-      // 3. Liderlik Tablosu Satırları
-      const tbody = document.getElementById('leaderboard-table-body');
-      if (!tbody) return;
-
-      if (filteredRanked.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="9" style="text-align:center; padding:1.5rem; color:var(--text-muted);">
-              Eşleşen oyuncu bulunamadı.
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      tbody.innerHTML = filteredRanked
-        .map(row => {
-          const isMe = row.username.toLowerCase() === this.session.username.toLowerCase();
-          const rankBadge =
-            row.rank === 1
-              ? '🥇 1.'
-              : row.rank === 2
-              ? '🥈 2.'
-              : row.rank === 3
-              ? '🥉 3.'
-              : `#${row.rank}`;
-
-          return `
-            <tr class="${isMe ? 'lb-current-user-row' : ''}">
-              <td class="lb-rank-cell">${rankBadge}</td>
-              <td>
-                <div style="display:flex; align-items:center; gap:0.5rem;">
-                  ${this.getAvatarImgHtml(row.username, 'mc-avatar-xs')}
-                  <strong>${this.formatUsernameHtml(
-                    row.username,
-                    row.rgbOwned && row.rgbEnabled
-                  )}</strong>
-                  ${isMe ? '<span class="role-badge role-player" style="margin-left:0.25rem;">SEN</span>' : ''}
-                </div>
-              </td>
-              <td><span class="role-badge role-${row.role.toLowerCase()}">${this.escapeHtml(row.rankBadge)}</span></td>
-              <td><strong class="gold-text">${row.totalPoints.toLocaleString('tr-TR')} Puan</strong></td>
-              <td><strong class="emerald-text">💚 ${row.emeraldCoins.toLocaleString('tr-TR')}</strong></td>
-              <td>${row.gamesPlayed}</td>
-              <td class="emerald-text">${row.gamesWon}</td>
-              <td><strong>%${row.winRate}</strong></td>
-              <td>❤️ ${row.extraLivesUsed}</td>
-            </tr>
-          `;
-        })
-        .join('');
-    }
-
-    // ==========================================
-    // ZÜMRÜT MAĞAZASI, RÜTBE MAĞAZASI & STRIPE ÖDEME EKRANI
-    // ==========================================
-    bindEmeraldShopScreen() {
-      document.querySelectorAll('[data-shop-cat]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.selectedShopCategory = btn.getAttribute('data-shop-cat') || 'ALL';
-          document.querySelectorAll('[data-shop-cat]').forEach(b => {
-            b.classList.toggle('active', b === btn);
-          });
-          this.renderEmeraldShop();
-        });
-      });
-    }
-
-    getNetheriteIngotSvg(ingotCount = 1) {
-      const countBadge =
-        ingotCount > 1
-          ? `<span class="netherite-stack-count">×${ingotCount}</span>`
-          : '';
-      return `
-        <div class="netherite-ingot-badge" title="Netherite Külçesi (${ingotCount}x)">
-          <svg viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges" aria-hidden="true">
-            <rect x="3" y="5" width="10" height="6" fill="#3b343a"/>
-            <rect x="2" y="6" width="12" height="4" fill="#4c434a"/>
-            <rect x="4" y="4" width="8" height="2" fill="#655b63"/>
-            <rect x="4" y="6" width="7" height="1" fill="#7c707a"/>
-            <rect x="3" y="9" width="9" height="2" fill="#292328"/>
-            <rect x="5" y="7" width="5" height="2" fill="#594f57"/>
-          </svg>
-          ${countBadge}
-        </div>
-      `;
-    }
-
-    renderEmeraldShop() {
-      if (!this.session) return;
-      const profile = economyService.getPlayerEconomyProfile(this.session.username);
-      const items =
-        this.selectedShopCategory === 'Emeralds'
-          ? []
-          : shopService.listShopItems(false, this.selectedShopCategory);
-      const rawPackages = paymentService.listEmeraldPackages
-        ? paymentService.listEmeraldPackages(false)
-        : paymentService.getEmeraldPackages
-        ? paymentService.getEmeraldPackages(false)
-        : [];
-      const emeraldPackages =
-        this.selectedShopCategory === 'ALL' || this.selectedShopCategory === 'Emeralds'
-          ? rawPackages
-          : [];
-
-      const balEl = document.getElementById('shop-emerald-balance');
-      if (balEl) {
-        balEl.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Zümrüt Coin`;
-      }
-
-      const invExtra = document.getElementById('shop-inv-extralife');
-      const invSecond = document.getElementById('shop-inv-secondchance');
-      const invBoost = document.getElementById('shop-inv-scorebooster');
-      const invEmBoost = document.getElementById('shop-inv-emeraldbooster');
-      const invTicket = document.getElementById('shop-inv-ticket');
-      const invRgb = document.getElementById('shop-inv-rgb');
-
-      if (invExtra) invExtra.textContent = profile.inventory?.extraLives || 0;
-      if (invSecond) invSecond.textContent = profile.inventory?.secondChance || 0;
-      if (invBoost) invBoost.textContent = profile.inventory?.scoreBooster || 0;
-      if (invEmBoost) invEmBoost.textContent = profile.inventory?.emeraldBooster || 0;
-      if (invTicket) invTicket.textContent = profile.inventory?.tournamentTickets || 0;
-      if (invRgb) {
-        invRgb.textContent = profile.rgbOwned
-          ? profile.rgbEnabled
-            ? 'Aktif 🌈'
-            : 'Sahip (Kapalı)'
-          : 'Kilitli';
-      }
-
-      const grid = document.getElementById('emerald-shop-grid');
-      if (!grid) return;
-
-      const packagesHtml = emeraldPackages
-        .map(pkg => {
-          const pkgTitle = pkg.name || pkg.title || `${pkg.emeralds} Zümrüt Paketi`;
-          const ingotCount = Number(pkg.ingotCount) || 1;
-          return `
-            <div class="shop-item-card shop-netherite-card">
-              <div>
-                <div class="shop-item-top">
-                  ${this.getNetheriteIngotSvg(ingotCount)}
-                  <span class="shop-item-price-tag">${pkg.priceTL.toLocaleString('tr-TR')} TL</span>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem; gap:0.4rem; flex-wrap:wrap;">
-                  <h3 class="shop-item-title" style="margin:0;">${this.escapeHtml(pkgTitle)}</h3>
-                  <span class="role-badge role-vip">${this.escapeHtml(pkg.badge || '5 💚 = 1 TL')}</span>
-                </div>
-                <p class="shop-item-desc">⬛ Netherite Külçesi Paketi: <strong>+${pkg.emeralds.toLocaleString('tr-TR')} Zümrüt Coin</strong> (${pkg.priceTL} TL).</p>
-              </div>
-              <div class="shop-item-footer">
-                <span class="meta-muted">Stripe Doğrulanmış Webhook</span>
-                <button
-                  type="button"
-                  class="mc-btn mc-btn-emerald mc-btn-small btn-buy-emerald-pkg"
-                  data-pkg-id="${this.escapeHtml(pkg.id)}"
-                >
-                  <span class="btn-inner">Satın Al (${pkg.priceTL} TL)</span>
-                </button>
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-
-      const itemsHtml = items
-        .map(item => {
-          const check = shopService.evaluateEligibility(this.session, item);
-          const priceStr =
-            item.currency === 'TRY'
-              ? `${item.price} TL`
-              : `💚 ${item.price.toLocaleString('tr-TR')} Zümrüt`;
-          const reqBadge =
-            item.requiredRole === 'VIP'
-              ? '<span class="role-badge role-vip">VIP Gerekli</span>'
-              : `<span class="meta-muted">${this.escapeHtml(item.category)}</span>`;
-          const rankTlBtn =
-            item.effectType === 'GRANT_RANK' && item.priceTL && check.canBuy
-              ? `<button
-                   type="button"
-                   class="mc-btn mc-btn-gold mc-btn-small btn-buy-rank-tl"
-                   data-rank-id="${this.escapeHtml(item.targetRank)}"
-                 >
-                   <span class="btn-inner">💳 ${item.priceTL} TL</span>
-                 </button>`
-              : '';
-
-          return `
-            <div class="shop-item-card">
-              <div>
-                <div class="shop-item-top">
-                  <div class="shop-item-icon">${this.escapeHtml(item.icon)}</div>
-                  <span class="shop-item-price-tag">${priceStr}</span>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
-                  <h3 class="shop-item-title" style="margin:0;">${this.escapeHtml(item.name)}</h3>
-                  ${reqBadge}
-                </div>
-                <p class="shop-item-desc">"${this.escapeHtml(item.description)}"</p>
-              </div>
-              <div class="shop-item-footer" style="gap:0.4rem; flex-wrap:wrap;">
-                <span class="meta-muted">${this.escapeHtml(check.reason)}</span>
-                <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
-                  ${rankTlBtn}
-                  <button
-                    type="button"
-                    class="mc-btn ${check.canBuy ? 'mc-btn-emerald' : 'mc-btn-stone'} mc-btn-small btn-buy-shop-item"
-                    data-item-id="${this.escapeHtml(item.id)}"
-                    ${check.canBuy ? '' : 'disabled'}
-                  >
-                    <span class="btn-inner">${this.escapeHtml(check.buttonLabel)}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-
-      grid.innerHTML = packagesHtml + itemsHtml;
-
-      grid.querySelectorAll('.btn-buy-emerald-pkg').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const pkgId = btn.getAttribute('data-pkg-id');
-          this.openStripeCheckoutModal({ type: 'EMERALDS', packageId: pkgId });
-        });
-      });
-
-      grid.querySelectorAll('.btn-buy-rank-tl').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const rankId = btn.getAttribute('data-rank-id');
-          this.openStripeCheckoutModal({ type: 'RANK', rankId });
-        });
-      });
-
-      grid.querySelectorAll('.btn-buy-shop-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const itemId = btn.getAttribute('data-item-id');
-          btn.disabled = true;
-          try {
-            const res = shopService.purchaseItem(this.session, itemId);
-            this.session = licenseService.refreshSessionRole(this.session) || this.session;
-            this.updateTopBarSessionUI();
-            if (res.item.effectType === 'GRANT_RANK') {
-              window.soundManager.playRankUpgrade();
-            } else {
-              window.soundManager.playPurchase();
-            }
-            if (window.mcQuizGame) {
-              const rect = btn.getBoundingClientRect();
-              window.mcQuizGame.particles.spawnBurst(
-                rect.left + rect.width / 2,
-                rect.top + rect.height / 2,
-                'emerald',
-                42
-              );
-            }
-            this.showToast(
-              `✅ ${res.item.icon} ${res.item.name} satın alındı (-${res.item.price} Zümrüt)!`,
-              'success'
-            );
-            this.syncEconomyHeaderUI();
-            this.renderEmeraldShop();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-            btn.disabled = false;
-          }
-        });
-      });
-    }
-
-    // ==========================================
-    // STRIPE CHECKOUT & WEBHOOK DOĞRULAMA MODALI
-    // ==========================================
-    openStripeCheckoutModal(payload) {
-      try {
-        const res = paymentService.createCheckoutSession(this.session, payload);
-        this.activeCheckoutSession = res.checkoutSession;
-
-        const modal = document.getElementById('modal-stripe-checkout');
-        const idEl = document.getElementById('stripe-chk-session-id');
-        const itemEl = document.getElementById('stripe-chk-item-label');
-        const amtEl = document.getElementById('stripe-chk-amount-tl');
-        const badgeEl = document.getElementById('stripe-chk-status-badge');
-
-        if (idEl) idEl.textContent = res.checkoutSession.id;
-        if (itemEl) itemEl.textContent = res.checkoutSession.title;
-        if (amtEl) amtEl.textContent = `${res.checkoutSession.amount} TL`;
-        if (badgeEl) {
-          badgeEl.textContent = res.checkoutSession.status;
-          badgeEl.className = 'status-pill status-WAITING';
-        }
-        if (modal) modal.classList.remove('hidden');
-      } catch (err) {
-        window.soundManager.playError();
-        this.showToast(err.message, 'error');
-      }
-    }
-
-    bindStripeCheckoutModal() {
-      const modal = document.getElementById('modal-stripe-checkout');
-      const completeBtn = document.getElementById('btn-stripe-complete-pay');
-      const failBtn = document.getElementById('btn-stripe-simulate-fail');
-
-      if (completeBtn) {
-        completeBtn.addEventListener('click', () => {
-          if (!this.activeCheckoutSession) return;
-          try {
-            const webhookRes = paymentService.completeTestModeCheckout(
-              this.session,
-              this.activeCheckoutSession.id
-            );
-            this.activeCheckoutSession = null;
-            if (modal) modal.classList.add('hidden');
-
-            this.session = licenseService.refreshSessionRole(this.session) || this.session;
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderEmeraldShop();
-            this.renderVipShop();
-
-            window.soundManager.playPurchase();
-            if (window.mcQuizGame) {
-              window.mcQuizGame.particles.spawnBurst(
-                window.innerWidth / 2,
-                window.innerHeight / 2,
-                'emerald',
-                55
-              );
-            }
-            this.showToast(
-              `✅ Stripe Webhook Doğrulandı (${webhookRes.eventId}): ${webhookRes.payment.title} hesabınıza tanımlandı!`,
-              'success'
-            );
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (failBtn) {
-        failBtn.addEventListener('click', () => {
-          if (!this.activeCheckoutSession) return;
-          window.soundManager.playError();
-          try {
-            paymentService.failCheckoutSession(
-              this.activeCheckoutSession.id,
-              'Stripe Test Modunda kart reddi simülasyonu'
-            );
-            this.activeCheckoutSession = null;
-            if (modal) modal.classList.add('hidden');
-            this.showToast(
-              '❌ Stripe Test Modunda ödeme başarısız oldu. 0 Zümrüt tanımlandı.',
-              'error'
-            );
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-    }
-
-    // ==========================================
-    // VIP MAĞAZASI & ÖDEME ENTEGRASYONU
-    // ==========================================
-    bindVipShopScreen() {
-      const buyVipBtn = document.getElementById('btn-buy-vip-package');
-      const gotoRankShopBtn = document.getElementById('btn-goto-rank-shop');
-
-      if (buyVipBtn) {
-        buyVipBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const res = paymentService.initiateCheckout(this.session, {
-            type: 'RANK',
-            rankId: 'VIP',
-            packageId: 'VIP_PACKAGE_200TL',
-            title: '👑 VIP Üyelik (200 TL)',
-            priceTL: 200
-          });
-          this.activeCheckoutSession = res.intent;
-          const statusBox = document.getElementById('payment-service-status-box');
-          const statusMsg = document.getElementById('payment-service-status-msg');
-          if (statusBox && statusMsg) {
-            statusMsg.textContent = `${res.message} (Oturum ID: ${res.intent.id})`;
-            statusBox.classList.remove('hidden');
-          }
-          const modal = document.getElementById('modal-stripe-checkout');
-          const idEl = document.getElementById('stripe-chk-session-id');
-          const itemEl = document.getElementById('stripe-chk-item-label');
-          const amtEl = document.getElementById('stripe-chk-amount-tl');
-          const badgeEl = document.getElementById('stripe-chk-status-badge');
-          if (idEl) idEl.textContent = res.intent.id;
-          if (itemEl) itemEl.textContent = res.intent.title;
-          if (amtEl) amtEl.textContent = `${res.intent.amount} TL`;
-          if (badgeEl) {
-            badgeEl.textContent = res.intent.status;
-            badgeEl.className = 'status-pill status-WAITING';
-          }
-          if (modal) modal.classList.remove('hidden');
-        });
-      }
-
-      if (gotoRankShopBtn) {
-        gotoRankShopBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.selectedShopCategory = 'Ranks';
-          document.querySelectorAll('[data-shop-cat]').forEach(b => {
-            b.classList.toggle('active', b.getAttribute('data-shop-cat') === 'Ranks');
-          });
-          this.navigateToScreen('screen-shop');
-        });
-      }
-    }
-
-    renderVipShop() {
-      if (!this.session) return;
-      const cfg = configService.getConfig();
-      const effRole = authGuard.getEffectiveRole(this.session);
-      const statusBadge = document.getElementById('vip-shop-user-status');
-      if (statusBadge) {
-        statusBadge.textContent = effRole;
-        statusBadge.className = `role-badge role-${effRole.toLowerCase()}`;
-      }
-
-      const normWin = document.getElementById('cmp-normal-win');
-      const vipWin = document.getElementById('cmp-vip-win');
-      const normDaily = document.getElementById('cmp-normal-daily');
-      const vipDaily = document.getElementById('cmp-vip-daily');
-
-      if (normWin) normWin.textContent = `+${cfg.rewards.gameWon} 💚`;
-      if (vipWin) vipWin.textContent = `+${cfg.rewards.vipGameWon} 💚`;
-      if (normDaily) normDaily.textContent = `+${cfg.rewards.dailyLogin} 💚`;
-      if (vipDaily) vipDaily.textContent = `+${cfg.rewards.vipDailyLogin} 💚`;
-    }
-
-    // ==========================================
-    // BÖLÜM 9, 10, 11 & 29: OYUNCU PROFİLİ, AVATAR KIRPMA & ÖZELLEŞTİRME
-    // ==========================================
-    bindProfileAndCosmetics() {
-      const enableRgbBtn = document.getElementById('btn-profile-rgb-enable');
-      const disableRgbBtn = document.getElementById('btn-profile-rgb-disable');
-      const avatarFileInp = document.getElementById('inp-profile-avatar-file');
-      const saveAvatarBtn = document.getElementById('btn-save-profile-avatar');
-      const removeAvatarBtn = document.getElementById('btn-remove-profile-avatar');
-      const saveCustBtn = document.getElementById('btn-save-profile-customization');
-
-      // 1. Profil Fotoğrafı Seçimi + 160x160 Kare Canvas Kırpma + Önizleme
-      if (avatarFileInp) {
-        avatarFileInp.addEventListener('change', () => {
-          const file = avatarFileInp.files && avatarFileInp.files[0];
-          if (!file) return;
-
-          const validation = avatarService.validateImageFile(file);
-          if (!validation.ok) {
-            window.soundManager.playError();
-            this.showToast(validation.error, 'error');
-            avatarFileInp.value = '';
-            return;
-          }
-
-          const reader = new FileReader();
-          reader.onload = ev => {
-            const img = new Image();
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              canvas.width = 160;
-              canvas.height = 160;
-              const ctx = canvas.getContext('2d');
-              const minSide = Math.min(img.width, img.height);
-              const sx = Math.floor((img.width - minSide) / 2);
-              const sy = Math.floor((img.height - minSide) / 2);
-              ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, 160, 160);
-
-              const croppedDataUrl = canvas.toDataURL('image/png');
-              this.pendingCroppedAvatarDataUrl = croppedDataUrl;
-
-              const previewWrap = document.getElementById('profile-avatar-crop-preview-wrap');
-              const previewImg = document.getElementById('profile-avatar-preview-img');
-              if (previewImg) previewImg.src = croppedDataUrl;
-              if (previewWrap) previewWrap.classList.remove('hidden');
-              if (saveAvatarBtn) saveAvatarBtn.classList.remove('hidden');
-
-              window.soundManager.playClick();
-              this.showToast('Fotoğraf kare olarak kırpıldı. Kaydetmek için "Fotoğrafı Kaydet" butonuna basın.', 'info');
-            };
-            img.onerror = () => {
-              this.showToast('Görsel dosyası okunamadı.', 'error');
-            };
-            img.src = ev.target.result;
-          };
-          reader.readAsDataURL(file);
-        });
-      }
-
-      // 2. Kırpılan Profil Fotoğrafını Kaydet
-      if (saveAvatarBtn) {
-        saveAvatarBtn.addEventListener('click', () => {
-          if (!this.pendingCroppedAvatarDataUrl) return;
-          try {
-            userService.updateProfileAvatar(this.session, this.pendingCroppedAvatarDataUrl);
-            this.pendingCroppedAvatarDataUrl = null;
-            const previewWrap = document.getElementById('profile-avatar-crop-preview-wrap');
-            if (previewWrap) previewWrap.classList.add('hidden');
-            saveAvatarBtn.classList.add('hidden');
-            if (avatarFileInp) avatarFileInp.value = '';
-
-            window.soundManager.playSuccess();
-            this.showToast('📸 Profil fotoğrafınız başarıyla güncellendi!', 'success');
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderPlayerProfile();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      // 3. Profil Fotoğrafını Kaldır (Varsayılan Minecraft Avatarına Dön)
-      if (removeAvatarBtn) {
-        removeAvatarBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            userService.updateProfileAvatar(this.session, null);
-            this.pendingCroppedAvatarDataUrl = null;
-            const previewWrap = document.getElementById('profile-avatar-crop-preview-wrap');
-            if (previewWrap) previewWrap.classList.add('hidden');
-            if (saveAvatarBtn) saveAvatarBtn.classList.add('hidden');
-            if (avatarFileInp) avatarFileInp.value = '';
-
-            this.showToast('Profil fotoğrafı kaldırıldı. Minecraft piksel avatarı aktif.', 'info');
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderPlayerProfile();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      // 4. Profil Özelleştirme Kaydet (Çerçeve, Arka Plan, Tema, Gizlilik)
-      if (saveCustBtn) {
-        saveCustBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            const profileBorder = document.getElementById('sel-profile-border')?.value || 'stone';
-            const profileBackground = document.getElementById('sel-profile-bg')?.value || 'overworld';
-            const theme = document.getElementById('sel-profile-theme')?.value || 'dark';
-            const profilePrivacy = document.getElementById('sel-profile-privacy')?.value || 'PUBLIC';
-
-            userService.updateProfileCustomization(this.session, {
-              profileBorder,
-              profileBackground,
-              theme,
-              profilePrivacy
-            });
-
-            this.applyUserThemePreference();
-            window.soundManager.playSuccess();
-            this.showToast('🎨 Profil özelleştirmeleri kaydedildi!', 'success');
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderPlayerProfile();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (enableRgbBtn) {
-        enableRgbBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            userService.setRgbUsernameEnabled(this.session, true);
-            economyService._mutateAccount(this.session.username, acc => {
-              acc.rgbOwned = true;
-              acc.rgbEnabled = true;
-            });
-            this.showToast('🌈 RGB Kullanıcı Adı etkinleştirildi!', 'success');
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderPlayerProfile();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (disableRgbBtn) {
-        disableRgbBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            userService.setRgbUsernameEnabled(this.session, false);
-            economyService._mutateAccount(this.session.username, acc => {
-              acc.rgbEnabled = false;
-            });
-            this.showToast('RGB Kullanıcı Adı kapatıldı.', 'info');
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderPlayerProfile();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-    }
-
-    renderPlayerProfile() {
-      if (!this.session) return;
-      const summary = leaderboardService.getPlayerRankAndSummary(this.session.username);
-      const achievements = achievementService.getPlayerAchievements(this.session.username);
-      const dailyStatus = dailyRewardService.canClaimDailyReward(this.session.username);
-      const userObj = userService.getUserByUsername(this.session.username);
-
-      const avatarImg = document.getElementById('profile-avatar-img');
-      const heroBanner = document.getElementById('profile-hero-banner');
-      const uName = document.getElementById('profile-username');
-      const uRole = document.getElementById('profile-role-badge');
-      const uRank = document.getElementById('profile-rank-badge');
-      const uIdEl = document.getElementById('profile-immutable-id');
-      const rgbPreview = document.getElementById('profile-rgb-preview');
-      const rgbPill = document.getElementById('profile-rgb-status-pill');
-
-      const borderKey = userObj?.profileBorder || 'stone';
-      const bgKey = userObj?.profileBackground || 'overworld';
-
-      if (avatarImg) {
-        avatarImg.src = avatarService.getUserAvatarUrl(userObj || this.session.username);
-        avatarImg.className = `mc-avatar-img mc-avatar-xl avatar-border-${borderKey}`;
-      }
-      if (heroBanner) {
-        heroBanner.className = `profile-hero-card profile-bg-${bgKey}`;
-      }
-
-      // Özelleştirme seçim kutularını senkronize et
-      const selBorder = document.getElementById('sel-profile-border');
-      const selBg = document.getElementById('sel-profile-bg');
-      const selTheme = document.getElementById('sel-profile-theme');
-      const selPrivacy = document.getElementById('sel-profile-privacy');
-      if (selBorder) selBorder.value = borderKey;
-      if (selBg) selBg.value = bgKey;
-      if (selTheme) selTheme.value = userObj?.settings?.theme || 'dark';
-      if (selPrivacy) selPrivacy.value = userObj?.profilePrivacy || 'PUBLIC';
-
-      if (uName) {
-        uName.innerHTML = this.formatUsernameHtml(
-          summary.username,
-          summary.rgbOwned && summary.rgbEnabled
-        );
-      }
-      if (uRole) {
-        uRole.textContent = summary.role;
-        uRole.className = `role-badge role-${summary.role.toLowerCase()}`;
-      }
-      if (uRank) uRank.textContent = `${summary.rankBadge} • Sıra #${summary.rank}`;
-      if (uIdEl) uIdEl.textContent = `Sabit Hesap ID: ${summary.userId || this.session.userId}`;
-      if (rgbPreview) rgbPreview.textContent = summary.username;
-      if (rgbPill) {
-        const statusStr = summary.rgbOwned
-          ? summary.rgbEnabled
-            ? 'AKTİF'
-            : 'SAHİP (KAPALI)'
-          : 'KİLİTLİ';
-        rgbPill.textContent = statusStr;
-        rgbPill.className = `status-pill status-${summary.rgbOwned && summary.rgbEnabled ? 'ACTIVE' : 'DISABLED'}`;
-      }
-
-      const extraOwned =
-        (summary.inventory?.extraLives || 0) + (summary.inventory?.secondChance || 0);
-
-      document.getElementById('prof-stat-rank').textContent = `#${summary.rank}`;
-      document.getElementById('prof-stat-points').textContent =
-        `${summary.totalPoints.toLocaleString('tr-TR')} Puan`;
-      document.getElementById('prof-stat-emeralds').textContent =
-        `💚 ${summary.emeraldCoins.toLocaleString('tr-TR')} Zümrüt Coin`;
-      document.getElementById('prof-stat-games').textContent =
-        summary.gamesPlayed.toLocaleString('tr-TR');
-      document.getElementById('prof-stat-winloss').textContent =
-        `${summary.gamesWon} G / ${summary.gamesLost} M`;
-      document.getElementById('prof-stat-winrate').textContent = `%${summary.winRate}`;
-      document.getElementById('prof-stat-extralives').textContent =
-        `${extraOwned} Sahip / ${summary.extraLivesUsed} Kullanıldı`;
-      document.getElementById('prof-stat-avgscore').textContent =
-        `${summary.averageScore.toLocaleString('tr-TR')} Puan`;
-      document.getElementById('prof-stat-bestscore').textContent =
-        `${summary.bestScore.toLocaleString('tr-TR')} Zümrüt`;
-      document.getElementById('prof-stat-earned').textContent =
-        `+${summary.totalEmeraldsEarned.toLocaleString('tr-TR')} Zümrüt`;
-      document.getElementById('prof-stat-spent').textContent =
-        `-${summary.totalEmeraldsSpent.toLocaleString('tr-TR')} Zümrüt`;
-      document.getElementById('prof-stat-streak').textContent =
-        `${dailyStatus.currentStreak} Gün`;
-
-      const unlockedCount = achievements.filter(a => a.unlocked).length;
-      const counterEl = document.getElementById('prof-achievements-counter');
-      if (counterEl) {
-        counterEl.textContent = `${unlockedCount} / ${achievements.length} Açıldı`;
-      }
-
-      const achGrid = document.getElementById('profile-achievements-grid');
-      if (achGrid) {
-        achGrid.innerHTML = achievements
-          .map(
-            a => `
-            <div class="achievement-card ${a.unlocked ? 'unlocked' : ''}">
-              <div class="ach-icon">${a.icon}</div>
-              <div class="ach-info">
-                <div class="ach-title">${this.escapeHtml(a.title)} ${
-                  a.unlocked ? '✅' : '🔒'
-                }</div>
-                <div class="ach-desc">${this.escapeHtml(a.description)}</div>
-              </div>
-            </div>
-          `
-          )
-          .join('');
-      }
-    }
-
-    // ==========================================
-    // ZÜMRÜT İŞLEM GEÇMİŞİ EKRANI
-    // ==========================================
-    renderEmeraldHistory() {
-      if (!this.session) return;
-      const profile = economyService.getPlayerEconomyProfile(this.session.username);
-      const txs = economyService.getTransactionHistory(this.session, this.session.username);
-
-      const balEl = document.getElementById('history-emerald-balance');
-      if (balEl) {
-        balEl.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Zümrüt Coin`;
-      }
-
-      const listEl = document.getElementById('player-history-list');
-      if (!listEl) return;
-
-      if (txs.length === 0) {
-        listEl.innerHTML =
-          '<div class="empty-state-box">Henüz kayıtlı Zümrüt Coin işlemi bulunmuyor.</div>';
-        return;
-      }
-
-      listEl.innerHTML = txs
-        .map(tx => {
-          const isNeg = tx.amount < 0;
-          const sign = tx.amount > 0 ? '+' : '';
-          const amountText =
-            tx.amount === 0
-              ? '❤️ 1 Ekstra Can Kullanıldı'
-              : `${sign}${tx.amount.toLocaleString('tr-TR')} Zümrüt`;
-          return `
-            <div class="tx-row ${isNeg ? 'tx-negative' : ''}">
-              <div class="tx-main">
-                <span class="tx-reason">${this.escapeHtml(tx.reason)} <span class="meta-muted">(${this.escapeHtml(tx.id)})</span></span>
-                <span class="tx-meta">🕒 ${tx.dateFormatted} • Önceki: 💚 ${Number(tx.previousBalance || 0).toLocaleString('tr-TR')} → Yeni: 💚 ${tx.balanceAfter.toLocaleString('tr-TR')} • Kaynak: ${this.escapeHtml(tx.source || 'Sistem')}</span>
-              </div>
-              <div class="tx-amount ${isNeg ? 'wrong-text' : 'emerald-text'}">
-                ${amountText}
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-    }
-
-    // ==========================================
-    // PARTİ SİSTEMİ (YETKİ KONTROLLÜ, LİSANSI ASLA SIFIRLAMAZ)
-    // ==========================================
-    openPartyLobby(openCreateBox = false) {
-      if (!this.session) {
-        this.lockWithLicenseGate(false);
-        return;
-      }
-
-      if (window.mcQuizGame) {
-        window.mcQuizGame.showScreen('screen-party');
-      }
-
-      this.syncEconomyHeaderUI();
-      this.renderPartyLobby(openCreateBox);
-    }
-
-    bindPartyLobby() {
-      const backMenuBtn = document.getElementById('btn-party-back-menu');
-      const playSoloBtn = document.getElementById('btn-party-play-solo');
-      const openCreateBtn = document.getElementById('btn-open-create-party');
-      const rankLockViewBtn = document.getElementById('btn-rank-lock-view-ranks');
-      const createBox = document.getElementById('organizer-create-party-box');
-      const createForm = document.getElementById('form-create-party');
-      const joinForm = document.getElementById('form-join-party');
-      const statusFilter = document.getElementById('filter-user-party-status');
-
-      if (backMenuBtn) {
-        backMenuBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-menu');
-        });
-      }
-
-      if (playSoloBtn) {
-        playSoloBtn.addEventListener('click', () => {
-          window.soundManager.playGameStart();
-          if (window.mcQuizGame) window.mcQuizGame.startNewGame();
-        });
-      }
-
-      if (rankLockViewBtn) {
-        rankLockViewBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-vip-shop');
-        });
-      }
-
-      if (openCreateBtn && createBox) {
-        openCreateBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const perms = authGuard.getUserPermissions(this.session);
-          if (!perms.canCreateParty) {
-            this.showToast('🔒 Bu özellik VIP veya daha yüksek rütbe gerektirir.', 'error');
-            return;
-          }
-          createBox.classList.toggle('hidden');
-          const nameInp = document.getElementById('input-party-name');
-          if (!createBox.classList.contains('hidden') && nameInp) nameInp.focus();
-        });
-      }
-
-      if (createForm) {
-        createForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const nameInput = document.getElementById('input-party-name');
-            const maxSelect = document.getElementById('input-party-max');
-            const modeSelect = document.getElementById('input-party-mode');
-            const descInput = document.getElementById('input-party-desc');
-            const newParty = partyService.createParty(this.session, {
-              name: nameInput.value,
-              maxPlayers: Number(maxSelect.value),
-              gameMode: modeSelect ? modeSelect.value : 'Klasik Milyoner (15 Soru)',
-              description: descInput ? descInput.value : ''
-            });
-            nameInput.value = '';
-            if (descInput) descInput.value = '';
-            this.selectedPartyId = newParty.id;
-            window.soundManager.playPartyJoin();
-            this.showToast(`"${newParty.name}" partisi oluşturuldu! Davet Kodu: ${newParty.inviteCode}`, 'success');
-            this.renderPartyLobby(false);
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      // Partiye Katıl — Lisansı veya hesabı ASLA sıfırlamaz!
-      if (joinForm) {
-        joinForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const codeInp = document.getElementById('input-join-invite-code');
-            const joinedParty = partyService.joinPartyByInviteCode(this.session, codeInp.value);
-            codeInp.value = '';
-            this.selectedPartyId = joinedParty.id;
-            window.soundManager.playPartyJoin();
-            this.showToast(`BAŞARILI — "${joinedParty.name}" partisine başarıyla katıldınız.`, 'success');
-            this.renderPartyLobby(false);
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (statusFilter) {
-        statusFilter.addEventListener('change', () => this.renderPartyList());
-      }
-    }
-
-    renderPartyLobby(forceShowCreate = false) {
-      if (!this.session) return;
-      const effRole = authGuard.getEffectiveRole(this.session);
-      const perms = authGuard.getUserPermissions(this.session);
-      const profile = economyService.getPlayerEconomyProfile(this.session.username);
-
-      const welcomeTitle = document.getElementById('party-welcome-title');
-      const roleBadge = document.getElementById('party-user-role-badge');
-      const licName = document.getElementById('party-user-license-name');
-      const createBtn = document.getElementById('btn-open-create-party');
-      const createBox = document.getElementById('organizer-create-party-box');
-      const lockCard = document.getElementById('player-party-create-lock-card');
-      const maxSelect = document.getElementById('input-party-max');
-
-      if (welcomeTitle) {
-        welcomeTitle.innerHTML = `Hoş Geldin, ${this.formatUsernameHtml(this.session.username)}`;
-      }
-      if (roleBadge) {
-        roleBadge.textContent = profile.rankBadge || effRole;
-        roleBadge.className = `role-badge role-${effRole.toLowerCase()}`;
-      }
-      if (licName) licName.textContent = this.session.licenseName || 'Aktif Hesap';
-
-      // Kullanıcının rütbe limitine göre maksimum oyuncu seçeneklerini doldur
-      if (maxSelect && perms.canCreateParty) {
-        const cap = Math.min(32, perms.maxPartySize || 4);
-        const sizes = [2, 4, 6, 8, 10, 12, 14, 16, 20, 32].filter(n => n <= cap);
-        if (!sizes.includes(cap)) sizes.push(cap);
-        maxSelect.innerHTML = sizes
-          .map(
-            n =>
-              `<option value="${n}" ${n === cap ? 'selected' : ''}>${n} Oyuncu ${
-                n === cap ? `(${profile.rank || effRole} Maks)` : ''
-              }</option>`
-          )
-          .join('');
-      }
-
-      // Normal PLAYER görsel kilit kartı (🔒) görür. Rütbeli ve ADMIN [ Parti Oluştur ] görür
-      const canCreateParty = Boolean(perms.canCreateParty);
-      if (createBtn) createBtn.classList.toggle('hidden', !canCreateParty);
-      if (lockCard) lockCard.classList.toggle('hidden', canCreateParty);
-      if (createBox) {
-        if (!canCreateParty) {
-          createBox.classList.add('hidden');
-        } else if (forceShowCreate) {
-          createBox.classList.remove('hidden');
-        }
-      }
-
-      this.renderPartyList();
-      this.renderSelectedPartyDetail();
-    }
-
-    renderPartyList() {
-      const listEl = document.getElementById('user-parties-list');
-      const filterEl = document.getElementById('filter-user-party-status');
-      if (!listEl || !this.session) return;
-
-      const statusFilter = filterEl ? filterEl.value : 'ALL';
-      let parties = partyService.listParties(this.session);
-      if (statusFilter !== 'ALL') {
-        parties = parties.filter(p => p.status === statusFilter);
-      }
-
-      if (!this.selectedPartyId && parties.length > 0) {
-        this.selectedPartyId = parties[0].id;
-      }
-
-      if (parties.length === 0) {
-        listEl.innerHTML = `
-          <div class="empty-state-box">
-            Aktif parti bulunamadı. Katılmak için yukarıya bir Davet Kodu (örn. <strong>MCM-8K2P</strong>) girin!
-          </div>
-        `;
-        return;
-      }
-
-      listEl.innerHTML = parties
-        .map(p => {
-          const joinedCount = p.participants.filter(pt => pt.joinStatus === 'JOINED').length;
-          const isSelected = p.id === this.selectedPartyId;
-          const statusTr = PARTY_STATUS_LABELS_TR[p.status] || p.status;
-          return `
-            <div class="party-item-card ${isSelected ? 'selected' : ''}" data-party-id="${p.id}">
-              <div class="party-item-top">
-                <span class="party-item-title">${this.escapeHtml(p.name)}</span>
-                <span class="status-pill status-${p.status}">${statusTr}</span>
-              </div>
-              <div class="party-item-meta">
-                <span>👑 Kurucu: <strong>${this.escapeHtml(p.organizer)}</strong></span>
-                <span>🎮 Mod: <strong>${this.escapeHtml(p.gameMode || 'Klasik Milyoner')}</strong></span>
-                <span>👥 Oyuncular: <strong>${joinedCount} / ${p.maxPlayers}</strong></span>
-                <span>🎟️ Davet Kodu: <strong class="emerald-text">${p.inviteCode}</strong></span>
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-
-      listEl.querySelectorAll('.party-item-card').forEach(card => {
-        card.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.selectedPartyId = card.getAttribute('data-party-id');
-          this.renderPartyList();
-          this.renderSelectedPartyDetail();
-        });
-      });
-    }
-
-    renderSelectedPartyDetail() {
-      const container = document.getElementById('party-detail-container');
-      if (!container || !this.session) return;
-
-      const party = this.selectedPartyId
-        ? partyService.getPartyById(this.session, this.selectedPartyId)
-        : null;
-
-      if (!party) {
-        container.innerHTML = `
-          <div class="empty-state-box">
-            Detayları görüntülemek için sol listeden bir parti seçin veya bir Davet Kodu girin.
-          </div>
-        `;
-        return;
-      }
-
-      const effRole = authGuard.getEffectiveRole(this.session);
-      const perms = authGuard.getUserPermissions(this.session);
-      const isOwner = party.organizer.toLowerCase() === this.session.username.toLowerCase();
-      const canManage = effRole === 'ADMIN' || (Boolean(perms.canInvitePlayers) && isOwner);
-      const isParticipant = party.participants.some(
-        pt => pt.username.toLowerCase() === this.session.username.toLowerCase() && pt.joinStatus === 'JOINED'
-      );
-      const joinedCount = party.participants.filter(pt => pt.joinStatus === 'JOINED').length;
-      const createdDate = new Date(party.createdAt).toLocaleString('tr-TR');
-      const statusTr = PARTY_STATUS_LABELS_TR[party.status] || party.status;
-
-      const managementToolbarHtml = canManage
-        ? `
-          <div class="party-owner-toolbar">
-            <div class="owner-toolbar-title">👑 RÜTBELİ KURUCU / ADMİN PARTİ YÖNETİMİ</div>
-            <div class="inline-join-form">
-              <input type="text" id="inp-invite-username" class="mc-input mc-input-sm" placeholder="Davet edilecek Minecraft kullanıcı adı..." />
-              <button type="button" id="btn-detail-invite" class="mc-btn mc-btn-emerald mc-btn-small">
-                <span class="btn-inner">✉️ Oyuncu Davet Et</span>
-              </button>
-              <button type="button" id="btn-detail-copy-code" class="mc-btn mc-btn-stone mc-btn-small">
-                <span class="btn-inner">📋 Davet Kodunu Kopyala</span>
-              </button>
-            </div>
-
-            <div class="owner-actions-wrap">
-              <button type="button" id="btn-party-start" class="mc-btn mc-btn-emerald mc-btn-small" ${
-                party.status === 'CANCELLED' ? 'disabled' : ''
-              }>
-                <span class="btn-inner">▶️ Parti Oyununu Başlat</span>
-              </button>
-              <select id="sel-party-status-change" class="mc-select mc-select-xs">
-                ${PARTY_STATUSES.map(
-                  st => `<option value="${st}" ${party.status === st ? 'selected' : ''}>Durum: ${PARTY_STATUS_LABELS_TR[st] || st}</option>`
-                ).join('')}
-              </select>
-              <button type="button" id="btn-party-cancel" class="mc-btn mc-btn-danger mc-btn-small" ${
-                party.status === 'CANCELLED' ? 'disabled' : ''
-              }>
-                <span class="btn-inner">✖ Partiyi İptal Et</span>
-              </button>
-            </div>
-          </div>
-        `
-        : '';
-
-      const participantActionBar = `
-        <div style="display:flex; gap:0.65rem; flex-wrap:wrap; margin-bottom:1rem;">
-          ${
-            !isParticipant && party.status !== 'CANCELLED'
-              ? `<button type="button" id="btn-detail-quick-join" class="mc-btn mc-btn-emerald mc-btn-small">
-                   <span class="btn-inner">🎟️ Bu Partiye Katıl (${party.inviteCode})</span>
-                 </button>`
-              : ''
-          }
-          ${
-            isParticipant
-              ? `<button type="button" id="btn-detail-leave-party" class="mc-btn mc-btn-danger mc-btn-small">
-                   <span class="btn-inner">🚪 Partiden Ayrıl</span>
-                 </button>`
-              : ''
-          }
-        </div>
-      `;
-
-      container.innerHTML = `
-        <div class="party-detail-header">
-          <div>
-            <div class="party-detail-title">${this.escapeHtml(party.name)}</div>
-            <div class="meta-muted">Parti ID: <strong>${party.id}</strong> • Oluşturulma: ${createdDate}</div>
-            ${party.description ? `<p class="panel-sec-desc" style="margin-top:0.3rem;">${this.escapeHtml(party.description)}</p>` : ''}
-          </div>
-          <span class="status-pill status-${party.status}">${statusTr}</span>
-        </div>
-
-        <div class="party-meta-grid">
-          <div class="party-meta-box">
-            <span>Kurucu</span>
-            <strong class="gold-text">${this.formatUsernameHtml(party.organizer)}</strong>
-          </div>
-          <div class="party-meta-box">
-            <span>Oyuncu / Maks</span>
-            <strong>${joinedCount} / ${party.maxPlayers}</strong>
-          </div>
-          <div class="party-meta-box">
-            <span>Oyun Modu</span>
-            <strong>${this.escapeHtml(party.gameMode || 'Klasik Milyoner')}</strong>
-          </div>
-          <div class="party-meta-box">
-            <span>Davet Kodu</span>
-            <strong class="emerald-text">${party.inviteCode}</strong>
-          </div>
-        </div>
-
-        ${participantActionBar}
-        ${managementToolbarHtml}
-
-        <h4 class="panel-sec-title">👥 Katılımcılar (${party.participants.length})</h4>
-        <div class="participants-grid">
-          ${party.participants
-            .map(pt => {
-              const joinedTime = new Date(pt.joinedAt).toLocaleTimeString('tr-TR', {
-                hour: '2-digit',
-                minute: '2-digit'
-              });
-              const canRemoveThis =
-                canManage && pt.username.toLowerCase() !== party.organizer.toLowerCase();
-              const joinStatusTr = pt.joinStatus === 'JOINED' ? 'KATILDI' : pt.joinStatus === 'INVITED' ? 'DAVET EDİLDİ' : pt.joinStatus;
-              return `
-                <div class="participant-card">
-                  <div class="participant-top">
-                    <span class="participant-name" style="display:inline-flex; align-items:center; gap:0.4rem;">
-                      ${this.getAvatarImgHtml(pt.username, 'mc-avatar-xs')}
-                      ${this.formatUsernameHtml(pt.username)}
-                    </span>
-                    <span class="role-badge role-${pt.role.toLowerCase()}">${pt.role}</span>
-                  </div>
-                  <div class="participant-sub">
-                    <span class="status-pill status-${pt.joinStatus}">${joinStatusTr}</span>
-                    <span>Katılım: ${joinedTime}</span>
-                  </div>
-                  ${
-                    canRemoveThis
-                      ? `<button type="button" class="act-btn danger btn-remove-pt" data-username="${this.escapeHtml(
-                          pt.username
-                        )}">Oyuncuyu Çıkar</button>`
-                      : ''
-                  }
-                </div>
-              `;
-            })
-            .join('')}
-        </div>
-      `;
-
-      // Hızlı Katıl / Partiden Ayrıl bağlantıları
-      const quickJoinBtn = document.getElementById('btn-detail-quick-join');
-      if (quickJoinBtn) {
-        quickJoinBtn.addEventListener('click', () => {
-          try {
-            partyService.joinPartyByInviteCode(this.session, party.inviteCode);
-            window.soundManager.playPartyJoin();
-            this.showToast(`BAŞARILI — "${party.name}" partisine başarıyla katıldınız.`, 'success');
-            this.renderPartyLobby(false);
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      const leaveBtn = document.getElementById('btn-detail-leave-party');
-      if (leaveBtn) {
-        leaveBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            partyService.leaveParty(this.session, party.id);
-            this.showToast(`"${party.name}" partisinden ayrıldınız. Lisansınız ve hesabınız aktif kalmaya devam ediyor.`, 'info');
-            this.renderPartyLobby(false);
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (canManage) {
-        const inviteBtn = document.getElementById('btn-detail-invite');
-        const copyCodeBtn = document.getElementById('btn-detail-copy-code');
-        const startBtn = document.getElementById('btn-party-start');
-        const cancelBtn = document.getElementById('btn-party-cancel');
-        const statusSel = document.getElementById('sel-party-status-change');
-
-        if (inviteBtn) {
-          inviteBtn.addEventListener('click', () => {
-            const userInp = document.getElementById('inp-invite-username');
-            const targetUser = userInp ? userInp.value.trim() : '';
-            try {
-              const invData = partyService.invitePlayer(this.session, party.id, targetUser);
-              if (userInp) userInp.value = '';
-              window.soundManager.playPartyInvite();
-              this.openInvitationModal(invData);
-              if (targetUser) {
-                this.showToast(`${targetUser} oyuncusu başarıyla davet edildi.`, 'success');
-              }
-              this.renderPartyLobby(false);
-            } catch (err) {
-              window.soundManager.playError();
-              this.showToast(err.message, 'error');
-            }
-          });
-        }
-
-        if (copyCodeBtn) {
-          copyCodeBtn.addEventListener('click', () => {
-            window.soundManager.playClick();
-            this.copyToClipboard(
-              party.inviteCode,
-              `Davet kodu kopyalandı: ${party.inviteCode}`
-            );
-          });
-        }
-
-        if (startBtn) {
-          startBtn.addEventListener('click', () => {
-            window.soundManager.playGameStart();
-            try {
-              partyService.setPartyStatus(this.session, party.id, 'ACTIVE');
-              this.showToast('Parti oyunu başlatıldı!', 'success');
-              this.renderPartyLobby(false);
-              if (window.mcQuizGame) {
-                window.mcQuizGame.startNewGame();
-              }
-            } catch (err) {
-              this.showToast(err.message, 'error');
-            }
-          });
-        }
-
-        if (statusSel) {
-          statusSel.addEventListener('change', () => {
-            try {
-              partyService.setPartyStatus(this.session, party.id, statusSel.value);
-              this.showToast(`Parti durumu güncellendi: ${PARTY_STATUS_LABELS_TR[statusSel.value] || statusSel.value}`, 'info');
-              this.renderPartyLobby(false);
-            } catch (err) {
-              this.showToast(err.message, 'error');
-            }
-          });
-        }
-
-        if (cancelBtn) {
-          cancelBtn.addEventListener('click', () => {
-            window.soundManager.playClick();
-            this.askConfirmation(
-              '✖ Partiyi İptal Et',
-              `"${party.name}" partisini iptal etmek istediğinize emin misiniz?`,
-              'Partiyi İptal Et',
-              () => {
-                try {
-                  partyService.setPartyStatus(this.session, party.id, 'CANCELLED');
-                  this.showToast('Parti iptal edildi.', 'info');
-                  this.renderPartyLobby(false);
-                } catch (err) {
-                  this.showToast(err.message, 'error');
-                }
-              }
-            );
-          });
-        }
-
-        container.querySelectorAll('.btn-remove-pt').forEach(btn => {
-          btn.addEventListener('click', () => {
-            window.soundManager.playClick();
-            const targetUser = btn.getAttribute('data-username');
-            this.askConfirmation(
-              '👥 Katılımcıyı Çıkar',
-              `"${targetUser}" oyuncusunu bu partiden çıkarmak istediğinize emin misiniz?`,
-              'Oyuncuyu Çıkar',
-              () => {
-                try {
-                  partyService.removeParticipant(this.session, party.id, targetUser);
-                  this.showToast(`${targetUser} partiden çıkarıldı.`, 'info');
-                  this.renderPartyLobby(false);
-                } catch (err) {
-                  this.showToast(err.message, 'error');
-                }
-              }
-            );
-          });
-        });
-      }
-    }
-
-    // ==========================================
-    // DAVET MODALI
-    // ==========================================
-    openInvitationModal(invData) {
-      const modal = document.getElementById('modal-invite');
-      const nameEl = document.getElementById('inv-party-name');
-      const orgEl = document.getElementById('inv-party-organizer');
-      const codeEl = document.getElementById('inv-party-code');
-
-      if (!modal) return;
-      if (nameEl) nameEl.textContent = invData.partyName;
-      if (orgEl) orgEl.textContent = invData.organizer;
-      if (codeEl) codeEl.textContent = invData.inviteCode;
-
-      this.currentInvitationText = invData.invitationText;
-      modal.classList.remove('hidden');
-    }
-
-    bindInvitationModal() {
-      const copyBtn = document.getElementById('btn-copy-invitation');
-      if (copyBtn) {
-        copyBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.copyToClipboard(
-            this.currentInvitationText,
-            'Parti daveti panoya kopyalandı!'
-          );
-        });
-      }
-    }
-
-    // ==========================================
-    // BÖLÜM 23, 24 & 25: DESTEK, HATA BİLDİRİMİ & ÖNERİ MERKEZİ
-    // ==========================================
-    bindSupportHub() {
-      document.querySelectorAll('[data-support-pane]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.switchSupportTab(btn.getAttribute('data-support-pane'));
-        });
-      });
-
-      const supForm = document.getElementById('form-submit-support');
-      if (supForm) {
-        supForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const category = document.getElementById('sup-category')?.value;
-            const title = document.getElementById('sup-title')?.value;
-            const description = document.getElementById('sup-desc')?.value;
-            const ticket = supportService.createSupportTicket(this.session, {
-              category,
-              title,
-              description
-            });
-            supForm.reset();
-            window.soundManager.playSuccess();
-            const prioTr = supportService.formatPriorityTR(ticket.priority);
-            this.showToast(
-              `Destek talebi ${ticket.id} gönderildi (${prioTr} Öncelik)!`,
-              'success'
-            );
-            this.renderSupportHub();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      const bugForm = document.getElementById('form-submit-bug');
-      if (bugForm) {
-        bugForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const title = document.getElementById('bug-title')?.value;
-            const category = document.getElementById('bug-category')?.value;
-            const relatedParty = document.getElementById('bug-party')?.value;
-            const attachmentUrl = document.getElementById('bug-attachment')?.value;
-            const description = document.getElementById('bug-desc')?.value;
-            const bug = bugService.createBugReport(this.session, {
-              title,
-              category,
-              relatedParty,
-              attachmentUrl,
-              description
-            });
-            bugForm.reset();
-            window.soundManager.playSuccess();
-            const prioTr = supportService.formatPriorityTR(bug.priority);
-            this.showToast(
-              `Hata bildirimi ${bug.id} gönderildi (${prioTr} Öncelik)!`,
-              'success'
-            );
-            this.renderSupportHub();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      const sugForm = document.getElementById('form-submit-suggestion');
-      if (sugForm) {
-        sugForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const title = document.getElementById('sug-title')?.value;
-            const category = document.getElementById('sug-category')?.value;
-            const description = document.getElementById('sug-desc')?.value;
-            const sug = suggestionService.createSuggestion(this.session, {
-              title,
-              category,
-              description
-            });
-            sugForm.reset();
-            window.soundManager.playSuccess();
-            const prioTr = supportService.formatPriorityTR(sug.priority);
-            this.showToast(
-              `Öneri ${sug.id} gönderildi (${prioTr} Öncelik)!`,
-              'success'
-            );
-            this.renderSupportHub();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      const sugSortSel = document.getElementById('filter-user-suggestions-sort');
-      if (sugSortSel) {
-        sugSortSel.addEventListener('change', () => this.renderSupportHub());
-      }
-    }
-
-    switchSupportTab(paneName) {
-      document.querySelectorAll('[data-support-pane]').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-support-pane') === paneName);
-      });
-      document.querySelectorAll('.support-pane').forEach(pane => {
-        pane.classList.toggle('hidden', pane.id !== `support-pane-${paneName}`);
-      });
-      this.renderSupportHub();
-    }
-
-    renderSupportHub() {
-      if (!this.session) return;
-      const priority = supportService.computeUserPriority(this.session);
-      const prioInd = document.getElementById('support-priority-indicator');
-      if (prioInd) {
-        prioInd.textContent =
-          priority === 'VERY HIGH'
-            ? '⚡ ÇOK YÜKSEK ÖNCELİK (VIP+/MVP)'
-            : priority === 'HIGH'
-            ? '🔥 YÜKSEK ÖNCELİK (VIP)'
-            : priority === 'CRITICAL'
-            ? '🛡️ KRİTİK ÖNCELİK (ADMIN)'
-            : 'NORMAL ÖNCELİK';
-        prioInd.className = `priority-pill priority-${priority.replace(/\s+/g, '_')}`;
-      }
-
-      // 1. Destek Talepleri
-      const supListEl = document.getElementById('user-support-tickets-list');
-      if (supListEl) {
-        const tickets = supportService.listSupportTickets(this.session, true);
-        supListEl.innerHTML =
-          tickets.length === 0
-            ? '<div class="empty-state-box">Henüz destek talebi göndermediniz.</div>'
-            : tickets
-                .map(t => {
-                  const prioTr = supportService.formatPriorityTR(t.priority);
-                  return `
-                  <div class="tx-row">
-                    <div class="tx-main">
-                      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                        <span class="tx-reason">${this.escapeHtml(t.title)}</span>
-                        <span class="priority-pill priority-${t.priority.replace(/\s+/g, '_')}">${prioTr} Öncelik</span>
-                        <span class="status-pill status-${t.status === 'RESOLVED' ? 'ACTIVE' : 'WAITING'}">${t.status}</span>
-                      </div>
-                      <span class="tx-meta">[${t.id}] • ${this.escapeHtml(t.category)} • ${new Date(t.createdAt).toLocaleString('tr-TR')}</span>
-                      <p class="panel-sec-desc" style="margin-top:0.25rem;">${this.escapeHtml(t.description)}</p>
-                      ${
-                        t.adminReply
-                          ? `<div class="emerald-text" style="font-size:0.84rem; margin-top:0.25rem;">🛡️ Admin Yanıtı: ${this.escapeHtml(t.adminReply)}</div>`
-                          : ''
-                      }
-                    </div>
-                  </div>
-                `;
-                })
-                .join('');
-      }
-
-      // 2. Hata Bildirimleri
-      const bugListEl = document.getElementById('user-bug-reports-list');
-      if (bugListEl) {
-        const bugs = bugService.listBugReports(this.session, false);
-        bugListEl.innerHTML =
-          bugs.length === 0
-            ? '<div class="empty-state-box">Henüz hata bildirimi bulunmuyor.</div>'
-            : bugs
-                .map(b => {
-                  const prioTr = supportService.formatPriorityTR(b.priority);
-                  return `
-                  <div class="tx-row">
-                    <div class="tx-main">
-                      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                        <span class="tx-reason">${this.escapeHtml(b.title)}</span>
-                        <span class="priority-pill priority-${b.priority.replace(/\s+/g, '_')}">${prioTr} Öncelik</span>
-                        <span class="status-pill status-WAITING">${b.status}</span>
-                      </div>
-                      <span class="tx-meta">[${b.id}] • Gönderen: ${this.escapeHtml(b.username)} • ${this.escapeHtml(b.category)} ${b.relatedParty ? `• Parti: ${this.escapeHtml(b.relatedParty)}` : ''}</span>
-                      <p class="panel-sec-desc" style="margin-top:0.25rem;">${this.escapeHtml(b.description)}</p>
-                    </div>
-                  </div>
-                `;
-                })
-                .join('');
-      }
-
-      // 3. Topluluk Önerileri
-      const sugListEl = document.getElementById('user-suggestions-list');
-      const sortBy = document.getElementById('filter-user-suggestions-sort')?.value || 'PRIORITY';
-      if (sugListEl) {
-        const sugs = suggestionService.listSuggestions(this.session, sortBy);
-        sugListEl.innerHTML =
-          sugs.length === 0
-            ? '<div class="empty-state-box">Henüz öneri gönderilmedi.</div>'
-            : sugs
-                .map(s => {
-                  const voted = (s.votedBy || []).some(
-                    u => u.toLowerCase() === this.session.username.toLowerCase()
-                  );
-                  const prioTr = supportService.formatPriorityTR(s.priority);
-                  const statusTr = supportService.formatSuggestionStatusTR
-                    ? supportService.formatSuggestionStatusTR(s.status)
-                    : s.status;
-                  return `
-                  <div class="tx-row">
-                    <div class="tx-main">
-                      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                        <span class="tx-reason">${this.escapeHtml(s.title)}</span>
-                        <span class="priority-pill priority-${s.priority.replace(/\s+/g, '_')}">${prioTr} Öncelik</span>
-                        <span class="status-pill status-ACTIVE">${this.escapeHtml(statusTr)}</span>
-                      </div>
-                      <span class="tx-meta">[${s.id}] • Gönderen: ${this.escapeHtml(s.username)} • ${this.escapeHtml(s.category)}</span>
-                      <p class="panel-sec-desc" style="margin-top:0.25rem;">${this.escapeHtml(s.description)}</p>
-                    </div>
-                    <button type="button" class="act-btn ${voted ? 'emerald' : ''} btn-vote-sug" data-sug-id="${s.id}">
-                      👍 ${s.votes || 0}
-                    </button>
-                  </div>
-                `;
-                })
-                .join('');
-
-        sugListEl.querySelectorAll('.btn-vote-sug').forEach(btn => {
-          btn.addEventListener('click', () => {
-            window.soundManager.playClick();
-            const id = btn.getAttribute('data-sug-id');
-            suggestionService.voteSuggestion(this.session, id);
-            this.renderSupportHub();
-          });
-        });
-      }
-    }
-
-    // ==========================================
-    // HESAP AYARLARI EKRANI
-    // ==========================================
-    bindAccountSettings() {
-      const unameForm = document.getElementById('form-acc-username');
-      const pwdForm = document.getElementById('form-acc-password');
-      const activateLicForm = document.getElementById('form-acc-activate-license');
-      const rgbEnableBtn = document.getElementById('btn-acc-rgb-enable');
-      const rgbDisableBtn = document.getElementById('btn-acc-rgb-disable');
-      const notifChk = document.getElementById('chk-acc-notifications');
-      const logoutBtn = document.getElementById('btn-acc-logout');
-
-      if (activateLicForm) {
-        activateLicForm.addEventListener('submit', async e => {
-          e.preventDefault();
-          const inp = document.getElementById('inp-acc-activate-license');
-          const rawCode = inp ? inp.value.trim() : '';
-          if (!rawCode) return;
-
-          const res = await licenseService.activateLicenseOnAccount(this.session, rawCode);
-          if (!res.ok) {
-            window.soundManager.playError();
-            this.showToast(res.error, 'error');
-            return;
-          }
-
-          this.session = res.session;
-          if (inp) inp.value = '';
-          window.soundManager.playRankUpgrade();
-          this.showToast(res.message || 'Lisans kodu hesabınıza başarıyla tanımlandı!', 'success');
-          this.updateTopBarSessionUI();
-          this.syncEconomyHeaderUI();
-          this.renderAccountSettings();
-        });
-      }
-
-      if (unameForm) {
-        unameForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const inp = document.getElementById('inp-acc-new-username');
-            const res = userService.changeUsername(this.session, inp.value);
-            this.session = res.session;
-            inp.value = '';
-            window.soundManager.playSuccess();
-            this.showToast(
-              `Kullanıcı adı "${this.session.username}" olarak güncellendi (Hesap ID ${res.user.id} korundu)!`,
-              'success'
-            );
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderAccountSettings();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (pwdForm) {
-        pwdForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const curr = document.getElementById('inp-acc-curr-pwd')?.value || '';
-            const next = document.getElementById('inp-acc-new-pwd')?.value || '';
-            userService.changePassword(this.session, curr, next);
-            pwdForm.reset();
-            window.soundManager.playSuccess();
-            this.showToast('Şifre güvenli bir şekilde güncellendi (tuzlanmış SHA-256).', 'success');
-            this.renderAccountSettings();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (rgbEnableBtn) {
-        rgbEnableBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            userService.setRgbUsernameEnabled(this.session, true);
-            economyService._mutateAccount(this.session.username, acc => {
-              acc.rgbOwned = true;
-              acc.rgbEnabled = true;
-            });
-            this.showToast('🌈 RGB Kullanıcı Adı etkinleştirildi!', 'success');
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderAccountSettings();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (rgbDisableBtn) {
-        rgbDisableBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            userService.setRgbUsernameEnabled(this.session, false);
-            economyService._mutateAccount(this.session.username, acc => {
-              acc.rgbEnabled = false;
-            });
-            this.showToast('RGB Kullanıcı Adı kapatıldı.', 'info');
-            this.updateTopBarSessionUI();
-            this.syncEconomyHeaderUI();
-            this.renderAccountSettings();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      if (notifChk) {
-        notifChk.addEventListener('change', () => {
-          userService.updateSettings(this.session, { notifications: notifChk.checked });
-          this.showToast('Bildirim ayarları kaydedildi.', 'info');
-        });
-      }
-
-      if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.handleLogout(false);
-        });
-      }
-    }
-
-    renderAccountSettings() {
-      if (!this.session) return;
-      const user = userService.getUserByUsername(this.session.username);
-      const profile = economyService.getPlayerEconomyProfile(this.session.username);
-      if (!user) return;
-
-      document.getElementById('acc-info-userid').textContent = user.id;
-      document.getElementById('acc-info-username').innerHTML = this.formatUsernameHtml(
-        user.minecraftUsername,
-        profile.rgbOwned && profile.rgbEnabled
-      );
-      document.getElementById('acc-info-role').textContent = `${user.role} (${profile.rankBadge})`;
-      document.getElementById('acc-info-vip').textContent = user.vipStatus?.isVip
-        ? `👑 AKTİF (${user.vipStatus.expiresAt || 'Sınırsız'})`
-        : 'Standart Oyuncu';
-      document.getElementById('acc-info-license').textContent = `${user.licenseId} (${this.session.codeMasked || 'Doğrulandı'})`;
-      document.getElementById('acc-info-pwd-status').textContent = user.hasPassword
-        ? '🔒 Şifre Hash Ayarlı (SHA-256)'
-        : 'Şifre Ayarlanmadı (Lisans Girişi)';
-    }
-
-    // ==========================================
-    // BÖLÜM 26 & 27: ADMİN PANELİ — %100 TÜRKÇE (18 SAYFA)
-    // ==========================================
-    openAdminPanel() {
-      try {
-        authGuard.requireRole(this.session, ['ADMIN']);
-      } catch (err) {
-        this.showToast(err.message, 'error');
-        return;
-      }
-
-      const nameEl = document.getElementById('admin-profile-name');
-      if (nameEl) nameEl.textContent = this.session.username;
-
-      if (window.mcQuizGame) {
-        window.mcQuizGame.showScreen('screen-admin');
-      }
-
-      this.syncEconomyHeaderUI();
-      this.renderAdminAll();
-    }
-
-    bindAdminPanel() {
-      const sidebarNav = document.getElementById('admin-sidebar-nav');
-      const openAdminDrawerBtn = document.getElementById('btn-open-admin-drawer');
-
-      if (openAdminDrawerBtn && sidebarNav) {
-        openAdminDrawerBtn.addEventListener('click', () => {
-          window.soundManager.playMenuOpen();
-          sidebarNav.classList.toggle('mobile-drawer-open');
-          sidebarNav.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
-      }
-
-      document.querySelectorAll('[data-admin-tab]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const tab = btn.getAttribute('data-admin-tab');
-          if (sidebarNav) sidebarNav.classList.remove('mobile-drawer-open');
-          this.switchAdminTab(tab);
-        });
-      });
-
-      const mobMoreBtn = document.getElementById('btn-admin-mob-more');
-      if (mobMoreBtn && sidebarNav) {
-        mobMoreBtn.addEventListener('click', () => {
-          window.soundManager.playMenuOpen();
-          sidebarNav.classList.toggle('mobile-drawer-open');
-          sidebarNav.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
-      }
-
-      const goGameBtn = document.getElementById('btn-admin-go-game');
-      if (goGameBtn) {
-        goGameBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.navigateToScreen('screen-menu');
-        });
-      }
-
-      const viewAllLogsBtn = document.getElementById('btn-dash-view-all-logs');
-      if (viewAllLogsBtn) {
-        viewAllLogsBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.switchAdminTab('activity');
-        });
-      }
-
-      // Oyuncu Arama & Filtre
-      const searchUsers = document.getElementById('search-adm-users');
-      const filterUsersRole = document.getElementById('filter-adm-users-role');
-      if (searchUsers) searchUsers.addEventListener('input', () => this.renderAdminUsers());
-      if (filterUsersRole) filterUsersRole.addEventListener('change', () => this.renderAdminUsers());
-
-      // Rütbe Kaydetme Formu
-      const saveRankForm = document.getElementById('form-admin-save-rank');
-      if (saveRankForm) {
-        saveRankForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const id = document.getElementById('adm-rank-id')?.value.trim();
-            const name = document.getElementById('adm-rank-name')?.value.trim();
-            const badge = document.getElementById('adm-rank-icon')?.value.trim() || '⚡';
-            const color = document.getElementById('adm-rank-color')?.value.trim() || '#fbbf24';
-            const emeraldPrice = Number(document.getElementById('adm-rank-emerald-price')?.value || 0);
-            const price = Number(document.getElementById('adm-rank-tl-price')?.value || 0);
-            const maxPartySize = Number(document.getElementById('adm-rank-party-limit')?.value || 4);
-            const emeraldMultiplier = Number(document.getElementById('adm-rank-multiplier')?.value || 1.0);
-            const supportPriority = document.getElementById('adm-rank-priority')?.value || 'HIGH';
-            const canCreateParty = document.getElementById('adm-rank-can-party')?.value === 'true';
-
-            const saved = rankService.adminSaveRank(this.session, {
-              id,
-              name,
-              badge,
-              color,
-              emeraldPrice,
-              price,
-              permissions: {
-                canCreateParty,
-                canInvitePlayers: canCreateParty,
-                maxPartySize,
-                emeraldMultiplier,
-                supportPriority,
-                bugPriority: supportPriority,
-                suggestionPriority: supportPriority,
-                maxExtraLives: 2,
-                cosmetics: true,
-                rgbName: emeraldPrice >= 3000,
-                profileEffects: emeraldPrice >= 1500
-              }
-            });
-
-            saveRankForm.reset();
-            window.soundManager.playSuccess();
-            this.showToast(`Rütbe "${saved.name}" (${saved.id}) kaydedildi!`, 'success');
-            this.renderAdminAll();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      // Lisans Oluştur & Filtrele
-      const genCodeBtn = document.getElementById('btn-adm-gen-code');
-      const codeInp = document.getElementById('adm-lic-code');
-      const roleSel = document.getElementById('adm-lic-role');
-      if (genCodeBtn && codeInp) {
-        genCodeBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const r = roleSel ? roleSel.value : 'PLAYER';
-          codeInp.value = licenseService.generateRandomCode(r);
-        });
-      }
-
-      const createLicForm = document.getElementById('form-admin-create-license');
-      if (createLicForm) {
-        createLicForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const name = document.getElementById('adm-lic-name').value;
-            const code = document.getElementById('adm-lic-code').value;
-            const role = document.getElementById('adm-lic-role').value;
-            const expiresAt = document.getElementById('adm-lic-expires').value || null;
-            const assignedUsername = document.getElementById('adm-lic-user').value || null;
-
-            const created = licenseService.createLicense(this.session, {
-              name,
-              code,
-              role,
-              expiresAt,
-              assignedUsername
-            });
-
-            createLicForm.reset();
-            window.soundManager.playSuccess();
-            this.showToast(`Lisans oluşturuldu: ${created.code} (${created.role})`, 'success');
-            this.renderAdminAll();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      const searchLic = document.getElementById('search-adm-licenses');
-      const filterLic = document.getElementById('filter-adm-licenses');
-      if (searchLic) searchLic.addEventListener('input', () => this.renderAdminLicenses());
-      if (filterLic) filterLic.addEventListener('change', () => this.renderAdminLicenses());
-
-      // Partiler Arama & Filtre
-      const searchPrt = document.getElementById('search-adm-parties');
-      const filterPrt = document.getElementById('filter-adm-parties');
-      const quickPartyBtn = document.getElementById('btn-adm-quick-party');
-      if (searchPrt) searchPrt.addEventListener('input', () => this.renderAdminParties());
-      if (filterPrt) filterPrt.addEventListener('change', () => this.renderAdminParties());
-      if (quickPartyBtn) {
-        quickPartyBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.openPartyLobby(true);
-        });
-      }
-
-      // Admin Liderlik Sıralaması
-      const admLbSort = document.getElementById('adm-lb-sort');
-      if (admLbSort) {
-        admLbSort.addEventListener('change', () => this.renderAdminLeaderboard());
-      }
-
-      // Ekonomi Bakiye İşlemleri
-      document.querySelectorAll('[data-adm-econ-op]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const op = btn.getAttribute('data-adm-econ-op');
-          const targetUser = (document.getElementById('adm-econ-username')?.value || '').trim();
-          const amountVal = Number(document.getElementById('adm-econ-amount')?.value || 0);
-          const reasonVal = (document.getElementById('adm-econ-reason')?.value || '').trim();
-
-          if (!targetUser) {
-            this.showToast('Lütfen bir oyuncu kullanıcı adı girin.', 'error');
-            return;
-          }
-
-          this.askConfirmation(
-            `💚 Admin Ekonomi İşlemi (${op})`,
-            `"${targetUser}" oyuncusu için ${op} (${amountVal} Zümrüt) işlemini uygulamak istediğinize emin misiniz?`,
-            `Onayla (${op})`,
-            () => {
-              try {
-                economyService.adminModifyBalance(this.session, {
-                  username: targetUser,
-                  operation: op,
-                  amount: amountVal,
-                  reason: reasonVal || `Admin ${op}`
-                });
-                window.soundManager.playEmeraldGain();
-                this.showToast(`"${targetUser}" oyuncusunun Zümrüt bakiyesi güncellendi (${op}).`, 'success');
-                this.syncEconomyHeaderUI();
-                this.renderAdminAll();
-              } catch (err) {
-                window.soundManager.playError();
-                this.showToast(err.message, 'error');
-              }
-            }
-          );
-        });
-      });
-
-      // Ekonomi Yapılandırma Formu
-      const cfgForm = document.getElementById('form-admin-economy-config');
-      if (cfgForm) {
-        cfgForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const newRewards = {
-              gameCompleted: Number(document.getElementById('cfg-reward-completed')?.value || 25),
-              gameWon: Number(document.getElementById('cfg-reward-won')?.value || 100),
-              vipGameWon: Number(document.getElementById('cfg-reward-vip-won')?.value || 150),
-              dailyLogin: Number(document.getElementById('cfg-reward-daily')?.value || 25),
-              vipDailyLogin: Number(document.getElementById('cfg-reward-vip-daily')?.value || 50),
-              top3Finish: Number(document.getElementById('cfg-reward-top3')?.value || 150),
-              tournamentWinner: Number(document.getElementById('cfg-reward-tournament')?.value || 500)
-            };
-            const newExtraLife = {
-              price: Number(document.getElementById('cfg-extralife-price')?.value || 500),
-              maxPerGame: Number(document.getElementById('cfg-extralife-max')?.value || 1),
-              enabled: document.getElementById('cfg-extralife-enabled')?.value === 'true'
-            };
-
-            configService.updateConfig(this.session, {
-              rewards: newRewards,
-              extraLife: newExtraLife
-            });
-
-            window.soundManager.playSuccess();
-            this.showToast('Ekonomi, VIP Bonus ve Ekstra Can ayarları kaydedildi!', 'success');
-            this.syncEconomyHeaderUI();
-            this.renderAdminAll();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      // Admin Mağaza Ürünü Oluştur
-      const createShopForm = document.getElementById('form-admin-create-shop-item');
-      if (createShopForm) {
-        createShopForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const name = document.getElementById('adm-shop-name')?.value || '';
-            const icon = document.getElementById('adm-shop-icon')?.value || '💎';
-            const price = Number(document.getElementById('adm-shop-price')?.value || 500);
-            const category = document.getElementById('adm-shop-category')?.value || 'Gameplay';
-            const requiredRole = document.getElementById('adm-shop-req-role')?.value || 'ANY';
-            const effectType = document.getElementById('adm-shop-effect')?.value || 'EXTRA_LIFE';
-            const description = document.getElementById('adm-shop-desc')?.value || '';
-
-            shopService.adminSaveShopItem(this.session, {
-              name,
-              icon,
-              price,
-              category,
-              requiredRole,
-              effectType,
-              description,
-              enabled: true
-            });
-
-            createShopForm.reset();
-            window.soundManager.playSuccess();
-            this.showToast(`Mağaza ürünü "${name}" başarıyla oluşturuldu!`, 'success');
-            this.renderAdminAll();
-          } catch (err) {
-            window.soundManager.playError();
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      // Admin VIP / Rütbe Atama Formu
-      const grantVipForm = document.getElementById('form-admin-grant-vip');
-      const revokeVipBtn = document.getElementById('btn-adm-revoke-vip');
-      if (grantVipForm) {
-        grantVipForm.addEventListener('submit', e => {
-          e.preventDefault();
-          try {
-            const uname = document.getElementById('adm-vip-username')?.value.trim();
-            const targetRank = document.getElementById('adm-vip-rank-select')?.value || 'VIP';
-            const exp = document.getElementById('adm-vip-expires')?.value || null;
-            userService.adminSetVipStatus(this.session, uname, {
-              rank: targetRank,
-              isVip: targetRank !== 'PLAYER',
-              expiresAt: exp
-            });
-            economyService._mutateAccount(uname, acc => {
-              acc.rank = targetRank;
-              acc.isVip = targetRank !== 'PLAYER';
-              if (acc.role !== 'ADMIN') acc.role = targetRank === 'PLAYER' ? 'PLAYER' : 'VIP';
-            });
-            window.soundManager.playRankUpgrade();
-            this.showToast(`👑 ${targetRank} rütbesi ${uname} oyuncusuna atandı!`, 'success');
-            this.syncEconomyHeaderUI();
-            this.renderAdminAll();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-      if (revokeVipBtn) {
-        revokeVipBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const uname = document.getElementById('adm-vip-username')?.value.trim();
-          if (!uname) {
-            this.showToast('Lütfen bir kullanıcı adı girin.', 'error');
-            return;
-          }
-          try {
-            userService.adminSetVipStatus(this.session, uname, {
-              rank: 'PLAYER',
-              isVip: false,
-              expiresAt: null
-            });
-            economyService._mutateAccount(uname, acc => {
-              acc.rank = 'PLAYER';
-              acc.isVip = false;
-              if (acc.role === 'VIP') acc.role = 'PLAYER';
-            });
-            this.showToast(`${uname} oyuncusunun rütbesi PLAYER olarak sıfırlandı.`, 'info');
-            this.syncEconomyHeaderUI();
-            this.renderAdminAll();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      // Admin Ödemeler Durum Filtresi
-      const filterPayments = document.getElementById('filter-adm-payments-status');
-      if (filterPayments) {
-        filterPayments.addEventListener('change', () => this.renderAdminPaymentsTab());
-      }
-
-      // Admin Öneriler Sıralaması
-      const admSugSort = document.getElementById('adm-suggestions-sort');
-      if (admSugSort) {
-        admSugSort.addEventListener('change', () => this.renderAdminSuggestions());
-      }
-
-      // Admin İşlemler Arama
-      const searchTx = document.getElementById('search-adm-tx-history');
-      if (searchTx) {
-        searchTx.addEventListener('input', () => this.renderAdminTransactions());
-      }
-
-      // Admin Yedek Oluştur & İndir
-      const createBackupBtn = document.getElementById('btn-adm-create-backup');
-      if (createBackupBtn) {
-        createBackupBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            const snap = backupService.createBackup(this.session, 'Manuel Admin Yedeği');
-            window.soundManager.playSuccess();
-            this.showToast(`Yedek ${snap.version} (${snap.id}) oluşturuldu!`, 'success');
-            this.renderAdminBackups();
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      const downloadBackupBtn = document.getElementById('btn-adm-download-latest-backup');
-      if (downloadBackupBtn) {
-        downloadBackupBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          try {
-            const jsonStr = backupService.exportBackupJson(this.session, null);
-            this.downloadJsonFile(`minecraft-milyoner-yedek-${Date.now()}.json`, jsonStr);
-            this.showToast('Yedek JSON dosyası indirildi!', 'success');
-          } catch (err) {
-            this.showToast(err.message, 'error');
-          }
-        });
-      }
-
-      // Aktivite Günlüğünü Temizle
-      const clearLogsBtn = document.getElementById('btn-adm-clear-logs');
-      if (clearLogsBtn) {
-        clearLogsBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.askConfirmation(
-            '🗑️ Aktivite Günlüğünü Temizle',
-            'Tüm sistem aktivite kayıtlarını temizlemek istediğinize emin misiniz?',
-            'Günlüğü Temizle',
-            () => {
-              try {
-                activityService.clearAll(this.session);
-                this.showToast('Aktivite günlüğü temizlendi.', 'info');
-                this.renderAdminAll();
-              } catch (err) {
-                this.showToast(err.message, 'error');
-              }
-            }
-          );
-        });
-      }
-
-      // Ayarlar Butonları
-      const admAudioBtn = document.getElementById('btn-adm-open-audio');
-      if (admAudioBtn) {
-        admAudioBtn.addEventListener('click', () => {
-          window.soundManager.playMenuOpen();
-          if (window.mcQuizGame) window.mcQuizGame.openModal('modal-audio');
-        });
-      }
-
-      const admLogoutBtn = document.getElementById('btn-adm-logout');
-      if (admLogoutBtn) {
-        admLogoutBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.handleLogout(false);
-        });
-      }
-    }
-
-    switchAdminTab(tabName) {
-      document.querySelectorAll('[data-admin-tab]').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-admin-tab') === tabName);
-      });
-      document.querySelectorAll('.admin-tab-pane').forEach(pane => {
-        pane.classList.toggle('active', pane.id === `admin-tab-${tabName}`);
-      });
-      this.renderAdminAll();
-    }
-
-    renderAdminAll() {
-      if (!this.session || authGuard.getEffectiveRole(this.session) !== 'ADMIN') return;
-      this.renderAdminDashboard();
-      this.renderAdminUsers();
-      this.renderAdminRanksTab();
-      this.renderAdminLicenses();
-      this.renderAdminParties();
-      this.renderAdminLeaderboard();
-      this.renderAdminEconomyTab();
-      this.renderAdminShopTab();
-      this.renderAdminVipTab();
-      this.renderAdminPaymentsTab();
-      this.renderAdminSupport();
-      this.renderAdminBugs();
-      this.renderAdminSuggestions();
-      this.renderAdminTransactions();
-      this.renderAdminAchievements();
-      this.renderAdminBackups();
-      this.renderAdminActivity();
-    }
-
-    // 1. Admin Gösterge Paneli (12 Kart)
-    renderAdminDashboard() {
-      const users = userService.getAllUsers();
-      const parties = partyService.listParties(this.session);
-      const econProfiles = economyService.getAllProfiles();
-      const tickets = supportService.listSupportTickets(this.session, false);
-      const bugs = bugService.listBugReports(this.session, false);
-      const sugs = suggestionService.listSuggestions(this.session, 'PRIORITY');
-      const logs = activityService.getAll();
-      const cfg = configService.getConfig();
-      const revMetrics = paymentService.getRevenueMetrics
-        ? paymentService.getRevenueMetrics()
-        : { emeraldsSold: 0, totalRevenueTL: 0 };
-
-      const totalUsers = users.length;
-      const activeUsers = users.filter(u => u.status === 'ACTIVE').length;
-      const vipUsers = users.filter(
-        u =>
-          ['VIP', 'VIP_PLUS'].includes(u.rank) ||
-          (u.vipStatus?.isVip &&
-            !['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(u.rank))
-      ).length;
-      const mvpUsers = users.filter(u =>
-        ['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(u.rank)
-      ).length;
-      const totalParties = parties.length;
-      const activeParties = parties.filter(p =>
-        ['WAITING', 'READY', 'STARTING', 'ACTIVE'].includes(p.status)
-      ).length;
-      const totalEmeralds = econProfiles.reduce((sum, p) => sum + (p.emeraldCoins || 0), 0);
-      const openTickets = tickets.filter(
-        t => t.status === 'OPEN' || t.status === 'IN PROGRESS'
-      ).length;
-      const openBugs = bugs.filter(b => b.status !== 'RESOLVED' && b.status !== 'CLOSED').length;
-      const openSuggestions = sugs.filter(
-        s => s.status !== 'COMPLETED' && s.status !== 'DECLINED' && s.status !== 'REJECTED'
-      ).length;
-
-      const setTxt = (id, v) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = v;
-      };
-
-      setTxt('adm-card-total-users', totalUsers);
-      setTxt('adm-card-active-users', activeUsers);
-      setTxt('adm-card-vip-users', vipUsers);
-      setTxt('adm-card-mvp-users', mvpUsers);
-      setTxt('adm-card-active-parties', activeParties);
-      setTxt('adm-card-total-parties', totalParties);
-      setTxt('adm-card-total-emeralds', `${totalEmeralds.toLocaleString('tr-TR')} 💚`);
-      setTxt('adm-card-emeralds-sold', `${(revMetrics.emeraldsSold || 0).toLocaleString('tr-TR')} 💚`);
-      setTxt('adm-card-revenue', `${(revMetrics.totalRevenueTL || 0).toLocaleString('tr-TR')} TL`);
-      setTxt('adm-card-open-tickets', openTickets);
-      setTxt('adm-card-open-bugs', openBugs);
-      setTxt('adm-card-open-suggestions', openSuggestions);
-
-      const stEx = document.getElementById('adm-status-extralife');
-      if (stEx) {
-        stEx.textContent = cfg.extraLife.enabled ? 'AKTİF' : 'DEVRE DIŞI';
-        stEx.className = cfg.extraLife.enabled ? 'emerald-text' : 'wrong-text';
-      }
-
-      const recentEl = document.getElementById('adm-dash-recent-activity');
-      if (recentEl) {
-        const recent = logs.slice(0, 8);
-        recentEl.innerHTML =
-          recent.length === 0
-            ? '<div class="empty-state-box">Henüz sistem aktivitesi bulunmuyor.</div>'
-            : recent
-                .map(
-                  item => `
-                <div class="activity-item">
-                  <span class="act-time">[${item.timeFormatted}]</span>
-                  <span class="act-msg">${this.escapeHtml(item.message)}</span>
-                </div>
-              `
-                )
-                .join('');
-      }
-    }
-
-    // 2. Admin Oyuncular Sayfası
-    renderAdminUsers() {
-      const wrap = document.getElementById('adm-users-list');
-      if (!wrap) return;
-
-      const q = (document.getElementById('search-adm-users')?.value || '').toLowerCase().trim();
-      const roleFilter = document.getElementById('filter-adm-users-role')?.value || 'ALL';
-      let users = userService.getAllUsers();
-
-      if (roleFilter !== 'ALL') {
-        users = users.filter(u => u.role === roleFilter || u.rank === roleFilter);
-      }
-      if (q) {
-        users = users.filter(
-          u =>
-            u.minecraftUsername.toLowerCase().includes(q) ||
-            u.id.toLowerCase().includes(q) ||
-            u.role.toLowerCase().includes(q) ||
-            (u.rank || '').toLowerCase().includes(q)
-        );
-      }
-
-      wrap.innerHTML = users
-        .map(u => {
-          const prof = economyService.getPlayerEconomyProfile(u.minecraftUsername);
-          const createdStr = new Date(u.createdAt).toLocaleDateString('tr-TR');
-          const loginStr = new Date(u.lastLogin).toLocaleString('tr-TR');
-          const rankLabel = u.rank || u.role || 'PLAYER';
-
-          return `
-            <div class="adm-row-card">
-              <div class="adm-row-main">
-                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                  ${this.getAvatarImgHtml(u.minecraftUsername, 'mc-avatar-xs')}
-                  <strong>${this.formatUsernameHtml(u.minecraftUsername, prof.rgbOwned && prof.rgbEnabled)}</strong>
-                  <span class="meta-muted">(${u.id})</span>
-                  <span class="role-badge role-${u.role.toLowerCase()}">${this.escapeHtml(prof.rankBadge || rankLabel)}</span>
-                  <span class="status-pill status-${u.status === 'ACTIVE' ? 'ACTIVE' : 'REVOKED'}">${u.status === 'ACTIVE' ? 'AKTİF' : 'ASKIYA ALINDI'}</span>
-                </div>
-                <div class="adm-row-sub">
-                  <span>Rütbe: <strong class="gold-text">${this.escapeHtml(rankLabel)}</strong></span>
-                  <span>⭐ Puan: <strong>${prof.totalPoints.toLocaleString('tr-TR')}</strong></span>
-                  <span>💚 Zümrüt: <strong class="emerald-text">${prof.emeraldCoins.toLocaleString('tr-TR')}</strong></span>
-                  <span>🎮 Oyun: <strong>${prof.gamesPlayed} (${prof.gamesWon}G / ${prof.gamesLost}M)</strong></span>
-                  <span>📅 Kayıt: ${createdStr}</span>
-                  <span>🕒 Son Giriş: ${loginStr}</span>
-                </div>
-              </div>
-              <div class="adm-row-actions">
-                <button type="button" class="act-btn" data-usr-act="role" data-user="${this.escapeHtml(u.minecraftUsername)}" data-role="${u.rank || u.role}">Rütbe / Rol Ata</button>
-                <button type="button" class="act-btn emerald" data-usr-act="econ" data-user="${this.escapeHtml(u.minecraftUsername)}">Zümrüt Düzenle</button>
-                <button type="button" class="act-btn ${u.status === 'SUSPENDED' ? 'emerald' : 'danger'}" data-usr-act="suspend" data-user="${this.escapeHtml(u.minecraftUsername)}">${u.status === 'SUSPENDED' ? 'Askıyı Kaldır' : 'Askıya Al'}</button>
-                <button type="button" class="act-btn danger" data-usr-act="reset" data-user="${this.escapeHtml(u.minecraftUsername)}">Hesabı Sıfırla</button>
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-
-      wrap.querySelectorAll('[data-usr-act]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const act = btn.getAttribute('data-usr-act');
-          const uname = btn.getAttribute('data-user');
-          const currRole = btn.getAttribute('data-role');
-
-          if (act === 'role') {
-            const nextRole = prompt(
-              `${uname} için yeni Rütbe veya Rol girin (PLAYER, VIP, VIP+, MVP, MVP+, ELITE, LEGEND, CHAMPION, MILLIONAIRE veya ADMIN):`,
-              currRole === 'PLAYER' ? 'VIP' : 'MVP'
-            );
-            if (nextRole) {
-              try {
-                userService.adminUpdateUserRole(this.session, uname, nextRole);
-                const normRank = nextRole.trim().toUpperCase().replace(/\+/g, '_PLUS');
-                economyService._mutateAccount(uname, acc => {
-                  acc.rank = normRank;
-                  acc.isVip = normRank !== 'PLAYER';
-                  acc.role = normRank === 'ADMIN' ? 'ADMIN' : normRank === 'PLAYER' ? 'PLAYER' : 'VIP';
-                });
-                this.showToast(`${uname} rütbesi ${nextRole.toUpperCase()} olarak güncellendi`, 'success');
-                this.syncEconomyHeaderUI();
-                this.renderAdminAll();
-              } catch (err) {
-                this.showToast(err.message, 'error');
-              }
-            }
-          } else if (act === 'econ') {
-            this.switchAdminTab('economy');
-            const inp = document.getElementById('adm-econ-username');
-            if (inp) {
-              inp.value = uname;
-              inp.focus();
-            }
-          } else if (act === 'suspend') {
-            try {
-              const updated = userService.adminToggleSuspendUser(this.session, uname);
-              this.showToast(`${uname} durumu: ${updated.status}`, 'info');
-              this.renderAdminAll();
-            } catch (err) {
-              this.showToast(err.message, 'error');
-            }
-          } else if (act === 'reset') {
-            this.askConfirmation(
-              '⚠️ Hesabı Sıfırla',
-              `"${uname}" oyuncusunun Zümrüt, Puan ve Oyun istatistiklerini sıfırlamak istediğinize emin misiniz?`,
-              'Hesabı Sıfırla',
-              () => {
-                try {
-                  userService.adminResetUserAccount(this.session, uname);
-                  this.showToast(`${uname} hesabı sıfırlandı.`, 'info');
-                  this.syncEconomyHeaderUI();
-                  this.renderAdminAll();
-                } catch (err) {
-                  this.showToast(err.message, 'error');
-                }
-              }
-            );
-          }
-        });
-      });
-    }
-
-    // 3. Admin Rütbeler Sayfası
-    renderAdminRanksTab() {
-      const wrap = document.getElementById('adm-ranks-list');
-      if (!wrap) return;
-      const ranks = rankService.getRanks ? rankService.getRanks(true) : [];
-
-      wrap.innerHTML = ranks
-        .map(r => {
-          const p = r.permissions || {};
-          const isProtected = ['PLAYER', 'VIP', 'ADMIN'].includes(r.id);
-          const icon = r.badge || r.badgeIcon || '👑';
-          const color = r.color || r.badgeColor || '#fbbf24';
-          const tlPrice = r.price ?? r.tlPrice ?? 0;
-          const prioTr = supportService.formatPriorityTR(p.supportPriority || 'NORMAL');
-          return `
-            <div class="adm-row-card">
-              <div class="adm-row-main">
-                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                  <span style="font-size:1.3rem;">${this.escapeHtml(icon)}</span>
-                  <span class="adm-code-title" style="color:${this.escapeHtml(color)};">${this.escapeHtml(r.name)} (${this.escapeHtml(r.id)})</span>
-                  <strong class="emerald-text">💚 ${(r.emeraldPrice || 0).toLocaleString('tr-TR')} Zümrüt</strong>
-                  <strong class="gold-text">💳 ${tlPrice.toLocaleString('tr-TR')} TL</strong>
-                </div>
-                <div class="adm-row-sub">
-                  <span>Parti Oluşturma: <strong>${p.canCreateParty ? 'EVET' : 'HAYIR'}</strong></span>
-                  <span>Maks Parti Boyutu: <strong>${p.maxPartySize >= 999 ? 'Sınırsız' : p.maxPartySize}</strong></span>
-                  <span>Zümrüt Çarpanı: <strong>${p.emeraldMultiplier || 1}x</strong></span>
-                  <span>Öncelik: <strong>${this.escapeHtml(prioTr)}</strong></span>
-                  <span>RGB İsim: <strong>${p.rgbName ? 'EVET' : 'HAYIR'}</strong></span>
-                </div>
-              </div>
-              <div class="adm-row-actions">
-                <button type="button" class="act-btn emerald" data-rnk-act="edit" data-id="${this.escapeHtml(r.id)}">Düzenleyiciye Yükle</button>
-                ${
-                  !isProtected
-                    ? `<button type="button" class="act-btn danger" data-rnk-act="delete" data-id="${this.escapeHtml(r.id)}">Sil</button>`
-                    : ''
-                }
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-
-      wrap.querySelectorAll('[data-rnk-act]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const act = btn.getAttribute('data-rnk-act');
-          const id = btn.getAttribute('data-id');
-          const r = rankService.getRankById(id);
-          if (!r) return;
-
-          if (act === 'edit') {
-            document.getElementById('adm-rank-id').value = r.id;
-            document.getElementById('adm-rank-name').value = r.name;
-            document.getElementById('adm-rank-icon').value = r.badge || r.badgeIcon || '👑';
-            document.getElementById('adm-rank-color').value = r.color || r.badgeColor || '#fbbf24';
-            document.getElementById('adm-rank-emerald-price').value = r.emeraldPrice || 0;
-            document.getElementById('adm-rank-tl-price').value = r.price ?? r.tlPrice ?? 0;
-            document.getElementById('adm-rank-party-limit').value = r.permissions?.maxPartySize || 4;
-            document.getElementById('adm-rank-multiplier').value = r.permissions?.emeraldMultiplier || 1;
-            document.getElementById('adm-rank-priority').value = r.permissions?.supportPriority || 'HIGH';
-            document.getElementById('adm-rank-can-party').value = String(Boolean(r.permissions?.canCreateParty));
-            this.showToast(`${r.name} rütbesi düzenleyiciye yüklendi.`, 'info');
-          } else if (act === 'delete') {
-            try {
-              rankService.adminDeleteRank(this.session, id);
-              this.showToast(`${id} rütbesi silindi.`, 'info');
-              this.renderAdminAll();
-            } catch (err) {
-              this.showToast(err.message, 'error');
-            }
-          }
-        });
-      });
-    }
-
-    // 4. Admin Lisanslar Sayfası
-    renderAdminLicenses() {
-      const wrap = document.getElementById('adm-licenses-list');
-      if (!wrap) return;
-
-      const q = (document.getElementById('search-adm-licenses')?.value || '').toLowerCase().trim();
-      const statusFilter = document.getElementById('filter-adm-licenses')?.value || 'ALL';
-
-      let list = licenseService.listLicensesForAdmin(this.session);
-      if (statusFilter !== 'ALL') {
-        list = list.filter(l => l.effectiveStatus === statusFilter);
-      }
-      if (q) {
-        list = list.filter(
-          l =>
-            l.code.toLowerCase().includes(q) ||
-            l.name.toLowerCase().includes(q) ||
-            (l.assignedUsername || '').toLowerCase().includes(q)
-        );
-      }
-
-      if (list.length === 0) {
-        wrap.innerHTML = '<div class="empty-state-box">Eşleşen lisans bulunamadı.</div>';
-        return;
-      }
-
-      wrap.innerHTML = list
-        .map(l => {
-          const createdStr = new Date(l.createdAt).toLocaleDateString('tr-TR');
-          const expiresStr = l.expiresAt
-            ? new Date(l.expiresAt).toLocaleDateString('tr-TR')
-            : 'Süresiz';
-          const sessionInfo = l.currentSessionUser
-            ? `🟢 Aktif Kullanıcı: ${this.escapeHtml(l.currentSessionUser)}`
-            : l.assignedUsername
-            ? `👤 Atanan: ${this.escapeHtml(l.assignedUsername)}`
-            : 'Atanmamış';
-
-          return `
-            <div class="adm-row-card">
-              <div class="adm-row-main">
-                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                  <span class="adm-code-title">${this.escapeHtml(l.code)}</span>
-                  <span class="role-badge role-${l.role.toLowerCase()}">${l.role}</span>
-                  <span class="status-pill status-${l.effectiveStatus}">${l.effectiveStatus}</span>
-                  <strong>${this.escapeHtml(l.name)}</strong>
-                </div>
-                <div class="adm-row-sub">
-                  <span>📅 Oluşturulma: ${createdStr}</span>
-                  <span>⏳ Bitiş: <strong>${expiresStr}</strong></span>
-                  <span>${sessionInfo}</span>
-                </div>
-              </div>
-              <div class="adm-row-actions">
-                <button type="button" class="act-btn emerald" data-lic-action="copy" data-code="${this.escapeHtml(l.code)}">Kopyala</button>
-                <button type="button" class="act-btn" data-lic-action="role" data-id="${l.id}" data-role="${l.role}">Rol Ata</button>
-                ${
-                  l.effectiveStatus === 'ACTIVE'
-                    ? `<button type="button" class="act-btn" data-lic-action="disable" data-id="${l.id}">Devre Dışı Bırak</button>`
-                    : `<button type="button" class="act-btn emerald" data-lic-action="activate" data-id="${l.id}">Aktifleştir</button>`
-                }
-                ${
-                  l.effectiveStatus !== 'REVOKED'
-                    ? `<button type="button" class="act-btn danger" data-lic-action="revoke" data-id="${l.id}">İptal Et</button>`
-                    : ''
-                }
-                <button type="button" class="act-btn danger" data-lic-action="delete" data-id="${l.id}">Sil</button>
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-
-      wrap.querySelectorAll('[data-lic-action]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const action = btn.getAttribute('data-lic-action');
-          const id = btn.getAttribute('data-id');
-          const code = btn.getAttribute('data-code');
-          const currRole = btn.getAttribute('data-role');
-
-          if (action === 'copy') {
-            this.copyToClipboard(code, `Lisans kodu kopyalandı: ${code}`);
-          } else if (action === 'role') {
-            const nextRole = prompt(
-              'Bu lisans için rol girin (PLAYER, VIP veya ADMIN):',
-              currRole === 'PLAYER' ? 'VIP' : 'PLAYER'
-            );
-            if (nextRole) {
-              licenseService.updateLicenseRoleOrExpiry(this.session, id, { role: nextRole });
-              this.showToast('Lisans rolü güncellendi.', 'success');
-              this.renderAdminAll();
-            }
-          } else if (action === 'disable') {
-            licenseService.updateLicenseStatus(this.session, id, 'DISABLED');
-            this.showToast('Lisans devre dışı bırakıldı.', 'info');
-            this.renderAdminAll();
-          } else if (action === 'activate') {
-            licenseService.updateLicenseStatus(this.session, id, 'ACTIVE');
-            this.showToast('Lisans yeniden aktifleştirildi.', 'success');
-            this.renderAdminAll();
-          } else if (action === 'revoke') {
-            this.askConfirmation(
-              '⚠️ Lisansı İptal Et',
-              'Bu lisansı iptal etmek istediğinize emin misiniz?',
-              'İptal Et',
-              () => {
-                licenseService.updateLicenseStatus(this.session, id, 'REVOKED');
-                this.showToast('Lisans iptal edildi.', 'info');
-                this.renderAdminAll();
-              }
-            );
-          } else if (action === 'delete') {
-            this.askConfirmation(
-              '🗑️ Lisansı Sil',
-              'Bu lisansı kalıcı olarak silmek istediğinize emin misiniz?',
-              'Sil',
-              () => {
-                licenseService.deleteLicense(this.session, id);
-                this.showToast('Lisans silindi.', 'info');
-                this.renderAdminAll();
-              }
-            );
-          }
-        });
-      });
-    }
-
-    // 5. Admin Partiler Sayfası
-    renderAdminParties() {
-      const wrap = document.getElementById('adm-parties-list');
-      if (!wrap) return;
-
-      const q = (document.getElementById('search-adm-parties')?.value || '').toLowerCase().trim();
-      const statusFilter = document.getElementById('filter-adm-parties')?.value || 'ALL';
-
-      let parties = partyService.listParties(this.session);
-      if (statusFilter !== 'ALL') {
-        parties = parties.filter(p => p.status === statusFilter);
-      }
-      if (q) {
-        parties = parties.filter(
-          p =>
-            p.name.toLowerCase().includes(q) ||
-            p.organizer.toLowerCase().includes(q) ||
-            p.inviteCode.toLowerCase().includes(q)
-        );
-      }
-
-      if (parties.length === 0) {
-        wrap.innerHTML = '<div class="empty-state-box">Parti bulunamadı.</div>';
-        return;
-      }
-
-      wrap.innerHTML = parties
-        .map(p => {
-          const joinedCount = p.participants.filter(pt => pt.joinStatus === 'JOINED').length;
-          const statusTr = PARTY_STATUS_LABELS_TR[p.status] || p.status;
-          return `
-            <div class="adm-row-card">
-              <div class="adm-row-main">
-                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                  <span class="adm-code-title">${this.escapeHtml(p.name)}</span>
-                  <span class="status-pill status-${p.status}">${statusTr}</span>
-                  <span class="meta-muted">(${p.id})</span>
-                </div>
-                <div class="adm-row-sub">
-                  <span>👑 Kurucu: <strong>${this.escapeHtml(p.organizer)}</strong></span>
-                  <span>🎮 Mod: <strong>${this.escapeHtml(p.gameMode || 'Klasik')}</strong></span>
-                  <span>👥 Oyuncular: <strong>${joinedCount} / ${p.maxPlayers}</strong></span>
-                  <span>🎟️ Davet Kodu: <strong class="emerald-text">${p.inviteCode}</strong></span>
-                </div>
-              </div>
-              <div class="adm-row-actions">
-                <button type="button" class="act-btn emerald" data-prt-action="inspect" data-id="${p.id}">İncele / Yönet</button>
-                <button type="button" class="act-btn emerald" data-prt-action="forcestart" data-id="${p.id}">Zorla Başlat</button>
-                <button type="button" class="act-btn" data-prt-action="transfer" data-id="${p.id}">Kurucu Devret</button>
-                <button type="button" class="act-btn danger" data-prt-action="cancel" data-id="${p.id}">İptal Et</button>
-                <button type="button" class="act-btn danger" data-prt-action="delete" data-id="${p.id}">Sil</button>
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-
-      wrap.querySelectorAll('[data-prt-action]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const act = btn.getAttribute('data-prt-action');
-          const id = btn.getAttribute('data-id');
-
-          if (act === 'inspect') {
-            this.selectedPartyId = id;
-            this.openPartyLobby(false);
-          } else if (act === 'forcestart') {
-            partyService.setPartyStatus(this.session, id, 'ACTIVE');
-            this.showToast('Parti Admin tarafından başlatıldı.', 'success');
-            this.renderAdminAll();
-          } else if (act === 'transfer') {
-            const newOwner = prompt('Yeni parti kurucusunun Minecraft kullanıcı adını girin:');
-            if (newOwner && newOwner.trim()) {
-              try {
-                partyService.transferOwnership(this.session, id, newOwner.trim());
-                this.showToast(`Parti kuruculuğu ${newOwner.trim()} oyuncusuna devredildi.`, 'success');
-                this.renderAdminAll();
-              } catch (err) {
-                this.showToast(err.message, 'error');
-              }
-            }
-          } else if (act === 'cancel') {
-            partyService.setPartyStatus(this.session, id, 'CANCELLED');
-            this.showToast('Parti iptal edildi.', 'info');
-            this.renderAdminAll();
-          } else if (act === 'delete') {
-            this.askConfirmation(
-              '🗑️ Partiyi Sil',
-              'Bu partiyi kalıcı olarak silmek istediğinize emin misiniz?',
-              'Partiyi Sil',
-              () => {
-                partyService.deleteParty(this.session, id);
-                this.showToast('Parti silindi.', 'info');
-                this.renderAdminAll();
-              }
-            );
-          }
-        });
-      });
-    }
-
-    // 6. Admin Liderlik Tablosu Sayfası
-    renderAdminLeaderboard() {
-      const wrap = document.getElementById('adm-leaderboard-list');
-      if (!wrap) return;
-      const sortBy = document.getElementById('adm-lb-sort')?.value || 'POINTS';
-      const ranked = leaderboardService.getLeaderboard({ limit: 50, search: '', sortBy });
-
-      wrap.innerHTML = ranked
-        .map(
-          r => `
-          <div class="adm-row-card">
-            <div class="adm-row-main">
-              <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                <span class="gold-text" style="font-weight:800;">#${r.rank}</span>
-                ${this.getAvatarImgHtml(r.username, 'mc-avatar-xs')}
-                <strong>${this.formatUsernameHtml(r.username, r.rgbOwned && r.rgbEnabled)}</strong>
-                <span class="role-badge role-${r.role.toLowerCase()}">${r.rankBadge}</span>
-              </div>
-              <div class="adm-row-sub">
-                <span>⭐ Puan: <strong>${r.totalPoints.toLocaleString('tr-TR')}</strong></span>
-                <span>💚 Zümrüt: <strong class="emerald-text">${r.emeraldCoins.toLocaleString('tr-TR')}</strong></span>
-                <span>🏆 Galibiyet: <strong>${r.gamesWon} (%${r.winRate})</strong></span>
-                <span>🎮 Oyun: <strong>${r.gamesPlayed}</strong></span>
-              </div>
-            </div>
-          </div>
-        `
-        )
-        .join('');
-    }
-
-    // 7. Admin Ekonomi Sayfası
-    renderAdminEconomyTab() {
-      const cfg = configService.getConfig();
-      const econProfiles = economyService.getAllProfiles();
-
-      const datalist = document.getElementById('adm-econ-players-datalist');
-      if (datalist) {
-        datalist.innerHTML = econProfiles
-          .map(
-            p =>
-              `<option value="${this.escapeHtml(p.username)}">${this.escapeHtml(
-                p.username
-              )} (💚 ${p.emeraldCoins} Zümrüt | ⭐ ${p.totalPoints} Puan)</option>`
-          )
-          .join('');
-      }
-
-      const setVal = (id, v) => {
-        const el = document.getElementById(id);
-        if (el && document.activeElement !== el) el.value = v;
-      };
-      setVal('cfg-reward-completed', cfg.rewards.gameCompleted);
-      setVal('cfg-reward-won', cfg.rewards.gameWon);
-      setVal('cfg-reward-vip-won', cfg.rewards.vipGameWon);
-      setVal('cfg-reward-daily', cfg.rewards.dailyLogin);
-      setVal('cfg-reward-vip-daily', cfg.rewards.vipDailyLogin);
-      setVal('cfg-reward-top3', cfg.rewards.top3Finish);
-      setVal('cfg-reward-tournament', cfg.rewards.tournamentWinner);
-      setVal('cfg-extralife-price', cfg.extraLife.price);
-      setVal('cfg-extralife-max', cfg.extraLife.maxPerGame);
-      setVal('cfg-extralife-enabled', String(cfg.extraLife.enabled));
-
-      // Zümrüt Satın Alma Paketleri (500 - 10.000 💚)
-      const pkgWrap = document.getElementById('adm-emerald-packages-list');
-      if (pkgWrap) {
-        const pkgs = paymentService.listEmeraldPackages
-          ? paymentService.listEmeraldPackages(true)
-          : paymentService.getEmeraldPackages
-          ? paymentService.getEmeraldPackages(true)
-          : [];
-        pkgWrap.innerHTML = pkgs
-          .map(pkg => {
-            const pkgTitle = pkg.name || pkg.title || `${pkg.emeralds} Zümrüt Paketi`;
-            return `
-            <div class="adm-row-card">
-              <div class="adm-row-main">
-                <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                  <span>${this.escapeHtml(pkg.icon || '💚')}</span>
-                  <strong>${this.escapeHtml(pkgTitle)}</strong>
-                  <span class="emerald-text">💚 ${pkg.emeralds.toLocaleString('tr-TR')} Zümrüt</span>
-                  <span class="gold-text">💳 ${pkg.priceTL.toLocaleString('tr-TR')} TL</span>
-                  <span class="status-pill status-${pkg.enabled !== false ? 'ACTIVE' : 'DISABLED'}">${
-                    pkg.enabled !== false ? 'AKTİF' : 'DEVRE DIŞI'
-                  }</span>
-                </div>
-              </div>
-              <div class="adm-row-actions">
-                <button type="button" class="act-btn" data-pkg-edit="${this.escapeHtml(pkg.id)}">TL Fiyatını Düzenle</button>
-              </div>
-            </div>
-          `;
-          })
-          .join('');
-
-        pkgWrap.querySelectorAll('[data-pkg-edit]').forEach(btn => {
-          btn.addEventListener('click', () => {
-            window.soundManager.playClick();
-            const id = btn.getAttribute('data-pkg-edit');
-            const target = pkgs.find(x => x.id === id);
-            if (!target) return;
-            const pkgTitle = target.name || target.title || id;
-            const rawPrice = prompt(
-              `${pkgTitle} için yeni TL fiyatı girin (min 100 TL):`,
-              String(target.priceTL)
-            );
-            if (rawPrice !== null && rawPrice.trim() !== '') {
-              try {
-                paymentService.adminSaveEmeraldPackage(this.session, {
-                  ...target,
-                  priceTL: Number(rawPrice)
-                });
-                this.showToast(`${pkgTitle} fiyatı ${rawPrice} TL olarak güncellendi.`, 'success');
-                this.renderAdminAll();
-              } catch (err) {
-                this.showToast(err.message, 'error');
-              }
-            }
-          });
-        });
-      }
-    }
-
-    // 8. Admin Zümrüt Mağazası Sayfası
-    renderAdminShopTab() {
-      const shopWrap = document.getElementById('adm-shop-items-list');
-      if (!shopWrap) return;
-      const items = shopService.listShopItems(true, 'ALL');
-
-      shopWrap.innerHTML = items
-        .map(
-          item => `
-          <div class="adm-row-card">
-            <div class="adm-row-main">
-              <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                <span style="font-size:1.35rem;">${this.escapeHtml(item.icon)}</span>
-                <span class="adm-code-title">${this.escapeHtml(item.name)}</span>
-                <span class="status-pill status-${item.enabled ? 'ACTIVE' : 'DISABLED'}">${
-                  item.enabled ? 'AKTİF' : 'DEVRE DIŞI'
-                }</span>
-                <span class="role-badge role-player">${this.escapeHtml(item.category)}</span>
-                <strong class="emerald-text">💚 ${item.price.toLocaleString('tr-TR')} Zümrüt</strong>
-              </div>
-              <div class="adm-row-sub">
-                <span>Etki: <strong>${item.effectType}</strong></span>
-                <span>Gerekli Rol: <strong>${item.requiredRole}</strong></span>
-                <span>Limit: <strong>${item.purchaseLimit}</strong></span>
-                <span>"${this.escapeHtml(item.description)}"</span>
-              </div>
-            </div>
-            <div class="adm-row-actions">
-              <button type="button" class="act-btn" data-shop-adm="price" data-id="${this.escapeHtml(item.id)}">Fiyat Değiştir</button>
-              <button type="button" class="act-btn ${item.enabled ? 'danger' : 'emerald'}" data-shop-adm="toggle" data-id="${this.escapeHtml(item.id)}">${item.enabled ? 'Devre Dışı Bırak' : 'Aktifleştir'}</button>
-            </div>
-          </div>
-        `
-        )
-        .join('');
-
-      shopWrap.querySelectorAll('[data-shop-adm]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const act = btn.getAttribute('data-shop-adm');
-          const id = btn.getAttribute('data-id');
-          const allItems = shopService.listShopItems(true, 'ALL');
-          const target = allItems.find(x => x.id === id);
-          if (!target) return;
-
-          if (act === 'toggle') {
-            shopService.adminSaveShopItem(this.session, {
-              ...target,
-              enabled: !target.enabled
-            });
-            this.showToast(
-              `${target.name} durumu: ${!target.enabled ? 'AKTİF' : 'DEVRE DIŞI'}.`,
-              'info'
-            );
-            this.renderAdminAll();
-          } else if (act === 'price') {
-            const rawNewPrice = prompt(
-              `"${target.name}" için yeni Zümrüt Coin fiyatını girin:`,
-              String(target.price)
-            );
-            if (rawNewPrice !== null && rawNewPrice.trim() !== '') {
-              const parsed = Math.max(0, Math.floor(Number(rawNewPrice)));
-              if (!Number.isNaN(parsed)) {
-                shopService.adminSaveShopItem(this.session, {
-                  ...target,
-                  price: parsed
-                });
-                this.showToast(`${target.name} fiyatı ${parsed} Zümrüt olarak güncellendi.`, 'success');
-                this.renderAdminAll();
-              }
-            }
-          }
-        });
-      });
-    }
-
-    // 9. Admin VIP ve Rütbe Yönetimi Sayfası
-    renderAdminVipTab() {
-      const vipWrap = document.getElementById('adm-vip-users-list');
-      if (!vipWrap) return;
-
-      const rankedUsers = userService
-        .getAllUsers()
-        .filter(
-          u =>
-            u.role === 'VIP' ||
-            u.role === 'ADMIN' ||
-            u.vipStatus?.isVip ||
-            (u.rank && u.rank !== 'PLAYER')
-        );
-
-      vipWrap.innerHTML =
-        rankedUsers.length === 0
-          ? '<div class="empty-state-box">Rütbeli üye bulunamadı.</div>'
-          : rankedUsers
-              .map(u => {
-                const prof = economyService.getPlayerEconomyProfile(u.minecraftUsername);
-                return `
-                  <div class="adm-row-card">
-                    <div class="adm-row-main">
-                      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                        ${this.getAvatarImgHtml(u.minecraftUsername, 'mc-avatar-xs')}
-                        <strong>👑 ${this.escapeHtml(u.minecraftUsername)}</strong>
-                        <span class="role-badge role-${u.role.toLowerCase()}">${this.escapeHtml(prof.rankBadge || u.rank || u.role)}</span>
-                      </div>
-                      <div class="adm-row-sub">
-                        <span>Rütbe Kademesi: <strong>${this.escapeHtml(u.rank || u.vipStatus?.tier || 'VIP')}</strong></span>
-                        <span>Maks Parti Boyutu: <strong>${prof.permissions?.maxPartySize || 4}</strong></span>
-                        <span>Bitiş: <strong>${u.rankExpiration || u.vipStatus?.expiresAt || 'Sınırsız'}</strong></span>
-                      </div>
-                    </div>
-                  </div>
-                `;
-              })
-              .join('');
-    }
-
-    // 10. Admin Ödemeler Sayfası
-    renderAdminPaymentsTab() {
-      const payWrap = document.getElementById('adm-vip-payments-list');
-      if (!payWrap) return;
-
-      const statusFilter = document.getElementById('filter-adm-payments-status')?.value || 'ALL';
-      let payments = paymentService.listPaymentIntents(this.session);
-      if (statusFilter !== 'ALL') {
-        payments = payments.filter(p => p.status === statusFilter);
-      }
-
-      if (payments.length === 0) {
-        payWrap.innerHTML =
-          '<div class="empty-state-box">Bu filtre için kayıtlı Stripe ödeme oturumu bulunamadı.</div>';
-        return;
-      }
-
-      payWrap.innerHTML = payments
-        .map(p => {
-          const statusClass =
-            p.status === 'PAID'
-              ? 'ACTIVE'
-              : p.status === 'PENDING'
-              ? 'WAITING'
-              : 'REVOKED';
-          return `
-            <div class="adm-row-card">
-              <div class="adm-row-main">
-                <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                  <span class="adm-code-title">${this.escapeHtml(p.id)}</span>
-                  <span class="status-pill status-${statusClass}">${this.escapeHtml(p.status)}</span>
-                  <strong>⛏️ ${this.escapeHtml(p.username)}</strong>
-                  <strong class="gold-text">${p.amount} ${this.escapeHtml(p.currency)}</strong>
-                </div>
-                <div class="adm-row-sub">
-                  <span>Ürün: <strong>${this.escapeHtml(p.title)}</strong></span>
-                  <span>Tür: <strong>${this.escapeHtml(p.type || 'EMERALDS')}</strong></span>
-                  ${p.webhookEventId ? `<span>Webhook Olayı: <code>${this.escapeHtml(p.webhookEventId)}</code></span>` : ''}
-                  <span>Tarih: ${new Date(p.createdAt).toLocaleString('tr-TR')}</span>
-                </div>
-              </div>
-              <div class="adm-row-actions">
-                ${
-                  p.status === 'PAID'
-                    ? `<button type="button" class="act-btn danger" data-pay-act="refund" data-id="${this.escapeHtml(p.id)}">İade Et</button>`
-                    : ''
-                }
-              </div>
-            </div>
-          `;
-        })
-        .join('');
-
-      payWrap.querySelectorAll('[data-pay-act="refund"]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const id = btn.getAttribute('data-id');
-          this.askConfirmation(
-            '💸 Ödemeyi İade Et',
-            `${id} numaralı ödemeyi İADE EDİLDİ olarak işaretlemek ve tanımlanan Zümrütleri geri almak istediğinize emin misiniz?`,
-            'İadeyi Onayla',
-            () => {
-              try {
-                paymentService.adminRefundPayment(this.session, id, 'Admin Paneli İadesi');
-                this.showToast(`Ödeme ${id} iade edildi.`, 'info');
-                this.syncEconomyHeaderUI();
-                this.renderAdminAll();
-              } catch (err) {
-                this.showToast(err.message, 'error');
-              }
-            }
-          );
-        });
-      });
-    }
-
-    // 11. Admin Destek Talepleri Sayfası
-    renderAdminSupport() {
-      const wrap = document.getElementById('adm-support-list');
-      if (!wrap) return;
-      const tickets = supportService.listSupportTickets(this.session, false);
-
-      wrap.innerHTML =
-        tickets.length === 0
-          ? '<div class="empty-state-box">Destek talebi bulunamadı.</div>'
-          : tickets
-              .map(t => {
-                const prioTr = supportService.formatPriorityTR(t.priority);
-                return `
-              <div class="adm-row-card">
-                <div class="adm-row-main">
-                  <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${t.priority.replace(/\s+/g, '_')}">${prioTr} ÖNCELİK</span>
-                    <strong>${this.escapeHtml(t.title)}</strong>
-                    <span class="status-pill status-${t.status === 'RESOLVED' ? 'ACTIVE' : 'WAITING'}">${t.status}</span>
-                  </div>
-                  <div class="adm-row-sub">
-                    <span>Talep ID: <strong>${t.id}</strong></span>
-                    <span>Oyuncu: <strong>${this.escapeHtml(t.username)} (${this.escapeHtml(t.rank || t.role)})</strong></span>
-                    <span>Kategori: <strong>${this.escapeHtml(t.category)}</strong></span>
-                    <span>Tarih: ${new Date(t.createdAt).toLocaleString('tr-TR')}</span>
-                  </div>
-                  <p class="panel-sec-desc" style="margin-top:0.3rem;">${this.escapeHtml(t.description)}</p>
-                  ${t.adminReply ? `<div class="emerald-text" style="font-size:0.84rem; margin-top:0.2rem;">Yanıt: ${this.escapeHtml(t.adminReply)}</div>` : ''}
-                </div>
-                <div class="adm-row-actions">
-                  <button type="button" class="act-btn emerald" data-adm-sup="reply" data-id="${t.id}">Yanıtla ve Çöz</button>
-                  <button type="button" class="act-btn" data-adm-sup="close" data-id="${t.id}">Kapat</button>
-                </div>
-              </div>
-            `;
-              })
-              .join('');
-
-      wrap.querySelectorAll('[data-adm-sup]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const act = btn.getAttribute('data-adm-sup');
-          const id = btn.getAttribute('data-id');
-          if (act === 'reply') {
-            const reply = prompt('Bu destek talebi için Admin yanıtını girin:');
-            if (reply !== null) {
-              supportService.adminUpdateSupportTicket(this.session, id, {
-                status: 'RESOLVED',
-                adminReply: reply.trim() || 'Admin tarafından çözüldü.'
-              });
-              this.showToast(`Talep ${id} çözüldü olarak işaretlendi.`, 'success');
-              this.renderAdminAll();
-            }
-          } else if (act === 'close') {
-            supportService.adminUpdateSupportTicket(this.session, id, { status: 'CLOSED' });
-            this.showToast(`Talep ${id} kapatıldı.`, 'info');
-            this.renderAdminAll();
-          }
-        });
-      });
-    }
-
-    // 12. Admin Hata Bildirimleri Sayfası
-    renderAdminBugs() {
-      const wrap = document.getElementById('adm-bugs-list');
-      if (!wrap) return;
-      const bugs = bugService.listBugReports(this.session, false);
-      const statuses = [
-        { val: 'OPEN', label: 'AÇIK' },
-        { val: 'IN PROGRESS', label: 'İNCELENİYOR' },
-        { val: 'WAITING FOR USER', label: 'OYUNCU BEKLENİYOR' },
-        { val: 'RESOLVED', label: 'ÇÖZÜLDÜ' },
-        { val: 'CLOSED', label: 'KAPATILDI' }
-      ];
-
-      wrap.innerHTML =
-        bugs.length === 0
-          ? '<div class="empty-state-box">Hata bildirimi bulunamadı.</div>'
-          : bugs
-              .map(b => {
-                const prioTr = supportService.formatPriorityTR(b.priority);
-                return `
-              <div class="adm-row-card">
-                <div class="adm-row-main">
-                  <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${b.priority.replace(/\s+/g, '_')}">${prioTr} ÖNCELİK</span>
-                    <strong>${this.escapeHtml(b.title)}</strong>
-                    <span class="status-pill status-WAITING">${b.status}</span>
-                  </div>
-                  <div class="adm-row-sub">
-                    <span>ID: <strong>${b.id}</strong></span>
-                    <span>Oyuncu: <strong>${this.escapeHtml(b.username)} (${this.escapeHtml(b.rank || (b.isVip ? 'VIP' : 'PLAYER'))})</strong></span>
-                    <span>Kategori: <strong>${this.escapeHtml(b.category)}</strong></span>
-                    ${b.relatedParty ? `<span>Parti: <strong>${this.escapeHtml(b.relatedParty)}</strong></span>` : ''}
-                    <span>Tarih: ${new Date(b.createdAt).toLocaleString('tr-TR')}</span>
-                  </div>
-                  <p class="panel-sec-desc" style="margin-top:0.3rem;">${this.escapeHtml(b.description)}</p>
-                </div>
-                <div class="adm-row-actions">
-                  <select class="mc-select mc-select-xs adm-bug-status-sel" data-bug-id="${b.id}">
-                    ${statuses
-                      .map(
-                        st => `<option value="${st.val}" ${b.status === st.val ? 'selected' : ''}>${st.label}</option>`
-                      )
-                      .join('')}
-                  </select>
-                </div>
-              </div>
-            `;
-              })
-              .join('');
-
-      wrap.querySelectorAll('.adm-bug-status-sel').forEach(sel => {
-        sel.addEventListener('change', () => {
-          const id = sel.getAttribute('data-bug-id');
-          bugService.adminUpdateBugStatus(this.session, id, sel.value);
-          this.showToast(`Hata bildirimi ${id} durumu güncellendi: ${sel.value}.`, 'success');
-          this.renderAdminAll();
-        });
-      });
-    }
-
-    // 13. Admin Öneriler Sayfası (Bölüm 24: İnceleniyor, Planlandı, Geliştiriliyor, Tamamlandı, Reddedildi)
-    renderAdminSuggestions() {
-      const wrap = document.getElementById('adm-suggestions-list');
-      if (!wrap) return;
-      const sortBy = document.getElementById('adm-suggestions-sort')?.value || 'PRIORITY';
-      const sugs = suggestionService.listSuggestions(this.session, sortBy);
-      const statuses = [
-        { val: 'REVIEWING', label: 'İnceleniyor' },
-        { val: 'PLANNED', label: 'Planlandı' },
-        { val: 'IN DEVELOPMENT', label: 'Geliştiriliyor' },
-        { val: 'COMPLETED', label: 'Tamamlandı' },
-        { val: 'DECLINED', label: 'Reddedildi' }
-      ];
-
-      wrap.innerHTML =
-        sugs.length === 0
-          ? '<div class="empty-state-box">Öneri bulunamadı.</div>'
-          : sugs
-              .map(s => {
-                const prioTr = supportService.formatPriorityTR(s.priority);
-                const statusTr = supportService.formatSuggestionStatusTR
-                  ? supportService.formatSuggestionStatusTR(s.status)
-                  : s.status;
-                return `
-              <div class="adm-row-card">
-                <div class="adm-row-main">
-                  <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${s.priority.replace(/\s+/g, '_')}">${prioTr} ÖNCELİK</span>
-                    <strong>${this.escapeHtml(s.title)}</strong>
-                    <span class="status-pill status-ACTIVE">${this.escapeHtml(statusTr)}</span>
-                    <span class="gold-text">👍 ${s.votes || 0} Oy</span>
-                  </div>
-                  <div class="adm-row-sub">
-                    <span>ID: <strong>${s.id}</strong></span>
-                    <span>Oyuncu: <strong>${this.escapeHtml(s.username)} (${this.escapeHtml(s.rank || s.role)})</strong></span>
-                    <span>Kategori: <strong>${this.escapeHtml(s.category)}</strong></span>
-                    <span>Tarih: ${new Date(s.createdAt).toLocaleString('tr-TR')}</span>
-                  </div>
-                  <p class="panel-sec-desc" style="margin-top:0.3rem;">${this.escapeHtml(s.description)}</p>
-                </div>
-                <div class="adm-row-actions">
-                  <select class="mc-select mc-select-xs adm-sug-status-sel" data-sug-id="${s.id}">
-                    ${statuses
-                      .map(
-                        st => `<option value="${st.val}" ${s.status === st.val ? 'selected' : ''}>${st.label}</option>`
-                      )
-                      .join('')}
-                  </select>
-                </div>
-              </div>
-            `;
-              })
-              .join('');
-
-      wrap.querySelectorAll('.adm-sug-status-sel').forEach(sel => {
-        sel.addEventListener('change', () => {
-          const id = sel.getAttribute('data-sug-id');
-          suggestionService.adminUpdateSuggestionStatus(this.session, id, sel.value);
-          const statusTr = supportService.formatSuggestionStatusTR
-            ? supportService.formatSuggestionStatusTR(sel.value)
-            : sel.value;
-          this.showToast(`Öneri ${id} durumu güncellendi: ${statusTr}.`, 'success');
-          this.renderAdminAll();
-        });
-      });
-    }
-
-    // 14. Admin İşlemler Sayfası
-    renderAdminTransactions() {
-      const txListEl = document.getElementById('adm-tx-history-list');
-      if (!txListEl) return;
-      const q = (document.getElementById('search-adm-tx-history')?.value || '').toLowerCase().trim();
-      let allTxs = economyService.getTransactionHistory(this.session, null);
-      if (q) {
-        allTxs = allTxs.filter(
-          tx =>
-            tx.username.toLowerCase().includes(q) ||
-            tx.reason.toLowerCase().includes(q) ||
-            tx.id.toLowerCase().includes(q)
-        );
-      }
-
-      txListEl.innerHTML =
-        allTxs.length === 0
-          ? '<div class="empty-state-box">İşlem kaydı bulunamadı.</div>'
-          : allTxs
-              .slice(0, 100)
-              .map(tx => {
-                const isNeg = tx.amount < 0;
-                const sign = tx.amount > 0 ? '+' : '';
-                const amtStr =
-                  tx.amount === 0
-                    ? '❤️ 1 Ekstra Can Kullanıldı'
-                    : `${sign}${tx.amount.toLocaleString('tr-TR')} Zümrüt`;
-                return `
-                  <div class="tx-row ${isNeg ? 'tx-negative' : ''}">
-                    <div class="tx-main">
-                      <span class="tx-reason"><strong>⛏️ ${this.escapeHtml(
-                        tx.username
-                      )}</strong> — ${this.escapeHtml(tx.reason)} <span class="meta-muted">[${tx.id}]</span></span>
-                      <span class="tx-meta">[${tx.dateFormatted}] • Önceki Bakiye: 💚 ${Number(tx.previousBalance || 0).toLocaleString('tr-TR')} → Yeni Bakiye: 💚 ${tx.balanceAfter.toLocaleString('tr-TR')} • Kaynak: ${this.escapeHtml(tx.source || 'Sistem')}</span>
-                    </div>
-                    <div class="tx-amount ${isNeg ? 'wrong-text' : 'emerald-text'}">${amtStr}</div>
-                  </div>
-                `;
-              })
-              .join('');
-    }
-
-    // 15. Admin Başarımlar Sayfası
-    renderAdminAchievements() {
-      const wrap = document.getElementById('adm-achievements-list');
-      if (!wrap) return;
-      const catalog = achievementService.getCatalog();
-      wrap.innerHTML = catalog
-        .map(
-          a => `
-          <div class="adm-row-card">
-            <div class="adm-row-main">
-              <div style="display:flex; gap:0.55rem; align-items:center;">
-                <span style="font-size:1.4rem;">${a.icon}</span>
-                <strong>${this.escapeHtml(a.title)}</strong>
-                <span class="meta-muted">(${a.id})</span>
-              </div>
-              <div class="adm-row-sub">
-                <span>${this.escapeHtml(a.description)}</span>
-                <span class="emerald-text">Bonus: +${a.bonusEmeralds} 💚</span>
-              </div>
-            </div>
-          </div>
-        `
-        )
-        .join('');
-    }
-
-    // 16. Admin Yedekler Sayfası
-    renderAdminBackups() {
-      const wrap = document.getElementById('adm-backups-list');
-      if (!wrap) return;
-      const backups = backupService.listBackups(this.session);
-
-      wrap.innerHTML = backups
-        .map(
-          b => `
-          <div class="adm-row-card">
-            <div class="adm-row-main">
-              <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                <span class="adm-code-title">${this.escapeHtml(b.id)}</span>
-                <span class="status-pill status-ACTIVE">${this.escapeHtml(b.version)}</span>
-                <strong>${this.escapeHtml(b.label)}</strong>
-              </div>
-              <div class="adm-row-sub">
-                <span>📅 Tarih: ${new Date(b.createdAt).toLocaleString('tr-TR')}</span>
-                <span>📁 <code>backup/users/</code> (${b.counts.users})</span>
-                <span>📁 <code>backup/parties/</code> (${b.counts.parties})</span>
-                <span>📁 <code>backup/licenses/</code> (${b.counts.licenses})</span>
-                <span>📁 <code>backup/transactions/</code> (${b.counts.transactions})</span>
-                <span>📁 <code>backup/payments/</code> (${b.counts.payments || 0})</span>
-                <span>📁 <code>backup/settings/</code> (Hazır)</span>
-              </div>
-            </div>
-            <div class="adm-row-actions">
-              <button type="button" class="act-btn emerald" data-bkp-act="download" data-id="${b.id}">⬇️ Yedeği İndir</button>
-              <button type="button" class="act-btn" data-bkp-act="export" data-id="${b.id}">JSON Kopyala</button>
-              <button type="button" class="act-btn danger" data-bkp-act="restore" data-id="${b.id}">Yedeği Geri Yükle</button>
-            </div>
-          </div>
-        `
-        )
-        .join('');
-
-      wrap.querySelectorAll('[data-bkp-act]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const act = btn.getAttribute('data-bkp-act');
-          const id = btn.getAttribute('data-id');
-          const target = backups.find(x => x.id === id);
-          if (!target) return;
-
-          if (act === 'download') {
-            const jsonStr = JSON.stringify(target, null, 2);
-            this.downloadJsonFile(`minecraft-milyoner-${target.id}.json`, jsonStr);
-            this.showToast(`${target.id}.json indirildi!`, 'success');
-          } else if (act === 'export') {
-            this.copyToClipboard(
-              JSON.stringify(target, null, 2),
-              `Yedek ${target.id} JSON panoya kopyalandı!`
-            );
-          } else if (act === 'restore') {
-            this.askConfirmation(
-              '💾 Yedeği Geri Yükle',
-              `Sistem durumunu ${target.id} (${target.version}) yedeğine geri yüklemek istediğinize emin misiniz?`,
-              'Geri Yükle',
-              () => {
-                backupService.restoreBackup(this.session, id);
-                this.showToast(`Yedek ${target.id} başarıyla geri yüklendi.`, 'success');
-                this.renderAdminAll();
-              }
-            );
-          }
-        });
-      });
-    }
-
-    // 17. Admin Aktivite Günlüğü
-    renderAdminActivity() {
-      const wrap = document.getElementById('adm-full-activity-list');
-      if (!wrap) return;
-      const logs = activityService.getAll();
-      wrap.innerHTML =
-        logs.length === 0
-          ? '<div class="empty-state-box">Kayıtlı aktivite günlüğü bulunamadı.</div>'
-          : logs
-              .map(
-                item => `
-                <div class="activity-item">
-                  <span class="act-time">[${item.timeFormatted}]</span>
-                  <span class="act-msg">${this.escapeHtml(item.message)}</span>
-                </div>
-              `
-              )
-              .join('');
-    }
-
-    // ==========================================
-    // YARDIMCI FONKSİYONLAR
-    // ==========================================
-    downloadJsonFile(filename, content) {
-      try {
-        const blob = new Blob([content], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } catch (e) {
-        this.copyToClipboard(content, 'Yedek JSON panoya kopyalandı!');
-      }
-    }
-
-    copyToClipboard(text, successMsg) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard
-          .writeText(text)
-          .then(() => this.showToast(successMsg, 'success'))
-          .catch(() => this.fallbackCopy(text, successMsg));
-      } else {
-        this.fallbackCopy(text, successMsg);
-      }
-    }
-
-    fallbackCopy(text, successMsg) {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand('copy');
-        this.showToast(successMsg, 'success');
-      } catch (e) {
-        this.showToast('Kopyalama başarısız oldu.', 'error');
-      }
-      ta.remove();
-    }
-
-    escapeHtml(str) {
-      return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+    } catch (e) {
+      return '-';
     }
   }
 
-  window.addEventListener('DOMContentLoaded', () => {
-    window.mcmPlatform = new TournamentPlatformController();
-  });
-})();
+  function formatCurrencyTRY(num) {
+    return `${Number(num || 0).toLocaleString('tr-TR')} ₺`;
+  }
+
+  function showToast(message, type = 'info') {
+    if (typeof window.showToastNotification === 'function') {
+      window.showToastNotification(message, type);
+      return;
+    }
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `mc-toast mc-toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('fade-out');
+      setTimeout(() => toast.remove(), 300);
+    }, 3600);
+  }
+
+  // ==========================================
+  // ÖZEL MINECRAFT SVG İKONLARINI YERLEŞTİR (#20)
+  // ==========================================
+  function injectCustomCurrencyIcons() {
+    const { mcIconService } = svc();
+    if (!mcIconService) return;
+
+    document.querySelectorAll('[data-mc-icon="emerald"]').forEach(el => {
+      const isLg = el.classList.contains('currency-svg-lg');
+      el.innerHTML = mcIconService.getEmeraldSvg(isLg ? 26 : 18);
+    });
+
+    document.querySelectorAll('[data-mc-icon="netherite"]').forEach(el => {
+      const isLg = el.classList.contains('currency-svg-lg');
+      el.innerHTML = mcIconService.getNetheriteSvg(isLg ? 26 : 18);
+    });
+  }
+
+  // ==========================================
+  // KARE MINECRAFT SKIN YÜZÜ AVATAR YARDIMCISI (#4)
+  // ==========================================
+  function setAvatarImageWithFallback(imgEl, userObj) {
+    if (!imgEl) return;
+    const { avatarService } = svc();
+    const username = userObj?.username || 'Steve';
+    const fallbackDataUrl = avatarService
+      ? avatarService.generatePixelAvatarDataUrl(username)
+      : '';
+    const primarySrc = avatarService
+      ? avatarService.getAvatarForUser(userObj)
+      : fallbackDataUrl;
+
+    imgEl.onerror = function () {
+      imgEl.onerror = null;
+      if (fallbackDataUrl) imgEl.src = fallbackDataUrl;
+    };
+    imgEl.src = primarySrc || fallbackDataUrl;
+  }
+
+  function getRankBadgeClass(rankId) {
+    const norm = String(rankId || 'MEMBER').toUpperCase();
+    if (norm === 'ADMIN') return 'role-badge role-admin';
+    if (norm === 'MODERATOR') return 'role-badge role-moderator';
+    if (norm === 'MVIP_PLUS') return 'role-badge role-mvip-plus';
+    if (norm === 'MVIP') return 'role-badge role-mvip';
+    if (norm === 'VIP_PLUS') return 'role-badge role-vip-plus';
+    if (norm === 'VIP') return 'role-badge role-vip';
+    return 'role-badge role-member';
+  }
+
+  // ==========================================
+  // ÜST BAR, ÇEKMECE VE GÜNLÜK NETHERITE SENKRONİZASYONU
+  // ==========================================
+  function syncHeaderAndDrawer() {
+    injectCustomCurrencyIcons();
+
+    const session = getSession();
+    const { userService, rankService, economyService, netheriteService, notificationService, extraLifeService, partyService } =
+      svc();
+
+    const emeraldPill = document.getElementById('header-emerald-pill');
+    const netheritePill = document.getElementById('header-netherite-pill');
+    const userChip = document.getElementById('user-account-chip');
+    const notifBtn = document.getElementById('btn-open-notifications');
+    const drawerAdminBtn = document.getElementById('drawer-btn-admin');
+    const drawerAdminLoginBtn = document.getElementById('btn-open-admin-login-modal');
+
+    if (!session) {
+      emeraldPill?.classList.add('hidden');
+      netheritePill?.classList.add('hidden');
+      userChip?.classList.add('hidden');
+      notifBtn?.classList.add('hidden');
+      drawerAdminBtn?.classList.add('hidden');
+      drawerAdminLoginBtn?.classList.remove('hidden');
+      return;
+    }
+
+    // İlk kez giriş yapan kullanıcının 250 Netherite başlangıç bonusunu garanti altına al (#14)
+    netheriteService?.ensureInitialBonusOnce(session.username);
+
+    const user = userService?.getUserByUsername(session.username) || session;
+    const rank = rankService?.getUserRank(user.username) || {
+      id: 'MEMBER',
+      name: 'Üye',
+      badge: '🌱'
+    };
+    const emeralds = economyService?.getBalance(user.username) ?? Number(user.emeraldBalance || 0);
+    const netherites =
+      netheriteService?.getBalance(user.username) ?? Number(user.netheriteBalance || 0);
+    const extraLives = extraLifeService?.getUserExtraLives(user.username) ?? Number(user.extraLives || 0);
+    const unreadNotifs = notificationService?.getUnreadCount(user.username) || 0;
+
+    // Header pill'leri göster
+    emeraldPill?.classList.remove('hidden');
+    netheritePill?.classList.remove('hidden');
+    userChip?.classList.remove('hidden');
+    notifBtn?.classList.remove('hidden');
+
+    const hEmerald = document.getElementById('header-emerald-count');
+    if (hEmerald) hEmerald.textContent = emeralds.toLocaleString('tr-TR');
+
+    const hNetherite = document.getElementById('header-netherite-count');
+    if (hNetherite) hNetherite.textContent = netherites.toLocaleString('tr-TR');
+
+    const hName = document.getElementById('header-user-name');
+    if (hName) hName.textContent = user.username;
+
+    const hRole = document.getElementById('header-user-role');
+    if (hRole) {
+      hRole.className = getRankBadgeClass(rank.id);
+      hRole.textContent = `${rank.badge} ${rank.name}`;
+    }
+
+    setAvatarImageWithFallback(document.getElementById('header-user-avatar'), user);
+
+    // Bildirim rozetleri (#7)
+    const hNotifBadge = document.getElementById('header-notif-badge');
+    const dNotifBadge = document.getElementById('drawer-notif-badge');
+    if (hNotifBadge) {
+      hNotifBadge.textContent = unreadNotifs > 99 ? '99+' : String(unreadNotifs);
+      hNotifBadge.classList.toggle('hidden', unreadNotifs <= 0);
+    }
+    if (dNotifBadge) {
+      dNotifBadge.textContent = unreadNotifs > 99 ? '99+' : String(unreadNotifs);
+      dNotifBadge.classList.toggle('hidden', unreadNotifs <= 0);
+    }
+
+    // Çekmece (Drawer) üst özeti
+    setAvatarImageWithFallback(document.getElementById('drawer-user-avatar'), user);
+    const dName = document.getElementById('drawer-user-name');
+    if (dName) dName.textContent = user.username;
+
+    const dRank = document.getElementById('drawer-user-rank');
+    if (dRank) {
+      dRank.className = getRankBadgeClass(rank.id);
+      dRank.textContent = `${rank.badge} ${rank.name}`;
+    }
+
+    const dMcName = document.getElementById('drawer-user-mcname');
+    if (dMcName) {
+      if (user.minecraftPlayerName) {
+        dMcName.textContent = `🎮 MC: ${user.minecraftPlayerName}`;
+        dMcName.classList.remove('hidden');
+      } else {
+        dMcName.classList.add('hidden');
+      }
+    }
+
+    const dEmerald = document.getElementById('drawer-emerald-count');
+    if (dEmerald) dEmerald.textContent = emeralds.toLocaleString('tr-TR');
+
+    const dNetherite = document.getElementById('drawer-netherite-count');
+    if (dNetherite) dNetherite.textContent = netherites.toLocaleString('tr-TR');
+
+    // Admin butonu görünürlüğü (#2)
+    const isAdmin = Boolean(session.isAdminSession || rank.id === 'ADMIN');
+    if (drawerAdminBtn) drawerAdminBtn.classList.toggle('hidden', !isAdmin);
+    if (drawerAdminLoginBtn) drawerAdminLoginBtn.classList.toggle('hidden', isAdmin);
+
+    const lbResetBtn = document.getElementById('btn-leaderboard-admin-reset');
+    if (lbResetBtn) lbResetBtn.classList.toggle('hidden', !isAdmin);
+
+    // Ana Sayfa (Welcome) özet kutuları
+    const stBest = document.getElementById('stat-best-score');
+    if (stBest) stBest.textContent = formatCurrencyTRY(user.points || user.bestScore || 0);
+
+    const stEm = document.getElementById('stat-emerald-balance');
+    if (stEm) stEm.textContent = emeralds.toLocaleString('tr-TR');
+
+    const stNe = document.getElementById('stat-netherite-balance');
+    if (stNe) stNe.textContent = netherites.toLocaleString('tr-TR');
+
+    const stLives = document.getElementById('stat-extra-lives');
+    if (stLives) stLives.textContent = `${extraLives} / 5 ❤️`;
+
+    // Aktif parti afişi
+    const activeParty = partyService?.getActivePartyForUser(user.username);
+    const partyBanner = document.getElementById('welcome-party-banner');
+    if (partyBanner) {
+      if (activeParty) {
+        partyBanner.classList.remove('hidden');
+        const pName = document.getElementById('welcome-party-name');
+        const pCode = document.getElementById('welcome-party-code');
+        if (pName) pName.textContent = activeParty.partyName;
+        if (pCode) pCode.textContent = activeParty.partyCode;
+      } else {
+        partyBanner.classList.add('hidden');
+      }
+    }
+
+    syncDailyNetheriteWidgets();
+  }
+
+  // ==========================================
+  // #13: GÜNLÜK ZÜMRÜT & NETHERITE ÖDÜLÜ WIDGET SENKRONİZASYONU
+  // ==========================================
+  function syncDailyNetheriteWidgets() {
+    const session = getSession();
+    const { netheriteService } = svc();
+    if (!session || !netheriteService) return;
+
+    const status = netheriteService.getDailyNetheriteStatus(session.username);
+    const hasNetherite = Number(status.dailyAmount || 0) > 0;
+    const dailyEm = Number(status.dailyEmerald || 50);
+    const dailyNe = Number(status.dailyAmount || 0);
+
+    // 1. Ana Sayfa Günlük Ödül Kutusu
+    const wTitle = document.getElementById('welcome-netherite-title');
+    const wDesc = document.getElementById('welcome-netherite-desc');
+    const wBtn = document.getElementById('btn-welcome-claim-netherite');
+
+    if (wTitle && wDesc && wBtn) {
+      if (status.canClaimNow) {
+        if (hasNetherite) {
+          wTitle.textContent = `⬛ ${status.rankName} Günlük Ödülünüz Hazır!`;
+          wDesc.textContent = `Bugünkü +${dailyNe} Netherite ve +${dailyEm} Zümrüt ödülünüzü hemen talep edebilirsiniz!`;
+          wBtn.textContent = `+${dailyNe} ⬛ & +${dailyEm} 🟢 Al`;
+        } else {
+          wTitle.textContent = `🟢 ${status.rankName} Günlük Zümrüt Ödülünüz Hazır!`;
+          wDesc.textContent = `Bugünkü +${dailyEm} Zümrüt ödülünüzü hemen alın! (VIP+ ve üzeri ilk alımda +250 ⬛ ve günlük +25/50/100 ⬛ kazanır)`;
+          wBtn.textContent = `+${dailyEm} Zümrüt Al`;
+        }
+        wBtn.disabled = false;
+        wBtn.dataset.actionMode = 'claim';
+      } else {
+        wTitle.textContent = hasNetherite
+          ? `⬛ ${status.rankName} Günlük Ödülü Alındı`
+          : `🟢 ${status.rankName} Günlük Zümrüt Ödülü Alındı`;
+        wDesc.textContent = hasNetherite
+          ? `Yeni +${dailyNe} Netherite ve +${dailyEm} Zümrüt ödülü için kalan süre: ${status.remainingText}`
+          : `Yeni +${dailyEm} Zümrüt ödülü için kalan süre: ${status.remainingText} (VIP+ ile günlük +25 ⬛ kazanın!)`;
+        wBtn.textContent = status.remainingText;
+        wBtn.disabled = true;
+        wBtn.dataset.actionMode = 'wait';
+      }
+    }
+
+    // 2. Mağaza Günlük Ödül Çubuğu
+    const sText = document.getElementById('shop-daily-netherite-text');
+    const sBtn = document.getElementById('btn-shop-claim-netherite');
+    if (sText && sBtn) {
+      if (status.canClaimNow) {
+        if (hasNetherite) {
+          sText.textContent = `${status.rankName} ayrıcalığınızla +${dailyNe} Netherite ve +${dailyEm} Zümrüt ödülünüz hazır!`;
+          sBtn.textContent = `+${dailyNe} ⬛ & +${dailyEm} 🟢 Al`;
+        } else {
+          sText.textContent = `${status.rankName} günlük +${dailyEm} Zümrüt ödülünüz hazır! (En az VIP+ ilk alımda +250 ⬛ + günlük +25/50/100 ⬛ verir)`;
+          sBtn.textContent = `+${dailyEm} Zümrüt Al`;
+        }
+        sBtn.disabled = false;
+        sBtn.dataset.actionMode = 'claim';
+      } else {
+        sText.textContent = hasNetherite
+          ? `Sonraki +${dailyNe} Netherite & +${dailyEm} Zümrüt ödülüne kalan süre: ${status.remainingText}`
+          : `Sonraki +${dailyEm} Zümrüt ödülüne kalan süre: ${status.remainingText}`;
+        sBtn.textContent = status.remainingText;
+        sBtn.disabled = true;
+        sBtn.dataset.actionMode = 'wait';
+      }
+    }
+
+    // 3. Profil Günlük Ödül Kutusu
+    const pStatus = document.getElementById('profile-daily-netherite-status');
+    const pBtn = document.getElementById('btn-profile-claim-netherite');
+    if (pStatus && pBtn) {
+      if (status.canClaimNow) {
+        pStatus.textContent = hasNetherite
+          ? `+${dailyNe} Netherite ve +${dailyEm} Zümrüt hemen alınabilir!`
+          : `+${dailyEm} Günlük Zümrüt hemen alınabilir!`;
+        pBtn.textContent = hasNetherite
+          ? `+${dailyNe} ⬛ & +${dailyEm} 🟢 Al`
+          : `+${dailyEm} Zümrüt Al`;
+        pBtn.disabled = false;
+        pBtn.dataset.actionMode = 'claim';
+      } else {
+        pStatus.textContent = `Bekleme süresi: ${status.remainingText}`;
+        pBtn.textContent = status.remainingText;
+        pBtn.disabled = true;
+        pBtn.dataset.actionMode = 'wait';
+      }
+    }
+  }
+
+  function handleDailyNetheriteClick(btn) {
+    const mode = btn?.dataset?.actionMode;
+    if (mode === 'upsell') {
+      state.shopCategory = 'Ranks';
+      navigateToScreen('shop');
+      return;
+    }
+    const session = getSession();
+    if (!session) return;
+    try {
+      const res = svc().netheriteService.claimDailyNetherite(session);
+      if (res.added > 0) {
+        showToast(
+          `🎉 +${res.added} Günlük Netherite ve +${res.emeraldAdded} Günlük Zümrüt hesabınıza eklendi!`,
+          'success'
+        );
+      } else {
+        showToast(`🎉 +${res.emeraldAdded} Günlük Zümrüt hesabınıza eklendi!`, 'success');
+      }
+      syncHeaderAndDrawer();
+      if (state.currentScreen === 'profile') renderProfile();
+      if (state.currentScreen === 'shop') renderShop();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  // ==========================================
+  // SAĞDAN AÇILIR KOMPAKT MENÜ ÇEKMECESİ (#5 & #6)
+  // ==========================================
+  function openDrawer() {
+    const drawer = document.getElementById('main-menu-drawer');
+    const backdrop = document.getElementById('menu-drawer-backdrop');
+    const toggleBtn = document.getElementById('btn-toggle-menu');
+    if (!drawer || !backdrop) return;
+
+    syncHeaderAndDrawer();
+    drawer.classList.remove('hidden');
+    backdrop.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      drawer.classList.add('open');
+      backdrop.classList.add('open');
+    });
+    if (toggleBtn) {
+      toggleBtn.classList.add('is-open');
+      toggleBtn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function closeDrawer() {
+    const drawer = document.getElementById('main-menu-drawer');
+    const backdrop = document.getElementById('menu-drawer-backdrop');
+    const toggleBtn = document.getElementById('btn-toggle-menu');
+    if (!drawer || !backdrop) return;
+
+    drawer.classList.remove('open');
+    backdrop.classList.remove('open');
+    if (toggleBtn) {
+      toggleBtn.classList.remove('is-open');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+    setTimeout(() => {
+      if (!drawer.classList.contains('open')) {
+        drawer.classList.add('hidden');
+        backdrop.classList.add('hidden');
+      }
+    }, 260);
+  }
+
+  function toggleDrawer() {
+    const drawer = document.getElementById('main-menu-drawer');
+    if (!drawer || drawer.classList.contains('hidden') || !drawer.classList.contains('open')) {
+      openDrawer();
+    } else {
+      closeDrawer();
+    }
+  }
+
+  // ==========================================
+  // MERKEZİ EKRAN YÖNLENDİRİCİSİ (SPA ROUTER)
+  // Hesap, bakiye, rütbe ve parti durumunu ASLA sıfırlamaz.
+  // ==========================================
+  function navigateToScreen(screenKey, options = {}) {
+    closeDrawer();
+
+    const session = getSession();
+    if (!session) {
+      const gate = document.getElementById('access-gate');
+      gate?.classList.remove('hidden');
+      return;
+    }
+
+    // Admin ekranı güvenlik kontrolü (#2)
+    if (screenKey === 'admin') {
+      const rankId = svc().authGuard?.getEffectiveRankId(session);
+      if (!session.isAdminSession && rankId !== 'ADMIN') {
+        showToast('Yönetici Paneline erişmek için Yönetici Girişi yapmalısınız!', 'error');
+        openAdminLoginModal();
+        return;
+      }
+    }
+
+    const targetId = `screen-${screenKey}`;
+    const targetEl = document.getElementById(targetId);
+    if (!targetEl) {
+      return;
+    }
+
+    document.querySelectorAll('.screen').forEach(scr => {
+      scr.classList.remove('active');
+      scr.classList.add('hidden');
+    });
+
+    targetEl.classList.remove('hidden');
+    targetEl.classList.add('active');
+    state.currentScreen = screenKey;
+
+    // Çekmecedeki aktif öğeyi işaretle
+    document.querySelectorAll('.drawer-item[data-nav-screen]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-nav-screen') === screenKey);
+    });
+
+    if (!options.skipHistory && window.location.hash !== `#${screenKey}`) {
+      try {
+        history.pushState({ screen: screenKey }, '', `#${screenKey}`);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    syncHeaderAndDrawer();
+
+    // İlgili ekranın içeriğini tazele
+    switch (screenKey) {
+      case 'welcome':
+        if (typeof window.refreshWelcomeScreen === 'function') {
+          window.refreshWelcomeScreen();
+        }
+        break;
+      case 'profile':
+        renderProfile();
+        break;
+      case 'notifications':
+        renderNotifications();
+        break;
+      case 'shop':
+        renderShop();
+        break;
+      case 'party':
+        renderParty();
+        break;
+      case 'stats':
+        renderStats();
+        break;
+      case 'leaderboard':
+        renderLeaderboard();
+        break;
+      case 'support':
+        renderSupport();
+        break;
+      case 'bug-report':
+        renderBugReports();
+        break;
+      case 'suggestions':
+        renderSuggestions();
+        break;
+      case 'settings':
+        renderSettings();
+        break;
+      case 'admin':
+        renderAdmin();
+        break;
+      default:
+        break;
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function openAdminLoginModal() {
+    closeDrawer();
+    const gate = document.getElementById('access-gate');
+    if (!gate) return;
+    gate.classList.remove('hidden');
+    const adminTabBtn = document.getElementById('tab-btn-admin');
+    if (adminTabBtn) adminTabBtn.click();
+  }
+
+  // ==========================================
+  // 4. EKRAN: PROFİL (renderProfile — #4, #13, #14)
+  // ==========================================
+  function renderProfile() {
+    const session = getSession();
+    if (!session) return;
+    const {
+      userService,
+      rankService,
+      economyService,
+      netheriteService,
+      shopService,
+      achievementService
+    } = svc();
+
+    const user = userService.getUserByUsername(session.username);
+    if (!user) return;
+
+    const rank = rankService.getUserRank(user.username);
+    const emeralds = economyService.getBalance(user.username);
+    const netherites = netheriteService.getBalance(user.username);
+
+    setAvatarImageWithFallback(document.getElementById('profile-avatar-img'), user);
+
+    // Kozmetik çerçeve ve efektler
+    const frameWrap = document.getElementById('profile-avatar-frame');
+    const heroCard = document.getElementById('profile-hero-card');
+    const allItems = shopService.getAllItems(true);
+    const equipped = user.equippedCosmetics || {};
+
+    if (frameWrap) {
+      frameWrap.className = 'profile-avatar-wrapper';
+      if (equipped.avatarFrame) {
+        const frameItem = allItems.find(i => i.id === equipped.avatarFrame);
+        if (frameItem?.cssValue) frameWrap.classList.add(frameItem.cssValue);
+      }
+    }
+
+    if (heroCard) {
+      heroCard.className = 'platform-card profile-hero-card';
+      if (equipped.profileEffect) {
+        const effItem = allItems.find(i => i.id === equipped.profileEffect);
+        if (effItem?.cssValue) heroCard.classList.add(effItem.cssValue);
+      }
+    }
+
+    const uNameEl = document.getElementById('profile-username-display');
+    if (uNameEl) {
+      uNameEl.textContent = user.username;
+      uNameEl.className = '';
+      uNameEl.style.color = '';
+      if (equipped.nameColor) {
+        const colorItem = allItems.find(i => i.id === equipped.nameColor);
+        if (colorItem?.cssValue === 'rgb-rainbow') {
+          uNameEl.classList.add('rgb-rainbow-text');
+        } else if (colorItem?.cssValue) {
+          uNameEl.style.color = colorItem.cssValue;
+        }
+      }
+    }
+
+    const rBadge = document.getElementById('profile-rank-badge');
+    if (rBadge) {
+      rBadge.className = getRankBadgeClass(rank.id);
+      rBadge.textContent = `${rank.badge} ${rank.name}`;
+    }
+
+    const mcDisplay = document.getElementById('profile-mc-player-display');
+    if (mcDisplay) {
+      mcDisplay.textContent = user.minecraftPlayerName
+        ? `🎮 Bağlı Minecraft Oyuncu Adı: ${user.minecraftPlayerName}`
+        : '🎮 Bağlı Minecraft Oyuncu Adı: Belirtilmedi';
+    }
+
+    const mcInput = document.getElementById('profile-mcname-input');
+    if (mcInput) mcInput.value = user.minecraftPlayerName || '';
+
+    const customBadgeEl = document.getElementById('profile-custom-badge');
+    if (customBadgeEl) {
+      if (equipped.badge) {
+        const badgeItem = allItems.find(i => i.id === equipped.badge);
+        customBadgeEl.textContent = badgeItem ? badgeItem.cssValue || badgeItem.name : '';
+      } else {
+        customBadgeEl.textContent = '';
+      }
+    }
+
+    const createdEl = document.getElementById('profile-created-at');
+    if (createdEl) createdEl.textContent = formatDateTR(user.createdAt);
+
+    const pEm = document.getElementById('profile-emerald-balance');
+    if (pEm) pEm.textContent = `${emeralds.toLocaleString('tr-TR')} 🟢`;
+
+    const pNe = document.getElementById('profile-netherite-balance');
+    if (pNe) pNe.textContent = `${netherites.toLocaleString('tr-TR')} ⬛`;
+
+    const pPts = document.getElementById('profile-total-points');
+    if (pPts) pPts.textContent = formatCurrencyTRY(user.points || user.bestScore || 0);
+
+    const pWin = document.getElementById('profile-win-ratio');
+    if (pWin) {
+      pWin.textContent = `${Number(user.gamesWon || 0)} / ${Number(user.gamesPlayed || 0)}`;
+    }
+
+    syncDailyNetheriteWidgets();
+
+    // Kozmetik Envanteri
+    const cosContainer = document.getElementById('profile-cosmetics-list');
+    if (cosContainer) {
+      const ownedIds = Array.isArray(user.ownedCosmetics) ? user.ownedCosmetics : [];
+      if (ownedIds.length === 0) {
+        cosContainer.innerHTML = `<div class="empty-state-box">Henüz kozmetik ürününüz yok. <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-nav-screen="shop"># MAĞAZA'ya Git</button></div>`;
+      } else {
+        cosContainer.innerHTML = ownedIds
+          .map(id => {
+            const item = allItems.find(i => i.id === id);
+            if (!item) return '';
+            const isEquipped = Object.values(equipped).includes(item.id);
+            return `
+              <div class="cosmetic-inv-card ${isEquipped ? 'equipped' : ''}">
+                <span class="cos-icon">${escapeHtml(item.icon)}</span>
+                <div class="cos-info">
+                  <strong>${escapeHtml(item.name)}</strong>
+                  <span>${escapeHtml(item.subCategory || 'Kozmetik')}</span>
+                </div>
+                <button type="button" class="mc-btn mc-btn-sm ${
+                  isEquipped ? 'mc-btn-secondary' : 'mc-btn-primary'
+                }" data-equip-cosmetic="${escapeHtml(item.id)}">
+                  ${isEquipped ? 'Çıkar' : 'Kuşan'}
+                </button>
+              </div>
+            `;
+          })
+          .join('');
+      }
+    }
+
+    // Başarımlar
+    const achContainer = document.getElementById('profile-achievements-list');
+    if (achContainer && achievementService) {
+      const achs = achievementService.getUserAchievements(user.username);
+      achContainer.innerHTML = achs
+        .map(
+          a => `
+          <div class="achievement-card ${a.unlocked ? 'unlocked' : 'locked'}">
+            <span class="ach-icon">${escapeHtml(a.icon)}</span>
+            <div class="ach-meta">
+              <strong>${escapeHtml(a.title)}</strong>
+              <p>${escapeHtml(a.description)}</p>
+              <span class="ach-reward">+${a.emeraldReward} 🟢 Ödül</span>
+            </div>
+            <span class="ach-status">${a.unlocked ? '✅ Kazanıldı' : '🔒 Kilitli'}</span>
+          </div>
+        `
+        )
+        .join('');
+    }
+
+    // Son Ekonomi İşlemleri (Zümrüt + Netherite birleşik)
+    const txContainer = document.getElementById('profile-tx-list');
+    if (txContainer) {
+      const emTxs = (economyService.getTransactions(user.username) || []).map(t => ({
+        ...t,
+        currency: 'EMERALD'
+      }));
+      const neTxs = (netheriteService.getTransactions(user.username) || []).map(t => ({
+        ...t,
+        currency: 'NETHERITE'
+      }));
+      const combined = [...emTxs, ...neTxs]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 15);
+
+      if (combined.length === 0) {
+        txContainer.innerHTML = `<div class="empty-state-box">Henüz işlem geçmişi bulunmuyor.</div>`;
+      } else {
+        txContainer.innerHTML = combined
+          .map(tx => {
+            const isPos = Number(tx.amount) >= 0;
+            const unit = tx.currency === 'NETHERITE' ? '⬛ Netherite' : '🟢 Zümrüt';
+            return `
+              <div class="tx-row">
+                <div>
+                  <strong>${escapeHtml(tx.reason)}</strong>
+                  <span class="tx-date">${formatDateTR(tx.createdAt)}</span>
+                </div>
+                <span class="tx-amount ${isPos ? 'pos' : 'neg'}">
+                  ${isPos ? '+' : ''}${tx.amount} ${unit}
+                </span>
+              </div>
+            `;
+          })
+          .join('');
+      }
+    }
+  }
+
+  // ==========================================
+  // 5. EKRAN: BİLDİRİMLER MERKEZİ (renderNotifications — #7)
+  // ==========================================
+  function renderNotifications() {
+    const session = getSession();
+    if (!session) return;
+    const { notificationService } = svc();
+    if (!notificationService) return;
+
+    const allNotifs = notificationService.getUserNotifications(session.username);
+    const unreadNotifs = allNotifs.filter(n => !n.read);
+
+    const totalEl = document.getElementById('notif-total-count');
+    const unreadEl = document.getElementById('notif-unread-count');
+    if (totalEl) totalEl.textContent = String(allNotifs.length);
+    if (unreadEl) unreadEl.textContent = String(unreadNotifs.length);
+
+    document.querySelectorAll('[data-notif-filter]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-notif-filter') === state.notifFilter);
+    });
+
+    const displayed = state.notifFilter === 'UNREAD' ? unreadNotifs : allNotifs;
+    const listEl = document.getElementById('notifications-list-container');
+    if (!listEl) return;
+
+    if (displayed.length === 0) {
+      listEl.innerHTML = `<div class="empty-state-box">Gösterilecek bildirim bulunmuyor.</div>`;
+      return;
+    }
+
+    const { partyService } = svc();
+
+    listEl.innerHTML = displayed
+      .map(n => {
+        const partyCode = n.meta?.partyCode || '';
+        const invitationId = n.meta?.invitationId || '';
+        const invObj =
+          invitationId && partyService?.getInvitationById
+            ? partyService.getInvitationById(invitationId)
+            : null;
+        const invStatus = invObj ? invObj.status : n.meta?.inviteStatus || '';
+
+        let partyActionHtml = '';
+        if (invitationId) {
+          if (invStatus === 'PENDING') {
+            partyActionHtml = `
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-accept-party-invite="${escapeHtml(
+                invitationId
+              )}" data-notif-id="${escapeHtml(n.id)}">Kabul Et</button>
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-reject-party-invite="${escapeHtml(
+                invitationId
+              )}" data-notif-id="${escapeHtml(n.id)}">Reddet</button>
+            `;
+          } else if (invStatus === 'ACCEPTED') {
+            partyActionHtml = `<span class="notif-read-label">✅ Kabul Edildi</span>`;
+          } else if (invStatus === 'REJECTED') {
+            partyActionHtml = `<span class="notif-read-label">❌ Reddedildi</span>`;
+          }
+        } else if (partyCode) {
+          partyActionHtml = `<button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-notif-join-party="${escapeHtml(
+            partyCode
+          )}">🎉 Partiye Katıl (${escapeHtml(partyCode)})</button>`;
+        }
+
+        return `
+          <div class="notification-card ${n.read ? 'is-read' : 'is-unread'}">
+            <div class="notif-card-icon">${escapeHtml(n.icon || '🔔')}</div>
+            <div class="notif-card-body">
+              <div class="notif-card-top">
+                <span class="notif-type-tag">${escapeHtml(n.typeLabel || 'Bildirim')}</span>
+                <span class="notif-time">${formatDateTR(n.createdAt)}</span>
+              </div>
+              <h4 class="notif-title">${escapeHtml(n.title)}</h4>
+              <p class="notif-message">${escapeHtml(n.message)}</p>
+              <div class="notif-card-actions">
+                ${
+                  !n.read
+                    ? `<button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-notif-mark-read="${escapeHtml(
+                        n.id
+                      )}">✓ Okundu olarak işaretle</button>`
+                    : `<span class="notif-read-label">✓ Okundu</span>`
+                }
+                ${partyActionHtml}
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  // ==========================================
+  // 6. EKRAN: BİRLEŞİK # MAĞAZA (renderShop — #8, #9, #10, #11, #12, #20, #27)
+  // Kategoriler: Ranks (Rütbeler), Emeralds (Zümrüt), Special (Özel Ürünler), Cosmetics (Kozmetikler)
+  // ==========================================
+  function renderShop() {
+    const session = getSession();
+    if (!session) return;
+    const {
+      userService,
+      rankService,
+      economyService,
+      netheriteService,
+      extraLifeService,
+      shopService
+    } = svc();
+
+    const user = userService.getUserByUsername(session.username);
+    if (!user) return;
+
+    const emeralds = economyService.getBalance(user.username);
+    const netherites = netheriteService.getBalance(user.username);
+    const extraLives = extraLifeService.getUserExtraLives(user.username);
+    const userRank = rankService.getUserRank(user.username);
+
+    const sEm = document.getElementById('shop-emerald-balance');
+    if (sEm) sEm.textContent = emeralds.toLocaleString('tr-TR');
+
+    const sNe = document.getElementById('shop-netherite-balance');
+    if (sNe) sNe.textContent = netherites.toLocaleString('tr-TR');
+
+    const sLi = document.getElementById('shop-extra-lives');
+    if (sLi) sLi.textContent = `${extraLives} / 5`;
+
+    syncDailyNetheriteWidgets();
+
+    // Sekme aktifliği
+    document.querySelectorAll('#unified-shop-tabs [data-shop-cat]').forEach(tab => {
+      tab.classList.toggle('active', tab.getAttribute('data-shop-cat') === state.shopCategory);
+    });
+
+    const ranksSection = document.getElementById('shop-ranks-section');
+    const itemsSection = document.getElementById('shop-items-section');
+
+    if (state.shopCategory === 'Ranks') {
+      ranksSection?.classList.remove('hidden');
+      itemsSection?.classList.add('hidden');
+      renderShopRanksGrid(user, userRank);
+    } else {
+      ranksSection?.classList.add('hidden');
+      itemsSection?.classList.remove('hidden');
+      renderShopItemsGrid(user, userRank, state.shopCategory);
+    }
+
+    injectCustomCurrencyIcons();
+  }
+
+  function renderShopRanksGrid(user, userRank) {
+    const container = document.getElementById('ranks-grid-container');
+    if (!container) return;
+
+    const purchasableRanks = svc().rankService.getPurchasableRanks(); // VIP, VIP+, MVIP, MVIP+
+    container.innerHTML = purchasableRanks
+      .map(rank => {
+        const isOwnedOrHigher = userRank.order >= rank.order;
+        const isCurrent = userRank.id === rank.id;
+        const dailyNetheriteText =
+          rank.dailyNetherite > 0
+            ? `<div class="rank-daily-netherite-pill">⬛ İlk Alımda +250 ⬛ • Günlük +${rank.dailyNetherite} ⬛ & +${rank.dailyEmerald || 200} 🟢</div>`
+            : `<div class="rank-daily-netherite-pill muted">🟢 Günlük +${rank.dailyEmerald || 100} Zümrüt Ödülü</div>`;
+
+        return `
+          <div class="rank-card" style="border-top: 4px solid ${escapeHtml(rank.color)};">
+            <div class="rank-card-header">
+              <span class="rank-card-badge" style="color: ${escapeHtml(rank.color)}">${escapeHtml(
+          rank.badge
+        )} ${escapeHtml(rank.name)}</span>
+              ${isCurrent ? `<span class="rank-current-tag">MEVCUT RÜTBENİZ</span>` : ''}
+            </div>
+
+            ${dailyNetheriteText}
+
+            <div class="rank-pricing-box">
+              <div class="rank-price-main">${rank.netheritePrice} ⬛ Netherite</div>
+              <div class="rank-price-sub">veya ${rank.emeraldPrice.toLocaleString(
+                'tr-TR'
+              )} 🟢 Zümrüt • ${rank.priceTry.toLocaleString('tr-TR')} ₺</div>
+            </div>
+
+            <ul class="rank-features-list">
+              ${(rank.features || []).map(f => `<li>✓ ${escapeHtml(f)}</li>`).join('')}
+            </ul>
+
+            <div class="rank-card-actions">
+              ${
+                isOwnedOrHigher
+                  ? `<button type="button" class="mc-btn mc-btn-secondary mc-btn-block" disabled>✓ Bu Rütbeye Sahipsiniz</button>`
+                  : `
+                    <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-rank="${escapeHtml(
+                      rank.id
+                    )}" data-pay-method="NETHERITE">
+                      ⬛ ${rank.netheritePrice} Netherite ile Satın Al
+                    </button>
+                    <button type="button" class="mc-btn mc-btn-primary mc-btn-block" data-buy-rank="${escapeHtml(
+                      rank.id
+                    )}" data-pay-method="EMERALD">
+                      🟢 ${rank.emeraldPrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
+                    </button>
+                    <button type="button" class="mc-btn mc-btn-secondary mc-btn-block" data-buy-rank="${escapeHtml(
+                      rank.id
+                    )}" data-pay-method="STRIPE">
+                      💳 Kart ile Al (${rank.priceTry.toLocaleString('tr-TR')} ₺)
+                    </button>
+                  `
+              }
+              <!-- #11: 🎁 Arkadaşına Hediye Et Butonu -->
+              <button type="button" class="mc-btn mc-btn-gift mc-btn-block" data-gift-rank="${escapeHtml(
+                rank.id
+              )}">
+                🎁 Arkadaşına Hediye Et
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  function renderShopItemsGrid(user, userRank, category) {
+    const grid = document.getElementById('shop-items-grid');
+    if (!grid) return;
+
+    const { shopService, rankService } = svc();
+    const items = shopService.getItemsByCategory(category);
+    const ownedCosmetics = Array.isArray(user.ownedCosmetics) ? user.ownedCosmetics : [];
+
+    if (items.length === 0) {
+      grid.innerHTML = `<div class="empty-state-box">Bu kategoride henüz ürün bulunmuyor.</div>`;
+      return;
+    }
+
+    grid.innerHTML = items
+      .map(item => {
+        const reqRank = rankService.getRankById(item.requiredRank || 'MEMBER');
+        const rankLocked = userRank.order < reqRank.order;
+        const alreadyOwned =
+          item.category === 'Cosmetics' &&
+          Number(item.maxPerUser) === 1 &&
+          ownedCosmetics.includes(item.id);
+
+        let actionButtonsHtml = '';
+        if (alreadyOwned) {
+          actionButtonsHtml = `<button type="button" class="mc-btn mc-btn-secondary mc-btn-block" disabled>✓ Envanterde Mevcut</button>`;
+        } else if (rankLocked) {
+          actionButtonsHtml = `<button type="button" class="mc-btn mc-btn-secondary mc-btn-block" disabled>🔒 ${escapeHtml(
+            reqRank.name
+          )} Gerekli</button>`;
+        } else if (item.currency === 'STRIPE') {
+          actionButtonsHtml = `
+            <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
+              item.id
+            )}" data-item-currency="STRIPE">
+              💳 ${Number(item.priceTry || item.price).toLocaleString('tr-TR')} ₺ — Satın Al (Stripe)
+            </button>
+          `;
+        } else if (item.currency === 'NETHERITE') {
+          const nPrice = Number(item.netheritePrice || item.price);
+          const ePrice = Number(item.emeraldPrice || 0);
+          actionButtonsHtml = `
+            <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
+              item.id
+            )}" data-item-currency="NETHERITE">
+              ⬛ ${nPrice} Netherite ile Satın Al
+            </button>
+            ${
+              ePrice > 0
+                ? `<button type="button" class="mc-btn mc-btn-primary mc-btn-block" data-buy-item="${escapeHtml(
+                    item.id
+                  )}" data-item-currency="EMERALD">
+                    🟢 ${ePrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
+                  </button>`
+                : ''
+            }
+          `;
+        } else {
+          const ePrice = Number(item.emeraldPrice || item.price);
+          const nPrice = Number(item.netheritePrice || 0);
+          actionButtonsHtml = `
+            <button type="button" class="mc-btn mc-btn-primary mc-btn-block" data-buy-item="${escapeHtml(
+              item.id
+            )}" data-item-currency="EMERALD">
+              🟢 ${ePrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
+            </button>
+            ${
+              nPrice > 0
+                ? `<button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
+                    item.id
+                  )}" data-item-currency="NETHERITE">
+                    ⬛ ${nPrice} Netherite ile Satın Al
+                  </button>`
+                : ''
+            }
+          `;
+        }
+
+        return `
+          <div class="shop-item-card">
+            <div class="shop-item-top">
+              <span class="shop-item-icon">${escapeHtml(item.icon || '🛍️')}</span>
+              <span class="shop-item-cat-tag">${escapeHtml(item.subCategory || item.category)}</span>
+            </div>
+            <h4 class="shop-item-title">${escapeHtml(item.name)}</h4>
+            <p class="shop-item-desc">${escapeHtml(item.description)}</p>
+            <div class="shop-item-actions">
+              ${actionButtonsHtml}
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  // ==========================================
+  // #11: "🎁 ARKADAŞINA HEDİYE ET" MODAL AKIŞI
+  // ==========================================
+  function openGiftRankModal(rankId) {
+    const { rankService } = svc();
+    const rank = rankService.getRankById(rankId);
+    if (!rank || !rank.purchasable) return;
+
+    state.giftModal.rankId = rank.id;
+    state.giftModal.friendUsername = '';
+
+    const modal = document.getElementById('modal-gift-rank');
+    const summaryBox = document.getElementById('gift-rank-summary-box');
+    const input = document.getElementById('gift-friend-username-input');
+    const step1 = document.getElementById('gift-step-1');
+    const step2 = document.getElementById('gift-step-2');
+    const err1 = document.getElementById('gift-step1-error');
+    const err2 = document.getElementById('gift-step2-error');
+
+    if (summaryBox) {
+      summaryBox.innerHTML = `
+        <div class="gift-rank-pill" style="border-left: 4px solid ${escapeHtml(rank.color)}">
+          <strong>${escapeHtml(rank.badge)} ${escapeHtml(rank.name)} Rütbesi Hediye Paketi</strong>
+          <span>${rank.netheritePrice} ⬛ Netherite veya ${rank.emeraldPrice.toLocaleString(
+        'tr-TR'
+      )} 🟢 Zümrüt</span>
+        </div>
+      `;
+    }
+
+    if (input) input.value = '';
+    err1?.classList.add('hidden');
+    err2?.classList.add('hidden');
+    step1?.classList.remove('hidden');
+    step2?.classList.add('hidden');
+    modal?.classList.remove('hidden');
+    input?.focus();
+  }
+
+  function closeGiftRankModal() {
+    const modal = document.getElementById('modal-gift-rank');
+    modal?.classList.add('hidden');
+  }
+
+  function proceedGiftRankStep2() {
+    const session = getSession();
+    if (!session) return;
+    const { userService, rankService } = svc();
+
+    const input = document.getElementById('gift-friend-username-input');
+    const err1 = document.getElementById('gift-step1-error');
+    const friendName = String(input?.value || '').trim();
+
+    const showErr = msg => {
+      if (err1) {
+        err1.textContent = msg;
+        err1.classList.remove('hidden');
+      }
+    };
+
+    if (!friendName) {
+      showErr('Lütfen arkadaşınızın kullanıcı adını girin.');
+      return;
+    }
+
+    if (friendName.toLowerCase() === session.username.toLowerCase()) {
+      showErr('Kendinize hediye gönderemezsiniz. Lütfen arkadaşınızın kullanıcı adını yazın.');
+      return;
+    }
+
+    const recipient = userService.getUserByUsername(friendName);
+    if (!recipient) {
+      showErr(`"${friendName}" adında kayıtlı bir oyuncu bulunamadı!`);
+      return;
+    }
+
+    const rank = rankService.getRankById(state.giftModal.rankId);
+    const recipientRank = rankService.getUserRank(recipient.username);
+    if (recipientRank.order >= rank.order) {
+      showErr(`${recipient.username} zaten ${recipientRank.name} veya daha yüksek bir rütbeye sahip!`);
+      return;
+    }
+
+    state.giftModal.friendUsername = recipient.username;
+    err1?.classList.add('hidden');
+
+    const recEl = document.getElementById('gift-confirmed-recipient');
+    if (recEl) recEl.textContent = recipient.username;
+
+    const cNe = document.getElementById('gift-cost-netherite');
+    if (cNe) cNe.textContent = String(rank.netheritePrice);
+
+    const cEm = document.getElementById('gift-cost-emerald');
+    if (cEm) cEm.textContent = rank.emeraldPrice.toLocaleString('tr-TR');
+
+    const cTry = document.getElementById('gift-cost-try');
+    if (cTry) cTry.textContent = rank.priceTry.toLocaleString('tr-TR');
+
+    document.getElementById('gift-step-1')?.classList.add('hidden');
+    document.getElementById('gift-step-2')?.classList.remove('hidden');
+  }
+
+  function executeGiftRankPayment(paymentMethod) {
+    const session = getSession();
+    if (!session) return;
+    const err2 = document.getElementById('gift-step2-error');
+    err2?.classList.add('hidden');
+
+    try {
+      const res = svc().shopService.giftRankToFriend(session, {
+        friendUsername: state.giftModal.friendUsername,
+        rankId: state.giftModal.rankId,
+        paymentMethod
+      });
+
+      closeGiftRankModal();
+      if (res.stripePrepared) {
+        showToast(res.message, 'info');
+      } else {
+        showToast(
+          `🎁 ${res.recipientUsername} adlı arkadaşınıza ${res.rank.name} rütbesi başarıyla hediye edildi!`,
+          'success'
+        );
+      }
+      syncHeaderAndDrawer();
+      renderShop();
+    } catch (err) {
+      if (err2) {
+        err2.textContent = err.message;
+        err2.classList.remove('hidden');
+      } else {
+        showToast(err.message, 'error');
+      }
+    }
+  }
+
+  // ==========================================
+  // 7. EKRAN: PARTİ SİSTEMİ (renderParty — #4, #5, #6, #9)
+  // ==========================================
+  function renderParty() {
+    const session = getSession();
+    if (!session) return;
+    const { partyService, authGuard, rankService, userService, avatarService } = svc();
+
+    // Bekleyen Parti Davetleri (#5)
+    const pendingBox = document.getElementById('party-pending-invites-box');
+    const pendingList = document.getElementById('party-pending-invites-list');
+    const pendingInvites = partyService.getPendingInvitationsForUser
+      ? partyService.getPendingInvitationsForUser(session.username)
+      : [];
+
+    if (pendingBox && pendingList) {
+      if (pendingInvites.length === 0) {
+        pendingBox.classList.add('hidden');
+        pendingList.innerHTML = '';
+      } else {
+        pendingBox.classList.remove('hidden');
+        pendingList.innerHTML = pendingInvites
+          .map(
+            inv => `
+            <div class="notification-card is-unread">
+              <div class="notif-card-icon">🎉</div>
+              <div class="notif-card-body">
+                <div class="notif-card-top">
+                  <span class="notif-type-tag">Parti Daveti</span>
+                  <span class="notif-time">${formatDateTR(inv.createdAt)}</span>
+                </div>
+                <h4 class="notif-title">Parti Daveti</h4>
+                <p class="notif-message">${escapeHtml(
+                  inv.fromUsername
+                )} sizi bir partiye davet etti. (${escapeHtml(inv.partyName)} — Kod: <code>${escapeHtml(
+              inv.partyCode
+            )}</code>)</p>
+                <div class="notif-card-actions">
+                  <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-accept-party-invite="${escapeHtml(
+                    inv.id
+                  )}">Kabul Et</button>
+                  <button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-reject-party-invite="${escapeHtml(
+                    inv.id
+                  )}">Reddet</button>
+                </div>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+      }
+    }
+
+    const activeParty = partyService.getActivePartyForUser(session.username);
+    const noActiveView = document.getElementById('party-no-active-view');
+    const activeRoomView = document.getElementById('party-active-room-view');
+    const createBtn = document.getElementById('btn-create-party-submit');
+    const upsellBanner = document.getElementById('party-vip-upsell');
+
+    const perms = authGuard.getUserPermissions(session);
+    if (createBtn && upsellBanner) {
+      if (!perms.canCreateParty) {
+        createBtn.disabled = true;
+        upsellBanner.classList.remove('hidden');
+      } else {
+        createBtn.disabled = false;
+        upsellBanner.classList.add('hidden');
+      }
+    }
+
+    if (!activeParty) {
+      noActiveView?.classList.remove('hidden');
+      activeRoomView?.classList.add('hidden');
+    } else {
+      noActiveView?.classList.add('hidden');
+      activeRoomView?.classList.remove('hidden');
+
+      const titleEl = document.getElementById('party-room-title');
+      const codeEl = document.getElementById('party-room-code');
+      const statusEl = document.getElementById('party-room-status');
+      const countEl = document.getElementById('party-member-count');
+      const startBtn = document.getElementById('btn-party-start-match');
+
+      if (titleEl) titleEl.textContent = activeParty.partyName;
+      if (codeEl) codeEl.textContent = activeParty.partyCode;
+      if (statusEl) {
+        statusEl.textContent =
+          activeParty.status === 'IN_GAME' ? '⚔️ MAÇ DEVAM EDİYOR' : '⏳ LOBİDE BEKLİYOR';
+      }
+      if (countEl) {
+        countEl.textContent = `${activeParty.members.length}/${activeParty.maxMembers || 8}`;
+      }
+
+      const isLeader =
+        activeParty.leaderUsername.toLowerCase() === session.username.toLowerCase() ||
+        session.isAdminSession;
+      if (startBtn) {
+        startBtn.disabled = !isLeader;
+        startBtn.textContent = isLeader
+          ? '⚔️ Parti Maçını Başlat'
+          : '⏳ Parti Liderinin Başlatması Bekleniyor';
+      }
+
+      const membersList = document.getElementById('party-members-list');
+      if (membersList) {
+        membersList.innerHTML = activeParty.members
+          .map(m => {
+            const mUser = userService?.getUserByUsername(m.username) || { username: m.username };
+            const mRank = rankService.getUserRank(m.username);
+            const mAvatar = avatarService
+              ? avatarService.getAvatarForUser(mUser)
+              : '';
+            const mFallback = avatarService
+              ? avatarService.generatePixelAvatarDataUrl(m.username)
+              : '';
+            const canKick =
+              isLeader && m.username.toLowerCase() !== activeParty.leaderUsername.toLowerCase();
+            return `
+              <div class="party-member-row">
+                <div class="pm-left">
+                  <img src="${escapeHtml(mAvatar)}" onerror="this.onerror=null;this.src='${escapeHtml(
+              mFallback
+            )}';" class="lb-avatar" alt="" />
+                  <span class="${getRankBadgeClass(mRank.id)}">${escapeHtml(mRank.badge)} ${escapeHtml(
+              mRank.name
+            )}</span>
+                  <strong>${escapeHtml(m.username)}</strong>
+                  ${
+                    m.username.toLowerCase() === activeParty.leaderUsername.toLowerCase()
+                      ? '<span class="leader-crown">👑 Lider</span>'
+                      : ''
+                  }
+                </div>
+                <div class="pm-right">
+                  <span class="pm-score">${formatCurrencyTRY(m.score || 0)}</span>
+                  ${
+                    canKick
+                      ? `<button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-kick-party-member="${escapeHtml(
+                          m.username
+                        )}" data-party-id="${escapeHtml(activeParty.partyId)}">Çıkar</button>`
+                      : ''
+                  }
+                </div>
+              </div>
+            `;
+          })
+          .join('');
+      }
+    }
+
+    // Açık Partiler Listesi
+    const publicList = document.getElementById('public-parties-list');
+    if (publicList) {
+      const openParties = partyService
+        .getAllParties()
+        .filter(p => p.status !== 'CLOSED' && p.members.length < (p.maxMembers || 8));
+
+      if (openParties.length === 0) {
+        publicList.innerHTML = `<div class="empty-state-box">Şu anda açık parti odası bulunmuyor.</div>`;
+      } else {
+        publicList.innerHTML = openParties
+          .map(
+            p => `
+            <div class="public-party-card">
+              <div>
+                <strong>${escapeHtml(p.partyName)}</strong>
+                <span>Lider: ${escapeHtml(p.leaderUsername)} • Oyuncular: ${p.members.length}/${
+              p.maxMembers || 8
+            }</span>
+              </div>
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-quick-join-party="${escapeHtml(
+                p.partyCode
+              )}">
+                Katıl (${escapeHtml(p.partyCode)})
+              </button>
+            </div>
+          `
+          )
+          .join('');
+      }
+    }
+  }
+
+  // ==========================================
+  // 8. EKRAN: İSTATİSTİKLER (renderStats — #17)
+  // ==========================================
+  function renderStats() {
+    const session = getSession();
+    if (!session) return;
+    const { userService, economyService, netheriteService, extraLifeService } = svc();
+    const user = userService.getUserByUsername(session.username);
+    if (!user) return;
+
+    const gamesPlayed = Number(user.gamesPlayed || 0);
+    const gamesWon = Number(user.gamesWon || 0);
+    const gamesLost = Number(user.gamesLost ?? Math.max(0, gamesPlayed - gamesWon));
+    const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0;
+    const points = Number(user.points || 0);
+    const bestScore = Number(user.bestScore || user.points || 0);
+    const emeraldsSpent = Number(user.emeraldsSpentTotal || 0);
+    const emeraldsEarned = Number(user.emeraldsEarnedTotal || user.emeraldBalance || 0);
+    const netheriteBalance = netheriteService.getBalance(user.username);
+    const extraLives = extraLifeService.getUserExtraLives(user.username);
+
+    const kpiGrid = document.getElementById('stats-kpi-grid');
+    if (kpiGrid) {
+      kpiGrid.innerHTML = `
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Oyun</span>
+          <strong class="kpi-val">${gamesPlayed}</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Galibiyet</span>
+          <strong class="kpi-val emerald-text">${gamesWon}</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Mağlubiyet</span>
+          <strong class="kpi-val">${gamesLost}</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Kazanma Oranı</span>
+          <strong class="kpi-val gold-text">%${winRate}</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Puan</span>
+          <strong class="kpi-val gold-text">${formatCurrencyTRY(points)}</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">En Yüksek Skor</span>
+          <strong class="kpi-val gold-text">${formatCurrencyTRY(bestScore)}</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Kullanılan Emerald</span>
+          <strong class="kpi-val">${emeraldsSpent.toLocaleString('tr-TR')} 🟢</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Kazanılan Emerald</span>
+          <strong class="kpi-val emerald-text">${emeraldsEarned.toLocaleString('tr-TR')} 🟢</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Netherite</span>
+          <strong class="kpi-val netherite-text">${netheriteBalance.toLocaleString('tr-TR')} ⬛</strong>
+        </div>
+        <div class="stat-kpi-card">
+          <span class="kpi-label">Extra Life</span>
+          <strong class="kpi-val">${extraLives} / 5 ❤️</strong>
+        </div>
+      `;
+    }
+
+    const recentGamesEl = document.getElementById('stats-recent-games');
+    if (recentGamesEl) {
+      let localStats = null;
+      try {
+        localStats = JSON.parse(
+          localStorage.getItem(`mc_millionaire_tr_stats_v5_${user.username.toLowerCase()}`) || 'null'
+        );
+      } catch (e) {
+        localStats = null;
+      }
+      const history = Array.isArray(localStats?.recentMatches) ? localStats.recentMatches : [];
+      if (history.length === 0) {
+        recentGamesEl.innerHTML = `<div class="empty-state-box">Henüz tamamlanmış maç kaydınız bulunmuyor.</div>`;
+      } else {
+        recentGamesEl.innerHTML = history
+          .slice(0, 10)
+          .map(
+            m => `
+            <div class="tx-row">
+              <div>
+                <strong>${m.didWin ? '🏆 Milyoner Şampiyonu' : `🎯 ${m.reachedQuestion}. Soruya Ulaşıldı`}</strong>
+                <span class="tx-date">${formatDateTR(m.date)}</span>
+              </div>
+              <span class="tx-amount pos">${formatCurrencyTRY(m.prizeWon || 0)}</span>
+            </div>
+          `
+          )
+          .join('');
+      }
+    }
+  }
+
+  // ==========================================
+  // 9. EKRAN: GERÇEK LİDERLİK TABLOSU (renderLeaderboard — #17, #18, #19)
+  // ==========================================
+  function renderLeaderboard() {
+    const { leaderboardService, avatarService } = svc();
+    const tbody = document.getElementById('leaderboard-tbody');
+    if (!tbody || !leaderboardService) return;
+
+    document.querySelectorAll('.lb-tab[data-lb-sort]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-lb-sort') === state.leaderboardSort);
+    });
+
+    const rows = leaderboardService.getLeaderboard({
+      sortBy: state.leaderboardSort,
+      search: state.leaderboardSearch
+    });
+
+    // #17 & #19: Gerçek oyuncu yoksa "Henüz sıralama bulunmuyor." göster
+    if (rows.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="empty-table-cell">Henüz sıralama bulunmuyor.</td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = rows
+      .map(r => {
+        const medal =
+          r.position === 1
+            ? '🥇 1'
+            : r.position === 2
+            ? '🥈 2'
+            : r.position === 3
+            ? '🥉 3'
+            : `#${r.position}`;
+        const avatarSrc = avatarService.getAvatarForUser(r);
+        const fallbackSrc = avatarService.generatePixelAvatarDataUrl(r.username);
+
+        return `
+          <tr>
+            <td><strong>${medal}</strong></td>
+            <td>
+              <div class="lb-player-cell">
+                <img src="${escapeHtml(avatarSrc)}" onerror="this.onerror=null;this.src='${escapeHtml(
+          fallbackSrc
+        )}';" class="lb-avatar" alt="" />
+                <div>
+                  <strong>${escapeHtml(r.username)}</strong>
+                  ${
+                    r.minecraftPlayerName
+                      ? `<span class="lb-mc-sub">🎮 ${escapeHtml(r.minecraftPlayerName)}</span>`
+                      : ''
+                  }
+                </div>
+              </div>
+            </td>
+            <td><span class="${getRankBadgeClass(r.rankId)}">${escapeHtml(r.rankBadge)} ${escapeHtml(
+          r.rankName
+        )}</span></td>
+            <td><strong class="gold-text">${formatCurrencyTRY(r.points)}</strong></td>
+            <td>${r.gamesWon}</td>
+            <td>${r.gamesPlayed}</td>
+            <td><strong class="emerald-text">${r.emeraldBalance.toLocaleString('tr-TR')} 🟢</strong></td>
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
+  // #18: Leaderboard'u Sıfırla Onay Modalı
+  function openResetLeaderboardModal() {
+    const modal = document.getElementById('modal-reset-leaderboard');
+    modal?.classList.remove('hidden');
+  }
+
+  function closeResetLeaderboardModal() {
+    const modal = document.getElementById('modal-reset-leaderboard');
+    modal?.classList.add('hidden');
+  }
+
+  function confirmResetLeaderboard() {
+    const session = getSession();
+    if (!session) return;
+    try {
+      svc().leaderboardService.adminResetLeaderboard(session);
+      closeResetLeaderboardModal();
+      showToast('Liderlik Tablosu başarıyla sıfırlandı!', 'success');
+      if (state.currentScreen === 'leaderboard') renderLeaderboard();
+      if (state.currentScreen === 'admin') renderAdmin();
+      syncHeaderAndDrawer();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  // ==========================================
+  // 10. DESTEK SİSTEMİ (renderSupport)
+  // ==========================================
+  function renderSupport() {
+    const session = getSession();
+    if (!session) return;
+    const listEl = document.getElementById('support-tickets-list');
+    if (!listEl) return;
+
+    const tickets = svc().supportService.getUserTickets(session.username);
+    if (tickets.length === 0) {
+      listEl.innerHTML = `<div class="empty-state-box">Henüz destek talebiniz bulunmuyor.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = tickets
+      .map(
+        t => `
+        <div class="ticket-card">
+          <div class="ticket-header">
+            <strong>#${escapeHtml(t.id)} — ${escapeHtml(t.subject)}</strong>
+            <span class="status-pill status-${escapeHtml(t.status.toLowerCase())}">${escapeHtml(
+          t.status
+        )}</span>
+          </div>
+          <p class="ticket-meta">Kategori: ${escapeHtml(t.category)} • Öncelik: ${escapeHtml(
+          t.priority
+        )} • ${formatDateTR(t.createdAt)}</p>
+          <div class="ticket-messages">
+            ${(t.messages || [])
+              .map(
+                m => `
+                <div class="ticket-msg ${m.senderRole === 'ADMIN' ? 'msg-admin' : 'msg-user'}">
+                  <strong>${escapeHtml(m.sender)} (${m.senderRole === 'ADMIN' ? 'Yönetici' : 'Siz'}):</strong>
+                  <p>${escapeHtml(m.text)}</p>
+                </div>
+              `
+              )
+              .join('')}
+          </div>
+        </div>
+      `
+      )
+      .join('');
+  }
+
+  // ==========================================
+  // 11. HATA BİLDİR (renderBugReports — #18)
+  // ==========================================
+  function renderBugReports() {
+    const session = getSession();
+    if (!session) return;
+    const listEl = document.getElementById('user-bugs-list');
+    if (!listEl) return;
+
+    const bugs = svc().bugService.getUserBugs(session.username);
+    if (bugs.length === 0) {
+      listEl.innerHTML = `<div class="empty-state-box">Henüz hata bildiriminiz bulunmuyor.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = bugs
+      .map(
+        b => `
+        <div class="ticket-card">
+          <div class="ticket-header">
+            <strong>🐞 ${escapeHtml(b.title)}</strong>
+            <span class="status-pill">${escapeHtml(b.status)}</span>
+          </div>
+          <p class="ticket-meta">${escapeHtml(b.category)} • Önem: ${escapeHtml(
+          b.severity
+        )} ${b.relatedParty ? `• Parti: <code>${escapeHtml(b.relatedParty)}</code>` : ''} • ${formatDateTR(
+          b.createdAt
+        )}</p>
+          <p>${escapeHtml(b.description)}</p>
+          ${
+            b.screenshot
+              ? `<p class="ticket-meta">📷 Ekran Görüntüsü: <a href="${escapeHtml(
+                  b.screenshot
+                )}" target="_blank" rel="noopener noreferrer">${escapeHtml(b.screenshot)}</a></p>`
+              : ''
+          }
+          ${
+            b.adminNote
+              ? `<div class="admin-reply-note">🛡️ <strong>Yönetici Notu:</strong> ${escapeHtml(
+                  b.adminNote
+                )}</div>`
+              : ''
+          }
+        </div>
+      `
+      )
+      .join('');
+  }
+
+  // ==========================================
+  // 12. ÖNERİ GÖNDER (renderSuggestions)
+  // ==========================================
+  function renderSuggestions() {
+    const session = getSession();
+    if (!session) return;
+    const listEl = document.getElementById('suggestions-list-container');
+    if (!listEl) return;
+
+    const suggestions = svc().suggestionService.getAllSuggestions();
+    if (suggestions.length === 0) {
+      listEl.innerHTML = `<div class="empty-state-box">Henüz paylaşılmış öneri bulunmuyor. İlk öneriyi siz paylaşın!</div>`;
+      return;
+    }
+
+    listEl.innerHTML = suggestions
+      .map(s => {
+        const upCount = Array.isArray(s.upvotes) ? s.upvotes.length : 0;
+        const downCount = Array.isArray(s.downvotes) ? s.downvotes.length : 0;
+        return `
+          <div class="ticket-card">
+            <div class="ticket-header">
+              <strong>💡 ${escapeHtml(s.title)}</strong>
+              <span class="status-pill">${escapeHtml(s.status)}</span>
+            </div>
+            <p class="ticket-meta">Gönderen: ${escapeHtml(s.username)} • Kategori: ${escapeHtml(
+          s.category
+        )} • ${formatDateTR(s.createdAt)}</p>
+            <p>${escapeHtml(s.details)}</p>
+            ${
+              s.adminNote
+                ? `<div class="admin-reply-note">🛡️ <strong>Yönetici Notu:</strong> ${escapeHtml(
+                    s.adminNote
+                  )}</div>`
+                : ''
+            }
+            <div class="suggestion-votes">
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-vote-sug="${escapeHtml(
+                s.id
+              )}" data-vote-dir="UP">👍 Destekle (${upCount})</button>
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-vote-sug="${escapeHtml(
+                s.id
+              )}" data-vote-dir="DOWN">👎 (${downCount})</button>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  // ==========================================
+  // 14. AYARLAR (renderSettings)
+  // ==========================================
+  function renderSettings() {
+    const session = getSession();
+    if (!session) return;
+    const user = svc().userService.getUserByUsername(session.username);
+    const soundToggle = document.getElementById('setting-sound-toggle');
+    if (soundToggle && user?.settings) {
+      soundToggle.checked = user.settings.sound !== false;
+    }
+  }
+
+  // ==========================================
+  // 15. EKRAN: TAM TÜRKÇE 15 BÖLÜMLÜ YÖNETİCİ PANELİ (renderAdmin — #19)
+  // ==========================================
+  function renderAdmin() {
+    const session = getSession();
+    const { authGuard } = svc();
+    if (!session || (!session.isAdminSession && authGuard?.getEffectiveRankId(session) !== 'ADMIN')) {
+      navigateToScreen('welcome');
+      return;
+    }
+
+    document.querySelectorAll('.admin-nav-btn[data-admin-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-admin-tab') === state.adminTab);
+    });
+
+    const container = document.getElementById('admin-content-area');
+    if (!container) return;
+
+    const {
+      userService,
+      rankService,
+      partyService,
+      leaderboardService,
+      economyService,
+      netheriteService,
+      shopService,
+      paymentService,
+      notificationService,
+      supportService,
+      bugService,
+      suggestionService,
+      backupService,
+      activityService
+    } = svc();
+
+    // 1. GÖSTERGE PANELİ (dashboard)
+    if (state.adminTab === 'dashboard') {
+      const users = userService.getAllUsers();
+      const parties = partyService.getAllParties().filter(p => p.status !== 'CLOSED');
+      const tickets = supportService.getAllTickets().filter(t => t.status === 'OPEN');
+      const bugs = bugService.getAllBugs().filter(b => b.status === 'OPEN');
+      const suggestions = suggestionService.getAllSuggestions();
+      const totalEmeralds = users.reduce((sum, u) => sum + Number(u.emeraldBalance || 0), 0);
+      const totalNetherites = users.reduce((sum, u) => sum + Number(u.netheriteBalance || 0), 0);
+
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>📊 Gösterge Paneli</h3>
+          <div class="stats-kpi-grid">
+            <div class="stat-kpi-card"><span class="kpi-label">TOPLAM OYUNCU</span><strong class="kpi-val">${
+              users.length
+            }</strong></div>
+            <div class="stat-kpi-card"><span class="kpi-label">AKTİF PARTİLER</span><strong class="kpi-val">${
+              parties.length
+            }</strong></div>
+            <div class="stat-kpi-card"><span class="kpi-label">TOPLAM ZÜMRÜT</span><strong class="kpi-val emerald-text">${totalEmeralds.toLocaleString(
+              'tr-TR'
+            )} 🟢</strong></div>
+            <div class="stat-kpi-card"><span class="kpi-label">TOPLAM NETHERITE</span><strong class="kpi-val netherite-text">${totalNetherites.toLocaleString(
+              'tr-TR'
+            )} ⬛</strong></div>
+            <div class="stat-kpi-card"><span class="kpi-label">AÇIK DESTEK / HATA</span><strong class="kpi-val">${
+              tickets.length
+            } / ${bugs.length}</strong></div>
+            <div class="stat-kpi-card"><span class="kpi-label">TOPLULUK ÖNERİLERİ</span><strong class="kpi-val">${
+              suggestions.length
+            }</strong></div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 2. OYUNCULAR (players — Arama + Detaylar + 7 Rütbe + Moderator Verme/Kaldırma + Zümrüt & Netherite Yönetimi)
+    if (state.adminTab === 'players') {
+      const allUsers = userService.getAllUsers();
+      const q = String(state.adminPlayerSearch || '').trim().toLowerCase();
+      const users = q
+        ? allUsers.filter(
+            u =>
+              u.username.toLowerCase().includes(q) ||
+              (u.minecraftPlayerName && u.minecraftPlayerName.toLowerCase().includes(q)) ||
+              String(u.userId || '').toLowerCase().includes(q)
+          )
+        : allUsers;
+      const ranks = rankService.getAllRanks();
+
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <div class="card-title-row">
+            <h3>👥 Oyuncu Yönetimi (${users.length} / ${allUsers.length} Hesap)</h3>
+            <div class="leaderboard-search-box">
+              <input type="text" id="admin-player-search" placeholder="Kullanıcı adı veya MC adı ara..." value="${escapeHtml(
+                state.adminPlayerSearch
+              )}" />
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="mc-table">
+              <thead>
+                <tr>
+                  <th>Kullanıcı / Detay</th>
+                  <th>MC Hesabı</th>
+                  <th>Rütbe</th>
+                  <th>Zümrüt / Netherite</th>
+                  <th>Moderator</th>
+                  <th>İşlemler</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${users
+                  .map(u => {
+                    const uRank = rankService.getUserRank(u.username);
+                    return `
+                      <tr>
+                        <td>
+                          <strong>${escapeHtml(u.username)}</strong>
+                          <div class="lb-mc-sub">Puan: ${formatCurrencyTRY(
+                            u.points || 0
+                          )} • Oyun: ${Number(u.gamesWon || 0)}/${Number(
+                      u.gamesPlayed || 0
+                    )} • Can: ${Number(u.extraLives || 0)}❤️</div>
+                        </td>
+                        <td>${escapeHtml(u.minecraftPlayerName || '-')}</td>
+                        <td>
+                          <select class="admin-inline-select" data-admin-set-rank="${escapeHtml(
+                            u.username
+                          )}">
+                            ${ranks
+                              .map(
+                                r =>
+                                  `<option value="${escapeHtml(r.id)}" ${
+                                    uRank.id === r.id ? 'selected' : ''
+                                  }>${escapeHtml(r.badge)} ${escapeHtml(r.name)}</option>`
+                              )
+                              .join('')}
+                          </select>
+                        </td>
+                        <td>
+                          <span class="emerald-text">${Number(u.emeraldBalance || 0)} 🟢</span> /
+                          <span class="netherite-text">${Number(u.netheriteBalance || 0)} ⬛</span>
+                        </td>
+                        <td>
+                          <button type="button" class="mc-btn mc-btn-sm ${
+                            u.isModerator ? 'mc-btn-gold' : 'mc-btn-secondary'
+                          }" data-admin-toggle-mod="${escapeHtml(u.username)}" data-mod-val="${
+                      u.isModerator ? 'false' : 'true'
+                    }">
+                            ${u.isModerator ? '⚔️ Moderatör (Kaldır)' : '⚔️ Moderatör Yap'}
+                          </button>
+                        </td>
+                        <td>
+                          <div class="admin-action-btns">
+                            <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-give-emerald="${escapeHtml(
+                              u.username
+                            )}">+500 🟢</button>
+                            <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-admin-remove-emerald="${escapeHtml(
+                              u.username
+                            )}">-250 🟢</button>
+                            <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-admin-give-netherite="${escapeHtml(
+                              u.username
+                            )}">+100 ⬛</button>
+                            <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-admin-remove-netherite="${escapeHtml(
+                              u.username
+                            )}">-50 ⬛</button>
+                            <button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-admin-delete-user="${escapeHtml(
+                              u.username
+                            )}">Sil</button>
+                          </div>
+                        </td>
+                      </tr>
+                    `;
+                  })
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 3. RÜTBELER (ranks — 7 Rütbe Yapılandırması & Moderator Yetkileri)
+    if (state.adminTab === 'ranks') {
+      const ranks = rankService.getAllRanks();
+      const modPerms = authGuard.getModeratorPermissions();
+
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>👑 7 Rütbe Hiyerarşisi (Üye, VIP, VIP+, MVIP, MVIP+, Moderator, ADMIN)</h3>
+          <div class="table-responsive">
+            <table class="mc-table">
+              <thead>
+                <tr>
+                  <th>Sıra</th>
+                  <th>Rütbe</th>
+                  <th>Fiyat (₺)</th>
+                  <th>Zümrüt Fiyatı</th>
+                  <th>Netherite Fiyatı</th>
+                  <th>Günlük Netherite</th>
+                  <th>Kaydet</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${ranks
+                  .map(
+                    r => `
+                    <tr>
+                      <td>#${r.order}</td>
+                      <td><strong>${escapeHtml(r.badge)} ${escapeHtml(r.name)}</strong> (<code>${escapeHtml(
+                      r.id
+                    )}</code>)</td>
+                      <td><input type="number" step="0.1" id="adm-rk-try-${r.id}" value="${
+                      r.priceTry
+                    }" style="width:85px;" /></td>
+                      <td><input type="number" id="adm-rk-em-${r.id}" value="${
+                      r.emeraldPrice
+                    }" style="width:95px;" /></td>
+                      <td><input type="number" id="adm-rk-ne-${r.id}" value="${
+                      r.netheritePrice
+                    }" style="width:95px;" /></td>
+                      <td><input type="number" id="adm-rk-daily-${r.id}" value="${
+                      r.dailyNetherite
+                    }" style="width:85px;" /></td>
+                      <td>
+                        <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-save-rank="${escapeHtml(
+                          r.id
+                        )}">Kaydet</button>
+                      </td>
+                    </tr>
+                  `
+                  )
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <h4 style="margin-top:24px;">⚔️ Moderator Yetki Yapılandırması</h4>
+          <div class="settings-toggle-list">
+            <label class="setting-row">
+              <span>Parti Odalarını Denetleme / Kapatma Yetkisi</span>
+              <input type="checkbox" id="mod-perm-parties" ${
+                modPerms.canModerateParties ? 'checked' : ''
+              } />
+            </label>
+            <label class="setting-row">
+              <span>Destek Taleplerini İnceleme Yetkisi</span>
+              <input type="checkbox" id="mod-perm-tickets" ${
+                modPerms.canReviewTickets ? 'checked' : ''
+              } />
+            </label>
+            <label class="setting-row">
+              <span>Hata Bildirimlerini İnceleme Yetkisi</span>
+              <input type="checkbox" id="mod-perm-bugs" ${modPerms.canReviewBugs ? 'checked' : ''} />
+            </label>
+            <button type="button" id="btn-admin-save-mod-perms" class="mc-btn mc-btn-sm mc-btn-gold" style="margin-top:10px;">
+              Moderatör Yetkilerini Kaydet
+            </button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 4. PARTİLER (parties)
+    if (state.adminTab === 'parties') {
+      const parties = partyService.getAllParties();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>🎉 Parti Odaları Yönetimi (${parties.length})</h3>
+          ${
+            parties.length === 0
+              ? `<div class="empty-state-box">Kayıtlı parti odası bulunmuyor.</div>`
+              : `
+                <div class="table-responsive">
+                  <table class="mc-table">
+                    <thead>
+                      <tr>
+                        <th>Kod</th>
+                        <th>Parti Adı</th>
+                        <th>Lider</th>
+                        <th>Durum</th>
+                        <th>Üyeler</th>
+                        <th>İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${parties
+                        .map(
+                          p => `
+                          <tr>
+                            <td><code>${escapeHtml(p.partyCode)}</code></td>
+                            <td><strong>${escapeHtml(p.partyName)}</strong></td>
+                            <td>${escapeHtml(p.leaderUsername)}</td>
+                            <td>${escapeHtml(p.status)}</td>
+                            <td>${p.members.map(m => escapeHtml(m.username)).join(', ')}</td>
+                            <td>
+                              ${
+                                p.status !== 'CLOSED'
+                                  ? `<button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-admin-close-party="${escapeHtml(
+                                      p.partyId
+                                    )}">Kapat</button>`
+                                  : 'Kapalı'
+                              }
+                            </td>
+                          </tr>
+                        `
+                        )
+                        .join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `
+          }
+        </div>
+      `;
+      return;
+    }
+
+    // 5. LİDERLİK TABLOSU (leaderboard — #16 Leaderboard'u Sıfırla)
+    if (state.adminTab === 'leaderboard') {
+      const rows = leaderboardService.getLeaderboard({ sortBy: 'points' });
+      const meta = leaderboardService.getMeta();
+
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <div class="card-title-row">
+            <h3>🏆 Liderlik Tablosu Yönetimi</h3>
+            <button type="button" id="btn-admin-tab-reset-lb" class="mc-btn mc-btn-danger">
+              🗑️ Leaderboard'u Sıfırla
+            </button>
+          </div>
+          <p class="card-sub">
+            Son Sıfırlama: <strong>${meta.lastResetAt ? formatDateTR(meta.lastResetAt) : 'Henüz sıfırlanmadı'}</strong>
+          </p>
+          ${
+            rows.length === 0
+              ? `<div class="empty-state-box">Henüz sıralama bulunmuyor.</div>`
+              : `
+                <div class="table-responsive">
+                  <table class="mc-table">
+                    <thead>
+                      <tr>
+                        <th>Sıra</th>
+                        <th>Oyuncu</th>
+                        <th>Puan (₺)</th>
+                        <th>Galibiyet</th>
+                        <th>Oyun</th>
+                        <th>Kaydet</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rows
+                        .map(
+                          r => `
+                          <tr>
+                            <td>#${r.position}</td>
+                            <td><strong>${escapeHtml(r.username)}</strong></td>
+                            <td><input type="number" id="adm-lb-pts-${escapeHtml(
+                              r.username
+                            )}" value="${r.points}" style="width:110px;" /></td>
+                            <td><input type="number" id="adm-lb-wins-${escapeHtml(
+                              r.username
+                            )}" value="${r.gamesWon}" style="width:80px;" /></td>
+                            <td><input type="number" id="adm-lb-games-${escapeHtml(
+                              r.username
+                            )}" value="${r.gamesPlayed}" style="width:80px;" /></td>
+                            <td>
+                              <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-save-lb="${escapeHtml(
+                                r.username
+                              )}">Güncelle</button>
+                            </td>
+                          </tr>
+                        `
+                        )
+                        .join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `
+          }
+        </div>
+      `;
+      return;
+    }
+
+    // 6. EKONOMİ (economy — Özel Oyuncu Bakiye Yönetimi + Zümrüt & Netherite Ayarları)
+    if (state.adminTab === 'economy') {
+      const settings = economyService.getSettings();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>💎 Oyuncu Zümrüt &amp; Netherite Bakiye İşlemi</h3>
+          <form id="admin-custom-currency-form" class="platform-form" style="margin-bottom:24px;">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>HEDEF OYUNCU KULLANICI ADI</label>
+                <input type="text" id="adm-cur-username" placeholder="Örn: SteveMaster" required />
+              </div>
+              <div class="input-group">
+                <label>PARA BİRİMİ</label>
+                <select id="adm-cur-type">
+                  <option value="EMERALD">🟢 Zümrüt (Emerald)</option>
+                  <option value="NETHERITE">⬛ Netherite</option>
+                </select>
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>İŞLEM TÜRÜ</label>
+                <select id="adm-cur-mode">
+                  <option value="ADD">Ekle (+)</option>
+                  <option value="REMOVE">Çıkar (-)</option>
+                  <option value="SET">Bakiye Sabitle (=)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>MİKTAR</label>
+                <input type="number" id="adm-cur-amount" value="250" min="1" required />
+              </div>
+            </div>
+            <button type="submit" class="mc-btn mc-btn-gold">Bakiyeyi Güncelle</button>
+          </form>
+
+          <h3>⚙️ Zümrüt &amp; Netherite Ekonomi Ayarları</h3>
+          <form id="admin-economy-settings-form" class="platform-form">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>Şampiyonluk Tamamlama Bonusu (Zümrüt)</label>
+                <input type="number" id="adm-eco-win-bonus" value="${settings.winCompletionBonus}" />
+              </div>
+              <div class="input-group">
+                <label>Parti Maçı Bonusu (Zümrüt)</label>
+                <input type="number" id="adm-eco-party-bonus" value="${settings.partyMatchBonus}" />
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>+1 Ekstra Can Fiyatı (Zümrüt)</label>
+                <input type="number" id="adm-eco-life-price" value="${settings.extraLifeBasePrice}" />
+              </div>
+              <div class="input-group">
+                <label>İlk Kayıt Tek Seferlik Netherite Ödülü</label>
+                <input type="number" id="adm-eco-init-netherite" value="${
+                  settings.initialNetheriteBonus || 250
+                }" />
+              </div>
+            </div>
+            <button type="submit" class="mc-btn mc-btn-primary">Ekonomi Ayarlarını Kaydet</button>
+          </form>
+        </div>
+      `;
+      return;
+    }
+
+    // 7. MAĞAZA (shop — Birleşik Mağaza Ürün Yönetimi + Yeni Ürün Ekleme)
+    if (state.adminTab === 'shop') {
+      const items = shopService.getAllItems(true);
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>🛒 Yeni Mağaza Ürünü Ekle / Güncelle</h3>
+          <form id="admin-shop-item-form" class="platform-form" style="margin-bottom: 24px;">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>ÜRÜN ADI</label>
+                <input type="text" id="adm-shop-name" placeholder="Örn: Altın Kazma Rozeti" required />
+              </div>
+              <div class="input-group">
+                <label>KATEGORİ</label>
+                <select id="adm-shop-category">
+                  <option value="Cosmetics">Kozmetikler (Cosmetics)</option>
+                  <option value="Special">Özel Ürünler (Special)</option>
+                  <option value="Emeralds">Zümrüt Paketleri (Emeralds)</option>
+                </select>
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>ZÜMRÜT FİYATI</label>
+                <input type="number" id="adm-shop-emerald" value="350" min="0" />
+              </div>
+              <div class="input-group">
+                <label>NETHERITE FİYATI</label>
+                <input type="number" id="adm-shop-netherite" value="50" min="0" />
+              </div>
+            </div>
+            <div class="input-group">
+              <label>AÇIKLAMA</label>
+              <input type="text" id="adm-shop-desc" placeholder="Ürün açıklaması..." required />
+            </div>
+            <button type="submit" class="mc-btn mc-btn-gold">Ürünü Mağazaya Kaydet</button>
+          </form>
+
+          <h3>📦 Mevcut Mağaza Ürünleri (${items.length} Ürün)</h3>
+          <div class="table-responsive">
+            <table class="mc-table">
+              <thead>
+                <tr>
+                  <th>İkon &amp; Ad</th>
+                  <th>Kategori</th>
+                  <th>Birim</th>
+                  <th>Zümrüt / Netherite</th>
+                  <th>Durum</th>
+                  <th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items
+                  .map(
+                    i => `
+                    <tr>
+                      <td><strong>${escapeHtml(i.icon)} ${escapeHtml(i.name)}</strong></td>
+                      <td>${escapeHtml(i.category)}</td>
+                      <td>${escapeHtml(i.currency)}</td>
+                      <td>${i.emeraldPrice || 0} 🟢 / ${i.netheritePrice || 0} ⬛</td>
+                      <td>${i.active !== false ? '✅ Aktif' : '⏸️ Pasif'}</td>
+                      <td>
+                        <button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-admin-delete-item="${escapeHtml(
+                          i.id
+                        )}">Sil</button>
+                      </td>
+                    </tr>
+                  `
+                  )
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 8. ÖDEMELER (payments — Stripe Hazırlık Yapılandırması & Hediye Kayıtları #9, #12, #27)
+    if (state.adminTab === 'payments') {
+      const stripeCfg = paymentService.getStripeConfig();
+      const sessions = paymentService.getCheckoutSessions();
+      const gifts = shopService.getGiftHistory();
+
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>💳 Stripe Ödeme Altyapısı Hazırlık Ayarları</h3>
+          <p class="card-sub">
+            Sistem şu anda hazırlık modundadır ve sahte ödeme gerçekleştirmez. Kullanıcılara <em>"${escapeHtml(
+              stripeCfg.statusMessage
+            )}"</em> bilgisi gösterilir.
+          </p>
+          <form id="admin-stripe-config-form" class="platform-form">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>Stripe Publishable Key (pk_test_... / pk_live_...)</label>
+                <input type="text" id="adm-stripe-pk" value="${escapeHtml(
+                  stripeCfg.publishableKey
+                )}" placeholder="pk_test_..." />
+              </div>
+              <div class="input-group">
+                <label>Çalışma Modu</label>
+                <select id="adm-stripe-mode">
+                  <option value="PREPARATION" ${
+                    stripeCfg.mode === 'PREPARATION' ? 'selected' : ''
+                  }>Hazırlık Modu (Yakında Aktif)</option>
+                  <option value="TEST" ${
+                    stripeCfg.mode === 'TEST' ? 'selected' : ''
+                  }>Test Modu</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="mc-btn mc-btn-primary">Stripe Ayarlarını Kaydet</button>
+          </form>
+
+          <h4 style="margin-top:24px;">🎁 Gönderilen Rütbe Hediyeleri (${gifts.length})</h4>
+          ${
+            gifts.length === 0
+              ? `<div class="empty-state-box">Henüz rütbe hediyesi kaydı bulunmuyor.</div>`
+              : `
+                <div class="table-responsive">
+                  <table class="mc-table">
+                    <thead>
+                      <tr>
+                        <th>Gönderen</th>
+                        <th>Alıcı</th>
+                        <th>Hediye Rütbe</th>
+                        <th>Yöntem</th>
+                        <th>Tarih</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${gifts
+                        .map(
+                          g => `
+                          <tr>
+                            <td><strong>${escapeHtml(g.fromUsername)}</strong></td>
+                            <td><strong>${escapeHtml(g.toUsername)}</strong></td>
+                            <td>${escapeHtml(g.rankName)}</td>
+                            <td>${escapeHtml(g.paymentMethod)} (${g.cost})</td>
+                            <td>${formatDateTR(g.createdAt)}</td>
+                          </tr>
+                        `
+                        )
+                        .join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `
+          }
+
+          <h4 style="margin-top:24px;">🧾 Hazırlanan Stripe Checkout Kayıtları (${sessions.length})</h4>
+          ${
+            sessions.length === 0
+              ? `<div class="empty-state-box">Henüz Stripe ödeme talebi oluşturulmadı.</div>`
+              : `
+                <div class="table-responsive">
+                  <table class="mc-table">
+                    <thead>
+                      <tr>
+                        <th>Oturum Kodu</th>
+                        <th>Kullanıcı</th>
+                        <th>Ürün</th>
+                        <th>Tutar</th>
+                        <th>Durum</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${sessions
+                        .map(
+                          s => `
+                          <tr>
+                            <td><code>${escapeHtml(s.id)}</code></td>
+                            <td>${escapeHtml(s.username)}</td>
+                            <td>${escapeHtml(s.productName)}</td>
+                            <td>${formatCurrencyTRY(s.amountTry)}</td>
+                            <td>${escapeHtml(s.status)}</td>
+                          </tr>
+                        `
+                        )
+                        .join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `
+          }
+        </div>
+      `;
+      return;
+    }
+
+    // 9. BİLDİRİMLER (notifications — Toplu veya Özel Bildirim Gönder)
+    if (state.adminTab === 'notifications') {
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>🔔 Bildirim &amp; Duyuru Gönderimi</h3>
+          <form id="admin-send-notification-form" class="platform-form">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>HEDEF KULLANICI ADI (TÜM OYUNCULAR İÇİN BOŞ BIRAKIN)</label>
+                <input type="text" id="adm-notif-target" placeholder="Örn: DiamondKing veya boş (Tüm Oyuncular)" />
+              </div>
+              <div class="input-group">
+                <label>BİLDİRİM TÜRÜ</label>
+                <select id="adm-notif-type">
+                  <option value="ADMIN_ANNOUNCEMENT">📣 Admin Duyurusu</option>
+                  <option value="NEW_UPDATE">🚀 Yeni Güncelleme</option>
+                  <option value="SYSTEM_NOTIFICATION">🔔 Sistem Bildirimi</option>
+                </select>
+              </div>
+            </div>
+            <div class="input-group">
+              <label>BAŞLIK</label>
+              <input type="text" id="adm-notif-title" placeholder="Duyuru başlığı..." required />
+            </div>
+            <div class="input-group">
+              <label>MESAJ İÇERİĞİ</label>
+              <textarea id="adm-notif-msg" rows="3" placeholder="Bildirim mesajınızı yazın..." required></textarea>
+            </div>
+            <button type="submit" class="mc-btn mc-btn-gold">📨 Bildirimi Gönder</button>
+          </form>
+        </div>
+      `;
+      return;
+    }
+
+    // 10. DESTEK (support)
+    if (state.adminTab === 'support') {
+      const tickets = supportService.getAllTickets();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>🎧 Destek Talepleri (${tickets.length})</h3>
+          ${
+            tickets.length === 0
+              ? `<div class="empty-state-box">Kayıtlı destek talebi bulunmuyor.</div>`
+              : tickets
+                  .map(
+                    t => `
+                    <div class="ticket-card">
+                      <div class="ticket-header">
+                        <strong>#${escapeHtml(t.id)} — ${escapeHtml(t.subject)} (${escapeHtml(
+                      t.username
+                    )} • ${escapeHtml(t.category)})</strong>
+                        <span class="status-pill">${escapeHtml(t.status)}</span>
+                      </div>
+                      <div class="inline-form-row" style="margin-top:8px;">
+                        <input type="text" id="adm-sup-reply-${escapeHtml(
+                          t.id
+                        )}" placeholder="Oyuncuya yanıt yazın..." />
+                        <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-reply-ticket="${escapeHtml(
+                          t.id
+                        )}">Yanıtla</button>
+                      </div>
+                    </div>
+                  `
+                  )
+                  .join('')
+          }
+        </div>
+      `;
+      return;
+    }
+
+    // 11. HATALAR (bugs)
+    if (state.adminTab === 'bugs') {
+      const bugs = bugService.getAllBugs();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>🐞 Hata Bildirimleri (${bugs.length})</h3>
+          ${
+            bugs.length === 0
+              ? `<div class="empty-state-box">Hata bildirimi bulunmuyor.</div>`
+              : bugs
+                  .map(
+                    b => `
+                    <div class="ticket-card">
+                      <div class="ticket-header">
+                        <strong>${escapeHtml(b.title)} (${escapeHtml(b.username)})</strong>
+                        <span class="status-pill">${escapeHtml(b.status)}</span>
+                      </div>
+                      <p class="ticket-meta">${escapeHtml(b.category)} • Önem: ${escapeHtml(
+                      b.severity
+                    )} ${
+                      b.relatedParty ? `• İlgili Parti: <code>${escapeHtml(b.relatedParty)}</code>` : ''
+                    }</p>
+                      <p>${escapeHtml(b.description)}</p>
+                      ${
+                        b.screenshot
+                          ? `<p class="ticket-meta">📷 Ekran Görüntüsü: <a href="${escapeHtml(
+                              b.screenshot
+                            )}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                              b.screenshot
+                            )}</a></p>`
+                          : ''
+                      }
+                      <div class="inline-form-row" style="margin-top:8px;">
+                        <input type="text" id="adm-bug-note-${escapeHtml(
+                          b.id
+                        )}" placeholder="Çözüm notu..." value="${escapeHtml(b.adminNote || '')}" />
+                        <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-resolve-bug="${escapeHtml(
+                          b.id
+                        )}">Çözüldü İşaretle &amp; Bildir</button>
+                      </div>
+                    </div>
+                  `
+                  )
+                  .join('')
+          }
+        </div>
+      `;
+      return;
+    }
+
+    // 12. ÖNERİLER (suggestions)
+    if (state.adminTab === 'suggestions') {
+      const suggestions = suggestionService.getAllSuggestions();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>💡 Topluluk Önerileri (${suggestions.length})</h3>
+          ${
+            suggestions.length === 0
+              ? `<div class="empty-state-box">Öneri bulunmuyor.</div>`
+              : suggestions
+                  .map(
+                    s => `
+                    <div class="ticket-card">
+                      <div class="ticket-header">
+                        <strong>${escapeHtml(s.title)} (${escapeHtml(s.username)})</strong>
+                        <span class="status-pill">${escapeHtml(s.status)}</span>
+                      </div>
+                      <p>${escapeHtml(s.details)}</p>
+                      <div class="inline-form-row" style="margin-top:8px;">
+                        <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-sug-status="${escapeHtml(
+                          s.id
+                        )}" data-status="ONAYLANDI">Onayla</button>
+                        <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-admin-sug-status="${escapeHtml(
+                          s.id
+                        )}" data-status="PLANLANDI">Planlandı</button>
+                        <button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-admin-sug-status="${escapeHtml(
+                          s.id
+                        )}" data-status="REDDEDİLDİ">Reddet</button>
+                      </div>
+                    </div>
+                  `
+                  )
+                  .join('')
+          }
+        </div>
+      `;
+      return;
+    }
+
+    // 13. YEDEKLER (backups)
+    if (state.adminTab === 'backups') {
+      const snapshots = backupService.getSnapshots();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>💾 Veri Yedekleme ve Geri Yükleme</h3>
+          <div class="header-bar-actions" style="margin-bottom:16px;">
+            <button type="button" id="btn-admin-create-snapshot" class="mc-btn mc-btn-primary">📸 Yeni Anlık Yedek Oluştur</button>
+            <button type="button" id="btn-admin-export-json" class="mc-btn mc-btn-gold">⬇️ JSON Olarak İndir</button>
+          </div>
+          <div class="tickets-list">
+            ${
+              snapshots.length === 0
+                ? `<div class="empty-state-box">Henüz kayıtlı anlık yedek bulunmuyor.</div>`
+                : snapshots
+                    .map(
+                      sn => `
+                      <div class="tx-row">
+                        <div>
+                          <strong>${escapeHtml(sn.label)}</strong>
+                          <span class="tx-date">${formatDateTR(sn.createdAt)}</span>
+                        </div>
+                        <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-admin-restore-snap="${escapeHtml(
+                          sn.id
+                        )}">Geri Yükle</button>
+                      </div>
+                    `
+                    )
+                    .join('')
+            }
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 14. AKTİVİTELER (activities)
+    if (state.adminTab === 'activities') {
+      const logs = activityService.getAllLogs().slice(0, 60);
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>📜 Sistem Aktivite Kayıtları</h3>
+          <div class="tx-history-list">
+            ${
+              logs.length === 0
+                ? `<div class="empty-state-box">Aktivite kaydı yok.</div>`
+                : logs
+                    .map(
+                      l => `
+                      <div class="tx-row">
+                        <div>
+                          <strong>[${escapeHtml(l.type)}] ${escapeHtml(l.message)}</strong>
+                          <span class="tx-date">Kullanıcı: ${escapeHtml(
+                            l.username
+                          )} • ${formatDateTR(l.timestamp)}</span>
+                        </div>
+                      </div>
+                    `
+                    )
+                    .join('')
+            }
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 15. AYARLAR (settings)
+    if (state.adminTab === 'settings') {
+      const pSettings = backupService.getPlatformSettings();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>⚙️ Platform Genel Ayarları</h3>
+          <form id="admin-platform-settings-form" class="platform-form">
+            <div class="input-group">
+              <label>PLATFORM BAŞLIĞI</label>
+              <input type="text" id="adm-set-title" value="${escapeHtml(pSettings.siteTitle)}" />
+            </div>
+            <div class="input-group">
+              <label>DUYURU METNİ</label>
+              <input type="text" id="adm-set-announcement" value="${escapeHtml(
+                pSettings.announcementText
+              )}" />
+            </div>
+            <button type="submit" class="mc-btn mc-btn-primary">Ayarları Kaydet</button>
+          </form>
+        </div>
+      `;
+    }
+  }
+
+  // ==========================================
+  // OLAY DİNLEYİCİLERİ (EVENT DELEGATION & HANDLERS)
+  // ==========================================
+  function bindPlatformEvents() {
+    // 1. Kompakt 3 Çizgili Menü Butonu & Backdrop
+    document.getElementById('btn-toggle-menu')?.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleDrawer();
+    });
+
+    document.getElementById('btn-close-menu')?.addEventListener('click', () => {
+      closeDrawer();
+    });
+
+    document.getElementById('menu-drawer-backdrop')?.addEventListener('click', () => {
+      closeDrawer();
+    });
+
+    // ESC ile çekmece ve modalları kapat
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeDrawer();
+        closeGiftRankModal();
+        closeResetLeaderboardModal();
+      }
+    });
+
+    // Marka logosuna tıklayınca Ana Sayfa
+    document.getElementById('brand-home-trigger')?.addEventListener('click', () => {
+      navigateToScreen('welcome');
+    });
+
+    // Yönetici Girişi butonu (çekmeceden)
+    document.getElementById('btn-open-admin-login-modal')?.addEventListener('click', () => {
+      openAdminLoginModal();
+    });
+
+    // Günlük Netherite Ödülü Butonları (#13)
+    ['btn-welcome-claim-netherite', 'btn-shop-claim-netherite', 'btn-profile-claim-netherite'].forEach(
+      id => {
+        document.getElementById(id)?.addEventListener('click', function () {
+          handleDailyNetheriteClick(this);
+        });
+      }
+    );
+
+    // Bildirim Merkezi: Toplu olarak okundu (#7)
+    document.getElementById('btn-notif-mark-all-read')?.addEventListener('click', () => {
+      const session = getSession();
+      if (!session) return;
+      svc().notificationService.markAllAsRead(session.username);
+      showToast('Tüm bildirimler okundu olarak işaretlendi.', 'success');
+      syncHeaderAndDrawer();
+      renderNotifications();
+    });
+
+    // Hediye Modalı (#11)
+    document.getElementById('btn-close-gift-modal')?.addEventListener('click', closeGiftRankModal);
+    document.getElementById('btn-gift-cancel-1')?.addEventListener('click', closeGiftRankModal);
+    document.getElementById('btn-gift-continue')?.addEventListener('click', proceedGiftRankStep2);
+    document.getElementById('btn-gift-back')?.addEventListener('click', () => {
+      document.getElementById('gift-step-2')?.classList.add('hidden');
+      document.getElementById('gift-step-1')?.classList.remove('hidden');
+    });
+    document
+      .getElementById('btn-gift-pay-netherite')
+      ?.addEventListener('click', () => executeGiftRankPayment('NETHERITE'));
+    document
+      .getElementById('btn-gift-pay-emerald')
+      ?.addEventListener('click', () => executeGiftRankPayment('EMERALD'));
+    document
+      .getElementById('btn-gift-pay-stripe')
+      ?.addEventListener('click', () => executeGiftRankPayment('STRIPE'));
+
+    // Leaderboard Sıfırlama Modalı (#18)
+    document
+      .getElementById('btn-leaderboard-admin-reset')
+      ?.addEventListener('click', openResetLeaderboardModal);
+    document
+      .getElementById('btn-admin-quick-reset-lb')
+      ?.addEventListener('click', openResetLeaderboardModal);
+    document
+      .getElementById('btn-close-reset-lb-modal')
+      ?.addEventListener('click', closeResetLeaderboardModal);
+    document
+      .getElementById('btn-cancel-reset-lb')
+      ?.addEventListener('click', closeResetLeaderboardModal);
+    document
+      .getElementById('btn-confirm-reset-lb')
+      ?.addEventListener('click', confirmResetLeaderboard);
+
+    // Liderlik Tablosu Arama
+    document.getElementById('leaderboard-search-input')?.addEventListener('input', function () {
+      state.leaderboardSearch = this.value;
+      renderLeaderboard();
+    });
+
+    // Profil: İsteğe bağlı Minecraft oyuncu adı kaydetme (#4)
+    document.getElementById('profile-mcname-form')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const mcName = document.getElementById('profile-mcname-input')?.value || '';
+      try {
+        svc().userService.updateMinecraftPlayerName(session, mcName);
+        showToast(
+          mcName.trim()
+            ? `Minecraft oyuncu adınız "${mcName.trim()}" olarak güncellendi ve skin yüzünüz yüklendi!`
+            : 'Minecraft oyuncu adı bağlantısı kaldırıldı.',
+          'success'
+        );
+        syncHeaderAndDrawer();
+        renderProfile();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Profil: Özel Avatar Yükleme ve Sıfırlama
+    document.getElementById('profile-avatar-input')?.addEventListener('change', async function () {
+      const file = this.files?.[0];
+      const session = getSession();
+      if (!file || !session) return;
+      try {
+        const dataUrl = await svc().avatarService.processUploadedFile(file);
+        svc().userService.updateAvatar(session, dataUrl);
+        showToast('Profil fotoğrafınız güncellendi!', 'success');
+        syncHeaderAndDrawer();
+        renderProfile();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('btn-reset-avatar')?.addEventListener('click', () => {
+      const session = getSession();
+      if (!session) return;
+      try {
+        svc().userService.updateAvatar(session, '');
+        showToast('Profil fotoğrafınız Minecraft skin yüzüne sıfırlandı.', 'info');
+        syncHeaderAndDrawer();
+        renderProfile();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Parti Formları
+    document.getElementById('party-join-form')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const code = document.getElementById('party-join-code-input')?.value || '';
+      try {
+        const party = svc().partyService.joinPartyByCode(session, code);
+        svc().achievementService?.checkAndUnlock(session.username, { joinedParty: true });
+        showToast(`🎉 "${party.partyName}" partisine katıldınız!`, 'success');
+        syncHeaderAndDrawer();
+        renderParty();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('party-create-form')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const name = document.getElementById('party-name-input')?.value || '';
+      try {
+        const party = svc().partyService.createParty(session, name);
+        svc().achievementService?.checkAndUnlock(session.username, { joinedParty: true });
+        showToast(`👑 "${party.partyName}" partisi kuruldu! Kod: ${party.partyCode}`, 'success');
+        syncHeaderAndDrawer();
+        renderParty();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('party-invite-form')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const activeParty = svc().partyService.getActivePartyForUser(session.username);
+      const targetUser = document.getElementById('party-invite-username')?.value || '';
+      if (!activeParty) return;
+      try {
+        svc().partyService.invitePlayerToParty(session, activeParty.partyId, targetUser);
+        showToast(`✉️ ${targetUser} oyuncusuna parti daveti gönderildi!`, 'success');
+        document.getElementById('party-invite-username').value = '';
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('btn-copy-party-code')?.addEventListener('click', () => {
+      const code = document.getElementById('party-room-code')?.textContent || '';
+      if (navigator.clipboard && code) {
+        navigator.clipboard.writeText(code);
+        showToast(`Parti kodu kopyalandı: ${code}`, 'success');
+      }
+    });
+
+    document.getElementById('btn-party-leave')?.addEventListener('click', () => {
+      const session = getSession();
+      if (!session) return;
+      const activeParty = svc().partyService.getActivePartyForUser(session.username);
+      if (!activeParty) return;
+      try {
+        svc().partyService.leaveParty(session, activeParty.partyId);
+        showToast('Partiden ayrıldınız.', 'info');
+        syncHeaderAndDrawer();
+        renderParty();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('btn-party-start-match')?.addEventListener('click', () => {
+      const session = getSession();
+      if (!session) return;
+      const activeParty = svc().partyService.getActivePartyForUser(session.username);
+      if (!activeParty) return;
+      try {
+        svc().partyService.startPartyMatch(session, activeParty.partyId);
+        showToast('⚔️ Parti maçı başlatıldı!', 'success');
+        if (typeof window.startNewGameSession === 'function') {
+          window.startNewGameSession(true);
+        } else {
+          document.getElementById('btn-start-game')?.click();
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Destek, Hata ve Öneri Formları
+    document.getElementById('support-create-form')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      try {
+        svc().supportService.createTicket(session, {
+          category: document.getElementById('support-category')?.value,
+          subject: document.getElementById('support-subject')?.value,
+          message: document.getElementById('support-message')?.value
+        });
+        e.target.reset();
+        showToast('Destek talebiniz başarıyla oluşturuldu.', 'success');
+        renderSupport();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('bug-report-form')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      try {
+        svc().bugService.createBugReport(session, {
+          title: document.getElementById('bug-title')?.value,
+          category: document.getElementById('bug-category')?.value,
+          severity: document.getElementById('bug-severity')?.value,
+          screenshot: document.getElementById('bug-screenshot')?.value || '',
+          relatedParty: document.getElementById('bug-related-party')?.value || '',
+          description: document.getElementById('bug-description')?.value
+        });
+        e.target.reset();
+        showToast('Hata bildiriminiz kaydedildi. Teşekkür ederiz!', 'success');
+        renderBugReports();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('suggestion-create-form')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      try {
+        svc().suggestionService.createSuggestion(session, {
+          category: document.getElementById('sug-category')?.value,
+          title: document.getElementById('sug-title')?.value,
+          details: document.getElementById('sug-details')?.value
+        });
+        e.target.reset();
+        showToast('Öneriniz toplulukla paylaşıldı!', 'success');
+        renderSuggestions();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Ayarlar: Şifre Değiştirme
+    document.getElementById('settings-password-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      try {
+        await svc().authService.changePassword(
+          session,
+          document.getElementById('settings-current-pass')?.value,
+          document.getElementById('settings-new-pass')?.value
+        );
+        e.target.reset();
+        showToast('Şifreniz başarıyla güncellendi!', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Genel Tıklama Delegasyonu (Navigasyon, Mağaza, Bildirimler, Parti Daveti, Admin İşlemleri)
+    document.addEventListener('click', e => {
+      // 1. Ekran Navigasyonu ([data-nav-screen])
+      const navTrigger = e.target.closest('[data-nav-screen]');
+      if (navTrigger) {
+        e.preventDefault();
+        const targetScreen = navTrigger.getAttribute('data-nav-screen');
+        if (targetScreen) navigateToScreen(targetScreen);
+        return;
+      }
+
+      // 2. Çıkış Yap ([data-nav-action="logout"])
+      const logoutTrigger = e.target.closest('[data-nav-action="logout"]');
+      if (logoutTrigger) {
+        e.preventDefault();
+        closeDrawer();
+        if (typeof window.handleUserLogout === 'function') {
+          window.handleUserLogout();
+        } else {
+          svc().authService?.logout();
+          window.location.reload();
+        }
+        return;
+      }
+
+      // 3. Birleşik Mağaza Kategori Sekmeleri
+      const shopTab = e.target.closest('[data-shop-cat]');
+      if (shopTab) {
+        state.shopCategory = shopTab.getAttribute('data-shop-cat');
+        renderShop();
+        return;
+      }
+
+      // 4. Rütbe Satın Alma ([data-buy-rank])
+      const buyRankBtn = e.target.closest('[data-buy-rank]');
+      if (buyRankBtn) {
+        const session = getSession();
+        if (!session) return;
+        const rankId = buyRankBtn.getAttribute('data-buy-rank');
+        const payMethod = buyRankBtn.getAttribute('data-pay-method') || 'NETHERITE';
+        try {
+          const res = svc().shopService.purchaseRankForSelf(session, rankId, payMethod);
+          if (res.stripePrepared) {
+            showToast(res.message, 'info');
+          } else if (res.firstVipPlusBonusGranted) {
+            showToast(
+              `🎉 Tebrikler! ${res.rank.name} rütbesine yükseldiniz ve ilk VIP+ ve üzeri alımınıza özel +250 Netherite kazandınız!`,
+              'success'
+            );
+          } else {
+            showToast(`🎉 Tebrikler! ${res.rank.name} rütbesine yükseldiniz!`, 'success');
+          }
+          syncHeaderAndDrawer();
+          renderShop();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 5. 🎁 Arkadaşına Rütbe Hediye Et ([data-gift-rank])
+      const giftRankBtn = e.target.closest('[data-gift-rank]');
+      if (giftRankBtn) {
+        const rankId = giftRankBtn.getAttribute('data-gift-rank');
+        openGiftRankModal(rankId);
+        return;
+      }
+
+      // 6. Mağaza Ürünü Satın Alma ([data-buy-item])
+      const buyItemBtn = e.target.closest('[data-buy-item]');
+      if (buyItemBtn) {
+        const session = getSession();
+        if (!session) return;
+        const itemId = buyItemBtn.getAttribute('data-buy-item');
+        const itemCurrency = buyItemBtn.getAttribute('data-item-currency') || null;
+        try {
+          const res = svc().shopService.purchaseItem(session, itemId, itemCurrency);
+          if (res.stripePrepared) {
+            showToast(res.message, 'info');
+          } else {
+            showToast('🛍️ Satın alma işlemi başarıyla tamamlandı!', 'success');
+          }
+          syncHeaderAndDrawer();
+          renderShop();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 7. Kozmetik Kuşan / Çıkar ([data-equip-cosmetic])
+      const equipBtn = e.target.closest('[data-equip-cosmetic]');
+      if (equipBtn) {
+        const session = getSession();
+        if (!session) return;
+        try {
+          svc().shopService.equipCosmetic(session, equipBtn.getAttribute('data-equip-cosmetic'));
+          showToast('Kozmetik görünümünüz güncellendi!', 'success');
+          renderProfile();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 8. Bildirim Filtre Sekmesi ([data-notif-filter])
+      const notifFilterBtn = e.target.closest('[data-notif-filter]');
+      if (notifFilterBtn) {
+        state.notifFilter = notifFilterBtn.getAttribute('data-notif-filter');
+        renderNotifications();
+        return;
+      }
+
+      // 9. Tekli Bildirimi "Okundu olarak işaretle" ([data-notif-mark-read])
+      const markReadBtn = e.target.closest('[data-notif-mark-read]');
+      if (markReadBtn) {
+        const session = getSession();
+        if (!session) return;
+        const notifId = markReadBtn.getAttribute('data-notif-mark-read');
+        svc().notificationService.markAsRead(session.username, notifId);
+        syncHeaderAndDrawer();
+        renderNotifications();
+        return;
+      }
+
+      // 10A. Parti Davetini Kabul Et ([data-accept-party-invite]) (#5)
+      const acceptInviteBtn = e.target.closest('[data-accept-party-invite]');
+      if (acceptInviteBtn) {
+        const session = getSession();
+        if (!session) return;
+        const invitationId = acceptInviteBtn.getAttribute('data-accept-party-invite');
+        const notifId = acceptInviteBtn.getAttribute('data-notif-id');
+        try {
+          const party = svc().partyService.acceptPartyInvitation(session, invitationId);
+          if (notifId) {
+            svc().notificationService?.markAsRead(session.username, notifId);
+          }
+          svc().achievementService?.checkAndUnlock(session.username, { joinedParty: true });
+          showToast(`🎉 Parti daveti kabul edildi! "${party.partyName}" odasına katıldınız.`, 'success');
+          syncHeaderAndDrawer();
+          navigateToScreen('party');
+        } catch (err) {
+          showToast(err.message, 'error');
+          renderNotifications();
+          renderParty();
+        }
+        return;
+      }
+
+      // 10B. Parti Davetini Reddet ([data-reject-party-invite]) (#5)
+      const rejectInviteBtn = e.target.closest('[data-reject-party-invite]');
+      if (rejectInviteBtn) {
+        const session = getSession();
+        if (!session) return;
+        const invitationId = rejectInviteBtn.getAttribute('data-reject-party-invite');
+        const notifId = rejectInviteBtn.getAttribute('data-notif-id');
+        try {
+          svc().partyService.rejectPartyInvitation(session, invitationId);
+          if (notifId) {
+            svc().notificationService?.markAsRead(session.username, notifId);
+          }
+          showToast('Parti daveti reddedildi.', 'info');
+          syncHeaderAndDrawer();
+          if (state.currentScreen === 'notifications') renderNotifications();
+          if (state.currentScreen === 'party') renderParty();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 10C. Bildirimden Partiye Katıl ([data-notif-join-party])
+      const notifJoinBtn = e.target.closest('[data-notif-join-party]');
+      if (notifJoinBtn) {
+        const session = getSession();
+        if (!session) return;
+        const code = notifJoinBtn.getAttribute('data-notif-join-party');
+        try {
+          const party = svc().partyService.joinPartyByCode(session, code);
+          showToast(`🎉 "${party.partyName}" partisine katıldınız!`, 'success');
+          navigateToScreen('party');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 11. Açık Partilerden Hızlı Katıl ([data-quick-join-party])
+      const quickJoinBtn = e.target.closest('[data-quick-join-party]');
+      if (quickJoinBtn) {
+        const session = getSession();
+        if (!session) return;
+        const code = quickJoinBtn.getAttribute('data-quick-join-party');
+        try {
+          const party = svc().partyService.joinPartyByCode(session, code);
+          showToast(`🎉 "${party.partyName}" partisine katıldınız!`, 'success');
+          syncHeaderAndDrawer();
+          renderParty();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 12. Partiden Üye Çıkar ([data-kick-party-member])
+      const kickBtn = e.target.closest('[data-kick-party-member]');
+      if (kickBtn) {
+        const session = getSession();
+        if (!session) return;
+        try {
+          svc().partyService.kickPartyMember(
+            session,
+            kickBtn.getAttribute('data-party-id'),
+            kickBtn.getAttribute('data-kick-party-member')
+          );
+          showToast('Oyuncu partiden çıkarıldı.', 'info');
+          renderParty();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 13. Liderlik Tablosu Sıralama Sekmeleri ([data-lb-sort])
+      const lbSortBtn = e.target.closest('[data-lb-sort]');
+      if (lbSortBtn) {
+        state.leaderboardSort = lbSortBtn.getAttribute('data-lb-sort');
+        renderLeaderboard();
+        return;
+      }
+
+      // 14. Öneri Oylama ([data-vote-sug])
+      const voteBtn = e.target.closest('[data-vote-sug]');
+      if (voteBtn) {
+        const session = getSession();
+        if (!session) return;
+        try {
+          svc().suggestionService.voteSuggestion(
+            session,
+            voteBtn.getAttribute('data-vote-sug'),
+            voteBtn.getAttribute('data-vote-dir')
+          );
+          renderSuggestions();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 15. Admin Paneli Sekme Geçişi ([data-admin-tab])
+      const adminTabBtn = e.target.closest('[data-admin-tab]');
+      if (adminTabBtn) {
+        state.adminTab = adminTabBtn.getAttribute('data-admin-tab');
+        renderAdmin();
+        return;
+      }
+
+      // 16. Admin İşlemleri
+      const session = getSession();
+      if (!session) return;
+
+      if (e.target.closest('#btn-admin-tab-reset-lb')) {
+        openResetLeaderboardModal();
+        return;
+      }
+
+      const modToggleBtn = e.target.closest('[data-admin-toggle-mod]');
+      if (modToggleBtn) {
+        const targetUser = modToggleBtn.getAttribute('data-admin-toggle-mod');
+        const makeMod = modToggleBtn.getAttribute('data-mod-val') === 'true';
+        try {
+          svc().userService.adminToggleModerator(session, targetUser, makeMod);
+          showToast(
+            makeMod
+              ? `${targetUser} oyuncusuna Moderator yetkisi verildi.`
+              : `${targetUser} oyuncusunun Moderator yetkisi kaldırıldı.`,
+            'success'
+          );
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const giveEmBtn = e.target.closest('[data-admin-give-emerald]');
+      if (giveEmBtn) {
+        const targetUser = giveEmBtn.getAttribute('data-admin-give-emerald');
+        try {
+          svc().economyService.adminModifyEmeralds(session, targetUser, 500, 'ADD');
+          showToast(`${targetUser} hesabına +500 Zümrüt eklendi.`, 'success');
+          renderAdmin();
+          syncHeaderAndDrawer();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const remEmBtn = e.target.closest('[data-admin-remove-emerald]');
+      if (remEmBtn) {
+        const targetUser = remEmBtn.getAttribute('data-admin-remove-emerald');
+        try {
+          svc().economyService.adminModifyEmeralds(session, targetUser, 250, 'REMOVE');
+          showToast(`${targetUser} hesabından 250 Zümrüt düşüldü.`, 'info');
+          renderAdmin();
+          syncHeaderAndDrawer();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const giveNeBtn = e.target.closest('[data-admin-give-netherite]');
+      if (giveNeBtn) {
+        const targetUser = giveNeBtn.getAttribute('data-admin-give-netherite');
+        try {
+          svc().netheriteService.adminModifyNetherite(session, targetUser, 100, 'ADD');
+          showToast(`${targetUser} hesabına +100 Netherite eklendi.`, 'success');
+          renderAdmin();
+          syncHeaderAndDrawer();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const remNeBtn = e.target.closest('[data-admin-remove-netherite]');
+      if (remNeBtn) {
+        const targetUser = remNeBtn.getAttribute('data-admin-remove-netherite');
+        try {
+          svc().netheriteService.adminModifyNetherite(session, targetUser, 50, 'REMOVE');
+          showToast(`${targetUser} hesabından 50 Netherite düşüldü.`, 'info');
+          renderAdmin();
+          syncHeaderAndDrawer();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const delItemBtn = e.target.closest('[data-admin-delete-item]');
+      if (delItemBtn) {
+        const itemId = delItemBtn.getAttribute('data-admin-delete-item');
+        try {
+          svc().shopService.adminDeleteItem(session, itemId);
+          showToast('Mağaza ürünü silindi.', 'info');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const delUserBtn = e.target.closest('[data-admin-delete-user]');
+      if (delUserBtn) {
+        const targetUser = delUserBtn.getAttribute('data-admin-delete-user');
+        try {
+          svc().userService.adminDeleteUser(session, targetUser);
+          showToast(`${targetUser} hesabı silindi.`, 'info');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const saveRankBtn = e.target.closest('[data-admin-save-rank]');
+      if (saveRankBtn) {
+        const rId = saveRankBtn.getAttribute('data-admin-save-rank');
+        try {
+          svc().rankService.updateRankConfig(session, rId, {
+            priceTry: Number(document.getElementById(`adm-rk-try-${rId}`)?.value || 0),
+            emeraldPrice: Number(document.getElementById(`adm-rk-em-${rId}`)?.value || 0),
+            netheritePrice: Number(document.getElementById(`adm-rk-ne-${rId}`)?.value || 0),
+            dailyNetherite: Number(document.getElementById(`adm-rk-daily-${rId}`)?.value || 0)
+          });
+          showToast('Rütbe yapılandırması kaydedildi.', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-admin-save-mod-perms')) {
+        try {
+          svc().authGuard.updateModeratorPermissions(session, {
+            canModerateParties: document.getElementById('mod-perm-parties')?.checked,
+            canReviewTickets: document.getElementById('mod-perm-tickets')?.checked,
+            canReviewBugs: document.getElementById('mod-perm-bugs')?.checked
+          });
+          showToast('Moderatör yetkileri güncellendi.', 'success');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const closePartyBtn = e.target.closest('[data-admin-close-party]');
+      if (closePartyBtn) {
+        try {
+          svc().partyService.adminCloseParty(
+            session,
+            closePartyBtn.getAttribute('data-admin-close-party')
+          );
+          showToast('Parti odası kapatıldı.', 'info');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const saveLbBtn = e.target.closest('[data-admin-save-lb]');
+      if (saveLbBtn) {
+        const uName = saveLbBtn.getAttribute('data-admin-save-lb');
+        try {
+          svc().leaderboardService.adminEditPlayerLeaderboard(session, uName, {
+            points: document.getElementById(`adm-lb-pts-${uName}`)?.value,
+            gamesWon: document.getElementById(`adm-lb-wins-${uName}`)?.value,
+            gamesPlayed: document.getElementById(`adm-lb-games-${uName}`)?.value
+          });
+          showToast(`${uName} liderlik verileri güncellendi.`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const replyTicketBtn = e.target.closest('[data-admin-reply-ticket]');
+      if (replyTicketBtn) {
+        const tId = replyTicketBtn.getAttribute('data-admin-reply-ticket');
+        const text = document.getElementById(`adm-sup-reply-${tId}`)?.value || '';
+        try {
+          svc().supportService.replyToTicket(session, tId, text);
+          showToast('Destek talebine yanıt gönderildi ve oyuncuya bildirim iletildi.', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const resolveBugBtn = e.target.closest('[data-admin-resolve-bug]');
+      if (resolveBugBtn) {
+        const bId = resolveBugBtn.getAttribute('data-admin-resolve-bug');
+        const note = document.getElementById(`adm-bug-note-${bId}`)?.value || '';
+        try {
+          svc().bugService.adminUpdateBug(session, bId, {
+            status: 'ÇÖZÜLDÜ',
+            adminNote: note
+          });
+          showToast('Hata kaydı güncellendi ve oyuncuya bildirim gönderildi.', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const sugStatusBtn = e.target.closest('[data-admin-sug-status]');
+      if (sugStatusBtn) {
+        try {
+          svc().suggestionService.adminUpdateSuggestion(
+            session,
+            sugStatusBtn.getAttribute('data-admin-sug-status'),
+            { status: sugStatusBtn.getAttribute('data-status') }
+          );
+          showToast('Öneri durumu güncellendi ve oyuncuya bildirim gönderildi.', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-admin-create-snapshot')) {
+        try {
+          svc().backupService.createManualSnapshot(session, 'Manuel Yönetici Yedeği');
+          showToast('Anlık yedek başarıyla oluşturuldu.', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-admin-export-json')) {
+        try {
+          const data = svc().backupService.exportPlatformData(session);
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `minecraft-milyoner-yedek-${Date.now()}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const restoreSnapBtn = e.target.closest('[data-admin-restore-snap]');
+      if (restoreSnapBtn) {
+        try {
+          svc().backupService.restoreSnapshot(
+            session,
+            restoreSnapBtn.getAttribute('data-admin-restore-snap')
+          );
+          showToast('Yedek başarıyla geri yüklendi!', 'success');
+          renderAdmin();
+          syncHeaderAndDrawer();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      }
+    });
+
+    // Admin Oyuncu Arama
+    document.addEventListener('input', e => {
+      if (e.target.id === 'admin-player-search') {
+        state.adminPlayerSearch = e.target.value;
+        renderAdmin();
+        const searchEl = document.getElementById('admin-player-search');
+        if (searchEl) {
+          searchEl.focus();
+          searchEl.setSelectionRange(searchEl.value.length, searchEl.value.length);
+        }
+      }
+    });
+
+    // Admin Rütbe Seçimi Değişikliği (Oyuncular Tablosu)
+    document.addEventListener('change', e => {
+      const rankSelect = e.target.closest('[data-admin-set-rank]');
+      if (rankSelect) {
+        const session = getSession();
+        if (!session) return;
+        const targetUser = rankSelect.getAttribute('data-admin-set-rank');
+        const newRank = rankSelect.value;
+        try {
+          svc().rankService.assignRankToUser(session, targetUser, newRank);
+          showToast(`${targetUser} oyuncusunun rütbesi güncellendi!`, 'success');
+          renderAdmin();
+          syncHeaderAndDrawer();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      }
+    });
+
+    // Admin Form Gönderimleri (Özel Bakiye, Mağaza Ürünü, Ekonomi, Stripe, Bildirim, Genel Ayarlar)
+    document.addEventListener('submit', e => {
+      const session = getSession();
+      if (!session) return;
+
+      if (e.target.id === 'admin-custom-currency-form') {
+        e.preventDefault();
+        try {
+          const targetUser = document.getElementById('adm-cur-username')?.value || '';
+          const curType = document.getElementById('adm-cur-type')?.value || 'EMERALD';
+          const mode = document.getElementById('adm-cur-mode')?.value || 'ADD';
+          const amount = Number(document.getElementById('adm-cur-amount')?.value || 0);
+          if (curType === 'NETHERITE') {
+            svc().netheriteService.adminModifyNetherite(session, targetUser, amount, mode);
+          } else {
+            svc().economyService.adminModifyEmeralds(session, targetUser, amount, mode);
+          }
+          showToast(`${targetUser} oyuncusunun ${curType} bakiyesi güncellendi!`, 'success');
+          syncHeaderAndDrawer();
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-shop-item-form') {
+        e.preventDefault();
+        try {
+          const name = document.getElementById('adm-shop-name')?.value || '';
+          const category = document.getElementById('adm-shop-category')?.value || 'Cosmetics';
+          const emeraldPrice = Number(document.getElementById('adm-shop-emerald')?.value || 0);
+          const netheritePrice = Number(document.getElementById('adm-shop-netherite')?.value || 0);
+          const description = document.getElementById('adm-shop-desc')?.value || '';
+          svc().shopService.adminSaveItem(session, {
+            name,
+            category,
+            currency: emeraldPrice > 0 ? 'EMERALD' : 'NETHERITE',
+            price: emeraldPrice > 0 ? emeraldPrice : netheritePrice,
+            emeraldPrice,
+            netheritePrice,
+            description
+          });
+          showToast('Yeni mağaza ürünü kaydedildi!', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-economy-settings-form') {
+        e.preventDefault();
+        try {
+          svc().economyService.updateSettings(session, {
+            winCompletionBonus: Number(document.getElementById('adm-eco-win-bonus')?.value || 250),
+            partyMatchBonus: Number(document.getElementById('adm-eco-party-bonus')?.value || 60),
+            extraLifeBasePrice: Number(document.getElementById('adm-eco-life-price')?.value || 250),
+            initialNetheriteBonus: Number(
+              document.getElementById('adm-eco-init-netherite')?.value || 250
+            )
+          });
+          showToast('Ekonomi ayarları kaydedildi.', 'success');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-stripe-config-form') {
+        e.preventDefault();
+        try {
+          svc().paymentService.updateStripeConfig(session, {
+            publishableKey: document.getElementById('adm-stripe-pk')?.value || '',
+            mode: document.getElementById('adm-stripe-mode')?.value || 'PREPARATION'
+          });
+          showToast('Stripe hazırlık yapılandırması kaydedildi.', 'success');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-send-notification-form') {
+        e.preventDefault();
+        try {
+          const target = String(document.getElementById('adm-notif-target')?.value || '').trim();
+          const type = document.getElementById('adm-notif-type')?.value || 'ADMIN_ANNOUNCEMENT';
+          const title = document.getElementById('adm-notif-title')?.value || '';
+          const message = document.getElementById('adm-notif-msg')?.value || '';
+
+          if (target) {
+            svc().notificationService.notifyUser(target, { type, title, message });
+            showToast(`${target} oyuncusuna bildirim gönderildi.`, 'success');
+          } else {
+            const res = svc().notificationService.broadcastNotification(session, {
+              type,
+              title,
+              message
+            });
+            showToast(`Duyuru ${res.sentCount} oyuncuya başarıyla gönderildi!`, 'success');
+          }
+          e.target.reset();
+          syncHeaderAndDrawer();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-platform-settings-form') {
+        e.preventDefault();
+        try {
+          svc().backupService.updatePlatformSettings(session, {
+            siteTitle: document.getElementById('adm-set-title')?.value || 'Minecraft Milyoner',
+            announcementText: document.getElementById('adm-set-announcement')?.value || ''
+          });
+          showToast('Platform ayarları güncellendi.', 'success');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      }
+    });
+
+    // Tarayıcı geri/ileri butonları
+    window.addEventListener('popstate', () => {
+      const hash = (window.location.hash || '').replace(/^#/, '');
+      if (hash && document.getElementById(`screen-${hash}`)) {
+        navigateToScreen(hash, { skipHistory: true });
+      }
+    });
+
+    // Her 1 saniyede bir Günlük Netherite geri sayımını güncelle
+    if (state.dailyTimerInterval) clearInterval(state.dailyTimerInterval);
+    state.dailyTimerInterval = setInterval(() => {
+      if (getSession()) {
+        syncDailyNetheriteWidgets();
+      }
+    }, 1000);
+  }
+
+  // Başlatma
+  function initPlatformUI() {
+    injectCustomCurrencyIcons();
+    bindPlatformEvents();
+    syncHeaderAndDrawer();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPlatformUI);
+  } else {
+    initPlatformUI();
+  }
+
+  window.MCMPlatform = {
+    navigateToScreen,
+    syncHeaderAndDrawer,
+    openDrawer,
+    closeDrawer,
+    toggleDrawer,
+    renderProfile,
+    renderNotifications,
+    renderShop,
+    renderParty,
+    renderStats,
+    renderLeaderboard,
+    renderAdmin,
+    showToast
+  };
+})(window);

@@ -1,1402 +1,1064 @@
 /**
- * KİM MİLYONER OLMAK İSTER? — MINECRAFT EDITION
- * Ana Oyun Motoru, Rastgele Soru Seçici, Jokerler, İstatistik Kayıt Sistemi ve Parçacık Efektleri
+ * Minecraft Milyoner - Ana Oyun Motoru, Kimlik Doğrulama Kapısı ve Ses Sistemi (v6.0)
+ *
+ * Özellikler:
+ * - Lisanssız Tam Türkçe Giriş / Kayıt / Şifre Sıfırlama (#1)
+ * - Ayrı Yönetici Girişi ("Yönetici Girişi") (#2)
+ * - Kayıtta İsteğe Bağlı Minecraft Oyuncu Adı & Tek Seferlik +250 Netherite (#4, #14)
+ * - 15 Soruluk Minecraft Milyoner Yarışma Motoru, Jokerler, Ekstra Can ve Zümrüt Ödülleri
  */
 
-(function () {
+(function (window) {
   'use strict';
 
   // ==========================================
-  // 15 SORULUK ÖDÜL MERDİVENİ (EMERALD)
+  // 15 BASAMAKLI ÖDÜL AĞACI
   // ==========================================
   const PRIZE_LADDER = [
-    { level: 1, amount: 100, label: "100 Emerald", milestone: false },
-    { level: 2, amount: 200, label: "200 Emerald", milestone: false },
-    { level: 3, amount: 500, label: "500 Emerald", milestone: false },
-    { level: 4, amount: 1000, label: "1.000 Emerald", milestone: false },
-    { level: 5, amount: 2000, label: "2.000 Emerald", milestone: true },
-    { level: 6, amount: 5000, label: "5.000 Emerald", milestone: false },
-    { level: 7, amount: 10000, label: "10.000 Emerald", milestone: false },
-    { level: 8, amount: 20000, label: "20.000 Emerald", milestone: false },
-    { level: 9, amount: 50000, label: "50.000 Emerald", milestone: false },
-    { level: 10, amount: 100000, label: "100.000 Emerald", milestone: true },
-    { level: 11, amount: 250000, label: "250.000 Emerald", milestone: false },
-    { level: 12, amount: 500000, label: "500.000 Emerald", milestone: false },
-    { level: 13, amount: 750000, label: "750.000 Emerald", milestone: false },
-    { level: 14, amount: 1000000, label: "1.000.000 Emerald", milestone: false },
-    { level: 15, amount: 5000000, label: "5.000.000 Emerald", milestone: true }
+    { level: 1, amount: 100, label: '100 ₺', safe: false },
+    { level: 2, amount: 1000, label: '1.000 ₺', safe: true },
+    { level: 3, amount: 2000, label: '2.000 ₺', safe: false },
+    { level: 4, amount: 3000, label: '3.000 ₺', safe: false },
+    { level: 5, amount: 5000, label: '5.000 ₺', safe: false },
+    { level: 6, amount: 7500, label: '7.500 ₺', safe: false },
+    { level: 7, amount: 15000, label: '15.000 ₺', safe: true },
+    { level: 8, amount: 30000, label: '30.000 ₺', safe: false },
+    { level: 9, amount: 60000, label: '60.000 ₺', safe: false },
+    { level: 10, amount: 125000, label: '125.000 ₺', safe: false },
+    { level: 11, amount: 250000, label: '250.000 ₺', safe: false },
+    { level: 12, amount: 400000, label: '400.000 ₺', safe: false },
+    { level: 13, amount: 600000, label: '600.000 ₺', safe: false },
+    { level: 14, amount: 800000, label: '800.000 ₺', safe: false },
+    { level: 15, amount: 1000000, label: '1.000.000 ₺', safe: true }
   ];
 
-  const DIFFICULTY_LABELS = {
-    easy: "Kolay (1–5)",
-    medium: "Orta (6–10)",
-    hard: "Zor (11–15)"
+  // ==========================================
+  // MINECRAFT SORU HAVUZU (KOLAY / ORTA / ZOR)
+  // ==========================================
+  const QUESTION_POOL = [
+    // --- KOLAY (1-5) ---
+    {
+      id: 'E1',
+      difficulty: 'easy',
+      q: "Minecraft'ta bir Çalışma Masası (Crafting Table) yapmak için kaç adet tahta blok gerekir?",
+      options: ['2', '4', '6', '8'],
+      answer: 1,
+      explanation: '2x2 envanter ızgarasına 4 adet tahta yerleştirilerek Çalışma Masası üretilir.'
+    },
+    {
+      id: 'E2',
+      difficulty: 'easy',
+      q: "Hangi yaratık oyuncuya yaklaştığında tıslayarak patlar ve bloklara zarar verir?",
+      options: ['Zombi', 'İskelet', 'Creeper', 'Enderman'],
+      answer: 2,
+      explanation: 'Creeper oyuncuya sessizce yaklaşıp yaklaşık 1.5 saniye tısladıktan sonra patlar.'
+    },
+    {
+      id: 'E3',
+      difficulty: 'easy',
+      q: "Obsidyen bloğunu kırıp envantere alabilmek için en az hangi kalitede kazma gereklidir?",
+      options: ['Taş Kazma', 'Demir Kazma', 'Altın Kazma', 'Elmas Kazma'],
+      answer: 3,
+      explanation: 'Obsidyen yalnızca Elmas veya Netherite kazma ile kırıldığında düşer.'
+    },
+    {
+      id: 'E4',
+      difficulty: 'easy',
+      q: "Köylülerle (Villager) ticaret yaparken kullanılan temel para birimi cevheri hangisidir?",
+      options: ['Elmas', 'Zümrüt (Emerald)', 'Altın Külçesi', 'Lapis Lazuli'],
+      answer: 1,
+      explanation: 'Köylü ticaret sisteminin resmi para birimi Zümrüt (Emerald) cevheridir.'
+    },
+    {
+      id: 'E5',
+      difficulty: 'easy',
+      q: "Gece olduğunda uyumak ve yeniden doğma noktasını ayarlamak için kullanılan eşya nedir?",
+      options: ['Yatak', 'Kamp Ateşi', 'Fener', 'Sandık'],
+      answer: 0,
+      explanation: '3 Yün ve 3 Tahta ile yapılan Yatak, geceyi geçirmeyi ve doğma noktasını kaydetmeyi sağlar.'
+    },
+    {
+      id: 'E6',
+      difficulty: 'easy',
+      q: "Creeper'lar aşağıdaki hayvanlardan hangisinden korkup kaçarlar?",
+      options: ['Kurt', 'Kedi ve Ocelot', 'At', ' Koyun'],
+      answer: 1,
+      explanation: 'Creeper yaratıkları kedilerden ve ocelotlardan uzak durur.'
+    },
+    {
+      id: 'E7',
+      difficulty: 'easy',
+      q: "Su kovası ve lav kaynağı birleştiğinde lav kaynağının üzerine su dökülürse ne oluşur?",
+      options: ['Kırıktaş', 'Obsidyen', 'Kumtaşı', 'Bazalt'],
+      answer: 1,
+      explanation: 'Duran lav kaynak bloğuna su temas ettiğinde Obsidyen oluşur.'
+    },
+    {
+      id: 'E8',
+      difficulty: 'easy',
+      q: "Minecraft'ta açlık barını doldurmak için ineklerden elde edilen pişmiş etin adı nedir?",
+      options: ['Biftek (Steak)', 'Koyun Eti', 'Tavuk Kızartması', 'Altın Elma'],
+      answer: 0,
+      explanation: 'Çiğ sığır eti fırında pişirildiğinde Biftek (Steak) olur ve yüksek doygunluk verir.'
+    },
+
+    // --- ORTA (6-10) ---
+    {
+      id: 'M1',
+      difficulty: 'medium',
+      q: "Nether boyutunda Yatak kullanmaya çalışırsanız ne olur?",
+      options: [
+        'Sabah olur',
+        'Yatak şiddetli bir şekilde patlar',
+        'Hiçbir şey olmaz',
+        'Nether portalı açılır'
+      ],
+      answer: 1,
+      explanation: 'Nether ve End boyutlarında yatakta uyumaya çalışmak güçlü bir patlamaya yol açar.'
+    },
+    {
+      id: 'M2',
+      difficulty: 'medium',
+      q: "Büyü Masası'nın (Enchanting Table) maksimum seviye (30. seviye) büyü verebilmesi için etrafına en az kaç Kitaplık dizilmelidir?",
+      options: ['10', '12', '15', '18'],
+      answer: 2,
+      explanation: '30. seviye büyülerin kilidini açmak için Büyü Masası çevresinde 15 adet Kitaplık bulunmalıdır.'
+    },
+    {
+      id: 'M3',
+      difficulty: 'medium',
+      q: "Elmas ekipmanları Netherite seviyesine yükseltmek için Demirci Masasında (Smithing Table) Netherite Külçesi ile birlikte ne gerekir?",
+      options: [
+        'Nether Yıldızı',
+        'Netherite Yükseltme Demirci Şablonu',
+        'Ejderha Nefesi',
+        'Alev Tozu'
+      ],
+      answer: 1,
+      explanation: '1.20 güncellemesinden itibaren Netherite Yükseltme Demirci Şablonu (Smithing Template) zorunludur.'
+    },
+    {
+      id: 'M4',
+      difficulty: 'medium',
+      q: "Bir Redstone sinyalinin yenileyici (Repeater) kullanmadan ulaşabileceği maksimum mesafe kaç bloktur?",
+      options: ['8 Blok', '12 Blok', '15 Blok', '20 Blok'],
+      answer: 2,
+      explanation: 'Standart Redstone tozu sinyali kaynağından itibaren en fazla 15 blok ilerler.'
+    },
+    {
+      id: 'M5',
+      difficulty: 'medium',
+      q: "End Portalını aktif hale getirmek için End Portalı Çerçevelerine toplam kaç adet Ender Gözü (Eye of Ender) yerleştirilmelidir?",
+      options: ['8', '10', '12', '16'],
+      answer: 2,
+      explanation: 'End Portalı 12 adet çerçeve bloğundan oluşur ve tamamında Ender Gözü bulunmalıdır.'
+    },
+    {
+      id: 'M6',
+      difficulty: 'medium',
+      q: "Ölümsüzlük Totemi (Totem of Undying) hangi yaratıktan düşer?",
+      options: ['Wither İskeleti', 'Uyandırıcı (Evoker)', 'Yağmacı (Pillager)', 'Gardiyan (Warden)'],
+      answer: 1,
+      explanation: 'Ölümsüzlük Totemi, Orman Köşklerinde veya Baskınlarda bulunan Uyandırıcıdan (Evoker) düşer.'
+    },
+    {
+      id: 'M7',
+      difficulty: 'medium',
+      q: "Hangi iksir oyuncuya ateş ve lav hasarına karşı tam bağışıklık kazandırır?",
+      options: [
+        'İyileştirme İksiri',
+        'Ateş Direnci İksiri',
+        'Yenilenme İksiri',
+        'Gece Görüşü İksiri'
+      ],
+      answer: 1,
+      explanation: 'Magma Kremi ile yapılan Ateş Direnci İksiri lav ve ateş hasarını tamamen engeller.'
+    },
+
+    // --- ZOR (11-15) ---
+    {
+      id: 'H1',
+      difficulty: 'hard',
+      q: "Antik Şehirlerde (Ancient City) yaşayan ve görme yetisi olmadığı halde titreşimleri algılayan devasa boss benzeri yaratık hangisidir?",
+      options: ['Yaşlı Gardiyan', 'Warden (Muhafız)', 'Ravager', 'Shulker'],
+      answer: 1,
+      explanation: 'Derin Karanlık biyomundaki Antik Şehirlerde Sculk Çığırtkanı tarafından çağrılan yaratık Warden\'dır.'
+    },
+    {
+      id: 'H2',
+      difficulty: 'hard',
+      q: "1 adet Netherite Külçesi (Netherite Ingot) üretmek için kaç adet Netherite Hurdası ve kaç adet Altın Külçesi gerekir?",
+      options: [
+        '2 Hurda + 2 Altın',
+        '4 Netherite Hurdası + 4 Altın Külçesi',
+        '6 Hurda + 2 Altın',
+        '8 Hurda + 1 Altın'
+      ],
+      answer: 1,
+      explanation: 'Antik Kalıntıların eritilmesiyle elde edilen 4 Netherite Hurdası ve 4 Altın Külçesi birleştirilir.'
+    },
+    {
+      id: 'H3',
+      difficulty: 'hard',
+      q: "Fener (Beacon) bloğunun tam güçte (4 katlı piramit) çalışabilmesi için taban piramidinde toplam kaç adet cevher bloğu bulunmalıdır?",
+      options: ['81 Blok', '128 Blok', '164 Blok', '200 Blok'],
+      answer: 2,
+      explanation: '9x9 (81) + 7x7 (49) + 5x5 (25) + 3x3 (9) = toplam 164 adet cevher bloğu gerekir.'
+    },
+    {
+      id: 'H4',
+      difficulty: 'hard',
+      q: "Minecraft'ta bir Zombi Köylüyü tekrar normal bir Köylüye dönüştürmek için hangi iksir atılmalı ve ardından ne verilmelidir?",
+      options: [
+        'Güç İksiri + Elmas',
+        'Zayıflık İksiri + Altın Elma',
+        'Rejenerasyon İksiri + Zümrüt',
+        'Anında Sağlık İksiri + Altın Havuç'
+      ],
+      answer: 1,
+      explanation: 'Önce Patlayıcı Zayıflık İksiri atılır, ardından Altın Elma yedirilerek iyileşme süreci başlatılır.'
+    },
+    {
+      id: 'H5',
+      difficulty: 'hard',
+      q: "Nether boyutunda 1 blok ilerlemek, Ana Dünyada (Overworld) kaç blok ilerlemeye karşılık gelir?",
+      options: ['4 Blok', '8 Blok', '16 Blok', '32 Blok'],
+      answer: 1,
+      explanation: 'Nether koordinatları Overworld koordinatlarına göre 1:8 oranında ölçeklenmiştir.'
+    },
+    {
+      id: 'H6',
+      difficulty: 'hard',
+      q: "Wither boss'unu çağırmak için Ruh Kumu/Ruh Toprağı üzerine kaç adet Wither İskeleti Kafatası yerleştirilmelidir?",
+      options: ['1', '2', '3', '4'],
+      answer: 2,
+      explanation: 'T şeklinde 4 Ruh Kumu üzerine 3 adet Wither İskeleti Kafatası koyularak Wither çağrılır.'
+    },
+    {
+      id: 'H7',
+      difficulty: 'hard',
+      q: "Oyunda Büyü Masası olmadan yalnızca ganimet sandıklarından veya köylü ticaretinden elde edilebilen ve XP ile eşyayı onaran büyü hangisidir?",
+      options: ['Kırılmazlık III', 'Onarım (Mending)', 'Servet III', 'İpeksi Dokunuş'],
+      answer: 1,
+      explanation: 'Onarım (Mending) bir hazine büyüsüdür ve Büyü Masasından çıkmaz; toplanan XP küreleriyle eşyayı tamir eder.'
+    }
+  ];
+
+  // ==========================================
+  // WEB AUDIO SES EFEKTLERİ
+  // ==========================================
+  const soundEngine = {
+    ctx: null,
+    enabled: true,
+
+    init() {
+      if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioCtx();
+      }
+    },
+
+    playTone(freq, duration = 0.14, type = 'sine', gainVal = 0.08) {
+      const toggle = document.getElementById('setting-sound-toggle');
+      if (toggle && !toggle.checked) return;
+      try {
+        this.init();
+        if (!this.ctx) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+      } catch (e) {
+        // ignore audio errors
+      }
+    },
+
+    click() {
+      this.playTone(520, 0.06, 'triangle', 0.06);
+    },
+
+    correct() {
+      this.playTone(587.33, 0.12, 'sine', 0.09);
+      setTimeout(() => this.playTone(880, 0.22, 'sine', 0.1), 110);
+    },
+
+    wrong() {
+      this.playTone(220, 0.25, 'sawtooth', 0.08);
+      setTimeout(() => this.playTone(165, 0.35, 'sawtooth', 0.08), 160);
+    },
+
+    win() {
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+        setTimeout(() => this.playTone(f, 0.18, 'triangle', 0.1), i * 110);
+      });
+    }
   };
 
   // ==========================================
-  // ÖZGÜN PİKSEL-ART SVG ÜRETİCİLERİ
+  // OYUN DURUMU
   // ==========================================
-  function createEmeraldSVG(size = 24) {
-    return `
-      <svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="image-rendering: pixelated; display: inline-block; vertical-align: middle;">
-        <path d="M5 1H11V2H12V4H13V12H12V14H11V15H5V14H4V12H3V4H4V2H5V1Z" fill="#084D20"/>
-        <path d="M6 2H10V3H11V5H12V11H11V13H10V14H6V13H5V11H4V5H5V3H6V2Z" fill="#17DD62"/>
-        <path d="M6 3H9V4H10V6H6V3Z" fill="#86FFAC"/>
-        <path d="M5 5H6V10H5V5Z" fill="#86FFAC"/>
-        <path d="M7 6H10V11H7V6Z" fill="#12B84F"/>
-        <path d="M6 11H10V13H6V11Z" fill="#0B8435"/>
-      </svg>
-    `;
+  const gameState = {
+    active: false,
+    isPartyMatch: false,
+    questions: [],
+    currentIndex: 0,
+    currentPrize: 0,
+    safePrize: 0,
+    emeraldEarnedThisMatch: 0,
+    streak: 0,
+    extraLifeUsedInMatch: false,
+    timer: null,
+    timeLeft: 30,
+    lifelines: {
+      fifty: true,
+      audience: true,
+      villager: true
+    }
+  };
+
+  function svc() {
+    return window.MCMServices || {};
   }
 
-  function createDiamondSVG(size = 48) {
-    return `
-      <svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="image-rendering: pixelated; display: inline-block; vertical-align: middle;">
-        <path d="M5 1H11V2H13V4H14V11H13V13H11V14H9V15H7V14H5V13H3V11H2V4H3V2H5V1Z" fill="#0B3C49"/>
-        <path d="M5 2H11V4H13V11H11V13H9V14H7V13H5V11H3V4H5V2Z" fill="#3DE0FF"/>
-        <path d="M6 3H10V5H11V7H6V3Z" fill="#B8F6FF"/>
-        <path d="M4 5H6V9H4V5Z" fill="#B8F6FF"/>
-        <path d="M6 8H11V11H9V12H7V11H6V8Z" fill="#19A7C9"/>
-      </svg>
-    `;
+  function shuffle(arr) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
   }
 
-  function createVillagerSVG(size = 54) {
-    return `
-      <svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="image-rendering: pixelated;">
-        <rect x="3" y="2" width="10" height="12" fill="#BD8B62"/>
-        <rect x="3" y="2" width="10" height="2" fill="#A4724B"/>
-        <rect x="4" y="5" width="8" height="1" fill="#472E1B"/>
-        <rect x="4" y="6" width="2" height="2" fill="#FFFFFF"/>
-        <rect x="5" y="6" width="1" height="2" fill="#17DD62"/>
-        <rect x="10" y="6" width="2" height="2" fill="#FFFFFF"/>
-        <rect x="10" y="6" width="1" height="2" fill="#17DD62"/>
-        <rect x="7" y="7" width="2" height="5" fill="#9E6B47"/>
-        <rect x="7" y="7" width="1" height="4" fill="#B27D56"/>
-        <rect x="5" y="12" width="6" height="1" fill="#69462B"/>
-      </svg>
-    `;
-  }
-
-  // ==========================================
-  // İSTATİSTİK VE KAYIT SİSTEMİ (Kullanıcı ID Bazlı localStorage)
-  // ==========================================
-  const STATS_KEY_PREFIX = 'mc_millionaire_tr_stats_v5_';
-
-  // Purge legacy shared stats key so accounts never share statistics
-  try {
-    localStorage.removeItem('mc_millionaire_tr_stats_v1');
-  } catch (e) {}
-
-  class StatsManager {
-    constructor(userId = null) {
-      this.userId = userId || this._detectSessionUserId() || 'guest';
-      this.stats = this._defaultStats();
-      this.load();
-    }
-
-    _defaultStats() {
-      return {
-        highestPrize: 0,
-        highestLevel: 0,
-        totalGames: 0,
-        correctAnswers: 0,
-        wrongAnswers: 0,
-        totalEmeralds: 0
-      };
-    }
-
-    _detectSessionUserId() {
-      try {
-        const s = window.MCMServices?.licenseService?.getActiveSession?.();
-        if (s && (s.userId || s.username)) {
-          return String(s.userId || s.username).toLowerCase();
-        }
-      } catch (e) {}
-      return null;
-    }
-
-    getStorageKey() {
-      const uid = this.userId || this._detectSessionUserId() || 'guest';
-      return `${STATS_KEY_PREFIX}${String(uid).toLowerCase()}`;
-    }
-
-    setUserId(userId) {
-      const nextId = userId ? String(userId).toLowerCase() : 'guest';
-      this.userId = nextId;
-      this.load();
-      this.updateUI();
-    }
-
-    load() {
-      this.stats = this._defaultStats();
-      try {
-        const raw = localStorage.getItem(this.getStorageKey());
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          this.stats = { ...this.stats, ...parsed };
-        }
-      } catch (e) {
-        console.warn('İstatistikler yüklenemedi:', e);
-      }
-    }
-
-    save() {
-      try {
-        localStorage.setItem(this.getStorageKey(), JSON.stringify(this.stats));
-      } catch (e) {
-        console.warn('İstatistikler kaydedilemedi:', e);
-      }
-      this.updateUI();
-    }
-
-    recordGameStart() {
-      this.stats.totalGames++;
-      this.save();
-    }
-
-    recordCorrect(levelReached, currentPrize) {
-      this.stats.correctAnswers++;
-      if (levelReached > this.stats.highestLevel) {
-        this.stats.highestLevel = levelReached;
-      }
-      if (currentPrize > this.stats.highestPrize) {
-        this.stats.highestPrize = currentPrize;
-      }
-      this.save();
-    }
-
-    recordGameEnd(wonAmount, isWrong) {
-      if (isWrong) {
-        this.stats.wrongAnswers++;
-      }
-      if (wonAmount > 0) {
-        this.stats.totalEmeralds += wonAmount;
-        if (wonAmount > this.stats.highestPrize) {
-          this.stats.highestPrize = wonAmount;
-        }
-      }
-      this.save();
-    }
-
-    reset() {
-      this.stats = this._defaultStats();
-      this.save();
-    }
-
-    formatNumber(n) {
-      return Number(n || 0).toLocaleString('tr-TR');
-    }
-
-    updateUI() {
-      const prizeStr = `${this.formatNumber(this.stats.highestPrize)} Zümrüt`;
-      const levelStr = `${this.stats.highestLevel} / 15`;
-      const totalEmStr = `${this.formatNumber(this.stats.totalEmeralds)} Zümrüt`;
-
-      // Ana Menü Özet İstatistikler
-      const menuPrize = document.getElementById('menu-best-prize');
-      const menuLevel = document.getElementById('menu-best-level');
-      const menuGames = document.getElementById('menu-games-played');
-      if (menuPrize) menuPrize.textContent = prizeStr;
-      if (menuLevel) menuLevel.textContent = levelStr;
-      if (menuGames) menuGames.textContent = this.formatNumber(this.stats.totalGames);
-
-      // İstatistikler Modalı
-      const sPrize = document.getElementById('stat-highest-prize');
-      const sLevel = document.getElementById('stat-highest-level');
-      const sGames = document.getElementById('stat-total-games');
-      const sCorrect = document.getElementById('stat-correct-answers');
-      const sWrong = document.getElementById('stat-wrong-answers');
-      const sTotalEm = document.getElementById('stat-total-emeralds');
-
-      if (sPrize) sPrize.textContent = prizeStr;
-      if (sLevel) sLevel.textContent = levelStr;
-      if (sGames) sGames.textContent = this.formatNumber(this.stats.totalGames);
-      if (sCorrect) sCorrect.textContent = this.formatNumber(this.stats.correctAnswers);
-      if (sWrong) sWrong.textContent = this.formatNumber(this.stats.wrongAnswers);
-      if (sTotalEm) sTotalEm.textContent = totalEmStr;
-    }
-  }
-
-  // ==========================================
-  // MİNECRAFT GECE/GÜNDÜZ ATMOSFERİ VE PARÇACIK MOTORU
-  // ==========================================
-  class ParticleEngine {
-    constructor() {
-      this.bgCanvas = document.getElementById('bg-canvas');
-      this.fxCanvas = document.getElementById('fx-canvas');
-      this.bgCtx = this.bgCanvas ? this.bgCanvas.getContext('2d') : null;
-      this.fxCtx = this.fxCanvas ? this.fxCanvas.getContext('2d') : null;
-
-      this.isNight = true;
-      this.bgBlocks = [];
-      this.stars = [];
-      this.fxParticles = [];
-
-      this.resize();
-      window.addEventListener('resize', () => this.resize());
-      this.initBgElements();
-      this.animate();
-    }
-
-    setAtmosphere(isNight) {
-      this.isNight = isNight;
-      document.body.classList.toggle('atmos-night', isNight);
-      document.body.classList.toggle('atmos-day', !isNight);
-    }
-
-    resize() {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      if (this.bgCanvas) {
-        this.bgCanvas.width = w;
-        this.bgCanvas.height = h;
-      }
-      if (this.fxCanvas) {
-        this.fxCanvas.width = w;
-        this.fxCanvas.height = h;
-      }
-    }
-
-    initBgElements() {
-      // Floating Emerald, Diamond, Gold & Stone pixel cubes
-      const types = [
-        { color: '#17dd62', border: '#86ffac' }, // Emerald
-        { color: '#3de0ff', border: '#b8f6ff' }, // Diamond
-        { color: '#ffbe1a', border: '#ffe885' }, // Gold
-        { color: '#374151', border: '#6b7280' }  // Stone/Obsidian
-      ];
-
-      this.bgBlocks = [];
-      for (let i = 0; i < 38; i++) {
-        const t = types[Math.floor(Math.random() * types.length)];
-        this.bgBlocks.push({
-          x: Math.random() * window.innerWidth,
-          y: Math.random() * window.innerHeight,
-          size: 8 + Math.floor(Math.random() * 14),
-          speedY: -0.22 - Math.random() * 0.5,
-          speedX: (Math.random() - 0.5) * 0.28,
-          color: t.color,
-          border: t.border,
-          alpha: 0.12 + Math.random() * 0.22
-        });
-      }
-
-      // Pixel stars for Night / Clouds for Day
-      this.stars = [];
-      for (let i = 0; i < 45; i++) {
-        this.stars.push({
-          x: Math.random() * window.innerWidth,
-          y: Math.random() * (window.innerHeight * 0.65),
-          size: 2 + Math.floor(Math.random() * 3),
-          twinkleSpeed: 0.02 + Math.random() * 0.04,
-          phase: Math.random() * Math.PI * 2
-        });
-      }
-    }
-
-    spawnBurst(x, y, type = 'emerald', count = 42) {
-      const palettes = {
-        emerald: ['#17dd62', '#86ffac', '#12b84f', '#ffbe1a', '#3de0ff'],
-        damage: ['#ff3b3b', '#b31919', '#fca5a5', '#52525b'],
-        victory: ['#17dd62', '#3de0ff', '#ffbe1a', '#b66dff', '#ffffff']
-      };
-      const colors = palettes[type] || palettes.emerald;
-
-      for (let i = 0; i < count; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 2.2 + Math.random() * 8;
-        this.fxParticles.push({
-          x,
-          y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 2.6,
-          size: 5 + Math.floor(Math.random() * 8),
-          color: colors[Math.floor(Math.random() * colors.length)],
-          alpha: 1,
-          decay: 0.013 + Math.random() * 0.015,
-          gravity: 0.16
-        });
-      }
-    }
-
-    animate() {
-      if (this.bgCtx && this.bgCanvas) {
-        const w = this.bgCanvas.width;
-        const h = this.bgCanvas.height;
-        this.bgCtx.clearRect(0, 0, w, h);
-
-        // Draw blocky Moon (Night) or blocky Sun (Day) in top-right sky
-        const celestialX = Math.max(w - 140, 60);
-        const celestialY = 85;
-        if (this.isNight) {
-          // Pixel Moon
-          this.bgCtx.fillStyle = 'rgba(226, 232, 240, 0.16)';
-          this.bgCtx.fillRect(celestialX - 8, celestialY - 8, 60, 60);
-          this.bgCtx.fillStyle = 'rgba(248, 250, 252, 0.35)';
-          this.bgCtx.fillRect(celestialX, celestialY, 44, 44);
-
-          // Twinkling Pixel Stars
-          for (const s of this.stars) {
-            s.phase += s.twinkleSpeed;
-            const a = 0.15 + (Math.sin(s.phase) * 0.5 + 0.5) * 0.35;
-            this.bgCtx.fillStyle = `rgba(255, 255, 255, ${a})`;
-            this.bgCtx.fillRect(Math.floor(s.x), Math.floor(s.y), s.size, s.size);
-          }
-        } else {
-          // Pixel Sun
-          this.bgCtx.fillStyle = 'rgba(255, 190, 26, 0.18)';
-          this.bgCtx.fillRect(celestialX - 10, celestialY - 10, 68, 68);
-          this.bgCtx.fillStyle = 'rgba(253, 224, 71, 0.42)';
-          this.bgCtx.fillRect(celestialX, celestialY, 48, 48);
-        }
-
-        // Floating Pixel Blocks & Gems
-        for (const b of this.bgBlocks) {
-          b.y += b.speedY;
-          b.x += b.speedX;
-          if (b.y < -24) {
-            b.y = h + 24;
-            b.x = Math.random() * w;
-          }
-          if (b.x < -24) b.x = w + 24;
-          if (b.x > w + 24) b.x = -24;
-
-          const bx = Math.floor(b.x);
-          const by = Math.floor(b.y);
-          this.bgCtx.globalAlpha = b.alpha;
-          this.bgCtx.fillStyle = b.color;
-          this.bgCtx.fillRect(bx, by, b.size, b.size);
-          this.bgCtx.fillStyle = b.border;
-          this.bgCtx.fillRect(bx, by, b.size, 2);
-        }
-        this.bgCtx.globalAlpha = 1;
-      }
-
-      // Render Foreground Burst Particles
-      if (this.fxCtx && this.fxCanvas) {
-        const w = this.fxCanvas.width;
-        const h = this.fxCanvas.height;
-        this.fxCtx.clearRect(0, 0, w, h);
-
-        for (let i = this.fxParticles.length - 1; i >= 0; i--) {
-          const p = this.fxParticles[i];
-          p.x += p.vx;
-          p.y += p.vy;
-          p.vy += p.gravity;
-          p.alpha -= p.decay;
-
-          if (p.alpha <= 0) {
-            this.fxParticles.splice(i, 1);
-            continue;
-          }
-
-          this.fxCtx.globalAlpha = Math.max(0, p.alpha);
-          this.fxCtx.fillStyle = p.color;
-          this.fxCtx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
-        }
-        this.fxCtx.globalAlpha = 1;
-      }
-
-      requestAnimationFrame(() => this.animate());
-    }
-  }
-
-  // ==========================================
-  // ANA OYUN KONTROLCÜSÜ
-  // ==========================================
-  class MinecraftMillionaireGame {
-    constructor() {
-      this.statsManager = new StatsManager();
-      this.particles = new ParticleEngine();
-
-      // Oyun Durumu: 'MENU' | 'QUESTION' | 'ANSWER_SELECTED' | 'CORRECT_REVEAL' | 'WRONG_REVEAL' | 'GAMEOVER' | 'VICTORY'
-      this.state = 'MENU';
-      this.currentLevelIndex = 0; // 0..14 (Soru 1..15)
-      this.usedQuestionIds = new Set(); // Aynı oyunda kesinlikle tekrar etmemesi için kullanılan ID'ler
-      this.lastQuestionIdsAcrossGames = []; // Arka arkaya yeni oyunlarda ilk soruların bile farklı gelmesi için
-      this.lastCategory = null; // Aynı kategorinin üst üste gelmesini önlemek için
-      this.currentQuestion = null;
-      this.eliminatedIndices = new Set();
-
-      this.jokers = {
-        fiftyFifty: false,
-        audience: false,
-        villager: false,
-        change: false
-      };
-
-      this.suspenseTimeout = null;
-      this.victoryConfettiInterval = null;
-      this.isUnlocked = false;
-
-      this.initIcons();
-      this.buildMoneyLadder();
-      this.bindEvents();
-      this.syncAudioUI();
-      this.statsManager.updateUI();
-    }
-
-    initIcons() {
-      const headerEmerald = document.getElementById('header-emerald-icon');
-      const heroLeft = document.getElementById('hero-emerald-left');
-      const heroRight = document.getElementById('hero-diamond-right');
-      const sidebarEmerald = document.getElementById('sidebar-emerald-icon');
-      const victoryEmerald = document.getElementById('victory-huge-emerald');
-
-      if (headerEmerald) headerEmerald.innerHTML = createEmeraldSVG(24);
-      if (heroLeft) heroLeft.innerHTML = createEmeraldSVG(50);
-      if (heroRight) heroRight.innerHTML = createDiamondSVG(50);
-      if (sidebarEmerald) sidebarEmerald.innerHTML = createEmeraldSVG(22);
-      if (victoryEmerald) victoryEmerald.innerHTML = createEmeraldSVG(94);
-    }
-
-    buildMoneyLadder() {
-      const listEl = document.getElementById('money-ladder-list');
-      if (!listEl) return;
-      listEl.innerHTML = '';
-
-      const reversed = [...PRIZE_LADDER].reverse();
-      reversed.forEach(item => {
-        const li = document.createElement('li');
-        li.className = `ladder-step ${item.milestone ? 'milestone' : ''}`;
-        li.id = `ladder-step-${item.level}`;
-        li.innerHTML = `
-          <span class="ladder-step-num">${item.level}</span>
-          <span class="ladder-step-prize">
-            ${createEmeraldSVG(16)}
-            <span>${item.label}</span>
-          </span>
-        `;
-        listEl.appendChild(li);
-      });
-    }
-
-    updateMoneyLadderUI() {
-      const currentLvl = this.currentLevelIndex + 1;
-      PRIZE_LADDER.forEach(item => {
-        const el = document.getElementById(`ladder-step-${item.level}`);
-        if (!el) return;
-        el.classList.remove('active', 'passed');
-        if (item.level === currentLvl) {
-          el.classList.add('active');
-        } else if (item.level < currentLvl) {
-          el.classList.add('passed');
-        }
-      });
-    }
-
-    // 1–5. sorular: "easy", 6–10. sorular: "medium", 11–15. sorular: "hard"
-    getDifficultyForLevel(levelNumber) {
-      if (levelNumber <= 5) return 'easy';
-      if (levelNumber <= 10) return 'medium';
-      return 'hard';
-    }
-
-    // Fisher-Yates Kripto Destekli Rastgele Karıştırma
-    shuffleArray(arr) {
-      const copy = [...arr];
-      for (let i = copy.length - 1; i > 0; i--) {
-        let rand;
-        if (window.crypto && window.crypto.getRandomValues) {
-          const buf = new Uint32Array(1);
-          window.crypto.getRandomValues(buf);
-          rand = buf[0] / (0xffffffff + 1);
-        } else {
-          rand = Math.random();
-        }
-        const j = Math.floor(rand * (i + 1));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
-      }
-      return copy;
-    }
-
-    /**
-     * RASTGELE VE ADİL SORU SEÇİM SİSTEMİ
-     * - Aynı oyunda kullanılan bir soru kesinlikle tekrar seçilmez.
-     * - Zorluk seviyesine ("easy", "medium", "hard") uygun havuzdan seçilir.
-     * - Bir önceki sorunun kategorisiyle aynı kategoriden kaçınılır (mümkünse farklı kategori seçilir).
-     * - Şıkların (A, B, C, D) dizilimi de her soruda rastgele karıştırılır ve doğru cevap yalnızca hafızada tutulur.
-     */
-    pickQuestionForDifficulty(difficulty) {
-      const allQuestions = window.QUESTIONS_DB || [];
-
-      // 1. Bu oyunda henüz hiç kullanılmamış ve ilgili zorluktaki sorular
-      let pool = allQuestions.filter(
-        q => q.difficulty === difficulty && !this.usedQuestionIds.has(q.id)
-      );
-
-      // 2. Eğer bir önceki sorunun kategorisinden farklı kategoride sorular varsa önceliği onlara ver
-      if (this.lastCategory) {
-        const diffCategoryPool = pool.filter(q => q.category !== this.lastCategory);
-        if (diffCategoryPool.length > 0) {
-          pool = diffCategoryPool;
-        }
-      }
-
-      // 3. Eğer önceki oyunda yeni çıkmış sorular dışında alternatif varsa onları tercih et (her yeni oyunda bambaşka sıra için)
-      if (this.lastQuestionIdsAcrossGames.length > 0) {
-        const freshAcrossGames = pool.filter(q => !this.lastQuestionIdsAcrossGames.includes(q.id));
-        if (freshAcrossGames.length > 0) {
-          pool = freshAcrossGames;
-        }
-      }
-
-      // Güvenlik: Havuz boşaldıysa (imkansıza yakın ama güvenlik için) kullanılmamış herhangi bir soruyu al
-      if (pool.length === 0) {
-        pool = allQuestions.filter(q => !this.usedQuestionIds.has(q.id));
-      }
-
-      const shuffledPool = this.shuffleArray(pool);
-      const chosen = shuffledPool[0];
-
-      this.usedQuestionIds.add(chosen.id);
-      this.lastCategory = chosen.category;
-
-      // Son 25 soruyu oyunlar arası hafızada tut ki arka arkaya başlatılan oyunlarda bile aynı sorular gelmesin
-      this.lastQuestionIdsAcrossGames.push(chosen.id);
-      if (this.lastQuestionIdsAcrossGames.length > 25) {
-        this.lastQuestionIdsAcrossGames.shift();
-      }
-
-      // Şıkları da karıştır
-      const indexedAnswers = chosen.answers.map((text, idx) => ({
-        text,
-        isCorrect: idx === chosen.correctAnswer
+  function getCombinedQuestionPool(difficulty) {
+    const base = QUESTION_POOL.filter(q => q.difficulty === difficulty);
+    if (window.QUESTIONS_DB && Array.isArray(window.QUESTIONS_DB[difficulty])) {
+      const extra = window.QUESTIONS_DB[difficulty].map(item => ({
+        difficulty,
+        q: item.question || item.q,
+        options: Array.isArray(item.options) ? [...item.options] : [],
+        answer: typeof item.correct === 'number' ? item.correct : item.answer,
+        explanation: item.explanation || ''
       }));
-      const shuffledAnswers = this.shuffleArray(indexedAnswers);
+      const seen = new Set(base.map(b => b.q));
+      extra.forEach(item => {
+        if (item.q && !seen.has(item.q)) {
+          seen.add(item.q);
+          base.push(item);
+        }
+      });
+    }
+    return base;
+  }
 
-      // Doğru cevabı DOM üzerinde hiçbir attribute olarak açık etmeden yalnızca bu nesnede sakla
+  function buildMatchQuestions() {
+    const easy = shuffle(getCombinedQuestionPool('easy')).slice(0, 5);
+    const medium = shuffle(getCombinedQuestionPool('medium')).slice(0, 5);
+    const hard = shuffle(getCombinedQuestionPool('hard')).slice(0, 5);
+    const combined = [...easy, ...medium, ...hard];
+
+    return combined.map(item => {
+      const indexed = item.options.map((text, idx) => ({
+        text,
+        correct: idx === item.answer
+      }));
+      const mixed = shuffle(indexed);
       return {
-        id: chosen.id,
-        question: chosen.question,
-        answers: shuffledAnswers.map(a => a.text),
-        correctAnswer: shuffledAnswers.findIndex(a => a.isCorrect),
-        difficulty: chosen.difficulty,
-        category: chosen.category,
-        explanation: chosen.explanation
+        ...item,
+        options: mixed.map(m => m.text),
+        answer: mixed.findIndex(m => m.correct)
       };
-    }
-
-    showScreen(screenId) {
-      document.querySelectorAll('.screen').forEach(sec => {
-        sec.classList.remove('active');
-      });
-      const target = document.getElementById(screenId);
-      if (target) {
-        target.classList.add('active');
-      }
-      // Sync top navigation active state
-      document.querySelectorAll('.main-nav-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-nav-screen') === screenId);
-      });
-    }
-
-    // ==========================================
-    // YENİ OYUN BAŞLAT / MENÜYE DÖN
-    // ==========================================
-    startNewGame() {
-      this.clearTimers();
-      this.currentGameId = `GAME-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      this.currentLevelIndex = 0;
-      this.usedQuestionIds.clear();
-      this.eliminatedIndices.clear();
-      this.lastCategory = null;
-
-      this.jokers = {
-        fiftyFifty: false,
-        audience: false,
-        villager: false,
-        change: false
-      };
-
-      const reviveBanner = document.getElementById('extralife-revive-banner');
-      if (reviveBanner) reviveBanner.classList.add('hidden');
-
-      this.statsManager.recordGameStart();
-      this.updateJokerButtonsUI();
-      this.showScreen('screen-game');
-      window.soundManager.startMusic('game');
-      if (window.mcmPlatform) {
-        window.mcmPlatform.syncEconomyHeaderUI();
-      }
-      this.loadCurrentLevelQuestion();
-    }
-
-    returnToMainMenu() {
-      this.clearTimers();
-      this.state = 'MENU';
-      this.showScreen('screen-menu');
-      window.soundManager.startMusic('menu');
-      this.statsManager.updateUI();
-      if (window.mcmPlatform) {
-        window.mcmPlatform.syncEconomyHeaderUI();
-      }
-    }
-
-    clearTimers() {
-      if (this.suspenseTimeout) {
-        clearTimeout(this.suspenseTimeout);
-        this.suspenseTimeout = null;
-      }
-      if (this.victoryConfettiInterval) {
-        clearInterval(this.victoryConfettiInterval);
-        this.victoryConfettiInterval = null;
-      }
-      window.soundManager.stopSuspense();
-    }
-
-    // ==========================================
-    // SORUYU EKRANA YÜKLE
-    // ==========================================
-    loadCurrentLevelQuestion(isChangedQuestion = false) {
-      this.state = 'QUESTION';
-      this.eliminatedIndices.clear();
-
-      const reviveBanner = document.getElementById('extralife-revive-banner');
-      if (reviveBanner) reviveBanner.classList.add('hidden');
-
-      const levelNumber = this.currentLevelIndex + 1;
-      const difficulty = this.getDifficultyForLevel(levelNumber);
-      const prizeObj = PRIZE_LADDER[this.currentLevelIndex];
-
-      this.currentQuestion = this.pickQuestionForDifficulty(difficulty);
-
-      // Üst Bilgi Çubuğunu Güncelle
-      document.getElementById('current-level-badge').textContent = `Soru ${levelNumber} / 15`;
-      document.getElementById('current-difficulty-badge').textContent = DIFFICULTY_LABELS[difficulty];
-      document.getElementById('current-category-badge').textContent = this.currentQuestion.category;
-      document.getElementById('current-target-prize').textContent = prizeObj.label;
-      document.getElementById('question-number-title').textContent = `Soru ${levelNumber} / 15`;
-
-      // Soru Kartı Geçiş Animasyonu
-      const qCard = document.getElementById('question-card');
-      if (qCard) {
-        qCard.classList.remove('changing');
-        void qCard.offsetWidth;
-        qCard.classList.add('changing');
-      }
-
-      document.getElementById('question-text').textContent = this.currentQuestion.question;
-
-      // Joker ve Açıklama Panellerini Gizle
-      const jokerPanel = document.getElementById('joker-feedback-panel');
-      if (jokerPanel) {
-        jokerPanel.classList.add('hidden');
-        jokerPanel.innerHTML = '';
-      }
-
-      const expPanel = document.getElementById('explanation-panel');
-      if (expPanel) expPanel.classList.add('hidden');
-
-      // 4 Cevap Butonunu Doldur
-      for (let i = 0; i < 4; i++) {
-        const btn = document.getElementById(`answer-btn-${i}`);
-        const textEl = document.getElementById(`answer-text-${i}`);
-        const pctEl = document.getElementById(`answer-percent-${i}`);
-
-        if (textEl) textEl.textContent = this.currentQuestion.answers[i];
-        if (pctEl) {
-          pctEl.classList.add('hidden');
-          pctEl.textContent = '%0';
-        }
-        if (btn) {
-          btn.disabled = false;
-          btn.classList.remove('selected', 'correct', 'wrong', 'eliminated');
-        }
-      }
-
-      this.updateMoneyLadderUI();
-      this.updateJokerButtonsUI();
-      if (window.mcmPlatform) {
-        window.mcmPlatform.syncEconomyHeaderUI();
-      }
-    }
-
-    // ==========================================
-    // CEVAP SEÇİMİ VE GERİLİM SÜRESİ
-    // ==========================================
-    selectAnswer(index) {
-      if (this.state !== 'QUESTION') return;
-      if (this.eliminatedIndices.has(index)) return;
-
-      this.state = 'ANSWER_SELECTED';
-
-      // Gerilim süresince tüm butonları kilitle
-      for (let i = 0; i < 4; i++) {
-        const btn = document.getElementById(`answer-btn-${i}`);
-        if (btn) btn.disabled = true;
-      }
-      this.updateJokerButtonsUI();
-
-      // 1. Seçilen cevap sarı/parlak renkte vurgulansın
-      const selectedBtn = document.getElementById(`answer-btn-${index}`);
-      if (selectedBtn) {
-        selectedBtn.classList.add('selected');
-      }
-
-      // 2. Cevap seçme ve gerilim sesi oynasın
-      window.soundManager.playAnswerSelect();
-      window.soundManager.playSuspense(1650);
-
-      // 3. Kısa bekleme süresi (1.65 saniye) sonunda cevabı açıkla
-      this.suspenseTimeout = setTimeout(() => {
-        this.revealAnswer(index);
-      }, 1650);
-    }
-
-    revealAnswer(selectedIndex) {
-      const correctIndex = this.currentQuestion.correctAnswer;
-      const selectedBtn = document.getElementById(`answer-btn-${selectedIndex}`);
-      const correctBtn = document.getElementById(`answer-btn-${correctIndex}`);
-
-      if (selectedBtn) selectedBtn.classList.remove('selected');
-
-      if (selectedIndex === correctIndex) {
-        // DOĞRU CEVAP!
-        this.state = 'CORRECT_REVEAL';
-        if (correctBtn) correctBtn.classList.add('correct');
-
-        window.soundManager.playCorrect();
-
-        if (correctBtn) {
-          const rect = correctBtn.getBoundingClientRect();
-          this.particles.spawnBurst(
-            rect.left + rect.width / 2,
-            rect.top + rect.height / 2,
-            'emerald',
-            45
-          );
-        }
-
-        const levelReached = this.currentLevelIndex + 1;
-        const prizeEarned = PRIZE_LADDER[this.currentLevelIndex].amount;
-        this.statsManager.recordCorrect(levelReached, prizeEarned);
-
-        // Bilgi / Açıklama Kutusu ve Sonraki Soru Butonu
-        const expPanel = document.getElementById('explanation-panel');
-        const expText = document.getElementById('explanation-text');
-        const nextLabel = document.getElementById('btn-next-label');
-
-        if (expText) expText.textContent = this.currentQuestion.explanation;
-        if (nextLabel) {
-          nextLabel.textContent = levelReached === 15
-            ? '🏆 BÜYÜK ÖDÜLÜ AL! ➔'
-            : 'SONRAKİ SORU ➔';
-        }
-        if (expPanel) expPanel.classList.remove('hidden');
-
-      } else {
-        // YANLIŞ CEVAP!
-        this.state = 'WRONG_REVEAL';
-        if (selectedBtn) selectedBtn.classList.add('wrong');
-
-        window.soundManager.playWrong();
-
-        if (selectedBtn) {
-          const rect = selectedBtn.getBoundingClientRect();
-          this.particles.spawnBurst(
-            rect.left + rect.width / 2,
-            rect.top + rect.height / 2,
-            'damage',
-            36
-          );
-        }
-
-        // SECTION 23: Check if player owns an Extra Life before full elimination
-        const levelNumber = this.currentLevelIndex + 1;
-        if (
-          window.mcmPlatform &&
-          window.mcmPlatform.canOfferExtraLife(this.currentGameId, levelNumber)
-        ) {
-          this.suspenseTimeout = setTimeout(() => {
-            window.mcmPlatform.promptExtraLifeRevive(
-              this.currentGameId,
-              levelNumber,
-              () => {
-                // Player clicked USE EXTRA LIFE -> Revive on current question with wrong option eliminated!
-                this.reviveWithExtraLife(selectedIndex);
-              },
-              () => {
-                // Player clicked EXIT -> Reveal correct answer and end game
-                if (correctBtn) correctBtn.classList.add('correct');
-                this.triggerGameOver(selectedIndex);
-              }
-            );
-          }, 850);
-          return;
-        }
-
-        if (correctBtn) correctBtn.classList.add('correct');
-
-        // Oyuncu doğru cevabı yeşil olarak gördükten 1.8 saniye sonra Oyun Bitti ekranına geç
-        this.suspenseTimeout = setTimeout(() => {
-          this.triggerGameOver(selectedIndex);
-        }, 1800);
-      }
-    }
-
-    reviveWithExtraLife(wrongIndex) {
-      // Eliminate the wrong choice and restore active QUESTION state
-      this.eliminatedIndices.add(wrongIndex);
-      const wrongBtn = document.getElementById(`answer-btn-${wrongIndex}`);
-      if (wrongBtn) {
-        wrongBtn.classList.remove('wrong', 'selected');
-        wrongBtn.classList.add('eliminated');
-        wrongBtn.disabled = true;
-      }
-
-      for (let i = 0; i < 4; i++) {
-        if (!this.eliminatedIndices.has(i)) {
-          const btn = document.getElementById(`answer-btn-${i}`);
-          if (btn) btn.disabled = false;
-        }
-      }
-
-      this.state = 'QUESTION';
-      this.updateJokerButtonsUI();
-
-      // Show visual notification banner: ❤️ EXTRA LIFE USED — "You have returned to the game!"
-      const reviveBanner = document.getElementById('extralife-revive-banner');
-      if (reviveBanner) {
-        reviveBanner.classList.remove('hidden');
-      }
-
-      window.soundManager.playCorrect();
-      this.particles.spawnBurst(window.innerWidth / 2, window.innerHeight / 2, 'emerald', 55);
-    }
-
-    proceedToNextQuestion() {
-      if (this.state !== 'CORRECT_REVEAL') return;
-
-      if (this.currentLevelIndex >= 14) {
-        // 15. soru da tamamlandı -> MİLYONER!
-        this.triggerVictory();
-      } else {
-        this.currentLevelIndex++;
-        this.loadCurrentLevelQuestion();
-      }
-    }
-
-    getGuaranteedPrizeOnLoss() {
-      // Baraj sistemi: 5. soru geçildiyse 2.000 Emerald, 10. soru geçildiyse 100.000 Emerald garanti
-      const completedLevels = this.currentLevelIndex; // 0..14
-      if (completedLevels >= 10) return 100000;
-      if (completedLevels >= 5) return 2000;
-      return 0;
-    }
-
-    triggerGameOver(selectedIndex) {
-      this.state = 'GAMEOVER';
-      window.soundManager.stopMusicLoop();
-
-      const letters = ['A', 'B', 'C', 'D'];
-      const correctIdx = this.currentQuestion.correctAnswer;
-      const guaranteedPrize = this.getGuaranteedPrizeOnLoss();
-
-      this.statsManager.recordGameEnd(guaranteedPrize, true);
-
-      document.getElementById('gameover-user-answer').textContent =
-        `${letters[selectedIndex]}) ${this.currentQuestion.answers[selectedIndex]}`;
-      document.getElementById('gameover-correct-answer').textContent =
-        `${letters[correctIdx]}) ${this.currentQuestion.answers[correctIdx]}`;
-      document.getElementById('gameover-explanation').textContent =
-        this.currentQuestion.explanation;
-
-      document.getElementById('gameover-level').textContent = `Soru ${this.currentLevelIndex + 1} / 15`;
-      document.getElementById('gameover-prize').textContent =
-        `${guaranteedPrize.toLocaleString('tr-TR')} Emerald`;
-      document.getElementById('gameover-correct-count').textContent = `${this.currentLevelIndex}`;
-      document.getElementById('gameover-wrong-count').textContent = '1';
-
-      if (window.mcmPlatform) {
-        window.mcmPlatform.onGameFinished({
-          won: false,
-          questionsAnswered: this.currentLevelIndex,
-          emeraldScoreReached: guaranteedPrize,
-          gameId: this.currentGameId
-        });
-      }
-
-      this.showScreen('screen-gameover');
-    }
-
-    triggerVictory() {
-      this.state = 'VICTORY';
-      window.soundManager.stopMusicLoop();
-      window.soundManager.playVictory();
-
-      this.statsManager.recordGameEnd(5000000, false);
-
-      const usedCount = Object.values(this.jokers).filter(Boolean).length;
-      document.getElementById('victory-jokers-used').textContent = `${usedCount} / 4`;
-
-      if (window.mcmPlatform) {
-        window.mcmPlatform.onGameFinished({
-          won: true,
-          questionsAnswered: 15,
-          emeraldScoreReached: 5000000,
-          gameId: this.currentGameId
-        });
-      }
-
-      this.showScreen('screen-victory');
-
-      this.particles.spawnBurst(window.innerWidth * 0.3, window.innerHeight * 0.35, 'victory', 65);
-      this.particles.spawnBurst(window.innerWidth * 0.7, window.innerHeight * 0.35, 'victory', 65);
-
-      this.victoryConfettiInterval = setInterval(() => {
-        if (this.state !== 'VICTORY') return;
-        const rx = window.innerWidth * (0.18 + Math.random() * 0.64);
-        const ry = window.innerHeight * (0.18 + Math.random() * 0.45);
-        this.particles.spawnBurst(rx, ry, 'victory', 34);
-      }, 1350);
-    }
-
-    // ==========================================
-    // 4 İNTERAKTİF JOKER MEKANİĞİ
-    // ==========================================
-    updateJokerButtonsUI() {
-      const canUse = this.state === 'QUESTION';
-      const map = [
-        { id: 'joker-5050', used: this.jokers.fiftyFifty },
-        { id: 'joker-audience', used: this.jokers.audience },
-        { id: 'joker-villager', used: this.jokers.villager },
-        { id: 'joker-change', used: this.jokers.change }
-      ];
-
-      map.forEach(item => {
-        const btn = document.getElementById(item.id);
-        if (!btn) return;
-        btn.disabled = !canUse || item.used;
-        btn.classList.toggle('used', item.used);
-      });
-    }
-
-    // 1. %50 / 50 Jokeri: İki yanlış cevabı kaldırır
-    useJokerFiftyFifty() {
-      if (this.state !== 'QUESTION' || this.jokers.fiftyFifty) return;
-      this.jokers.fiftyFifty = true;
-      window.soundManager.playFiftyFifty();
-
-      const correctIdx = this.currentQuestion.correctAnswer;
-      const wrongIndices = [0, 1, 2, 3].filter(
-        i => i !== correctIdx && !this.eliminatedIndices.has(i)
-      );
-
-      const shuffledWrong = this.shuffleArray(wrongIndices);
-      const toRemove = shuffledWrong.slice(0, 2);
-
-      toRemove.forEach(idx => {
-        this.eliminatedIndices.add(idx);
-        const btn = document.getElementById(`answer-btn-${idx}`);
-        if (btn) {
-          btn.disabled = true;
-          btn.classList.add('eliminated');
-          const rect = btn.getBoundingClientRect();
-          this.particles.spawnBurst(
-            rect.left + rect.width / 2,
-            rect.top + rect.height / 2,
-            'damage',
-            18
-          );
-        }
-      });
-
-      this.updateJokerButtonsUI();
-    }
-
-    // 2. Seyirciye Sor Jokeri: A, B, C, D için gerçekçi rastgele yüzdeler üretir
-    useJokerAudience() {
-      if (this.state !== 'QUESTION' || this.jokers.audience) return;
-      this.jokers.audience = true;
-      window.soundManager.playAudience();
-
-      const correctIdx = this.currentQuestion.correctAnswer;
-      const activeIndices = [0, 1, 2, 3].filter(i => !this.eliminatedIndices.has(i));
-
-      const diff = this.currentQuestion.difficulty;
-      const baseBoost = diff === 'easy' ? 68 : diff === 'medium' ? 56 : 45;
-      const percentages = [0, 0, 0, 0];
-
-      let remaining = 100;
-      const correctPct = Math.min(
-        remaining - (activeIndices.length - 1) * 4,
-        baseBoost + Math.floor((Math.random() - 0.5) * 16)
-      );
-      percentages[correctIdx] = correctPct;
-      remaining -= correctPct;
-
-      const otherActive = this.shuffleArray(activeIndices.filter(i => i !== correctIdx));
-      otherActive.forEach((idx, pos) => {
-        if (pos === otherActive.length - 1) {
-          percentages[idx] = remaining;
-        } else {
-          const share = Math.floor(Math.random() * (remaining + 1));
-          percentages[idx] = share;
-          remaining -= share;
-        }
-      });
-
-      const letters = ['A', 'B', 'C', 'D'];
-      const panel = document.getElementById('joker-feedback-panel');
-      if (panel) {
-        panel.classList.remove('hidden');
-        panel.innerHTML = `
-          <div class="audience-poll-wrap">
-            <div class="audience-header">
-              <span>👥 MİNECRAFT SEYİRCİ OYLAMASI SONUÇLARI:</span>
-              <span>${letters.map((l, i) => `${l} — %${percentages[i]}`).join(' | ')}</span>
-            </div>
-            <div class="audience-bars-grid">
-              ${letters.map((letter, idx) => `
-                <div class="audience-bar-col">
-                  <div class="audience-bar-pct">%${percentages[idx]}</div>
-                  <div class="audience-bar-track">
-                    <div class="audience-bar-fill" id="aud-bar-${idx}" style="height: 0%;"></div>
-                  </div>
-                  <div class="audience-bar-label">${letter}</div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
+    });
+  }
+
+  // ==========================================
+  // ÖDÜL MERDİVENİ OLUŞTURMA
+  // ==========================================
+  function renderPrizeLadder() {
+    const ladderEl = document.getElementById('prize-ladder');
+    if (!ladderEl) return;
+
+    ladderEl.innerHTML = [...PRIZE_LADDER]
+      .reverse()
+      .map(step => {
+        const idx = step.level - 1;
+        const isCurrent = gameState.active && idx === gameState.currentIndex;
+        const isPassed = gameState.active && idx < gameState.currentIndex;
+        return `
+          <li class="ladder-item ${step.safe ? 'safe-haven' : ''} ${isCurrent ? 'current' : ''} ${
+          isPassed ? 'passed' : ''
+        }">
+            <span class="step-num">${step.level}</span>
+            <span class="step-amount">${step.label}</span>
+          </li>
         `;
+      })
+      .join('');
+  }
+
+  // ==========================================
+  // YARIŞMAYI BAŞLATMA
+  // ==========================================
+  function startNewGameSession(isParty = false) {
+    const session = svc().authService?.getActiveSession();
+    if (!session) {
+      document.getElementById('access-gate')?.classList.remove('hidden');
+      return;
+    }
+
+    soundEngine.click();
+    stopQuestionTimer();
+
+    gameState.active = true;
+    gameState.isPartyMatch = Boolean(isParty);
+    gameState.questions = buildMatchQuestions();
+    gameState.currentIndex = 0;
+    gameState.currentPrize = 0;
+    gameState.safePrize = 0;
+    gameState.emeraldEarnedThisMatch = 0;
+    gameState.streak = 0;
+    gameState.extraLifeUsedInMatch = false;
+    gameState.lifelines = {
+      fifty: true,
+      audience: true,
+      villager: true
+    };
+
+    ['lifeline-5050', 'lifeline-audience', 'lifeline-villager'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('used');
+      }
+    });
+
+    window.MCMPlatform?.navigateToScreen('game');
+    loadQuestionOnStage();
+  }
+
+  function loadQuestionOnStage() {
+    stopQuestionTimer();
+    const qObj = gameState.questions[gameState.currentIndex];
+    if (!qObj) {
+      finishGameSession({ didWin: true, walkedAway: false });
+      return;
+    }
+
+    const stepInfo = PRIZE_LADDER[gameState.currentIndex];
+    const numEl = document.getElementById('hud-question-num');
+    const safeEl = document.getElementById('hud-safe-prize');
+    const diffEl = document.getElementById('question-difficulty');
+    const prizeTagEl = document.getElementById('question-prize-tag');
+    const qTextEl = document.getElementById('question-text');
+    const walkAmtEl = document.getElementById('walk-away-amount');
+    const feedbackEl = document.getElementById('lifeline-feedback');
+
+    if (numEl) numEl.textContent = `${gameState.currentIndex + 1} / 15`;
+    if (safeEl) safeEl.textContent = `${gameState.safePrize.toLocaleString('tr-TR')} ₺`;
+    if (diffEl) {
+      diffEl.textContent =
+        qObj.difficulty === 'easy'
+          ? 'KOLAY SEVİYE'
+          : qObj.difficulty === 'medium'
+          ? 'ORTA SEVİYE'
+          : 'ZOR SEVİYE';
+    }
+    if (prizeTagEl) prizeTagEl.textContent = `${stepInfo.label} DEĞERİNDE SORU`;
+    if (qTextEl) qTextEl.textContent = qObj.q;
+    if (walkAmtEl) walkAmtEl.textContent = `${gameState.currentPrize.toLocaleString('tr-TR')} ₺`;
+    if (feedbackEl) {
+      feedbackEl.classList.add('hidden');
+      feedbackEl.innerHTML = '';
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const btn = document.getElementById(`ans-${i}`);
+      if (!btn) continue;
+      btn.disabled = false;
+      btn.className = 'answer-btn';
+      const txtSpan = btn.querySelector('.ans-text');
+      if (txtSpan) txtSpan.textContent = qObj.options[i];
+    }
+
+    renderPrizeLadder();
+    startQuestionTimer();
+  }
+
+  function startQuestionTimer() {
+    stopQuestionTimer();
+    gameState.timeLeft = 30;
+    updateTimerUI();
+
+    gameState.timer = setInterval(() => {
+      gameState.timeLeft--;
+      updateTimerUI();
+      if (gameState.timeLeft <= 0) {
+        stopQuestionTimer();
+        handleWrongOrTimeout(-1, 'Süre doldu!');
+      }
+    }, 1000);
+  }
+
+  function stopQuestionTimer() {
+    if (gameState.timer) {
+      clearInterval(gameState.timer);
+      gameState.timer = null;
+    }
+  }
+
+  function updateTimerUI() {
+    const txt = document.getElementById('timer-text');
+    const ring = document.getElementById('timer-ring-fill');
+    if (txt) txt.textContent = String(Math.max(0, gameState.timeLeft));
+    if (ring) {
+      const circumference = 163.36;
+      const offset = circumference - (Math.max(0, gameState.timeLeft) / 30) * circumference;
+      ring.style.strokeDashoffset = String(offset);
+    }
+  }
+
+  // ==========================================
+  // CEVAP SEÇİMİ VE EKSTRA CAN KONTROLÜ
+  // ==========================================
+  function handleAnswerSelection(chosenIndex) {
+    if (!gameState.active) return;
+    stopQuestionTimer();
+
+    const qObj = gameState.questions[gameState.currentIndex];
+    if (!qObj) return;
+
+    for (let i = 0; i < 4; i++) {
+      const b = document.getElementById(`ans-${i}`);
+      if (b) b.disabled = true;
+    }
+
+    const chosenBtn = document.getElementById(`ans-${chosenIndex}`);
+    chosenBtn?.classList.add('selected');
+    soundEngine.click();
+
+    setTimeout(() => {
+      chosenBtn?.classList.remove('selected');
+      if (chosenIndex === qObj.answer) {
+        // DOĞRU CEVAP!
+        chosenBtn?.classList.add('correct');
+        soundEngine.correct();
+
+        const stepInfo = PRIZE_LADDER[gameState.currentIndex];
+        gameState.currentPrize = stepInfo.amount;
+        if (stepInfo.safe) {
+          gameState.safePrize = stepInfo.amount;
+        }
+        gameState.streak++;
+
+        // Zümrüt ödülü ver
+        const session = svc().authService?.getActiveSession();
+        if (session && svc().economyService) {
+          const rewardRes = svc().economyService.rewardCorrectAnswer(
+            session.username,
+            gameState.currentIndex
+          );
+          gameState.emeraldEarnedThisMatch += Number(rewardRes.added || 0);
+          svc().achievementService?.checkAndUnlock(session.username, {
+            streak: gameState.streak
+          });
+          window.MCMPlatform?.syncHeaderAndDrawer();
+        }
 
         setTimeout(() => {
-          percentages.forEach((pct, idx) => {
-            const bar = document.getElementById(`aud-bar-${idx}`);
-            if (bar) bar.style.height = `${pct}%`;
-
-            const tag = document.getElementById(`answer-percent-${idx}`);
-            if (tag && !this.eliminatedIndices.has(idx)) {
-              tag.textContent = `%${pct}`;
-              tag.classList.remove('hidden');
-            }
-          });
-        }, 50);
-      }
-
-      this.updateJokerButtonsUI();
-    }
-
-    // 3. Köylüye Sor Jokeri: Köylü karakteri ipucu verir (her zaman %100 kesin doğru söylemez)
-    useJokerVillager() {
-      if (this.state !== 'QUESTION' || this.jokers.villager) return;
-      this.jokers.villager = true;
-      window.soundManager.playVillager();
-
-      const letters = ['A', 'B', 'C', 'D'];
-      const correctIdx = this.currentQuestion.correctAnswer;
-      const diff = this.currentQuestion.difficulty;
-
-      // Köylünün doğru bilme ihtimali: Kolayda %90, Ortada %82, Zorda %74
-      const accuracyChance = diff === 'easy' ? 0.90 : diff === 'medium' ? 0.82 : 0.74;
-      const tellsTruth = Math.random() < accuracyChance;
-
-      let suggestedIdx = correctIdx;
-      if (!tellsTruth) {
-        const wrongChoices = [0, 1, 2, 3].filter(
-          i => i !== correctIdx && !this.eliminatedIndices.has(i)
-        );
-        if (wrongChoices.length > 0) {
-          suggestedIdx = wrongChoices[Math.floor(Math.random() * wrongChoices.length)];
-        }
-      }
-
-      const suggestedLetter = letters[suggestedIdx];
-      const suggestedText = this.currentQuestion.answers[suggestedIdx];
-
-      const templates = [
-        `"Hmm... Hmm... Bence cevap <strong>${suggestedLetter}) ${suggestedText}</strong> olabilir. Kütüphanedeki parşömenlerde öyle görmüştüm!"`,
-        `"Hrmmm! Köy meydanında gezgin tüccarla konuşmuştuk, büyük ihtimalle doğru şık <strong>${suggestedLetter} (${suggestedText})</strong> ama yine de dikkatli ol!"`,
-        `"Hmm... 5 Emerald verirsen söylerim... Şaka şaka! Bana kalırsa cevap <strong>${suggestedLetter}) ${suggestedText}</strong> seçeneği."`
-      ];
-      const chosenLine = templates[Math.floor(Math.random() * templates.length)];
-
-      const panel = document.getElementById('joker-feedback-panel');
-      if (panel) {
-        panel.classList.remove('hidden');
-        panel.innerHTML = `
-          <div class="villager-dialogue-wrap">
-            <div class="villager-avatar">${createVillagerSVG(54)}</div>
-            <div class="villager-speech">
-              <div class="villager-name">🧑‍🌾 BİLGE KÖYLÜ (Usta Kütüphaneci)</div>
-              <p class="villager-text">${chosenLine}</p>
-            </div>
-          </div>
-        `;
-      }
-
-      this.updateJokerButtonsUI();
-    }
-
-    // 4. Soruyu Değiştir Jokeri: Aynı zorluk seviyesinden yeni, rastgele ve kullanılmamış bir soru getirir
-    useJokerChangeQuestion() {
-      if (this.state !== 'QUESTION' || this.jokers.change) return;
-      this.jokers.change = true;
-      window.soundManager.playChangeQuestion();
-
-      const qCard = document.getElementById('question-card');
-      if (qCard) {
-        const rect = qCard.getBoundingClientRect();
-        this.particles.spawnBurst(
-          rect.left + rect.width / 2,
-          rect.top + rect.height / 2,
-          'emerald',
-          30
-        );
-      }
-
-      this.loadCurrentLevelQuestion(true);
-    }
-
-    // ==========================================
-    // SES VE ATMOSFER ARAYÜZ SENKRONİZASYONU
-    // ==========================================
-    syncAudioUI() {
-      const sm = window.soundManager;
-
-      const qMusicBtn = document.getElementById('btn-quick-music');
-      const qMusicIcon = document.getElementById('quick-music-icon');
-      const qMusicLabel = document.getElementById('quick-music-label');
-
-      const qSfxBtn = document.getElementById('btn-quick-sfx');
-      const qSfxIcon = document.getElementById('quick-sfx-icon');
-      const qSfxLabel = document.getElementById('quick-sfx-label');
-
-      if (qMusicBtn) qMusicBtn.classList.toggle('muted', !sm.musicEnabled);
-      if (qMusicIcon) qMusicIcon.textContent = sm.musicEnabled ? '🎵' : '🔇';
-      if (qMusicLabel) qMusicLabel.textContent = sm.musicEnabled ? 'MÜZİK: AÇIK' : 'MÜZİK: KAPALI';
-
-      if (qSfxBtn) qSfxBtn.classList.toggle('muted', !sm.sfxEnabled);
-      if (qSfxIcon) qSfxIcon.textContent = sm.sfxEnabled ? '🔊' : '🔈';
-      if (qSfxLabel) qSfxLabel.textContent = sm.sfxEnabled ? 'EFEKT: AÇIK' : 'EFEKT: KAPALI';
-
-      const toggleMusicBtn = document.getElementById('toggle-music-btn');
-      const toggleMusicText = document.getElementById('toggle-music-text');
-      const toggleSfxBtn = document.getElementById('toggle-sfx-btn');
-      const toggleSfxText = document.getElementById('toggle-sfx-text');
-
-      if (toggleMusicBtn) {
-        toggleMusicBtn.className = `mc-btn mc-btn-small ${sm.musicEnabled ? 'mc-btn-emerald' : 'mc-btn-danger'}`;
-      }
-      if (toggleMusicText) toggleMusicText.textContent = sm.musicEnabled ? 'AÇIK' : 'KAPALI';
-
-      if (toggleSfxBtn) {
-        toggleSfxBtn.className = `mc-btn mc-btn-small ${sm.sfxEnabled ? 'mc-btn-emerald' : 'mc-btn-danger'}`;
-      }
-      if (toggleSfxText) toggleSfxText.textContent = sm.sfxEnabled ? 'AÇIK' : 'KAPALI';
-
-      const musicSlider = document.getElementById('slider-music-vol');
-      const musicLabel = document.getElementById('music-vol-label');
-      const sfxSlider = document.getElementById('slider-sfx-vol');
-      const sfxLabel = document.getElementById('sfx-vol-label');
-
-      const mPct = Math.round(sm.musicVolume * 100);
-      const sPct = Math.round(sm.sfxVolume * 100);
-
-      if (musicSlider) musicSlider.value = mPct;
-      if (musicLabel) musicLabel.textContent = `%${mPct}`;
-      if (sfxSlider) sfxSlider.value = sPct;
-      if (sfxLabel) sfxLabel.textContent = `%${sPct}`;
-    }
-
-    // ==========================================
-    // BUTON VE KLAVYE ETKİLEŞİMLERİ
-    // ==========================================
-    bindEvents() {
-      const clickAndRun = (id, fn) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('click', () => {
-          window.soundManager.playClick();
-          fn();
-        });
-      };
-
-      // Ana Menü Butonları
-      clickAndRun('btn-start-game', () => this.startNewGame());
-      clickAndRun('btn-open-rules', () => this.openModal('modal-rules'));
-      clickAndRun('btn-open-audio', () => this.openModal('modal-audio'));
-      clickAndRun('btn-open-stats', () => {
-        this.statsManager.updateUI();
-        this.openModal('modal-stats');
-      });
-
-      // Üst Çubuk Butonları
-      clickAndRun('top-brand-btn', () => this.returnToMainMenu());
-      clickAndRun('btn-top-stats', () => {
-        this.statsManager.updateUI();
-        this.openModal('modal-stats');
-      });
-      clickAndRun('btn-top-settings', () => this.openModal('modal-audio'));
-
-      // Gece / Gündüz Atmosfer Butonu
-      clickAndRun('btn-toggle-atmos', () => {
-        const nextNight = !this.particles.isNight;
-        this.particles.setAtmosphere(nextNight);
-        const icon = document.getElementById('atmos-icon');
-        const label = document.getElementById('atmos-label');
-        if (icon) icon.textContent = nextNight ? '🌙' : '☀️';
-        if (label) label.textContent = nextNight ? 'ATMOSFER: GECE' : 'ATMOSFER: GÜNDÜZ';
-      });
-
-      clickAndRun('btn-quick-music', () => {
-        window.soundManager.setMusicEnabled(!window.soundManager.musicEnabled);
-        if (window.soundManager.musicEnabled && !window.soundManager.currentMusicMode) {
-          window.soundManager.startMusic(this.state === 'MENU' ? 'menu' : 'game');
-        }
-        this.syncAudioUI();
-      });
-
-      clickAndRun('btn-quick-sfx', () => {
-        window.soundManager.setSfxEnabled(!window.soundManager.sfxEnabled);
-        this.syncAudioUI();
-      });
-
-      // Oyun Ekranı Butonları
-      clickAndRun('btn-quit-menu', () => this.returnToMainMenu());
-      clickAndRun('btn-next-question', () => this.proceedToNextQuestion());
-
-      // 4 Joker Butonu
-      clickAndRun('joker-5050', () => this.useJokerFiftyFifty());
-      clickAndRun('joker-audience', () => this.useJokerAudience());
-      clickAndRun('joker-villager', () => this.useJokerVillager());
-      clickAndRun('joker-change', () => this.useJokerChangeQuestion());
-
-      // Cevap Şıkları (A, B, C, D)
-      for (let i = 0; i < 4; i++) {
-        const btn = document.getElementById(`answer-btn-${i}`);
-        if (btn) {
-          btn.addEventListener('click', () => this.selectAnswer(i));
-        }
-      }
-
-      // Zafer ve Oyun Bitti Ekranı Butonları
-      clickAndRun('btn-victory-restart', () => this.startNewGame());
-      clickAndRun('btn-victory-menu', () => this.returnToMainMenu());
-      clickAndRun('btn-gameover-restart', () => this.startNewGame());
-      clickAndRun('btn-gameover-menu', () => this.returnToMainMenu());
-
-      // Ses Ayarları Modalı
-      clickAndRun('toggle-music-btn', () => {
-        window.soundManager.setMusicEnabled(!window.soundManager.musicEnabled);
-        if (window.soundManager.musicEnabled && !window.soundManager.currentMusicMode) {
-          window.soundManager.startMusic(this.state === 'MENU' ? 'menu' : 'game');
-        }
-        this.syncAudioUI();
-      });
-
-      clickAndRun('toggle-sfx-btn', () => {
-        window.soundManager.setSfxEnabled(!window.soundManager.sfxEnabled);
-        this.syncAudioUI();
-      });
-
-      const musicSlider = document.getElementById('slider-music-vol');
-      if (musicSlider) {
-        musicSlider.addEventListener('input', e => {
-          window.soundManager.setMusicVolume(Number(e.target.value) / 100);
-          this.syncAudioUI();
-        });
-      }
-
-      const sfxSlider = document.getElementById('slider-sfx-vol');
-      if (sfxSlider) {
-        sfxSlider.addEventListener('input', e => {
-          window.soundManager.setSfxVolume(Number(e.target.value) / 100);
-          this.syncAudioUI();
-        });
-      }
-
-      const testVillager = document.getElementById('btn-test-villager');
-      if (testVillager) {
-        testVillager.addEventListener('click', () => window.soundManager.playVillager());
-      }
-
-      const testLevelUp = document.getElementById('btn-test-levelup');
-      if (testLevelUp) {
-        testLevelUp.addEventListener('click', () => window.soundManager.playCorrect());
-      }
-
-      // İstatistikleri Sıfırla
-      clickAndRun('btn-reset-stats', () => {
-        this.statsManager.reset();
-      });
-
-      // Modal Kapatma Butonları
-      document.querySelectorAll('[data-close]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const modalId = btn.getAttribute('data-close');
-          this.closeModal(modalId);
-        });
-      });
-
-      document.querySelectorAll('.modal-overlay').forEach(overlay => {
-        overlay.addEventListener('click', e => {
-          if (e.target === overlay) {
-            window.soundManager.playClick();
-            overlay.classList.add('hidden');
+          gameState.currentIndex++;
+          if (gameState.currentIndex >= 15) {
+            finishGameSession({ didWin: true, walkedAway: false });
+          } else {
+            loadQuestionOnStage();
           }
+        }, 1100);
+      } else {
+        // YANLIŞ CEVAP!
+        chosenBtn?.classList.add('wrong');
+        soundEngine.wrong();
+        handleWrongOrTimeout(chosenIndex, qObj.explanation);
+      }
+    }, 650);
+  }
+
+  function handleWrongOrTimeout(chosenIndex, reasonText) {
+    const session = svc().authService?.getActiveSession();
+    const availableLives = session
+      ? svc().extraLifeService?.getUserExtraLives(session.username) || 0
+      : 0;
+
+    // Ekstra Can varsa ve bu maçta henüz kullanılmadıysa ikinci şans sun
+    if (availableLives > 0 && !gameState.extraLifeUsedInMatch && chosenIndex >= 0) {
+      const modal = document.getElementById('extra-life-modal');
+      const countEl = document.getElementById('extra-life-modal-count');
+      if (countEl) countEl.textContent = String(availableLives);
+      if (modal) {
+        modal.dataset.wrongIndex = String(chosenIndex);
+        modal.classList.remove('hidden');
+        return;
+      }
+    }
+
+    const qObj = gameState.questions[gameState.currentIndex];
+    if (qObj) {
+      const correctBtn = document.getElementById(`ans-${qObj.answer}`);
+      correctBtn?.classList.add('correct');
+    }
+
+    setTimeout(() => {
+      finishGameSession({
+        didWin: false,
+        walkedAway: false,
+        explanation: reasonText || qObj?.explanation || ''
+      });
+    }, 1300);
+  }
+
+  function finishGameSession({ didWin = false, walkedAway = false, explanation = '' }) {
+    stopQuestionTimer();
+    gameState.active = false;
+
+    const finalPrize = didWin
+      ? 1000000
+      : walkedAway
+      ? gameState.currentPrize
+      : gameState.safePrize;
+
+    if (didWin) soundEngine.win();
+
+    const session = svc().authService?.getActiveSession();
+    if (session) {
+      // Kullanıcı istatistiklerini ve gerçek liderlik puanını güncelle
+      svc().userService?.recordGameResult(session.username, {
+        scoreEarned: finalPrize,
+        didWin
+      });
+
+      // Oyun sonu Zümrüt ödülü
+      if (svc().economyService) {
+        const bonusRes = svc().economyService.rewardGameCompletion(
+          session.username,
+          didWin,
+          gameState.isPartyMatch
+        );
+        gameState.emeraldEarnedThisMatch += Number(bonusRes.added || 0);
+      }
+
+      // Parti maçındaysa parti skorunu güncelle
+      const activeParty = svc().partyService?.getActivePartyForUser(session.username);
+      if (activeParty) {
+        svc().partyService.updateMemberScore(session.username, finalPrize);
+      }
+
+      // Yerel son maç geçmişine kaydet
+      try {
+        const key = `mc_millionaire_tr_stats_v5_${session.username.toLowerCase()}`;
+        const existing = JSON.parse(localStorage.getItem(key) || '{}');
+        const recentMatches = Array.isArray(existing.recentMatches) ? existing.recentMatches : [];
+        recentMatches.unshift({
+          date: new Date().toISOString(),
+          didWin,
+          reachedQuestion: gameState.currentIndex + 1,
+          prizeWon: finalPrize
         });
-      });
-
-      // İlk tıklamada Web Audio kilidini aç
-      const unlockAudio = () => {
-        window.soundManager.initContext();
-        if (this.isUnlocked && !window.soundManager.currentMusicMode && window.soundManager.musicEnabled) {
-          window.soundManager.startMusic(this.state === 'MENU' ? 'menu' : 'game');
-        }
-        document.removeEventListener('pointerdown', unlockAudio);
-      };
-      document.addEventListener('pointerdown', unlockAudio);
-
-      // Klavye Desteği (A/B/C/D, 1/2/3/4, Enter/Space, Escape)
-      window.addEventListener('keydown', e => {
-        if (!this.isUnlocked) return;
-
-        if (e.key === 'Escape') {
-          document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(m => {
-            m.classList.add('hidden');
-          });
-          return;
-        }
-
-        const anyModalOpen = document.querySelector('.modal-overlay:not(.hidden)');
-        if (anyModalOpen) return;
-
-        const key = e.key.toUpperCase();
-        if (this.state === 'QUESTION') {
-          if (key === 'A') this.selectAnswer(0);
-          else if (key === 'B') this.selectAnswer(1);
-          else if (key === 'C') this.selectAnswer(2);
-          else if (key === 'D') this.selectAnswer(3);
-          else if (key === '1') this.useJokerFiftyFifty();
-          else if (key === '2') this.useJokerAudience();
-          else if (key === '3') this.useJokerVillager();
-          else if (key === '4') this.useJokerChangeQuestion();
-        } else if (this.state === 'CORRECT_REVEAL') {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            window.soundManager.playClick();
-            this.proceedToNextQuestion();
-          }
-        }
-      });
+        if (recentMatches.length > 20) recentMatches.length = 20;
+        localStorage.setItem(key, JSON.stringify({ ...existing, recentMatches }));
+      } catch (e) {
+        // ignore
+      }
     }
 
-    openModal(id) {
-      const m = document.getElementById(id);
-      if (m) m.classList.remove('hidden');
+    // Oyun Sonu Ekranını Doldur
+    const iconEl = document.getElementById('gameover-icon');
+    const titleEl = document.getElementById('gameover-title');
+    const subEl = document.getElementById('gameover-subtitle');
+    const prizeEl = document.getElementById('gameover-prize');
+    const emEl = document.getElementById('gameover-emerald-earned');
+    const expEl = document.getElementById('gameover-explanation');
+
+    if (iconEl) iconEl.textContent = didWin ? '👑' : walkedAway ? '💰' : '💥';
+    if (titleEl) {
+      titleEl.textContent = didWin
+        ? 'TEBRİKLER! MİLYONER OLDUNUZ!'
+        : walkedAway
+        ? 'YARIŞMADAN ÇEKİLDİNİZ'
+        : 'OYUN BİTTİ!';
+    }
+    if (subEl) {
+      subEl.textContent = didWin
+        ? '15 sorunun tamamını doğru yanıtlayarak büyük ödülü kazandınız!'
+        : walkedAway
+        ? 'Mevcut ödülünüzü garanti altına alarak yarışmayı tamamladınız.'
+        : `${gameState.currentIndex + 1}. soruda elendiniz.`;
+    }
+    if (prizeEl) prizeEl.textContent = `${finalPrize.toLocaleString('tr-TR')} ₺`;
+    if (emEl) emEl.textContent = `+${gameState.emeraldEarnedThisMatch.toLocaleString('tr-TR')} 🟢`;
+    if (expEl) expEl.textContent = explanation || '';
+
+    window.MCMPlatform?.syncHeaderAndDrawer();
+    window.MCMPlatform?.navigateToScreen('gameover');
+  }
+
+  // ==========================================
+  // JOKERLER (50:50, SUNUCUYA SOR, BİLGE KÖYLÜ)
+  // ==========================================
+  function useFiftyFifty() {
+    if (!gameState.active || !gameState.lifelines.fifty) return;
+    gameState.lifelines.fifty = false;
+    soundEngine.click();
+
+    const btn = document.getElementById('lifeline-5050');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('used');
     }
 
-    closeModal(id) {
-      const m = document.getElementById(id);
-      if (m) m.classList.add('hidden');
+    const qObj = gameState.questions[gameState.currentIndex];
+    if (!qObj) return;
+
+    const wrongIndices = [0, 1, 2, 3].filter(i => i !== qObj.answer);
+    const toHide = shuffle(wrongIndices).slice(0, 2);
+    toHide.forEach(idx => {
+      const b = document.getElementById(`ans-${idx}`);
+      if (b) {
+        b.disabled = true;
+        b.classList.add('eliminated');
+      }
+    });
+  }
+
+  function useAskAudience() {
+    if (!gameState.active || !gameState.lifelines.audience) return;
+    gameState.lifelines.audience = false;
+    soundEngine.click();
+
+    const btn = document.getElementById('lifeline-audience');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('used');
+    }
+
+    const qObj = gameState.questions[gameState.currentIndex];
+    if (!qObj) return;
+
+    const letters = ['A', 'B', 'C', 'D'];
+    const rates = [10, 10, 10, 10];
+    rates[qObj.answer] = 64;
+    let rem = 36;
+    [0, 1, 2, 3]
+      .filter(i => i !== qObj.answer)
+      .forEach((idx, pos) => {
+        if (pos === 2) rates[idx] = rem;
+        else {
+          const share = Math.floor(Math.random() * rem);
+          rates[idx] = share;
+          rem -= share;
+        }
+      });
+
+    const fb = document.getElementById('lifeline-feedback');
+    if (fb) {
+      fb.classList.remove('hidden');
+      fb.innerHTML = `<strong>👥 Sunucu Oylaması:</strong> ${rates
+        .map((r, i) => `${letters[i]}: %${r}`)
+        .join(' • ')}`;
     }
   }
 
-  window.addEventListener('DOMContentLoaded', () => {
-    window.mcQuizGame = new MinecraftMillionaireGame();
-  });
-})();
+  function useWiseVillager() {
+    if (!gameState.active || !gameState.lifelines.villager) return;
+    gameState.lifelines.villager = false;
+    soundEngine.click();
+
+    const btn = document.getElementById('lifeline-villager');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('used');
+    }
+
+    const qObj = gameState.questions[gameState.currentIndex];
+    if (!qObj) return;
+
+    const letters = ['A', 'B', 'C', 'D'];
+    const fb = document.getElementById('lifeline-feedback');
+    if (fb) {
+      fb.classList.remove('hidden');
+      fb.innerHTML = `<strong>🧙‍♂️ Bilge Köylü:</strong> "Hrmmm! Parşömenlerime göre doğru cevap büyük ihtimalle <strong>${
+        letters[qObj.answer]
+      }) ${qObj.options[qObj.answer]}</strong>!"`;
+    }
+  }
+
+  // ==========================================
+  // KİMLİK DOĞRULAMA KAPISI (LİSANSSIZ GİRİŞ / KAYIT / YÖNETİCİ GİRİŞİ)
+  // ==========================================
+  function initAccessGate() {
+    const gate = document.getElementById('access-gate');
+    const loginForm = document.getElementById('access-login-form');
+    const regForm = document.getElementById('access-register-form');
+    const forgotForm = document.getElementById('access-forgot-form');
+    const adminForm = document.getElementById('access-admin-form');
+
+    // Sekme değiştirme
+    document.querySelectorAll('.auth-tab[data-auth-tab]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const mode = tab.getAttribute('data-auth-tab');
+        document.querySelectorAll('.auth-tab').forEach(t => {
+          t.classList.toggle('active', t === tab);
+          t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+        });
+
+        loginForm?.classList.toggle('hidden', mode !== 'login');
+        regForm?.classList.toggle('hidden', mode !== 'register');
+        forgotForm?.classList.toggle('hidden', mode !== 'forgot');
+        adminForm?.classList.toggle('hidden', mode !== 'admin');
+      });
+    });
+
+    // 1. Normal Kullanıcı Girişi (#1: Lisans Kodu Yok)
+    loginForm?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('gate-login-error');
+      errEl?.classList.add('hidden');
+
+      const username = document.getElementById('gate-login-username')?.value || '';
+      const password = document.getElementById('gate-login-password')?.value || '';
+
+      try {
+        const session = await svc().authService.login({ username, password });
+        gate?.classList.add('hidden');
+        window.MCMPlatform?.syncHeaderAndDrawer();
+        window.MCMPlatform?.navigateToScreen('welcome');
+        window.MCMPlatform?.showToast(`Hoş geldin, ${session.username}!`, 'success');
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+        }
+      }
+    });
+
+    // 2. Normal Kullanıcı Kaydı (#1: Lisans Kodu Yok, #4: İsteğe Bağlı MC Adı, #14: +250 Netherite)
+    regForm?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('gate-reg-error');
+      errEl?.classList.add('hidden');
+
+      const username = document.getElementById('gate-reg-username')?.value || '';
+      const minecraftPlayerName = document.getElementById('gate-reg-mc-name')?.value || '';
+      const password = document.getElementById('gate-reg-password')?.value || '';
+      const passwordConfirm = document.getElementById('gate-reg-password-confirm')?.value || '';
+
+      try {
+        const session = await svc().authService.registerAccount({
+          username,
+          password,
+          passwordConfirm,
+          minecraftPlayerName
+        });
+        gate?.classList.add('hidden');
+        window.MCMPlatform?.syncHeaderAndDrawer();
+        window.MCMPlatform?.navigateToScreen('welcome');
+        window.MCMPlatform?.showToast(
+          `🎉 Hoş geldin ${session.username}! Günlük ücretsiz Zümrüt ödülünü Ana Sayfadan hemen alabilirsin!`,
+          'success'
+        );
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+        }
+      }
+    });
+
+    // 3. Şifre Sıfırlama (#1: Lisans Kodu Yok)
+    forgotForm?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('gate-forgot-error');
+      const okEl = document.getElementById('gate-forgot-success');
+      errEl?.classList.add('hidden');
+      okEl?.classList.add('hidden');
+
+      const username = document.getElementById('gate-forgot-username')?.value || '';
+      const minecraftPlayerName = document.getElementById('gate-forgot-mc-name')?.value || '';
+      const newPassword = document.getElementById('gate-forgot-new-password')?.value || '';
+
+      try {
+        await svc().authService.resetForgottenPassword({
+          username,
+          minecraftPlayerName,
+          newPassword
+        });
+        if (okEl) {
+          okEl.textContent = 'Şifreniz başarıyla güncellendi! Giriş sekmesinden giriş yapabilirsiniz.';
+          okEl.classList.remove('hidden');
+        }
+        forgotForm.reset();
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+        }
+      }
+    });
+
+    // 4. Ayrı Yönetici Girişi (#2: MashallahMC)
+    adminForm?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('gate-admin-error');
+      errEl?.classList.add('hidden');
+
+      const username = document.getElementById('gate-admin-username')?.value || '';
+      const password = document.getElementById('gate-admin-password')?.value || '';
+
+      try {
+        const session = await svc().authService.adminLogin({ username, password });
+        adminForm.reset();
+        gate?.classList.add('hidden');
+        window.MCMPlatform?.syncHeaderAndDrawer();
+        window.MCMPlatform?.navigateToScreen('admin');
+        window.MCMPlatform?.showToast(
+          `🛡️ Yönetici oturumu açıldı (${session.username}).`,
+          'success'
+        );
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+        }
+      }
+    });
+
+    // Aktif oturum varsa kapıyı gizle
+    const activeSession = svc().authService?.getActiveSession();
+    if (activeSession) {
+      gate?.classList.add('hidden');
+      window.MCMPlatform?.syncHeaderAndDrawer();
+      const hash = (window.location.hash || '').replace(/^#/, '');
+      if (hash && document.getElementById(`screen-${hash}`)) {
+        window.MCMPlatform?.navigateToScreen(hash, { skipHistory: true });
+      }
+    } else {
+      gate?.classList.remove('hidden');
+    }
+  }
+
+  function handleUserLogout() {
+    stopQuestionTimer();
+    gameState.active = false;
+    svc().authService?.logout();
+    window.MCMPlatform?.syncHeaderAndDrawer();
+
+    const gate = document.getElementById('access-gate');
+    gate?.classList.remove('hidden');
+    document.getElementById('tab-btn-login')?.click();
+    window.MCMPlatform?.showToast('Hesabınızdan güvenli bir şekilde çıkış yapıldı.', 'info');
+  }
+
+  // ==========================================
+  // OYUN BUTONLARINI BAĞLA
+  // ==========================================
+  function bindGameControls() {
+    document.getElementById('btn-start-game')?.addEventListener('click', () => {
+      startNewGameSession(false);
+    });
+
+    document.getElementById('btn-play-again')?.addEventListener('click', () => {
+      startNewGameSession(false);
+    });
+
+    document.getElementById('btn-go-home')?.addEventListener('click', () => {
+      window.MCMPlatform?.navigateToScreen('welcome');
+    });
+
+    for (let i = 0; i < 4; i++) {
+      document.getElementById(`ans-${i}`)?.addEventListener('click', () => {
+        handleAnswerSelection(i);
+      });
+    }
+
+    document.getElementById('lifeline-5050')?.addEventListener('click', useFiftyFifty);
+    document.getElementById('lifeline-audience')?.addEventListener('click', useAskAudience);
+    document.getElementById('lifeline-villager')?.addEventListener('click', useWiseVillager);
+
+    document.getElementById('btn-walk-away')?.addEventListener('click', () => {
+      if (!gameState.active) return;
+      finishGameSession({ didWin: false, walkedAway: true });
+    });
+
+    // Ekstra Can İkinci Şans Modalı
+    document.getElementById('btn-use-extra-life')?.addEventListener('click', () => {
+      const modal = document.getElementById('extra-life-modal');
+      const session = svc().authService?.getActiveSession();
+      if (!modal || !session) return;
+
+      try {
+        svc().extraLifeService.consumeExtraLifeInMatch(session.username);
+        gameState.extraLifeUsedInMatch = true;
+        modal.classList.add('hidden');
+
+        const wrongIdx = Number(modal.dataset.wrongIndex ?? -1);
+        if (wrongIdx >= 0) {
+          const wrongBtn = document.getElementById(`ans-${wrongIdx}`);
+          if (wrongBtn) {
+            wrongBtn.disabled = true;
+            wrongBtn.classList.add('eliminated');
+          }
+        }
+
+        for (let i = 0; i < 4; i++) {
+          const b = document.getElementById(`ans-${i}`);
+          if (b && !b.classList.contains('eliminated')) {
+            b.disabled = false;
+          }
+        }
+
+        window.MCMPlatform?.syncHeaderAndDrawer();
+        window.MCMPlatform?.showToast(
+          '❤️ 1 Ekstra Can kullanıldı! Yanlış şık elendi, yarışmaya devam edebilirsiniz!',
+          'success'
+        );
+        startQuestionTimer();
+      } catch (err) {
+        window.MCMPlatform?.showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('btn-skip-extra-life')?.addEventListener('click', () => {
+      const modal = document.getElementById('extra-life-modal');
+      modal?.classList.add('hidden');
+      const qObj = gameState.questions[gameState.currentIndex];
+      finishGameSession({
+        didWin: false,
+        walkedAway: false,
+        explanation: qObj?.explanation || ''
+      });
+    });
+  }
+
+  function initApp() {
+    initAccessGate();
+    bindGameControls();
+    renderPrizeLadder();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+  } else {
+    initApp();
+  }
+
+  window.startNewGameSession = startNewGameSession;
+  window.handleUserLogout = handleUserLogout;
+  window.refreshWelcomeScreen = function () {
+    window.MCMPlatform?.syncHeaderAndDrawer();
+  };
+})(window);

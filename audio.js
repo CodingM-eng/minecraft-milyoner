@@ -60,7 +60,7 @@ class SoundManager {
         if (typeof parsed.sfxVolume === 'number') this.sfxVolume = parsed.sfxVolume;
       }
     } catch (e) {
-      console.warn('Ses ayarları yüklenemedi:', e);
+      // Ses ayarları yüklenemedi
     }
   }
 
@@ -79,7 +79,7 @@ class SoundManager {
         })
       );
     } catch (e) {
-      console.warn('Ses ayarları kaydedilemedi:', e);
+      // Ses ayarları kaydedilemedi
     }
   }
 

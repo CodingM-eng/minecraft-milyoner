@@ -1,80 +1,60 @@
 /**
- * MINECRAFT MILYONER — FULL PRODUCTION PLATFORM ARCHITECTURE & SERVICES
+ * MC Milyoner Olmak İster - Çekirdek Servis Katmanı (v7.0 Production)
  *
- * Strictly separates:
- * 1. authService & authGuard (Step-by-step License -> Username Login, Welcome Back, Session & Permission Guard)
- * 2. userService (Immutable User ID, Roles & Data-Driven Ranks, Hashed Passwords, Purchases, Cosmetics, Settings)
- * 3. licenseService (Master Admin, VIP, Player & Community Licenses — Never reset by Party actions)
- * 4. partyService (Data-Driven Rank Permission Enforcement: canCreateParty, canInvitePlayers, maxPartySize)
- * 5. supportService (Support, Bug Reports, Suggestions + 4-Tier Priority: CRITICAL, VERY HIGH, HIGH, NORMAL)
- * 6. paymentService (Stripe Checkout + Idempotent Webhook Architecture + 5 Emeralds = 1 TL Packages + Refunds)
- * 7. backupService (Versioned Backups for users, parties, licenses, transactions, payments, settings + Download)
- * 8. activityService (Audit Logging)
+ * Mimari Özellikler:
+ * 1. Lisanssız Normal Kullanıcı Kayıt / Giriş / Çıkış ve Tam Hesap İzolasyonu (#1, #7)
+ * 2. Ayrı Yönetici Girişi ("Yönetici Girişi") — Salted SHA-256 Hash Doğrulaması (#2, #8)
+ * 3. 7 Rütbe Hiyerarşisi & Moderator Yetki Sistemi (#3, #13)
+ * 4. İsteğe Bağlı Minecraft Oyuncu Adı & Kare Skin Yüzü Avatarı (#4, #9)
+ * 5. Kişisel Bildirim Merkezi & Parti Daveti Kabul/Red Sistemi (#5, #11)
+ * 6. Parti Sistemi: Oluşturma, Kodla Katılma, Davet Gönderme, Kabul/Reddetme (#4, #5, #6)
+ * 7. Destek, Hata Bildirimi (Ekran Görüntüsü + İlgili Parti), Öneri, Yedekleme ve Aktivite Kayıtları (#18, #19)
  */
 
-(function () {
+(function (window) {
   'use strict';
 
   const STORAGE_KEYS = {
-    USERS: 'mcm_platform_users_v5_clean',
-    LICENSES: 'mcm_platform_licenses_v5_clean',
-    PARTIES: 'mcm_platform_parties_v5_clean',
-    PLAYERS: 'mcm_platform_players_v5_clean',
-    ACTIVITY: 'mcm_platform_activity_v5_clean',
-    SESSION: 'mcm_platform_active_session_v5_clean',
-    REMEMBERED_USER: 'mcm_platform_remembered_user_v5_clean',
-    SUPPORT_TICKETS: 'mcm_platform_support_tickets_v5_clean',
-    BUG_REPORTS: 'mcm_platform_bug_reports_v5_clean',
-    SUGGESTIONS: 'mcm_platform_suggestions_v5_clean',
-    BACKUPS: 'mcm_platform_backups_v5_clean',
-    PAYMENTS: 'mcm_platform_payments_v5_clean',
-    WEBHOOK_EVENTS: 'mcm_stripe_webhook_events_v5_clean',
-    EMERALD_PACKAGES: 'mcm_emerald_packages_v5_clean',
-    SYSTEM_SETTINGS: 'mcm_platform_sys_settings_v5_clean'
+    USERS: 'mc_millionaire_tr_users_v6',
+    ACTIVE_SESSION: 'mc_millionaire_tr_active_session_v6',
+    PARTIES: 'mc_millionaire_tr_parties_v6',
+    PARTY_INVITATIONS: 'mc_millionaire_tr_party_invites_v6',
+    NOTIFICATIONS: 'mc_millionaire_tr_notifications_v6',
+    SUPPORT_TICKETS: 'mc_millionaire_tr_support_v6',
+    BUG_REPORTS: 'mc_millionaire_tr_bugs_v6',
+    SUGGESTIONS: 'mc_millionaire_tr_suggestions_v6',
+    STRIPE_CONFIG: 'mc_millionaire_tr_stripe_cfg_v6',
+    STRIPE_SESSIONS: 'mc_millionaire_tr_stripe_sessions_v6',
+    MOD_PERMISSIONS: 'mc_millionaire_tr_mod_perms_v6',
+    BACKUPS: 'mc_millionaire_tr_backups_v6',
+    PLATFORM_SETTINGS: 'mc_millionaire_tr_platform_settings_v6',
+    ACTIVITY: 'mc_millionaire_tr_activity_v6',
+    FIRST_PREMIUM_NETHERITE_GRANTED: 'mc_millionaire_tr_first_netherite_v6'
   };
 
-  // Purge legacy demo storage keys once so no fake/seeded data remains
-  try {
-    const LEGACY_KEYS = [
-      'mcm_platform_users_v3',
-      'mcm_platform_licenses_v2',
-      'mcm_platform_parties_v2',
-      'mcm_platform_players_v2',
-      'mcm_platform_support_tickets_v3',
-      'mcm_platform_bug_reports_v3',
-      'mcm_platform_suggestions_v3',
-      'mcm_platform_payments_v3',
-      'mcm_econ_accounts_v3',
-      'mcm_econ_transactions_v3',
-      'mcm_econ_achievements_v3'
-    ];
-    LEGACY_KEYS.forEach(k => localStorage.removeItem(k));
-  } catch (e) {}
+  // ==========================================
+  // KRİPTOGRAFİK YARDIMCILAR (Ayrı Admin Girişi #8)
+  // Şifre asla düz metin olarak saklanmaz veya arayüzde gösterilmez.
+  // ==========================================
+  const AUTH_SALT = 'MCM_2026_SALT';
+  const SESSION_SECRET = 'MCM_2026_SIG_KEY';
+  const ADMIN_USER_HASH = '1608bd23ef77e2854bd4a14bb3bc0fd5e734d77bd851f6e37e795c7eb695a073';
+  const ADMIN_PASS_HASH = 'df8896b8447df2314b2a64f4ba6abb3992740163430da594d1b5cdc0686c24eb';
 
-  // Precomputed SHA-256 digests (salted) so plaintext master license & secrets never appear in source
-  const MASTER_SALT = 'MCM_2026_SALT::';
-  const MASTER_ADMIN_DIGEST = 'df8896b8447df2314b2a64f4ba6abb3992740163430da594d1b5cdc0686c24eb';
-  const LEGACY_COMMUNITY_DIGEST = '32c69093739b5fac530d8dc5d90fcd8abd57ea1f4c805dc563af52f5bf23083e';
-
-  // Pure JS SHA-256 implementation
-  function sha256(ascii) {
+  function sha256SyncAscii(ascii) {
     function rightRotate(value, amount) {
       return (value >>> amount) | (value << (32 - amount));
     }
-
     const mathPow = Math.pow;
     const maxWord = mathPow(2, 32);
     const lengthProperty = 'length';
     let i, j;
     let result = '';
-
     const words = [];
     const asciiBitLength = ascii[lengthProperty] * 8;
-
-    let hash = (sha256.h = sha256.h || []);
-    const k = (sha256.k = sha256.k || []);
+    let hash = (sha256SyncAscii.h = sha256SyncAscii.h || []);
+    const k = (sha256SyncAscii.k = sha256SyncAscii.k || []);
     let primeCounter = k[lengthProperty];
-
     const isComposite = {};
     for (let candidate = 2; primeCounter < 64; candidate++) {
       if (!isComposite[candidate]) {
@@ -85,26 +65,21 @@
         k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
       }
     }
-
     ascii += '\x80';
     while ((ascii[lengthProperty] % 64) - 56) ascii += '\x00';
     for (i = 0; i < ascii[lengthProperty]; i++) {
       j = ascii.charCodeAt(i);
-      if (j >> 8) return '';
-      words[i >> 2] |= j << (((3 - i) % 4) * 8);
+      words[i >> 2] |= j << ((3 - (i % 4)) * 8);
     }
     words[words[lengthProperty]] = (asciiBitLength / maxWord) | 0;
     words[words[lengthProperty]] = asciiBitLength;
-
     for (j = 0; j < words[lengthProperty]; ) {
       const w = words.slice(j, (j += 16));
       const oldHash = hash;
       hash = hash.slice(0, 8);
-
       for (i = 0; i < 64; i++) {
         const w15 = w[i - 15],
           w2 = w[i - 2];
-
         const a = hash[0],
           e = hash[4];
         const temp1 =
@@ -123,16 +98,13 @@
         const temp2 =
           (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) +
           ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
-
         hash = [(temp1 + temp2) | 0].concat(hash);
         hash[4] = (hash[4] + temp1) | 0;
       }
-
       for (i = 0; i < 8; i++) {
         hash[i] = (hash[i] + oldHash[i]) | 0;
       }
     }
-
     for (i = 0; i < 8; i++) {
       for (j = 3; j + 1; j--) {
         const b = (hash[i] >> (j * 8)) & 255;
@@ -142,3054 +114,2006 @@
     return result;
   }
 
-  function computeSaltedDigest(rawValue) {
-    const utf8 = unescape(encodeURIComponent(MASTER_SALT + String(rawValue).trim()));
-    return sha256(utf8);
+  function sha256(str) {
+    const utf8 = unescape(encodeURIComponent(String(str ?? '')));
+    return sha256SyncAscii(utf8);
   }
 
-  function hashPassword(rawPassword) {
-    if (!rawPassword || !String(rawPassword).trim()) return null;
-    return computeSaltedDigest('MCM_PWD_V3::' + String(rawPassword));
-  }
-
-  function normalizeRole(role) {
-    const r = String(role || 'PLAYER').toUpperCase();
-    if (r === 'ADMIN') return 'ADMIN';
-    if (
-      r === 'VIP' ||
-      r === 'VIP+' ||
-      r === 'VIP_PLUS' ||
-      r === 'MVP' ||
-      r === 'MVP+' ||
-      r === 'MVP_PLUS' ||
-      r === 'MVIP' ||
-      r === 'MVIP+' ||
-      r === 'MVIP_PLUS' ||
-      r === 'ELITE' ||
-      r === 'LEGEND' ||
-      r === 'CHAMPION' ||
-      r === 'MILLIONAIRE' ||
-      r === 'ORGANIZER'
-    ) {
-      return 'VIP';
+  async function sha256Async(str) {
+    try {
+      if (window.crypto && window.crypto.subtle && typeof TextEncoder !== 'undefined') {
+        const buf = new TextEncoder().encode(String(str ?? ''));
+        const hashBuf = await window.crypto.subtle.digest('SHA-256', buf);
+        return Array.from(new Uint8Array(hashBuf))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+      }
+    } catch (err) {
+      // Fallback to synchronous SHA-256
     }
-    return 'PLAYER';
+    return sha256(str);
   }
 
-  function normalizeRankId(rankId, fallbackRole = 'PLAYER') {
-    const r = String(rankId || fallbackRole || 'PLAYER')
-      .trim()
-      .toUpperCase()
-      .replace(/\+/g, '_PLUS');
-    if (r === 'OYUNCU') return 'PLAYER';
-    const valid = [
-      'PLAYER',
-      'VIP',
-      'VIP_PLUS',
-      'MVP',
-      'MVP_PLUS',
-      'MVIP',
-      'MVIP_PLUS',
-      'ELITE',
-      'LEGEND',
-      'CHAMPION',
-      'MILLIONAIRE',
-      'ADMIN'
-    ];
-    if (valid.includes(r)) return r;
-    if (window.MCMServices && window.MCMServices.rankService) {
-      const custom = window.MCMServices.rankService
-        .listRanks()
-        .find(x => x.id.toUpperCase() === r);
-      if (custom) return custom.id.toUpperCase();
-    }
-    if (normalizeRole(fallbackRole) === 'ADMIN') return 'ADMIN';
-    if (normalizeRole(fallbackRole) === 'VIP') return 'VIP';
-    return 'PLAYER';
+  function computeTokenSignature(payload) {
+    const raw = `${SESSION_SECRET}::${payload.userId || ''}::${payload.username}::${payload.role}::${
+      payload.isAdminSession ? 'ADM' : 'USR'
+    }`;
+    return sha256(raw).slice(0, 28);
   }
 
-  // Storage helper
-  const storageAdapter = {
+  // ==========================================
+  // STORAGE YARDIMCISI
+  // ==========================================
+  const storage = {
     get(key, fallback) {
       try {
         const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : fallback;
-      } catch (e) {
-        console.warn('Storage read error:', e);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return parsed !== null && parsed !== undefined ? parsed : fallback;
+      } catch (err) {
         return fallback;
       }
     },
     set(key, value) {
       try {
         localStorage.setItem(key, JSON.stringify(value));
-      } catch (e) {
-        console.warn('Storage write error:', e);
+        return true;
+      } catch (err) {
+        return false;
       }
     },
     remove(key) {
       try {
         localStorage.removeItem(key);
-      } catch (e) {}
+      } catch (err) {
+        return false;
+      }
+      return true;
+    }
+  };
+
+  function generateId(prefix = 'ID') {
+    const rnd = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const ts = Date.now().toString(36).toUpperCase().slice(-4);
+    return `${prefix}-${ts}${rnd}`;
+  }
+
+  // ==========================================
+  // ÖZEL MINECRAFT ZÜMRÜT, NETHERITE VE 3 ÇİZGİLİ MENÜ SVG SERVİSİ (#10, #12)
+  // ==========================================
+  const mcIconService = {
+    getEmeraldSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-emerald-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M5 1H11V2H12V4H13V12H12V14H11V15H5V14H4V12H3V4H4V2H5V1Z" fill="#064E20"/><path d="M6 2H10V3H11V5H12V11H11V13H10V14H6V13H5V11H4V5H5V3H6V2Z" fill="#17DD62"/><path d="M6 3H9V4H10V6H6V3Z" fill="#86FFAC"/><path d="M5 5H6V10H5V5Z" fill="#86FFAC"/><path d="M7 6H10V11H7V6Z" fill="#12B84F"/><path d="M6 11H10V13H6V11Z" fill="#0B8435"/></svg>`;
+    },
+
+    getNetheriteSvg(size = 18, stackCount = 1) {
+      const badge =
+        stackCount > 1 ? `<span class="netherite-stack-count">×${stackCount}</span>` : '';
+      return `<span class="mc-netherite-icon-wrap" style="display:inline-flex;align-items:center;position:relative;vertical-align:middle;"><svg class="mc-currency-svg mc-netherite-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><rect x="2" y="4" width="12" height="8" fill="#231D22"/><rect x="3" y="5" width="10" height="6" fill="#3B3339"/><rect x="2" y="6" width="12" height="4" fill="#4D434B"/><rect x="4" y="4" width="8" height="2" fill="#685D66"/><rect x="4" y="6" width="7" height="1" fill="#887A85"/><rect x="3" y="9" width="9" height="2" fill="#2B2429"/><rect x="5" y="7" width="5" height="2" fill="#5D515A"/><rect x="11" y="5" width="1" height="2" fill="#9E8F9B"/></svg>${badge}</span>`;
+    },
+
+    getHamburgerSvg() {
+      return `<svg class="mc-hamburger-svg" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true"><rect class="hb-line hb-line-1" x="2" y="4" width="16" height="2.5" fill="currentColor"/><rect class="hb-line hb-line-2" x="2" y="9" width="16" height="2.5" fill="currentColor"/><rect class="hb-line hb-line-3" x="2" y="14" width="16" height="2.5" fill="currentColor"/></svg>`;
     }
   };
 
   // ==========================================
-  // 1. ACTIVITY SERVICE
+  // AKTİVİTE GÜNLÜĞÜ SERVİSİ (activityService)
   // ==========================================
   const activityService = {
-    getAll() {
-      return storageAdapter.get(STORAGE_KEYS.ACTIVITY, []);
+    getAllLogs() {
+      return storage.get(STORAGE_KEYS.ACTIVITY, []);
     },
 
-    log(type, actor, message, metadata = {}) {
-      const logs = this.getAll();
-      const now = new Date();
-      const timeStr = now.toTimeString().slice(0, 5);
+    getAll() {
+      return this.getAllLogs();
+    },
+
+    log(type, username, message, meta = {}) {
+      const logs = this.getAllLogs();
       const entry = {
-        id: 'ACT-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
-        type,
-        actor: actor || 'System',
-        message,
-        metadata,
-        timestamp: now.toISOString(),
-        timeFormatted: timeStr
+        id: generateId('ACT'),
+        type: String(type || 'INFO'),
+        username: String(username || 'Sistem'),
+        message: String(message || ''),
+        meta,
+        timestamp: new Date().toISOString()
       };
       logs.unshift(entry);
-      if (logs.length > 300) logs.length = 300;
-      storageAdapter.set(STORAGE_KEYS.ACTIVITY, logs);
+      if (logs.length > 400) logs.length = 400;
+      storage.set(STORAGE_KEYS.ACTIVITY, logs);
       return entry;
     },
 
     clearAll(session) {
       authGuard.requireRole(session, ['ADMIN']);
-      storageAdapter.set(STORAGE_KEYS.ACTIVITY, []);
-      this.log('SYSTEM', session.username, `${session.username} cleared the activity logs`);
+      storage.set(STORAGE_KEYS.ACTIVITY, []);
+      this.log(
+        'SYSTEM_LOGS_CLEARED',
+        session.username,
+        `Yönetici ${session.username} aktivite kayıtlarını temizledi.`
+      );
+      return true;
     }
   };
 
   // ==========================================
-  // 2. AUTHORIZATION & PERMISSION GUARD (NEVER RESETS ACCOUNT ON PARTY ACTIONS)
+  // 7 RÜTBE HİYERARŞİSİ & YETKİ KONTROLCÜSÜ (#13)
+  // Üye -> VIP -> VIP+ -> MVIP -> MVIP+ -> Moderator -> ADMIN
   // ==========================================
-  const BUILTIN_LICENSE_IDS = [
-    'MASTER-ADMIN-ROOT',
-    'MASTER-ADMIN-001',
-    'LIC-COMMUNITY-XXQ',
-    'STD-XXQ-NETWORK'
-  ];
+  const RANK_ALIASES = {
+    PLAYER: 'MEMBER',
+    UYE: 'MEMBER',
+    ÜYE: 'MEMBER',
+    MEMBER: 'MEMBER',
+    VIP: 'VIP',
+    'VIP+': 'VIP_PLUS',
+    VIP_PLUS: 'VIP_PLUS',
+    MVP: 'MVIP',
+    'MVP+': 'MVIP_PLUS',
+    MVIP: 'MVIP',
+    'MVIP+': 'MVIP_PLUS',
+    MVIP_PLUS: 'MVIP_PLUS',
+    MODERATOR: 'MODERATOR',
+    MOD: 'MODERATOR',
+    ADMIN: 'ADMIN'
+  };
+
+  function normalizeRankId(rawRank) {
+    const key = String(rawRank || 'MEMBER')
+      .trim()
+      .toUpperCase();
+    return RANK_ALIASES[key] || 'MEMBER';
+  }
+
+  const DEFAULT_MOD_PERMS = {
+    canCreateParty: true,
+    canInvitePlayers: true,
+    canModerateParties: true,
+    canReviewTickets: true,
+    canReviewBugs: true,
+    canReviewSuggestions: true
+  };
 
   const authGuard = {
+    getModeratorPermissions() {
+      const saved = storage.get(STORAGE_KEYS.MOD_PERMISSIONS, null);
+      return { ...DEFAULT_MOD_PERMS, ...(saved || {}) };
+    },
+
+    updateModeratorPermissions(session, updates = {}) {
+      this.requireRole(session, ['ADMIN']);
+      const current = this.getModeratorPermissions();
+      const next = {
+        ...current,
+        canCreateParty:
+          updates.canCreateParty !== undefined
+            ? Boolean(updates.canCreateParty)
+            : current.canCreateParty,
+        canInvitePlayers:
+          updates.canInvitePlayers !== undefined
+            ? Boolean(updates.canInvitePlayers)
+            : current.canInvitePlayers,
+        canModerateParties:
+          updates.canModerateParties !== undefined
+            ? Boolean(updates.canModerateParties)
+            : current.canModerateParties,
+        canReviewTickets:
+          updates.canReviewTickets !== undefined
+            ? Boolean(updates.canReviewTickets)
+            : current.canReviewTickets,
+        canReviewBugs:
+          updates.canReviewBugs !== undefined
+            ? Boolean(updates.canReviewBugs)
+            : current.canReviewBugs,
+        canReviewSuggestions:
+          updates.canReviewSuggestions !== undefined
+            ? Boolean(updates.canReviewSuggestions)
+            : current.canReviewSuggestions
+      };
+      storage.set(STORAGE_KEYS.MOD_PERMISSIONS, next);
+      activityService.log(
+        'MOD_PERMS_UPDATED',
+        session.username,
+        `Yönetici ${session.username} Moderatör yetkilerini güncelledi.`
+      );
+      return next;
+    },
+
     verifySession(session) {
-      if (!session || !session.licenseId || !session.role || !session.signature) {
-        throw new Error('Unauthorized: Invalid session. Please log in.');
+      if (!session || !session.username) {
+        throw new Error('Yetkisiz işlem: Lütfen önce hesabınıza giriş yapın.');
       }
-      const normRole = normalizeRole(session.role);
-      const expectedSig = computeSaltedDigest(
-        `${session.licenseId}:${session.role}:${session.username}`
-      );
-      const expectedNormSig = computeSaltedDigest(
-        `${session.licenseId}:${normRole}:${session.username}`
-      );
-      if (session.signature !== expectedSig && session.signature !== expectedNormSig) {
-        throw new Error('Security Violation: Session signature verification failed.');
+      const expectedSig = computeTokenSignature(session);
+      if (session.signature && session.signature !== expectedSig) {
+        throw new Error('Güvenlik Hatası: Oturum imzası geçersiz.');
       }
-
-      // Check user suspension status if user record exists
-      const userRecord = userService._findRawByUsername(session.username);
-      if (userRecord && userRecord.status === 'SUSPENDED' && normRole !== 'ADMIN') {
-        throw new Error('Account Suspended: Your account has been suspended by an Administrator.');
-      }
-
-      // Built-in licenses (Master Admin & Community License) are always valid
-      if (!session.isMasterAdmin && !BUILTIN_LICENSE_IDS.includes(session.licenseId)) {
-        const lic = licenseService._findRawById(session.licenseId);
-        if (lic) {
-          const effectiveStatus = licenseService.computeEffectiveStatus(lic);
-          if (effectiveStatus !== 'ACTIVE') {
-            throw new Error(`License status is ${effectiveStatus}.`);
-          }
-        }
+      const user = userService.getUserByUsername(session.username);
+      if (user && user.status === 'SUSPENDED' && !session.isAdminSession) {
+        throw new Error('Hesabınız yönetici tarafından askıya alınmıştır.');
       }
       return true;
+    },
+
+    getEffectiveRankId(session) {
+      if (!session) return 'MEMBER';
+      if (session.isAdminSession) return 'ADMIN';
+      // Always read authoritative rank from stored user record (#20, #25)
+      const user = userService.getUserByUsername(session.username);
+      if (user) {
+        if (user.role === 'ADMIN' || user.rank === 'ADMIN') return 'ADMIN';
+        if (user.isModerator || user.role === 'MODERATOR' || user.rank === 'MODERATOR') {
+          return 'MODERATOR';
+        }
+        return normalizeRankId(user.rank || user.role || 'MEMBER');
+      }
+      return 'MEMBER';
+    },
+
+    getEffectiveRole(session) {
+      if (!session) return 'MEMBER';
+      if (session.isAdminSession) return 'ADMIN';
+      const rankId = this.getEffectiveRankId(session);
+      if (rankId === 'ADMIN') return 'ADMIN';
+      if (rankId === 'MODERATOR') return 'MODERATOR';
+      if (['VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(rankId)) return 'VIP';
+      return 'MEMBER';
+    },
+
+    getUserPermissions(session) {
+      if (!session) {
+        return {
+          canCreateParty: false,
+          canInvitePlayers: false,
+          maxPartySize: 0,
+          emeraldMultiplier: 1.0,
+          dailyNetherite: 0
+        };
+      }
+      const rankId = this.getEffectiveRankId(session);
+      const rankSvc = window.MCMServices?.rankService;
+      if (rankSvc && typeof rankSvc.getPermissionsForRank === 'function') {
+        const basePerms = rankSvc.getPermissionsForRank(rankId);
+        if (rankId === 'MODERATOR') {
+          const modPerms = this.getModeratorPermissions();
+          return { ...basePerms, ...modPerms };
+        }
+        return basePerms;
+      }
+      const isRanked = rankId !== 'MEMBER';
+      return {
+        canCreateParty: isRanked,
+        canInvitePlayers: isRanked,
+        maxPartySize: rankId === 'ADMIN' ? 999 : isRanked ? 8 : 0,
+        emeraldMultiplier: rankId === 'ADMIN' ? 3.0 : isRanked ? 1.5 : 1.0,
+        dailyNetherite: ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rankId) ? 15 : 0
+      };
+    },
+
+    isVipOrAdmin(session) {
+      return this.getEffectiveRankId(session) !== 'MEMBER';
+    },
+
+    canClaimDailyNetherite(session) {
+      const rankId = this.getEffectiveRankId(session);
+      return ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rankId);
     },
 
     requireRole(session, allowedRoles = []) {
       this.verifySession(session);
-      const userRole = this.getEffectiveRole(session);
-      const normalizedAllowed = allowedRoles.map(normalizeRole);
-      if (!normalizedAllowed.includes(userRole)) {
-        throw new Error(
-          `Access Denied: This action requires (${normalizedAllowed.join(' or ')}) permission.`
-        );
-      }
-      return true;
-    },
+      const effectiveRole = this.getEffectiveRole(session);
+      const effectiveRank = this.getEffectiveRankId(session);
 
-    getEffectiveRole(session) {
-      if (!session) return 'PLAYER';
-      if (normalizeRole(session.role) === 'ADMIN') return 'ADMIN';
-      const u = userService.getUserByUsername(session.username);
-      if (u) {
-        if (normalizeRole(u.role) === 'ADMIN' || u.rank === 'ADMIN') return 'ADMIN';
-        if (
-          normalizeRole(u.role) === 'VIP' ||
-          (u.vipStatus && u.vipStatus.isVip) ||
-          (u.rank && u.rank !== 'PLAYER')
-        ) {
-          return 'VIP';
+      if (allowedRoles.includes('ADMIN') && allowedRoles.length === 1) {
+        if (!session.isAdminSession && effectiveRole !== 'ADMIN' && effectiveRank !== 'ADMIN') {
+          throw new Error(
+            'Erişim Reddedildi: Bu işlem yalnızca doğrulanmış Yönetici (Admin) oturumu ile yapılabilir.'
+          );
         }
+        return effectiveRole;
       }
-      return normalizeRole(session.role);
-    },
 
-    getEffectiveRankId(session) {
-      if (!session) return 'PLAYER';
-      if (normalizeRole(session.role) === 'ADMIN') return 'ADMIN';
-      const u = userService.getUserByUsername(session.username);
-      if (u && u.rank) {
-        return normalizeRankId(u.rank, u.role);
-      }
-      return normalizeRankId(session.rank || session.role, session.role);
-    },
-
-    // Section 10: Data-Driven Permission Lookup (Never hardcode if VIP / if MVP)
-    getUserPermissions(session) {
-      const rankId = this.getEffectiveRankId(session);
-      if (window.MCMServices && window.MCMServices.rankService) {
-        return window.MCMServices.rankService.getPermissionsForRank(rankId);
-      }
-      // Fallback before economy.js loads
-      const isAdmin = rankId === 'ADMIN';
-      const isElevated = rankId !== 'PLAYER';
-      return {
-        canCreateParty: isElevated,
-        canInvitePlayers: isElevated,
-        maxPartySize: isAdmin ? 999 : isElevated ? 4 : 0,
-        emeraldMultiplier: isAdmin ? 3.0 : isElevated ? 1.25 : 1.0,
-        supportPriority: isAdmin ? 'CRITICAL' : isElevated ? 'HIGH' : 'NORMAL',
-        bugPriority: isAdmin ? 'CRITICAL' : isElevated ? 'HIGH' : 'NORMAL',
-        suggestionPriority: isAdmin ? 'CRITICAL' : isElevated ? 'HIGH' : 'NORMAL',
-        maxExtraLives: isAdmin ? 10 : isElevated ? 5 : 3,
-        cosmetics: isElevated,
-        rgbName: isElevated,
-        profileEffects: isElevated
-      };
-    },
-
-    requirePermission(session, permissionKey) {
-      this.verifySession(session);
-      const perms = this.getUserPermissions(session);
-      if (!perms || !perms[permissionKey]) {
+      const normalizedAllowed = allowedRoles.map(r => (r === 'PLAYER' ? 'MEMBER' : r));
+      if (
+        !normalizedAllowed.includes(effectiveRole) &&
+        !normalizedAllowed.includes(effectiveRank) &&
+        effectiveRole !== 'ADMIN'
+      ) {
         throw new Error(
-          `Access Denied: Your current rank (${this.getEffectiveRankId(session)}) does not grant the "${permissionKey}" permission.`
+          `Erişim Reddedildi: Bu işlem için [${allowedRoles.join(' / ')}] yetkisi gereklidir.`
         );
       }
-      return perms;
-    },
-
-    isVipOrAdmin(session) {
-      const perms = this.getUserPermissions(session);
-      return Boolean(perms.canCreateParty || this.getEffectiveRole(session) !== 'PLAYER');
+      return effectiveRole;
     }
   };
 
   // ==========================================
-  // 3. USER ACCOUNT SERVICE (Section 3, 5, 27, 34)
+  // AVATAR SERVİSİ (#9: İsteğe Bağlı Minecraft Oyuncu Adı -> Skin Yüzü veya Piksel SVG)
+  // ==========================================
+  const avatarService = {
+    MAX_FILE_BYTES: 2 * 1024 * 1024,
+    ALLOWED_MIMES: ['image/png', 'image/jpeg', 'image/webp'],
+
+    generatePixelAvatarDataUrl(username = 'Steve') {
+      const clean = String(username || 'Steve').trim();
+      let hash = 0;
+      for (let i = 0; i < clean.length; i++) {
+        hash = clean.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const abs = Math.abs(hash);
+
+      const skinTones = ['#d2996c', '#b87d52', '#e0ab82', '#8d5524', '#c68642', '#9c6644'];
+      const hairColors = ['#2c1b10', '#4a2e16', '#171717', '#6b21a8', '#0f766e', '#991b1b', '#ca8a04'];
+      const eyeColors = ['#17dd62', '#38bdf8', '#a855f7', '#fbbf24', '#ef4444', '#2563eb'];
+      const shirtColors = ['#0ea5e9', '#16a34a', '#7c3aed', '#dc2626', '#d97706', '#374151'];
+
+      const skin = skinTones[abs % skinTones.length];
+      const hair = hairColors[(abs >> 3) % hairColors.length];
+      const eye = eyeColors[(abs >> 6) % eyeColors.length];
+      const shirt = shirtColors[(abs >> 9) % shirtColors.length];
+
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges"><rect width="8" height="8" fill="${skin}"/><rect x="0" y="0" width="8" height="2" fill="${hair}"/><rect x="0" y="2" width="1" height="2" fill="${hair}"/><rect x="7" y="2" width="1" height="2" fill="${hair}"/><rect x="1" y="4" width="1" height="1" fill="#ffffff"/><rect x="2" y="4" width="1" height="1" fill="${eye}"/><rect x="5" y="4" width="1" height="1" fill="${eye}"/><rect x="6" y="4" width="1" height="1" fill="#ffffff"/><rect x="3" y="5" width="2" height="1" fill="#7c4a2d"/><rect x="2" y="6" width="4" height="1" fill="#432312"/><rect x="0" y="7" width="8" height="1" fill="${shirt}"/></svg>`;
+      return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    },
+
+    getMinecraftSkinFaceUrl(mcPlayerName, size = 160) {
+      const clean = String(mcPlayerName || '').trim();
+      if (!clean || !/^[a-zA-Z0-9_]{2,16}$/.test(clean)) return '';
+      return `https://mc-heads.net/avatar/${encodeURIComponent(clean)}/${size}`;
+    },
+
+    getAvatarForUser(userObj) {
+      if (!userObj) return this.generatePixelAvatarDataUrl('Steve');
+      if (userObj.avatarUrl && String(userObj.avatarUrl).trim()) {
+        return userObj.avatarUrl;
+      }
+      if (userObj.minecraftPlayerName && String(userObj.minecraftPlayerName).trim()) {
+        const skinUrl = this.getMinecraftSkinFaceUrl(userObj.minecraftPlayerName, 160);
+        if (skinUrl) return skinUrl;
+      }
+      return this.generatePixelAvatarDataUrl(userObj.username || 'Steve');
+    },
+
+    processUploadedFile(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          reject(new Error('Lütfen bir görsel dosyası seçin.'));
+          return;
+        }
+        if (!this.ALLOWED_MIMES.includes(file.type)) {
+          reject(new Error('Yalnızca PNG, JPG veya WEBP formatında görsel yükleyebilirsiniz.'));
+          return;
+        }
+        if (file.size > this.MAX_FILE_BYTES) {
+          reject(new Error('Görsel boyutu en fazla 2 MB olabilir.'));
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 160;
+            canvas.height = 160;
+            const ctx = canvas.getContext('2d');
+            const minSide = Math.min(img.width, img.height);
+            const sx = (img.width - minSide) / 2;
+            const sy = (img.height - minSide) / 2;
+            ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, 160, 160);
+            resolve(canvas.toDataURL('image/webp', 0.88));
+          };
+          img.onerror = () => reject(new Error('Görsel işlenirken bir hata oluştu.'));
+          img.src = ev.target.result;
+        };
+        reader.onerror = () => reject(new Error('Dosya okunamadı.'));
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  // ==========================================
+  // BİLDİRİM SİSTEMİ (#11 — notificationService)
+  // ==========================================
+  const NOTIFICATION_TYPE_META = {
+    PARTY_INVITE: { label: 'Parti Daveti', icon: '🎉' },
+    PARTY_JOIN_REQUEST: { label: 'Partiye katılma bildirimi', icon: '🤝' },
+    PARTY_UPDATE: { label: 'Parti güncellemesi', icon: '🎉' },
+    NEW_UPDATE: { label: 'Yeni güncelleme', icon: '🚀' },
+    RANK_UPGRADED: { label: 'Rank yükseltildi', icon: '👑' },
+    RANK_GIFTED: { label: 'Rank hediye edildi', icon: '🎁' },
+    SHOP_PURCHASE: { label: 'Mağaza satın alımı', icon: '🛍️' },
+    EMERALD_EARNED: { label: 'Emerald kazanıldı', icon: '🟢' },
+    NETHERITE_DAILY_REWARD: { label: 'Netherite günlük ödülü', icon: '⬛' },
+    ADMIN_ANNOUNCEMENT: { label: 'Admin duyurusu', icon: '📣' },
+    SUPPORT_REPLY: { label: 'Destek cevabı', icon: '🎧' },
+    BUG_REPORT_REPLY: { label: 'Hata bildirimi cevabı', icon: '🐞' },
+    SUGGESTION_STATUS_CHANGED: { label: 'Öneri durumu değişti', icon: '💡' },
+    SYSTEM_NOTIFICATION: { label: 'Sistem bildirimi', icon: '🔔' }
+  };
+
+  const notificationService = {
+    _getAllMap() {
+      return storage.get(STORAGE_KEYS.NOTIFICATIONS, {});
+    },
+
+    _saveAllMap(map) {
+      storage.set(STORAGE_KEYS.NOTIFICATIONS, map);
+    },
+
+    _resolveUserKey(usernameOrSession) {
+      if (!usernameOrSession) return '';
+      if (typeof usernameOrSession === 'object' && usernameOrSession.username) {
+        return String(usernameOrSession.username).trim().toLowerCase();
+      }
+      return String(usernameOrSession).trim().toLowerCase();
+    },
+
+    notifyUser(targetUsername, { type = 'SYSTEM_NOTIFICATION', title, message, description, meta = {} }) {
+      const key = this._resolveUserKey(targetUsername);
+      if (!key) return null;
+
+      const typeInfo = NOTIFICATION_TYPE_META[type] || NOTIFICATION_TYPE_META.SYSTEM_NOTIFICATION;
+      const map = this._getAllMap();
+      const list = Array.isArray(map[key]) ? map[key] : [];
+
+      const notif = {
+        id: generateId('NTF'),
+        recipient: String(targetUsername).trim(),
+        type,
+        typeLabel: typeInfo.label,
+        icon: typeInfo.icon,
+        title: String(title || typeInfo.label).trim(),
+        message: String(message || description || '').trim(),
+        meta: meta || {},
+        read: false,
+        createdAt: new Date().toISOString()
+      };
+
+      list.unshift(notif);
+      if (list.length > 150) list.length = 150;
+      map[key] = list;
+      this._saveAllMap(map);
+      return notif;
+    },
+
+    broadcastNotification(session, { type = 'ADMIN_ANNOUNCEMENT', title, message, meta = {} }) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const users = userService.getAllUsers();
+      let sentCount = 0;
+      users.forEach(u => {
+        this.notifyUser(u.username, { type, title, message, meta });
+        sentCount++;
+      });
+      activityService.log(
+        'BROADCAST_NOTIF',
+        session.username,
+        `Yönetici ${session.username} tüm oyunculara (${sentCount}) bildirim gönderdi: ${title}`
+      );
+      return { sentCount };
+    },
+
+    getUserNotifications(usernameOrSession) {
+      const key = this._resolveUserKey(usernameOrSession);
+      if (!key) return [];
+      const map = this._getAllMap();
+      return Array.isArray(map[key]) ? [...map[key]] : [];
+    },
+
+    getUnreadCount(usernameOrSession) {
+      const list = this.getUserNotifications(usernameOrSession);
+      return list.filter(n => !n.read).length;
+    },
+
+    markAsRead(usernameOrSession, notifId) {
+      const key = this._resolveUserKey(usernameOrSession);
+      if (!key) return null;
+      const map = this._getAllMap();
+      const list = Array.isArray(map[key]) ? map[key] : [];
+      const target = list.find(n => n.id === notifId);
+      if (target) {
+        target.read = true;
+        map[key] = list;
+        this._saveAllMap(map);
+      }
+      return target;
+    },
+
+    updateNotificationMeta(usernameOrSession, notifId, metaUpdates = {}) {
+      const key = this._resolveUserKey(usernameOrSession);
+      if (!key) return null;
+      const map = this._getAllMap();
+      const list = Array.isArray(map[key]) ? map[key] : [];
+      const target = list.find(n => n.id === notifId);
+      if (target) {
+        target.meta = { ...(target.meta || {}), ...metaUpdates };
+        target.read = true;
+        map[key] = list;
+        this._saveAllMap(map);
+      }
+      return target;
+    },
+
+    markAllAsRead(usernameOrSession) {
+      const key = this._resolveUserKey(usernameOrSession);
+      if (!key) return [];
+      const map = this._getAllMap();
+      const list = Array.isArray(map[key]) ? map[key] : [];
+      list.forEach(n => {
+        n.read = true;
+      });
+      map[key] = list;
+      this._saveAllMap(map);
+      return list;
+    }
+  };
+
+  // ==========================================
+  // OYUNCU HESAP SERVİSİ (userService — #7, #9, #13, #14)
   // ==========================================
   const userService = {
-    _ensureSeedUsers() {
-      const existing = storageAdapter.get(STORAGE_KEYS.USERS, null);
-      if (existing && Array.isArray(existing)) {
-        let changed = false;
-        existing.forEach(u => {
-          if (u.role === 'ORGANIZER') {
-            u.role = 'VIP';
-            if (u.vipStatus) u.vipStatus.isVip = true;
-            changed = true;
-          }
-          if (!u.rank) {
-            u.rank = normalizeRankId(u.rankId || u.cosmetics?.equippedRank || u.role, u.role);
-            u.rankId = u.rank;
-            changed = true;
-          }
-          if (u.rankExpiration === undefined) {
-            u.rankExpiration = u.vipStatus?.expiresAt || null;
-            changed = true;
-          }
-          if (!Array.isArray(u.purchases)) {
-            u.purchases = [];
-            changed = true;
-          }
-          if (!u.cosmetics) {
-            u.cosmetics = {
-              rgbOwned: Boolean(u.role === 'ADMIN' || u.rank !== 'PLAYER'),
-              rgbEnabled: Boolean(u.role === 'ADMIN'),
-              animatedNameOwned: Boolean(u.role === 'ADMIN'),
-              animatedNameEnabled: false,
-              profileEffects: Boolean(u.rank !== 'PLAYER'),
-              equippedRank: u.rank
-            };
-            changed = true;
-          }
-          if (!u.settings) {
-            u.settings = { notifications: true, reducedMotion: false };
-            changed = true;
-          }
-        });
-        if (changed) storageAdapter.set(STORAGE_KEYS.USERS, existing);
-        return existing;
-      }
-
-      const empty = [];
-      storageAdapter.set(STORAGE_KEYS.USERS, empty);
-      return empty;
+    getAllUsers() {
+      const list = storage.get(STORAGE_KEYS.USERS, []);
+      return Array.isArray(list) ? list.filter(u => !u.isDemo) : [];
     },
 
-    _getAllRaw() {
-      return this._ensureSeedUsers();
-    },
-
-    _saveAllRaw(users) {
-      storageAdapter.set(STORAGE_KEYS.USERS, users);
-    },
-
-    _findRawById(userId) {
-      return this._getAllRaw().find(u => u.id === userId) || null;
-    },
-
-    _findRawByUsername(username) {
-      if (!username) return null;
-      return (
-        this._getAllRaw().find(
-          u => u.minecraftUsername.toLowerCase() === String(username).trim().toLowerCase()
-        ) || null
-      );
-    },
-
-    // Strip passwordHash before returning to UI / Admin / API
-    _sanitizeUser(u) {
-      if (!u) return null;
-      const copy = JSON.parse(JSON.stringify(u));
-      const hasPassword = Boolean(copy.passwordHash);
-      delete copy.passwordHash;
-      copy.hasPassword = hasPassword;
-      copy.role = normalizeRole(copy.role);
-      copy.rank = normalizeRankId(copy.rank || copy.rankId || copy.role, copy.role);
-      copy.rankId = copy.rank;
-
-      // Check rank / VIP expiration
-      const expDate = copy.rankExpiration || copy.vipStatus?.expiresAt || null;
-      if (expDate && copy.role !== 'ADMIN') {
-        const exp = new Date(expDate).getTime();
-        if (!isNaN(exp) && Date.now() > exp) {
-          copy.vipStatus = { isVip: false, tier: 'NONE', expiresAt: null, grantedAt: null };
-          copy.role = 'PLAYER';
-          copy.rank = 'PLAYER';
-          copy.rankId = 'PLAYER';
-          copy.rankExpiration = null;
-        }
-      }
-
-      if (copy.role === 'VIP' || copy.role === 'ADMIN' || copy.rank !== 'PLAYER') {
-        if (!copy.vipStatus) copy.vipStatus = { isVip: true, tier: copy.rank, expiresAt: expDate };
-        copy.vipStatus.isVip = true;
-      }
-      copy.purchases = Array.isArray(copy.purchases) ? copy.purchases : [];
-      return copy;
-    },
-
-    getOrCreateAccount({
-      minecraftUsername,
-      licenseId,
-      role = 'PLAYER',
-      rank = null,
-      password = '',
-      requireExistingPassword = false
-    }) {
-      const cleanName = String(minecraftUsername || '').trim();
-      if (!cleanName) throw new Error('Lütfen geçerli bir Minecraft kullanıcı adı girin.');
-
-      const all = this._getAllRaw();
-      const now = new Date().toISOString();
-      const normRole = normalizeRole(role);
-      const normRank = normalizeRankId(rank || normRole, normRole);
-      let user = all.find(u => u.minecraftUsername.toLowerCase() === cleanName.toLowerCase());
-
-      if (user) {
-        if (user.passwordHash) {
-          if (requireExistingPassword && !password) {
-            throw new Error('Bu hesap şifre korumalıdır. Lütfen şifrenizi girin.');
-          }
-          if (password) {
-            const candidateHash = hashPassword(password);
-            if (candidateHash !== user.passwordHash) {
-              throw new Error('Hatalı hesap şifresi girdiniz.');
-            }
-          }
-        } else if (password && String(password).trim().length >= 4) {
-          user.passwordHash = hashPassword(password);
-        }
-
-        if (normRole === 'ADMIN') {
-          user.role = 'ADMIN';
-          user.rank = 'ADMIN';
-          user.rankId = 'ADMIN';
-          user.vipStatus = { isVip: true, tier: 'ADMIN', expiresAt: null, grantedAt: now };
-        } else if (normRole === 'VIP' && user.role !== 'ADMIN') {
-          user.role = 'VIP';
-          if (!user.rank || user.rank === 'PLAYER') {
-            user.rank = normRank !== 'PLAYER' ? normRank : 'VIP';
-            user.rankId = user.rank;
-          }
-          user.vipStatus = {
-            isVip: true,
-            tier: user.rank,
-            expiresAt: user.vipStatus?.expiresAt || null,
-            grantedAt: user.vipStatus?.grantedAt || now
-          };
-        }
-        if (licenseId) {
-          user.licenseId = licenseId;
-        }
-        user.lastLogin = now;
-      } else {
-        const isVipOrAdmin = normRole === 'VIP' || normRole === 'ADMIN';
-        const initialRank =
-          normRole === 'ADMIN' ? 'ADMIN' : normRank !== 'PLAYER' ? normRank : isVipOrAdmin ? 'VIP' : 'PLAYER';
-        user = {
-          id:
-            'USR-' +
-            Date.now().toString(36).toUpperCase() +
-            '-' +
-            Math.floor(100 + Math.random() * 899),
-          minecraftUsername: cleanName,
-          licenseId: licenseId || 'LIC-COMMUNITY-XXQ',
-          role: normRole,
-          rank: initialRank,
-          rankId: initialRank,
-          rankExpiration: null,
-          vipStatus: {
-            isVip: isVipOrAdmin,
-            tier: isVipOrAdmin ? initialRank : 'NONE',
-            expiresAt: null,
-            grantedAt: isVipOrAdmin ? now : null
-          },
-          passwordHash: password ? hashPassword(password) : null,
-          emeraldBalance: 0,
-          points: 0,
-          leaderboardRank: all.length + 1,
-          gamesPlayed: 0,
-          gamesWon: 0,
-          gamesLost: 0,
-          extraLives: 0,
-          achievements: [],
-          purchases: [],
-          cosmetics: {
-            rgbOwned: isVipOrAdmin,
-            rgbEnabled: normRole === 'ADMIN',
-            animatedNameOwned: normRole === 'ADMIN',
-            animatedNameEnabled: false,
-            profileEffects: isVipOrAdmin,
-            equippedRank: initialRank
-          },
-          status: 'ACTIVE',
-          createdAt: now,
-          lastLogin: now,
-          settings: {
-            notifications: true,
-            reducedMotion: false
-          }
-        };
-        all.push(user);
-      }
-
-      this._saveAllRaw(all);
-      playerService.TouchPlayer(user.minecraftUsername, user.role, user.licenseId);
-      return this._sanitizeUser(user);
+    _saveAllUsers(users) {
+      storage.set(STORAGE_KEYS.USERS, users);
     },
 
     getUserByUsername(username) {
-      const u = this._findRawByUsername(username);
-      return this._sanitizeUser(u);
+      if (!username) return null;
+      const clean = String(username).trim().toLowerCase();
+      return this.getAllUsers().find(u => u.username.toLowerCase() === clean) || null;
     },
 
     getUserById(userId) {
-      const u = this._findRawById(userId);
-      return this._sanitizeUser(u);
+      if (!userId) return null;
+      return this.getAllUsers().find(u => u.userId === userId) || null;
     },
 
-    getAllUsers() {
-      return this._getAllRaw().map(u => this._sanitizeUser(u));
-    },
+    syncUserFields(username, updates = {}) {
+      const users = this.getAllUsers();
+      const clean = String(username || '').trim().toLowerCase();
+      const idx = users.findIndex(u => u.username.toLowerCase() === clean);
+      if (idx === -1) return null;
 
-    // Sync economy stats into userService record so both stay 100% consistent
-    syncFromEconomyAccount(econAcc) {
-      if (!econAcc || !econAcc.username) return;
-      const all = this._getAllRaw();
-      const user = all.find(
-        u => u.minecraftUsername.toLowerCase() === String(econAcc.username).toLowerCase()
-      );
-      if (!user) return;
-      user.emeraldBalance = Math.max(0, Number(econAcc.balance ?? user.emeraldBalance ?? 0));
-      user.points = Math.max(0, Number(econAcc.points ?? user.points ?? 0));
-      user.gamesPlayed = Number(econAcc.gamesPlayed ?? user.gamesPlayed ?? 0);
-      user.gamesWon = Number(econAcc.gamesWon ?? user.gamesWon ?? 0);
-      user.gamesLost = Number(econAcc.gamesLost ?? user.gamesLost ?? 0);
-      user.extraLives = Math.max(0, Number(econAcc.extraLives ?? user.extraLives ?? 0));
-      if (econAcc.rgbOwned !== undefined) {
-        user.cosmetics = user.cosmetics || {};
-        user.cosmetics.rgbOwned = Boolean(user.cosmetics.rgbOwned || econAcc.rgbOwned);
-      }
-      if (econAcc.animatedNameOwned !== undefined) {
-        user.cosmetics = user.cosmetics || {};
-        user.cosmetics.animatedNameOwned = Boolean(
-          user.cosmetics.animatedNameOwned || econAcc.animatedNameOwned
-        );
-      }
-      if (econAcc.equippedRank) {
-        const normR = normalizeRankId(econAcc.equippedRank, user.role);
-        user.rank = normR;
-        user.rankId = normR;
-        user.cosmetics = user.cosmetics || {};
-        user.cosmetics.equippedRank = normR;
-      }
-      this._saveAllRaw(all);
-    },
-
-    // Section 3 & 27: Change Username without creating a new account (uses immutable user.id)
-    changeUsername(session, newUsernameInput) {
-      authGuard.verifySession(session);
-      const cleanNew = String(newUsernameInput || '').trim();
-      if (!cleanNew || cleanNew.length < 3 || cleanNew.length > 24) {
-        throw new Error('Username must be between 3 and 24 characters.');
-      }
-
-      const all = this._getAllRaw();
-      const currentUser =
-        all.find(u => u.id === session.userId) ||
-        all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
-
-      if (!currentUser) throw new Error('User account not found.');
-
-      const oldUsername = currentUser.minecraftUsername;
-      if (oldUsername.toLowerCase() !== cleanNew.toLowerCase()) {
-        const conflict = all.find(
-          u => u.id !== currentUser.id && u.minecraftUsername.toLowerCase() === cleanNew.toLowerCase()
-        );
-        if (conflict) {
-          throw new Error('This Minecraft username is already taken by another account.');
-        }
-      }
-
-      currentUser.minecraftUsername = cleanNew;
-      this._saveAllRaw(all);
-
-      if (window.MCMServices && window.MCMServices.economyService) {
-        window.MCMServices.economyService._renameUsernameInternal(oldUsername, cleanNew);
-      }
-
-      const parties = partyService._getAllRaw();
-      parties.forEach(p => {
-        if (p.organizer.toLowerCase() === oldUsername.toLowerCase()) {
-          p.organizer = cleanNew;
-        }
-        p.participants.forEach(pt => {
-          if (pt.username.toLowerCase() === oldUsername.toLowerCase()) {
-            pt.username = cleanNew;
-          }
-        });
-      });
-      partyService._saveAllRaw(parties);
-
-      const updatedSession = licenseService._buildSignedSession({
-        userId: currentUser.id,
-        licenseId: session.licenseId,
-        licenseName: session.licenseName,
-        role: currentUser.role,
-        rank: currentUser.rank,
-        username: cleanNew,
-        isMasterAdmin: session.isMasterAdmin,
-        codeMasked: session.codeMasked
-      });
-      licenseService._saveSession(updatedSession);
-
-      activityService.log(
-        'USERNAME_CHANGED',
-        cleanNew,
-        `User ${oldUsername} changed username to ${cleanNew} (ID: ${currentUser.id})`
-      );
-
-      return {
-        user: this._sanitizeUser(currentUser),
-        session: updatedSession
+      // Immutable userId preserved (#7)
+      const immutableId = users[idx].userId || generateId('USR');
+      users[idx] = {
+        ...users[idx],
+        ...updates,
+        userId: immutableId,
+        updatedAt: new Date().toISOString()
       };
-    },
+      this._saveAllUsers(users);
 
-    // Section 3 & 27: Change / Set Password (stores ONLY salted SHA-256 hash)
-    changePassword(session, currentPassword, newPassword) {
-      authGuard.verifySession(session);
-      if (!newPassword || String(newPassword).length < 4) {
-        throw new Error('New password must be at least 4 characters.');
+      // Eğer aktif oturum bu kullanıcıya aitse oturumu da güncel tut (asla sıfırlama)
+      const active = storage.get(STORAGE_KEYS.ACTIVE_SESSION, null);
+      if (active && active.username && active.username.toLowerCase() === clean) {
+        const updatedSession = {
+          ...active,
+          userId: immutableId,
+          rank: active.isAdminSession ? 'ADMIN' : users[idx].rank,
+          role: active.isAdminSession ? 'ADMIN' : users[idx].role,
+          isModerator: Boolean(users[idx].isModerator),
+          minecraftPlayerName: users[idx].minecraftPlayerName || '',
+          avatarUrl: users[idx].avatarUrl || '',
+          emeraldBalance: Number(users[idx].emeraldBalance || 0),
+          netheriteBalance: Number(users[idx].netheriteBalance || 0),
+          extraLives: Number(users[idx].extraLives || 0),
+          points: Number(users[idx].points || 0)
+        };
+        updatedSession.signature = computeTokenSignature(updatedSession);
+        storage.set(STORAGE_KEYS.ACTIVE_SESSION, updatedSession);
       }
 
-      const all = this._getAllRaw();
-      const user =
-        all.find(u => u.id === session.userId) ||
-        all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
-      if (!user) throw new Error('User account not found.');
-
-      if (user.passwordHash) {
-        const currHash = hashPassword(currentPassword);
-        if (currHash !== user.passwordHash) {
-          throw new Error('Current password is incorrect.');
-        }
-      }
-
-      user.passwordHash = hashPassword(newPassword);
-      this._saveAllRaw(all);
-      activityService.log(
-        'PASSWORD_UPDATED',
-        user.minecraftUsername,
-        `${user.minecraftUsername} updated their account password hash`
-      );
-      return true;
+      return users[idx];
     },
 
-    // Section 13 & 36: Cosmetics & RGB Username Toggle
-    setRgbUsernameEnabled(session, enabled) {
+    updateMinecraftPlayerName(session, minecraftPlayerName) {
       authGuard.verifySession(session);
-      const all = this._getAllRaw();
-      const user =
-        all.find(u => u.id === session.userId) ||
-        all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
-      if (!user) throw new Error('User account not found.');
-
-      const perms = authGuard.getUserPermissions(session);
-      if (!user.cosmetics?.rgbOwned && !perms.rgbName) {
-        throw new Error('You must purchase RGB Username from the Shop or unlock an eligible Rank first.');
-      }
-
-      user.cosmetics = user.cosmetics || {};
-      user.cosmetics.rgbOwned = true;
-      user.cosmetics.rgbEnabled = Boolean(enabled);
-      this._saveAllRaw(all);
-      return this._sanitizeUser(user);
-    },
-
-    updateSettings(session, newSettings = {}) {
-      authGuard.verifySession(session);
-      const all = this._getAllRaw();
-      const user =
-        all.find(u => u.id === session.userId) ||
-        all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
-      if (!user) throw new Error('User account not found.');
-
-      user.settings = {
-        notifications: true,
-        reducedMotion: false,
-        theme: 'dark',
-        privacy: 'PUBLIC',
-        ...(user.settings || {}),
-        ...newSettings
-      };
-      this._saveAllRaw(all);
-      return this._sanitizeUser(user);
-    },
-
-    // Section 9 & 10: Profile Photo Upload, Change & Remove (Safe MIME Types Only)
-    updateProfileAvatar(session, avatarDataUrl) {
-      authGuard.verifySession(session);
-      const all = this._getAllRaw();
-      const user =
-        all.find(u => u.id === session.userId) ||
-        all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
-      if (!user) throw new Error('Kullanıcı hesabı bulunamadı.');
-
-      if (avatarDataUrl === null || avatarDataUrl === '') {
-        user.avatarDataUrl = null;
-        this._saveAllRaw(all);
-        activityService.log(
-          'AVATAR_REMOVED',
-          user.minecraftUsername,
-          `${user.minecraftUsername} profil fotoğrafını kaldırdı (Minecraft avatarına dönüldü)`
-        );
-        return this._sanitizeUser(user);
-      }
-
-      const str = String(avatarDataUrl || '').trim();
-      const safeMimeRegex = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i;
-      if (!safeMimeRegex.test(str)) {
+      const cleanMc = String(minecraftPlayerName || '').trim();
+      if (cleanMc && !/^[a-zA-Z0-9_]{2,16}$/.test(cleanMc)) {
         throw new Error(
-          'Güvenlik Hatası: Yalnızca PNG, JPG/JPEG ve WEBP formatındaki güvenli görseller yüklenebilir.'
+          'Minecraft oyuncu adı 2-16 karakter uzunluğunda olmalı ve yalnızca harf, rakam veya alt çizgi (_) içermelidir.'
         );
       }
-      // Max ~2MB decoded (~2.8M base64 chars)
-      if (str.length > 2850000) {
-        throw new Error('Dosya boyutu çok büyük! Maksimum 2 MB görsel yükleyebilirsiniz.');
-      }
-
-      user.avatarDataUrl = str;
-      this._saveAllRaw(all);
-      activityService.log(
-        'AVATAR_UPDATED',
-        user.minecraftUsername,
-        `${user.minecraftUsername} profil fotoğrafını güncelledi`
-      );
-      return this._sanitizeUser(user);
+      return this.syncUserFields(session.username, {
+        minecraftPlayerName: cleanMc
+      });
     },
 
-    // Section 11 & 29: Profile Customization (Border, Background, Achievement Showcase, Theme, Privacy)
-    updateProfileCustomization(
-      session,
-      { profileBorder, profileBackground, showcaseAchievements, theme, privacy, profilePrivacy } = {}
-    ) {
+    updateAvatar(session, avatarUrl) {
       authGuard.verifySession(session);
-      const all = this._getAllRaw();
-      const user =
-        all.find(u => u.id === session.userId) ||
-        all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
-      if (!user) throw new Error('Kullanıcı hesabı bulunamadı.');
-
-      user.cosmetics = user.cosmetics || {};
-      user.settings = user.settings || { notifications: true, reducedMotion: false, theme: 'dark', privacy: 'PUBLIC' };
-
-      const allowedBorders = ['stone', 'emerald', 'gold', 'diamond', 'obsidian', 'nether'];
-      if (profileBorder && allowedBorders.includes(profileBorder)) {
-        user.cosmetics.profileBorder = profileBorder;
-        user.profileBorder = profileBorder;
-      }
-
-      const allowedBgs = ['overworld', 'emerald_temple', 'nether_fortress', 'end_dimension', 'diamond_vault'];
-      if (profileBackground && allowedBgs.includes(profileBackground)) {
-        user.cosmetics.profileBackground = profileBackground;
-        user.profileBackground = profileBackground;
-      }
-
-      if (Array.isArray(showcaseAchievements)) {
-        user.cosmetics.showcaseAchievements = showcaseAchievements.slice(0, 3).map(String);
-        user.showcaseAchievements = user.cosmetics.showcaseAchievements;
-      }
-
-      if (theme === 'dark' || theme === 'light') {
-        user.settings.theme = theme;
-      }
-
-      const privVal = profilePrivacy || privacy;
-      const allowedPrivacy = ['PUBLIC', 'PARTY_ONLY', 'PRIVATE'];
-      if (privVal && allowedPrivacy.includes(privVal)) {
-        user.settings.privacy = privVal;
-        user.profilePrivacy = privVal;
-      }
-
-      this._saveAllRaw(all);
-      activityService.log(
-        'PROFILE_CUSTOMIZED',
-        user.minecraftUsername,
-        `${user.minecraftUsername} profil özelleştirmelerini güncelledi`
-      );
-      return this._sanitizeUser(user);
+      return this.syncUserFields(session.username, {
+        avatarUrl: String(avatarUrl || '')
+      });
     },
 
-    // Grant Rank internally (from Shop purchase, Stripe webhook, or Admin)
-    _grantRankInternal(targetUsername, rankId, expiresAt = null) {
-      const cleanRank = normalizeRankId(rankId);
-      const all = this._getAllRaw();
-      const user = all.find(
-        u => u.minecraftUsername.toLowerCase() === String(targetUsername).toLowerCase()
-      );
-      if (!user) throw new Error('User not found.');
-
-      const now = new Date().toISOString();
-      user.rank = cleanRank;
-      user.rankId = cleanRank;
-      user.rankExpiration = expiresAt || null;
-
-      if (cleanRank === 'ADMIN') {
-        user.role = 'ADMIN';
-      } else if (cleanRank === 'PLAYER') {
-        user.role = 'PLAYER';
-      } else {
-        if (user.role !== 'ADMIN') user.role = 'VIP';
-      }
-
-      const isElevated = cleanRank !== 'PLAYER';
-      user.vipStatus = {
-        isVip: isElevated,
-        tier: isElevated ? cleanRank : 'NONE',
-        expiresAt: expiresAt || null,
-        grantedAt: isElevated ? user.vipStatus?.grantedAt || now : null
-      };
-
-      user.cosmetics = user.cosmetics || {};
-      user.cosmetics.equippedRank = cleanRank;
-      if (isElevated) {
-        user.cosmetics.rgbOwned = true;
-        user.cosmetics.profileEffects = true;
-      }
-      if (cleanRank === 'MILLIONAIRE' || cleanRank === 'MVP_PLUS' || cleanRank === 'ADMIN') {
-        user.cosmetics.animatedNameOwned = true;
-      }
-
-      this._saveAllRaw(all);
-
-      // Sync with economy account if initialized
-      if (window.MCMServices && window.MCMServices.economyService) {
-        window.MCMServices.economyService._mutateAccount(user.minecraftUsername, acc => {
-          acc.role = user.role;
-          acc.isVip = isElevated;
-          acc.equippedRank = cleanRank;
-          acc.ownedRanks = acc.ownedRanks || ['PLAYER'];
-          if (!acc.ownedRanks.includes(cleanRank)) acc.ownedRanks.push(cleanRank);
-          if (isElevated) acc.rgbOwned = true;
-        });
-      }
-
-      return this._sanitizeUser(user);
-    },
-
-    // Section 21, 22, 26: ADMIN USER, VIP & RANK MANAGEMENT
-    adminUpdateUserRole(session, targetUsername, newRoleOrRank) {
+    adminToggleModerator(session, targetUsername, makeModerator = true) {
       authGuard.requireRole(session, ['ADMIN']);
-      const targetRank = normalizeRankId(newRoleOrRank, newRoleOrRank);
-      const updated = this._grantRankInternal(targetUsername, targetRank, null);
-      activityService.log(
-        'USER_ROLE_CHANGED',
-        session.username,
-        `Admin ${session.username} updated ${updated.minecraftUsername}'s rank/role to ${targetRank}`
-      );
-      return updated;
-    },
+      const user = this.getUserByUsername(targetUsername);
+      if (!user) throw new Error('Oyuncu bulunamadı.');
 
-    adminSetVipStatus(session, targetUsername, { isVip, rankId = 'VIP', expiresAt = null }) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const targetRank = isVip ? normalizeRankId(rankId || 'VIP', 'VIP') : 'PLAYER';
-      const updated = this._grantRankInternal(targetUsername, targetRank, expiresAt);
+      const isMod = Boolean(makeModerator);
+      const nextRank = isMod ? 'MODERATOR' : 'MEMBER';
+      const nextRole = isMod ? 'MODERATOR' : 'MEMBER';
+
+      const updated = this.syncUserFields(user.username, {
+        isModerator: isMod,
+        rank: nextRank,
+        role: nextRole
+      });
+
+      notificationService.notifyUser(user.username, {
+        type: 'RANK_UPGRADED',
+        title: isMod ? '⚔️ Moderatör Yetkisi Verildi!' : 'Moderatör Yetkisi Kaldırıldı',
+        message: isMod
+          ? 'Yönetici tarafından hesabınıza resmi Moderator rütbesi ve yetkileri tanımlandı.'
+          : 'Hesabınızdaki Moderator yetkisi yönetici tarafından kaldırıldı.'
+      });
+
       activityService.log(
-        isVip ? 'VIP_GRANTED' : 'VIP_REMOVED',
+        'ADMIN_ACTION',
         session.username,
-        `Admin ${session.username} ${isVip ? `granted ${targetRank} to` : 'removed VIP from'} ${updated.minecraftUsername}`
+        `${user.username} oyuncusunun Moderator durumu güncellendi: ${isMod}`
       );
       return updated;
     },
 
     adminToggleSuspendUser(session, targetUsername) {
       authGuard.requireRole(session, ['ADMIN']);
-      const all = this._getAllRaw();
-      const user = all.find(
-        u => u.minecraftUsername.toLowerCase() === String(targetUsername).toLowerCase()
-      );
-      if (!user) throw new Error('User not found.');
-      if (user.role === 'ADMIN') throw new Error('Cannot suspend an ADMIN account.');
-
-      user.status = user.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
-      this._saveAllRaw(all);
+      const user = this.getUserByUsername(targetUsername);
+      if (!user) throw new Error('Oyuncu bulunamadı.');
+      if (user.username.toLowerCase() === session.username.toLowerCase()) {
+        throw new Error('Kendi yönetici hesabınızı askıya alamazsınız.');
+      }
+      const nextStatus = user.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+      const updated = this.syncUserFields(user.username, { status: nextStatus });
       activityService.log(
-        'USER_STATUS_CHANGED',
+        'ADMIN_ACTION',
         session.username,
-        `Admin ${session.username} set ${user.minecraftUsername} status to ${user.status}`
+        `${user.username} hesap durumu ${nextStatus} olarak değiştirildi.`
       );
-      return this._sanitizeUser(user);
+      return updated;
     },
 
-    adminResetUserAccount(session, targetUsername) {
+    adminDeleteUser(session, targetUsername) {
       authGuard.requireRole(session, ['ADMIN']);
-      const all = this._getAllRaw();
-      const user = all.find(
-        u => u.minecraftUsername.toLowerCase() === String(targetUsername).toLowerCase()
-      );
-      if (!user) throw new Error('User not found.');
-
-      user.emeraldBalance = 0;
-      user.points = 0;
-      user.gamesPlayed = 0;
-      user.gamesWon = 0;
-      user.gamesLost = 0;
-      user.extraLives = 0;
-      user.achievements = [];
-      this._saveAllRaw(all);
-
-      if (window.MCMServices && window.MCMServices.economyService) {
-        window.MCMServices.economyService.adminModifyBalance(session, {
-          username: user.minecraftUsername,
-          operation: 'RESET',
-          amount: 0,
-          reason: 'Admin Account Reset'
-        });
+      const clean = String(targetUsername || '').trim().toLowerCase();
+      if (!clean) throw new Error('Kullanıcı adı belirtilmedi.');
+      if (clean === session.username.toLowerCase()) {
+        throw new Error('Kendi yönetici hesabınızı silemezsiniz!');
       }
 
+      const users = this.getAllUsers();
+      const filtered = users.filter(u => u.username.toLowerCase() !== clean);
+      this._saveAllUsers(filtered);
+
       activityService.log(
-        'USER_ACCOUNT_RESET',
+        'ADMIN_ACTION',
         session.username,
-        `Admin ${session.username} reset account statistics and Emeralds for ${user.minecraftUsername}`
+        `Yönetici ${session.username}, "${targetUsername}" hesabını sildi.`
       );
-      return this._sanitizeUser(user);
+      return true;
+    },
+
+    recordGameResult(username, { scoreEarned = 0, didWin = false } = {}) {
+      const user = this.getUserByUsername(username);
+      if (!user) return null;
+
+      const earned = Math.max(0, Number(scoreEarned || 0));
+      const nextPlayed = Number(user.gamesPlayed || 0) + 1;
+      const nextWon = Number(user.gamesWon || 0) + (didWin ? 1 : 0);
+      const nextLost = Number(user.gamesLost || 0) + (didWin ? 0 : 1);
+      const nextPoints = Number(user.points || 0) + earned;
+      const nextBest = Math.max(Number(user.bestScore || 0), earned);
+
+      return this.syncUserFields(user.username, {
+        gamesPlayed: nextPlayed,
+        gamesWon: nextWon,
+        gamesLost: nextLost,
+        points: nextPoints,
+        bestScore: nextBest
+      });
     }
   };
 
   // ==========================================
-  // 4. LICENSE & STEP-BY-STEP AUTH SERVICE (Section 2, 4)
+  // KİMLİK DOĞRULAMA SERVİSİ (authService — #7 Lisanssız Akış & #8 Ayrı Admin Girişi)
   // ==========================================
-  const licenseService = {
-    _ensureSeedData() {
-      const existing = storageAdapter.get(STORAGE_KEYS.LICENSES, null);
-      if (existing && Array.isArray(existing)) {
-        existing.forEach(l => {
-          l.role = normalizeRole(l.role);
-        });
-        return existing;
-      }
+  function buildSessionPayload(user, isAdminSession = false) {
+    const payload = {
+      userId: user.userId || generateId('USR'),
+      username: user.username,
+      minecraftPlayerName: user.minecraftPlayerName || '',
+      avatarUrl: user.avatarUrl || '',
+      rank: isAdminSession ? 'ADMIN' : normalizeRankId(user.rank || 'MEMBER'),
+      role: isAdminSession ? 'ADMIN' : user.role || 'MEMBER',
+      isModerator: Boolean(user.isModerator),
+      isAdminSession: Boolean(isAdminSession),
+      emeraldBalance: Number(user.emeraldBalance || 0),
+      netheriteBalance: Number(user.netheriteBalance ?? 0),
+      extraLives: Number(user.extraLives || 0),
+      points: Number(user.points || 0),
+      loginAt: new Date().toISOString()
+    };
+    payload.signature = computeTokenSignature(payload);
+    return payload;
+  }
 
-      const empty = [];
-      storageAdapter.set(STORAGE_KEYS.LICENSES, empty);
-      return empty;
-    },
-
-    _getAllRaw() {
-      return this._ensureSeedData();
-    },
-
-    _saveAllRaw(list) {
-      storageAdapter.set(STORAGE_KEYS.LICENSES, list);
-    },
-
-    _findRawById(id) {
-      return this._getAllRaw().find(l => l.id === id) || null;
-    },
-
-    computeEffectiveStatus(lic) {
-      if (!lic) return 'INVALID';
-      if (lic.status === 'REVOKED') return 'REVOKED';
-      if (lic.status === 'DISABLED') return 'DISABLED';
-      if (lic.expiresAt) {
-        const expTime = new Date(lic.expiresAt).getTime();
-        if (!isNaN(expTime) && Date.now() > expTime) {
-          return 'EXPIRED';
-        }
-      }
-      return 'ACTIVE';
-    },
-
-    generateRandomCode(role = 'PLAYER') {
-      const r = normalizeRole(role);
-      const prefix = r === 'ADMIN' ? 'MCAD' : r === 'VIP' ? 'MCVP' : 'MCML';
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      const seg = () =>
-        Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-      return `${prefix}-${seg()}-${seg()}`;
-    },
-
-    // Validate License Code (Master Admin, Community, or Admin-Created License)
-    async validateLicenseStep(rawCode) {
-      await new Promise(r => setTimeout(r, 120));
-      const cleanCode = String(rawCode || '').trim();
-      if (!cleanCode) {
-        return { ok: false, error: 'Lütfen geçerli bir lisans kodu girin.' };
-      }
-
-      const digest = computeSaltedDigest(cleanCode);
-
-      // 1. Master Admin License ("Minecraft@MashallahMC@Admin")
-      if (digest === MASTER_ADMIN_DIGEST) {
-        return {
-          ok: true,
-          licenseToken: {
-            licenseId: 'MASTER-ADMIN-ROOT',
-            licenseName: 'Master Admin Lisansı',
-            role: 'ADMIN',
-            rank: 'ADMIN',
-            isMasterAdmin: true,
-            suggestedUsername: 'Mashallah',
-            codeMasked: 'MASTER-****-ADMIN'
-          }
-        };
-      }
-
-      // 2. Community License ("xxqnetwork")
-      if (digest === LEGACY_COMMUNITY_DIGEST) {
-        return {
-          ok: true,
-          licenseToken: {
-            licenseId: 'LIC-COMMUNITY-XXQ',
-            licenseName: 'XXQ Network Topluluk Lisansı',
-            role: 'PLAYER',
-            rank: 'PLAYER',
-            isMasterAdmin: false,
-            suggestedUsername: '',
-            codeMasked: 'XXQ-****-NET'
-          }
-        };
-      }
-
-      // 3. Managed Licenses in Storage
-      const all = this._getAllRaw();
-      const found = all.find(l => l.code.toUpperCase() === cleanCode.toUpperCase());
-      if (!found) {
-        return { ok: false, error: 'Geçersiz lisans kodu! Lütfen kodunuzu kontrol edin.' };
-      }
-
-      const effStatus = this.computeEffectiveStatus(found);
-      if (effStatus !== 'ACTIVE') {
-        return {
-          ok: false,
-          error: `Bu lisansın durumu: ${effStatus}. Lütfen yönetici ile iletişime geçin.`
-        };
-      }
-
-      return {
-        ok: true,
-        licenseToken: {
-          licenseId: found.id,
-          licenseName: found.name,
-          role: normalizeRole(found.role),
-          rank: normalizeRankId(found.rank || found.role, found.role),
-          isMasterAdmin: false,
-          suggestedUsername: found.assignedUsername || '',
-          codeMasked: found.code.slice(0, 5) + '****' + found.code.slice(-4)
-        }
-      };
-    },
-
-    // KAYIT OL (Register New Account with Username + Password + Confirm Password + Optional License)
-    async registerAccount({ username, password, confirmPassword, licenseCode = '' }) {
-      await new Promise(r => setTimeout(r, 120));
-      const cleanName = String(username || '').trim();
-      if (!cleanName || cleanName.length < 3 || cleanName.length > 24) {
-        return { ok: false, error: 'Kullanıcı adı 3 ile 24 karakter arasında olmalıdır.' };
-      }
-      if (!password || String(password).length < 4) {
-        return { ok: false, error: 'Şifre en az 4 karakter olmalıdır.' };
-      }
-      if (confirmPassword !== undefined && password !== confirmPassword) {
-        return { ok: false, error: 'Şifre ve Şifre Tekrarı birbiriyle eşleşmiyor!' };
-      }
-
-      const existingUser = userService._findRawByUsername(cleanName);
-      if (existingUser) {
-        return {
-          ok: false,
-          error: 'Bu kullanıcı adı zaten kayıtlı! Lütfen GİRİŞ YAP sekmesini kullanın.'
-        };
-      }
-
-      let licenseToken = {
-        licenseId: 'LIC-COMMUNITY-XXQ',
-        licenseName: 'Standart Oyuncu Lisansı',
-        role: 'PLAYER',
-        rank: 'PLAYER',
-        isMasterAdmin: false,
-        suggestedUsername: cleanName,
-        codeMasked: 'STD-****-USER'
-      };
-
-      const cleanLic = String(licenseCode || '').trim();
-      if (cleanLic) {
-        const licCheck = await this.validateLicenseStep(cleanLic);
-        if (!licCheck.ok) {
-          return licCheck;
-        }
-        licenseToken = licCheck.licenseToken;
-      }
-
-      return this.completeAccountStep(licenseToken, cleanName, password);
-    },
-
-    // GİRİŞ YAP (Login with Username + Password + Optional License Upgrade)
-    async loginWithCredentials({ username, password = '', licenseCode = '' }) {
-      await new Promise(r => setTimeout(r, 120));
-      const cleanName = String(username || '').trim();
-      const cleanLic = String(licenseCode || '').trim();
-
-      // If user entered a Master/Admin license code with no username, default to suggested username
-      let resolvedName = cleanName;
-      let licTokenFromInput = null;
-      if (cleanLic) {
-        const licRes = await this.validateLicenseStep(cleanLic);
-        if (!licRes.ok) return licRes;
-        licTokenFromInput = licRes.licenseToken;
-        if (!resolvedName && licTokenFromInput.suggestedUsername) {
-          resolvedName = licTokenFromInput.suggestedUsername;
-        }
-      }
-
-      if (!resolvedName) {
-        return { ok: false, error: 'Lütfen Minecraft kullanıcı adınızı girin.' };
-      }
-
-      const rawUser = userService._findRawByUsername(resolvedName);
-      if (!rawUser) {
-        // If a valid license code was provided, allow instant account creation
-        if (licTokenFromInput) {
-          return this.completeAccountStep(licTokenFromInput, resolvedName, password);
-        }
-        return {
-          ok: false,
-          error: 'Bu kullanıcı adıyla kayıtlı hesap bulunamadı. Lütfen önce KAYIT OL sekmesinden hesap oluşturun.'
-        };
-      }
-
-      if (rawUser.passwordHash) {
-        if (!password) {
-          return { ok: false, error: 'Lütfen hesap şifrenizi girin.' };
-        }
-        if (hashPassword(password) !== rawUser.passwordHash) {
-          return { ok: false, error: 'Kullanıcı adı veya şifre hatalı!' };
-        }
-      }
-
-      const tokenToUse = licTokenFromInput || {
-        licenseId: rawUser.licenseId || 'LIC-COMMUNITY-XXQ',
-        licenseName:
-          rawUser.role === 'ADMIN'
-            ? 'Master Admin Lisansı'
-            : rawUser.role === 'VIP'
-              ? 'VIP Lisansı'
-              : 'Kayıtlı Hesap Lisansı',
-        role: rawUser.role || 'PLAYER',
-        rank: rawUser.rank || rawUser.role || 'PLAYER',
-        isMasterAdmin: rawUser.licenseId === 'MASTER-ADMIN-ROOT',
-        suggestedUsername: rawUser.minecraftUsername,
-        codeMasked: rawUser.licenseId === 'MASTER-ADMIN-ROOT' ? 'MASTER-****-ADMIN' : 'HESAP-****-AKTİF'
-      };
-
-      return this.completeAccountStep(tokenToUse, rawUser.minecraftUsername, password);
-    },
-
-    // ŞİFREMİ UNUTTUM (Reset Password with License Code or Account Verification)
-    async resetPasswordWithLicenseOrRecovery({ username, licenseCode = '', newPassword }) {
-      await new Promise(r => setTimeout(r, 120));
-      const cleanName = String(username || '').trim();
-      if (!cleanName) {
-        return { ok: false, error: 'Lütfen kullanıcı adınızı girin.' };
-      }
-      if (!newPassword || String(newPassword).length < 4) {
-        return { ok: false, error: 'Yeni şifreniz en az 4 karakter olmalıdır.' };
-      }
-
-      const all = userService._getAllRaw();
-      const user = all.find(u => u.minecraftUsername.toLowerCase() === cleanName.toLowerCase());
-      if (!user) {
-        return { ok: false, error: 'Bu kullanıcı adıyla kayıtlı bir hesap bulunamadı.' };
-      }
-
-      const cleanLic = String(licenseCode || '').trim();
-      if (cleanLic) {
-        const licCheck = await this.validateLicenseStep(cleanLic);
-        if (!licCheck.ok) {
-          return { ok: false, error: 'Doğrulama için girilen lisans kodu geçersiz.' };
-        }
-      }
-
-      user.passwordHash = hashPassword(newPassword);
-      userService._saveAllRaw(all);
-      activityService.log(
-        'PASSWORD_RESET',
-        user.minecraftUsername,
-        `${user.minecraftUsername} hesap şifresini sıfırladı`
-      );
-      return { ok: true, message: 'Şifreniz başarıyla güncellendi! Şimdi giriş yapabilirsiniz.' };
-    },
-
-    // Activate / Upgrade License Code on Logged-In Account (Settings / Profile)
-    async activateLicenseOnAccount(session, rawCode) {
-      authGuard.verifySession(session);
-      const licRes = await this.validateLicenseStep(rawCode);
-      if (!licRes.ok) return licRes;
-
-      const token = licRes.licenseToken;
-      const updatedUser = userService._grantRankInternal(
-        session.username,
-        token.rank || token.role,
-        null
-      );
-
-      const allUsers = userService._getAllRaw();
-      const rawU = allUsers.find(
-        u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase()
-      );
-      if (rawU) {
-        rawU.licenseId = token.licenseId;
-        userService._saveAllRaw(allUsers);
-      }
-
-      const newSession = this._buildSignedSession({
-        userId: updatedUser.id,
-        licenseId: token.licenseId,
-        licenseName: token.licenseName,
-        role: updatedUser.role,
-        rank: updatedUser.rank,
-        username: updatedUser.minecraftUsername,
-        isMasterAdmin: token.isMasterAdmin,
-        codeMasked: token.codeMasked
-      });
-      this._saveSession(newSession);
-      storageAdapter.set(STORAGE_KEYS.REMEMBERED_USER, {
-        userId: updatedUser.id,
-        username: updatedUser.minecraftUsername,
-        role: updatedUser.role,
-        rank: updatedUser.rank,
-        licenseId: token.licenseId,
-        licenseName: token.licenseName,
-        isMasterAdmin: token.isMasterAdmin,
-        codeMasked: token.codeMasked,
-        savedAt: new Date().toISOString()
-      });
-
-      activityService.log(
-        'LICENSE_ACTIVATED',
-        updatedUser.minecraftUsername,
-        `${updatedUser.minecraftUsername} hesabında "${token.licenseName}" (${updatedUser.rank}) etkinleştirildi`
-      );
-
-      return { ok: true, session: newSession, user: updatedUser, licenseToken: token };
-    },
-
-    // STEP 2 OF LOGIN FLOW: Enter Minecraft Username -> Create/Load Account -> Dashboard
-    async completeAccountStep(licenseToken, minecraftUsername, password = '') {
-      await new Promise(r => setTimeout(r, 100));
-      if (!licenseToken || !licenseToken.licenseId) {
-        return {
-          ok: false,
-          error: 'Lisans doğrulama süresi doldu. Lütfen tekrar giriş yapın.'
-        };
-      }
-
-      const finalUsername =
-        String(minecraftUsername || '').trim() ||
-        licenseToken.suggestedUsername ||
-        (licenseToken.role === 'ADMIN'
-          ? 'Mashallah'
-          : 'Oyuncu_' + Math.floor(100 + Math.random() * 899));
-
-      try {
-        const userAccount = userService.getOrCreateAccount({
-          minecraftUsername: finalUsername,
-          licenseId: licenseToken.licenseId,
-          role: licenseToken.role,
-          rank: licenseToken.rank || licenseToken.role,
-          password
-        });
-
-        if (!licenseToken.isMasterAdmin && !BUILTIN_LICENSE_IDS.includes(licenseToken.licenseId)) {
-          const all = this._getAllRaw();
-          const found = all.find(l => l.id === licenseToken.licenseId);
-          if (found) {
-            found.currentSessionUser = userAccount.minecraftUsername;
-            found.lastUsedAt = new Date().toISOString();
-            this._saveAllRaw(all);
-          }
-        }
-
-        const effectiveRole = userAccount.role;
-        const session = this._buildSignedSession({
-          userId: userAccount.id,
-          licenseId: licenseToken.licenseId,
-          licenseName: licenseToken.licenseName,
-          role: effectiveRole,
-          rank: userAccount.rank,
-          username: userAccount.minecraftUsername,
-          isMasterAdmin: licenseToken.isMasterAdmin,
-          codeMasked: licenseToken.codeMasked
-        });
-
-        this._saveSession(session);
-        storageAdapter.set(STORAGE_KEYS.REMEMBERED_USER, {
-          userId: userAccount.id,
-          username: userAccount.minecraftUsername,
-          role: effectiveRole,
-          rank: userAccount.rank,
-          licenseId: licenseToken.licenseId,
-          licenseName: licenseToken.licenseName,
-          isMasterAdmin: licenseToken.isMasterAdmin,
-          codeMasked: licenseToken.codeMasked,
-          savedAt: new Date().toISOString()
-        });
-
-        activityService.log(
-          'ACCOUNT_LOGIN',
-          userAccount.minecraftUsername,
-          `${userAccount.minecraftUsername} (${userAccount.rank}) giriş yaptı`
-        );
-
-        return { ok: true, session, user: userAccount };
-      } catch (err) {
-        return { ok: false, error: err.message };
-      }
-    },
-
-    async validateAndLogin(rawCode, customUsername = '', password = '') {
-      const step1 = await this.validateLicenseStep(rawCode);
-      if (!step1.ok) return step1;
-      return this.completeAccountStep(step1.licenseToken, customUsername, password);
-    },
-
-    getRememberedUser() {
-      return storageAdapter.get(STORAGE_KEYS.REMEMBERED_USER, null);
-    },
-
-    resumeRememberedAccount() {
-      const rem = this.getRememberedUser();
-      if (!rem || !rem.username || !rem.licenseId) return null;
-      const user = userService.getOrCreateAccount({
-        minecraftUsername: rem.username,
-        licenseId: rem.licenseId,
-        role: rem.role,
-        rank: rem.rank
-      });
-      const session = this._buildSignedSession({
-        userId: user.id,
-        licenseId: rem.licenseId,
-        licenseName: rem.licenseName || 'Kayıtlı Lisans',
-        role: user.role,
-        rank: user.rank,
-        username: user.minecraftUsername,
-        isMasterAdmin: Boolean(rem.isMasterAdmin),
-        codeMasked: rem.codeMasked || 'KAYITLI-****'
-      });
-      this._saveSession(session);
-      return session;
-    },
-
-    _buildSignedSession({
-      userId,
-      licenseId,
-      licenseName,
-      role,
-      rank,
-      username,
-      isMasterAdmin,
-      codeMasked
-    }) {
-      const normRole = normalizeRole(role);
-      const normRank = normalizeRankId(rank || normRole, normRole);
-      const signature = computeSaltedDigest(`${licenseId}:${normRole}:${username}`);
-      return {
-        userId: userId || 'USR-0',
-        licenseId,
-        licenseName,
-        role: normRole,
-        rank: normRank,
-        username,
-        isMasterAdmin: Boolean(isMasterAdmin),
-        codeMasked,
-        loggedInAt: new Date().toISOString(),
-        signature
-      };
-    },
-
-    _saveSession(session) {
-      try {
-        sessionStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(session));
-        localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(session));
-      } catch (e) {
-        console.warn('Session storage error:', e);
-      }
-    },
-
-    refreshSessionRole(session) {
-      if (!session) return null;
-      const u = userService.getUserByUsername(session.username);
-      if (!u) return session;
-      const newRole = normalizeRole(u.role);
-      const newRank = normalizeRankId(u.rank || u.role, newRole);
-      if (newRole !== session.role || newRank !== session.rank) {
-        const updated = this._buildSignedSession({
-          userId: u.id,
-          licenseId: session.licenseId,
-          licenseName: session.licenseName,
-          role: newRole,
-          rank: newRank,
-          username: u.minecraftUsername,
-          isMasterAdmin: session.isMasterAdmin,
-          codeMasked: session.codeMasked
-        });
-        this._saveSession(updated);
-        return updated;
-      }
-      return session;
-    },
-
+  const authService = {
     getActiveSession() {
-      try {
-        const raw =
-          sessionStorage.getItem(STORAGE_KEYS.SESSION) ||
-          localStorage.getItem(STORAGE_KEYS.SESSION);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        parsed.role = normalizeRole(parsed.role);
-        authGuard.verifySession(parsed);
-        return this.refreshSessionRole(parsed);
-      } catch (e) {
-        return null;
-      }
+      return storage.get(STORAGE_KEYS.ACTIVE_SESSION, null);
     },
 
-    logout(clearRemembered = false) {
-      const current = storageAdapter.get(STORAGE_KEYS.SESSION, null);
-      if (
-        current &&
-        current.licenseId &&
-        !current.isMasterAdmin &&
-        !BUILTIN_LICENSE_IDS.includes(current.licenseId)
-      ) {
-        const all = this._getAllRaw();
-        const found = all.find(l => l.id === current.licenseId);
-        if (found) {
-          found.currentSessionUser = null;
-          this._saveAllRaw(all);
-        }
+    async registerAccount({ username, password, passwordConfirm, minecraftPlayerName = '' }) {
+      const cleanUser = String(username || '').trim();
+      const cleanMc = String(minecraftPlayerName || '').trim();
+      const rawPass = String(password || '');
+      const rawConfirm = String(passwordConfirm ?? rawPass);
+
+      if (!cleanUser || cleanUser.length < 3 || cleanUser.length > 20) {
+        throw new Error('Kullanıcı adı 3 ile 20 karakter arasında olmalıdır.');
       }
-      try {
-        sessionStorage.removeItem(STORAGE_KEYS.SESSION);
-        localStorage.removeItem(STORAGE_KEYS.SESSION);
-        if (clearRemembered) {
-          localStorage.removeItem(STORAGE_KEYS.REMEMBERED_USER);
-        }
-      } catch (e) {}
-    },
-
-    // ADMIN LICENSE MANAGEMENT (Section 4)
-    listLicensesForAdmin(session) {
-      authGuard.requireRole(session, ['ADMIN']);
-      return this._getAllRaw().map(l => ({
-        ...l,
-        role: normalizeRole(l.role),
-        effectiveStatus: this.computeEffectiveStatus(l)
-      }));
-    },
-
-    createLicense(session, { name, code, role, expiresAt, assignedUsername }) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const cleanRole = normalizeRole(role);
-      const finalCode = (code && code.trim().toUpperCase()) || this.generateRandomCode(cleanRole);
-      const all = this._getAllRaw();
-
-      if (all.some(l => l.code.toUpperCase() === finalCode)) {
-        throw new Error('Bu lisans kodu zaten mevcut!');
+      if (!/^[a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]+$/.test(cleanUser)) {
+        throw new Error('Kullanıcı adı yalnızca harf, rakam ve alt çizgi (_) içerebilir.');
       }
 
-      const newLic = {
-        id: 'LIC-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5).toUpperCase(),
-        code: finalCode,
-        name: (name || '').trim() || `${cleanRole} Lisansı`,
-        role: cleanRole,
-        rank: normalizeRankId(role, cleanRole),
+      const userCheckHash = await sha256Async(
+        `${AUTH_SALT}::ADMIN_USER::${cleanUser.toLowerCase()}`
+      );
+      if (userCheckHash === ADMIN_USER_HASH) {
+        throw new Error('Bu kullanıcı adı sistem yöneticisi için ayrılmıştır.');
+      }
+
+      if (userService.getUserByUsername(cleanUser)) {
+        throw new Error('Bu kullanıcı adı zaten alınmış. Lütfen başka bir ad seçin.');
+      }
+
+      if (cleanMc && !/^[a-zA-Z0-9_]{2,16}$/.test(cleanMc)) {
+        throw new Error(
+          'İsteğe bağlı Minecraft oyuncu adı 2-16 karakter olmalı ve yalnızca harf, rakam veya alt çizgi içermelidir.'
+        );
+      }
+
+      if (rawPass.length < 4) {
+        throw new Error('Şifreniz en az 4 karakter uzunluğunda olmalıdır.');
+      }
+      if (rawPass !== rawConfirm) {
+        throw new Error('Girdiğiniz şifreler birbiriyle eşleşmiyor.');
+      }
+
+      const passwordHash = await sha256Async(
+        `${AUTH_SALT}::PWD::${cleanUser.toLowerCase()}::${rawPass}`
+      );
+      const nowIso = new Date().toISOString();
+
+      const newUser = {
+        userId: generateId('USR'),
+        username: cleanUser,
+        minecraftPlayerName: cleanMc,
+        passwordHash,
+        rank: 'MEMBER',
+        role: 'MEMBER',
+        isModerator: false,
         status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        expiresAt: expiresAt || null,
-        assignedUsername: (assignedUsername || '').trim() || null,
-        currentSessionUser: null,
-        lastUsedAt: null
+        emeraldBalance: 0,
+        emeraldsEarnedTotal: 0,
+        emeraldsSpentTotal: 0,
+        netheriteBalance: 0, // İlk kez en az VIP+ rütbesi alındığında tek seferlik +250 Netherite verilir
+        initialNetheriteBonusClaimed: false,
+        lastNetheriteClaimAt: null,
+        lastDailyEmeraldClaimAt: null,
+        extraLives: 0,
+        points: 0,
+        bestScore: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        ownedCosmetics: [],
+        equippedCosmetics: {
+          avatarFrame: null,
+          nameColor: null,
+          badge: null,
+          profileEffect: null
+        },
+        achievements: [],
+        settings: {
+          sound: true,
+          particles: true
+        },
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        lastLoginAt: nowIso
       };
 
-      all.unshift(newLic);
-      this._saveAllRaw(all);
+      const users = userService.getAllUsers();
+      users.push(newUser);
+      userService._saveAllUsers(users);
+
+      notificationService.notifyUser(newUser.username, {
+        type: 'SYSTEM_NOTIFICATION',
+        title: '🎉 MC Milyoner Olmak İster Platformuna Hoş Geldin!',
+        message:
+          'Hesabın başarıyla oluşturuldu! Her gün ücretsiz Günlük Zümrüt ödülünü alabilir, ilk VIP+ ve üzeri rütbe alımında anında +250 Netherite kazanabilirsin!'
+      });
+
       activityService.log(
-        'LICENSE_CREATED',
-        session.username,
-        `${session.username} yeni ${cleanRole} lisansı oluşturdu: "${newLic.name}" (${newLic.code})`
+        'USER_REGISTER',
+        newUser.username,
+        `${newUser.username} platforma kayıt oldu.`
       );
-      return newLic;
+
+      const session = buildSessionPayload(newUser, false);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+      return session;
     },
 
-    updateLicenseStatus(session, licenseId, newStatus) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const allowed = ['ACTIVE', 'DISABLED', 'REVOKED'];
-      if (!allowed.includes(newStatus)) throw new Error('Geçersiz lisans durumu.');
+    async login({ username, password }) {
+      const cleanUser = String(username || '').trim();
+      const rawPass = String(password || '');
 
-      const all = this._getAllRaw();
-      const target = all.find(l => l.id === licenseId);
-      if (!target) throw new Error('Lisans bulunamadı.');
-
-      target.status = newStatus;
-      if (newStatus !== 'ACTIVE') {
-        target.currentSessionUser = null;
+      if (!cleanUser || !rawPass) {
+        throw new Error('Lütfen kullanıcı adınızı ve şifrenizi girin.');
       }
-      this._saveAllRaw(all);
 
-      activityService.log(
-        `LICENSE_${newStatus}`,
-        session.username,
-        `${session.username} "${target.name}" (${target.code}) lisans durumunu ${newStatus} yaptı`
-      );
-      return target;
-    },
-
-    updateLicenseRoleOrExpiry(session, licenseId, { role, expiresAt }) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const all = this._getAllRaw();
-      const target = all.find(l => l.id === licenseId);
-      if (!target) throw new Error('Lisans bulunamadı.');
-
-      if (role) {
-        target.role = normalizeRole(role);
-        target.rank = normalizeRankId(role, target.role);
+      const user = userService.getUserByUsername(cleanUser);
+      if (!user) {
+        throw new Error('Kullanıcı adı veya şifre hatalı.');
       }
-      if (expiresAt !== undefined) target.expiresAt = expiresAt || null;
-      this._saveAllRaw(all);
 
-      activityService.log(
-        'LICENSE_UPDATED',
-        session.username,
-        `${session.username} "${target.code}" lisansını güncelledi (Rol: ${target.role})`
+      if (user.status === 'SUSPENDED') {
+        throw new Error('Hesabınız yönetici tarafından askıya alınmıştır.');
+      }
+
+      const expectedHash = await sha256Async(
+        `${AUTH_SALT}::PWD::${user.username.toLowerCase()}::${rawPass}`
       );
-      return target;
+      if (user.passwordHash !== expectedHash) {
+        throw new Error('Kullanıcı adı veya şifre hatalı.');
+      }
+
+      const updatedUser = userService.syncUserFields(user.username, {
+        lastLoginAt: new Date().toISOString()
+      });
+
+      if (window.MCMServices?.netheriteService) {
+        window.MCMServices.netheriteService.ensureInitialBonusOnce(updatedUser.username);
+      }
+
+      const finalUser = userService.getUserByUsername(user.username) || updatedUser;
+      const session = buildSessionPayload(finalUser, false);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+      activityService.log('USER_LOGIN', finalUser.username, `${finalUser.username} giriş yaptı.`);
+      return session;
     },
 
-    deleteLicense(session, licenseId) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const all = this._getAllRaw();
-      const idx = all.findIndex(l => l.id === licenseId);
-      if (idx === -1) throw new Error('Lisans bulunamadı.');
+    async adminLogin({ username, password }) {
+      const cleanUser = String(username || '').trim();
+      const rawPass = String(password || '');
 
-      const removed = all.splice(idx, 1)[0];
-      this._saveAllRaw(all);
+      if (!cleanUser || !rawPass) {
+        throw new Error('Lütfen yönetici kullanıcı adını ve şifresini girin.');
+      }
+
+      const uHash = await sha256Async(`${AUTH_SALT}::ADMIN_USER::${cleanUser.toLowerCase()}`);
+      const pHash = await sha256Async(`${AUTH_SALT}::${rawPass}`);
+
+      if (uHash !== ADMIN_USER_HASH || pHash !== ADMIN_PASS_HASH) {
+        throw new Error('Yönetici kullanıcı adı veya şifresi geçersiz!');
+      }
+
+      let adminUser = userService.getUserByUsername(cleanUser);
+      const nowIso = new Date().toISOString();
+
+      if (!adminUser) {
+        adminUser = {
+          userId: 'USR-ADMIN-ROOT',
+          username: cleanUser,
+          minecraftPlayerName: cleanUser,
+          passwordHash: pHash,
+          rank: 'ADMIN',
+          role: 'ADMIN',
+          isModerator: true,
+          status: 'ACTIVE',
+          emeraldBalance: 0,
+          emeraldsEarnedTotal: 0,
+          emeraldsSpentTotal: 0,
+          netheriteBalance: 250,
+          initialNetheriteBonusClaimed: true,
+          lastNetheriteClaimAt: null,
+          extraLives: 0,
+          points: 0,
+          bestScore: 0,
+          gamesPlayed: 0,
+          gamesWon: 0,
+          gamesLost: 0,
+          ownedCosmetics: [],
+          equippedCosmetics: {},
+          achievements: [],
+          settings: { sound: true, particles: true },
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          lastLoginAt: nowIso
+        };
+        const users = userService.getAllUsers();
+        users.push(adminUser);
+        userService._saveAllUsers(users);
+      } else {
+        adminUser = userService.syncUserFields(adminUser.username, {
+          rank: 'ADMIN',
+          role: 'ADMIN',
+          lastLoginAt: nowIso
+        });
+      }
+
+      const session = buildSessionPayload(adminUser, true);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
       activityService.log(
-        'LICENSE_DELETED',
-        session.username,
-        `${session.username} "${removed.name}" (${removed.code}) lisansını sildi`
+        'ADMIN_LOGIN',
+        adminUser.username,
+        `Yönetici ${adminUser.username} Yönetici Paneline giriş yaptı.`
       );
-      return removed;
+      return session;
+    },
+
+    async resetForgottenPassword({ username, minecraftPlayerName = '', newPassword }) {
+      const cleanUser = String(username || '').trim();
+      const cleanMc = String(minecraftPlayerName || '').trim();
+      const rawNew = String(newPassword || '');
+
+      if (!cleanUser || !rawNew) {
+        throw new Error('Lütfen kullanıcı adınızı ve yeni şifrenizi girin.');
+      }
+      if (rawNew.length < 4) {
+        throw new Error('Yeni şifreniz en az 4 karakter olmalıdır.');
+      }
+
+      const user = userService.getUserByUsername(cleanUser);
+      if (!user) {
+        throw new Error('Bu kullanıcı adına sahip bir hesap bulunamadı.');
+      }
+
+      if (
+        user.minecraftPlayerName &&
+        cleanMc &&
+        user.minecraftPlayerName.toLowerCase() !== cleanMc.toLowerCase()
+      ) {
+        throw new Error('Girdiğiniz Minecraft oyuncu adı hesap bilgileriyle eşleşmiyor.');
+      }
+
+      const newHash = await sha256Async(
+        `${AUTH_SALT}::PWD::${user.username.toLowerCase()}::${rawNew}`
+      );
+      userService.syncUserFields(user.username, { passwordHash: newHash });
+      return true;
+    },
+
+    async changePassword(session, currentPassword, newPassword) {
+      authGuard.verifySession(session);
+      const user = userService.getUserByUsername(session.username);
+      if (!user) throw new Error('Hesap bulunamadı.');
+
+      const currHash = await sha256Async(
+        `${AUTH_SALT}::PWD::${user.username.toLowerCase()}::${String(currentPassword || '')}`
+      );
+      if (user.passwordHash !== currHash && !session.isAdminSession) {
+        throw new Error('Mevcut şifrenizi hatalı girdiniz.');
+      }
+
+      if (!newPassword || String(newPassword).length < 4) {
+        throw new Error('Yeni şifreniz en az 4 karakter olmalıdır.');
+      }
+
+      const nextHash = await sha256Async(
+        `${AUTH_SALT}::PWD::${user.username.toLowerCase()}::${String(newPassword)}`
+      );
+      userService.syncUserFields(user.username, { passwordHash: nextHash });
+      return true;
+    },
+
+    logout() {
+      const active = this.getActiveSession();
+      if (active) {
+        activityService.log('USER_LOGOUT', active.username, `${active.username} çıkış yaptı.`);
+      }
+      storage.remove(STORAGE_KEYS.ACTIVE_SESSION);
+      return true;
     }
   };
 
   // ==========================================
-  // 5. PARTY SERVICE (Sections 10, 11, 12, 13 — DATA-DRIVEN RANK PERMISSIONS & LIMITS)
+  // PARTİ SİSTEMİ & DAVET YÖNETİMİ (partyService — #4, #5, #6)
+  // Partiye katılmak/ayrılmak hesap, rütbe veya bakiyeyi ASLA sıfırlamaz.
   // ==========================================
-  const PARTY_STATUSES = ['WAITING', 'READY', 'STARTING', 'ACTIVE', 'FINISHED', 'CANCELLED'];
-
   const partyService = {
-    _ensureSeedParties() {
-      const existing = storageAdapter.get(STORAGE_KEYS.PARTIES, null);
-      if (existing && Array.isArray(existing)) {
-        existing.forEach(p => {
-          if (!p.gameMode) p.gameMode = 'Klasik Milyoner (15 Soru)';
-          if (p.description === undefined)
-            p.description = 'Minecraft Milyoner turnuva parti odası.';
-        });
-        return existing;
-      }
+    INVITE_TTL_MS: 24 * 60 * 60 * 1000, // 24 saat geçerli davet
 
-      const empty = [];
-      storageAdapter.set(STORAGE_KEYS.PARTIES, empty);
-      return empty;
+    getAllParties() {
+      return storage.get(STORAGE_KEYS.PARTIES, []);
     },
 
-    _getAllRaw() {
-      return this._ensureSeedParties();
+    _saveAllParties(parties) {
+      storage.set(STORAGE_KEYS.PARTIES, parties);
     },
 
-    _saveAllRaw(list) {
-      storageAdapter.set(STORAGE_KEYS.PARTIES, list);
+    getAllInvitations() {
+      return storage.get(STORAGE_KEYS.PARTY_INVITATIONS, []);
     },
 
-    generateInviteCode() {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      const seg = Array.from({ length: 4 }, () =>
-        chars[Math.floor(Math.random() * chars.length)]
-      ).join('');
-      return `MCM-${seg}`;
+    _saveAllInvitations(list) {
+      storage.set(STORAGE_KEYS.PARTY_INVITATIONS, list);
     },
 
-    listParties(session) {
-      authGuard.verifySession(session);
-      const all = this._getAllRaw();
-      const perms = authGuard.getUserPermissions(session);
-      if (perms.canCreateParty || authGuard.getEffectiveRole(session) === 'ADMIN') {
-        return all;
-      }
-      return all.filter(
-        p =>
-          p.status === 'WAITING' ||
-          p.participants.some(pt => pt.username.toLowerCase() === session.username.toLowerCase()) ||
-          (p.invitedUsers || []).some(u => u.toLowerCase() === session.username.toLowerCase())
+    getActivePartyForUser(username) {
+      if (!username) return null;
+      const clean = String(username).trim().toLowerCase();
+      return (
+        this.getAllParties().find(
+          p =>
+            p.status !== 'CLOSED' &&
+            Array.isArray(p.members) &&
+            p.members.some(m => m.username.toLowerCase() === clean)
+        ) || null
       );
     },
 
-    getPartyById(session, partyId) {
-      authGuard.verifySession(session);
-      return this._getAllRaw().find(p => p.id === partyId) || null;
+    getPendingInvitationsForUser(username) {
+      if (!username) return [];
+      const clean = String(username).trim().toLowerCase();
+      const now = Date.now();
+      const invites = this.getAllInvitations();
+      let changed = false;
+
+      invites.forEach(inv => {
+        if (inv.status === 'PENDING' && inv.expiresAt && new Date(inv.expiresAt).getTime() < now) {
+          inv.status = 'EXPIRED';
+          changed = true;
+        }
+      });
+      if (changed) this._saveAllInvitations(invites);
+
+      return invites.filter(
+        inv => inv.recipientUsername.toLowerCase() === clean && inv.status === 'PENDING'
+      );
     },
 
-    // Section 10, 11 & 13: Enforce data-driven rank permission (canCreateParty) and maxPartySize!
-    createParty(
-      session,
-      { name, maxPlayers = 4, gameMode = 'Classic Millionaire (15 Qs)', description = '' }
-    ) {
-      const perms = authGuard.requirePermission(session, 'canCreateParty');
-
-      const cleanName = String(name || '').trim();
-      if (!cleanName) throw new Error('Please enter a party name.');
-
-      const requestedMax = Math.max(2, Number(maxPlayers) || 4);
-      const rankMaxAllowed = Number(perms.maxPartySize) || 4;
-      const isAdmin = authGuard.getEffectiveRole(session) === 'ADMIN';
-
-      if (!isAdmin && requestedMax > rankMaxAllowed) {
-        throw new Error(
-          `Party Size Limit: Your current rank (${authGuard.getEffectiveRankId(session)}) allows up to ${rankMaxAllowed} players per party. Upgrade your rank for larger parties!`
-        );
+    createParty(session, partyName) {
+      authGuard.verifySession(session);
+      const perms = authGuard.getUserPermissions(session);
+      if (!perms.canCreateParty && !session.isAdminSession) {
+        throw new Error('Parti oluşturmak için en az VIP rütbesine sahip olmalısınız!');
       }
 
-      const maxP = isAdmin ? Math.min(999, requestedMax) : Math.min(rankMaxAllowed, requestedMax);
-      const all = this._getAllRaw();
-      const now = new Date().toISOString();
-
-      let inviteCode = this.generateInviteCode();
-      while (all.some(p => p.inviteCode === inviteCode)) {
-        inviteCode = this.generateInviteCode();
+      const cleanName = String(partyName || '').trim();
+      if (!cleanName || cleanName.length < 3) {
+        throw new Error('Parti adı en az 3 karakter olmalıdır.');
       }
 
-      const effRole = authGuard.getEffectiveRole(session);
+      const existing = this.getActivePartyForUser(session.username);
+      if (existing) {
+        throw new Error(`Zaten "${existing.partyName}" adlı bir partidesiniz!`);
+      }
+
+      const existingCodes = new Set(this.getAllParties().map(p => p.partyCode));
+      let partyCode = '';
+      do {
+        partyCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      } while (partyCode.length < 6 || existingCodes.has(partyCode));
+
       const newParty = {
-        id: 'PRT-' + Math.floor(1000 + Math.random() * 9000),
-        name: cleanName,
-        organizer: session.username,
-        organizerLicenseId: session.licenseId,
-        maxPlayers: maxP,
-        gameMode: String(gameMode || 'Classic Millionaire (15 Qs)').trim(),
-        description: String(description || '').trim(),
-        inviteCode,
-        status: 'WAITING',
-        createdAt: now,
-        participants: [
+        partyId: generateId('PRT'),
+        partyCode,
+        partyName: cleanName,
+        leaderUsername: session.username,
+        maxMembers: Number(perms.maxPartySize || 8),
+        status: 'LOBBY',
+        members: [
           {
             username: session.username,
-            role: effRole,
-            joinStatus: 'JOINED',
-            joinedAt: now
+            joinedAt: new Date().toISOString(),
+            score: 0
           }
         ],
-        invitedUsers: []
+        createdAt: new Date().toISOString()
       };
 
-      all.unshift(newParty);
-      this._saveAllRaw(all);
+      const parties = this.getAllParties();
+      parties.unshift(newParty);
+      this._saveAllParties(parties);
 
       activityService.log(
-        'PARTY_CREATED',
+        'PARTY_CREATE',
         session.username,
-        `${session.username} (${authGuard.getEffectiveRankId(session)}) created party "${newParty.name}" (Max ${maxP}, Code: ${newParty.inviteCode})`,
-        { partyId: newParty.id }
+        `${session.username} "${cleanName}" (${partyCode}) partisini oluşturdu.`
       );
-
       return newParty;
     },
 
-    _assertPartyOwnerOrAdmin(session, party) {
+    /**
+     * #4: Parti Kodu İle Katılma
+     * Geçersiz kod -> "Geçersiz parti kodu."
+     * Kapalı parti -> "Bu parti artık aktif değil."
+     * Dolu parti -> "Bu parti dolu."
+     */
+    joinPartyByCode(session, partyCode) {
       authGuard.verifySession(session);
-      if (!party) throw new Error('Party not found.');
-      const effRole = authGuard.getEffectiveRole(session);
-      const perms = authGuard.getUserPermissions(session);
-      const isOwner = party.organizer.toLowerCase() === session.username.toLowerCase();
-      if (effRole !== 'ADMIN' && !(perms.canCreateParty && isOwner)) {
-        throw new Error(
-          'Access Denied: Only the party owner or an Admin can manage this party.'
-        );
-      }
-    },
-
-    // Section 10 & 11: Enforce canInvitePlayers permission
-    invitePlayer(session, partyId, targetUsername = '') {
-      authGuard.requirePermission(session, 'canInvitePlayers');
-      const all = this._getAllRaw();
-      const party = all.find(p => p.id === partyId);
-      this._assertPartyOwnerOrAdmin(session, party);
-
-      if (party.status === 'CANCELLED' || party.status === 'FINISHED') {
-        throw new Error('This party is no longer active.');
+      const cleanCode = String(partyCode || '')
+        .trim()
+        .toUpperCase();
+      if (!cleanCode) {
+        throw new Error('Geçersiz parti kodu.');
       }
 
-      const cleanUser = String(targetUsername || '').trim();
-      if (cleanUser) {
-        if (!party.invitedUsers) party.invitedUsers = [];
-        if (!party.invitedUsers.some(u => u.toLowerCase() === cleanUser.toLowerCase())) {
-          party.invitedUsers.push(cleanUser);
+      const parties = this.getAllParties();
+      const matchingParties = parties.filter(p => p.partyCode === cleanCode);
+      if (matchingParties.length === 0) {
+        throw new Error('Geçersiz parti kodu.');
+      }
+
+      const activeParty = matchingParties.find(p => p.status !== 'CLOSED');
+      if (!activeParty) {
+        throw new Error('Bu parti artık aktif değil.');
+      }
+
+      const alreadyIn = activeParty.members.some(
+        m => m.username.toLowerCase() === session.username.toLowerCase()
+      );
+      if (alreadyIn) return activeParty;
+
+      if (activeParty.members.length >= (activeParty.maxMembers || 8)) {
+        throw new Error('Bu parti dolu.');
+      }
+
+      // Kullanıcının başka aktif partisi varsa ondan çıkar
+      parties.forEach(p => {
+        if (p.partyId !== activeParty.partyId && p.status !== 'CLOSED') {
+          p.members = p.members.filter(
+            m => m.username.toLowerCase() !== session.username.toLowerCase()
+          );
+          if (p.members.length === 0) p.status = 'CLOSED';
         }
+      });
+
+      activeParty.members.push({
+        username: session.username,
+        joinedAt: new Date().toISOString(),
+        score: 0
+      });
+      this._saveAllParties(parties);
+
+      // Bu oyuncuya ait bekleyen davet varsa ACCEPTED işaretle
+      const invites = this.getAllInvitations();
+      invites.forEach(inv => {
         if (
-          !party.participants.some(pt => pt.username.toLowerCase() === cleanUser.toLowerCase())
+          inv.partyId === activeParty.partyId &&
+          inv.recipientUsername.toLowerCase() === session.username.toLowerCase() &&
+          inv.status === 'PENDING'
         ) {
-          party.participants.push({
-            username: cleanUser,
-            role: 'PLAYER',
-            joinStatus: 'INVITED',
-            joinedAt: new Date().toISOString()
+          inv.status = 'ACCEPTED';
+        }
+      });
+      this._saveAllInvitations(invites);
+
+      // Odadaki diğer üyelere bildirim gönder
+      activeParty.members.forEach(m => {
+        if (m.username.toLowerCase() !== session.username.toLowerCase()) {
+          notificationService.notifyUser(m.username, {
+            type: 'PARTY_JOIN_REQUEST',
+            title: '🎉 Partiye Yeni Oyuncu Katıldı',
+            message: `${session.username}, "${activeParty.partyName}" partisine katıldı!`
           });
         }
-        this._saveAllRaw(all);
-        activityService.log(
-          'PLAYER_INVITED',
-          session.username,
-          `${session.username} invited ${cleanUser} to "${party.name}"`,
-          { partyId: party.id }
-        );
-      }
+      });
 
-      return {
-        partyName: party.name,
-        partyId: party.id,
-        organizer: party.organizer,
-        inviteCode: party.inviteCode,
-        invitationText: `Minecraft Milyoner Party Invitation\nParty: ${party.name}\nOwner: ${party.organizer}\nMode: ${party.gameMode}\nInvite Code: ${party.inviteCode}`
-      };
+      activityService.log(
+        'PARTY_JOIN',
+        session.username,
+        `${session.username}, "${activeParty.partyName}" (${activeParty.partyCode}) partisine katıldı.`
+      );
+      return activeParty;
     },
 
-    // Section 2 & 12: Join Party — NEVER resets license, account, rank, VIP, Emeralds, or points!
-    joinPartyByInviteCode(session, inviteCodeInput) {
+    /**
+     * #5: Oyuncu Davet Et
+     * Doğrulamalar:
+     * - Kendini davet edemez
+     * - Var olmayan oyuncuyu davet edemez
+     * - Zaten partide olanı davet edemez
+     * - Dolu partiye davet gönderemez
+     * - Aynı oyuncuya mükerrer aktif davet gönderemez
+     */
+    invitePlayerToParty(session, partyId, targetUsername) {
       authGuard.verifySession(session);
-      const code = String(inviteCodeInput || '').trim().toUpperCase();
-      if (!code) throw new Error('Please enter a valid Party Code (e.g. MCM-8K2P).');
-
-      const all = this._getAllRaw();
-      const party = all.find(
-        p => p.inviteCode.toUpperCase() === code || p.id.toUpperCase() === code
-      );
-      if (!party) {
-        throw new Error('INVALID PARTY CODE: No party found with that invite code.');
+      const cleanTarget = String(targetUsername || '').trim();
+      if (!cleanTarget) {
+        throw new Error('Lütfen davet edilecek oyuncunun adını girin.');
       }
 
-      if (party.status === 'CANCELLED' || party.status === 'FINISHED') {
-        throw new Error(`Cannot join this party (Status: ${party.status}).`);
+      if (cleanTarget.toLowerCase() === session.username.toLowerCase()) {
+        throw new Error('Kendinizi partiye davet edemezsiniz.');
       }
 
-      const existingParticipant = party.participants.find(
-        pt => pt.username.toLowerCase() === session.username.toLowerCase()
-      );
+      const targetUser = userService.getUserByUsername(cleanTarget);
+      if (!targetUser) {
+        throw new Error(`"${cleanTarget}" adında kayıtlı bir oyuncu bulunamadı.`);
+      }
 
-      const joinedCount = party.participants.filter(pt => pt.joinStatus === 'JOINED').length;
+      const party = this.getAllParties().find(p => p.partyId === partyId);
+      if (!party || party.status === 'CLOSED') {
+        throw new Error('Bu parti artık aktif değil.');
+      }
+
+      const isLeader = party.leaderUsername.toLowerCase() === session.username.toLowerCase();
+      const perms = authGuard.getUserPermissions(session);
+      if (!isLeader && !perms.canInvitePlayers && !session.isAdminSession) {
+        throw new Error('Bu partiye oyuncu davet etme yetkiniz bulunmuyor.');
+      }
+
+      if (party.members.length >= (party.maxMembers || 8)) {
+        throw new Error('Bu parti dolu.');
+      }
+
       if (
-        (!existingParticipant || existingParticipant.joinStatus !== 'JOINED') &&
-        joinedCount >= party.maxPlayers
+        party.members.some(m => m.username.toLowerCase() === targetUser.username.toLowerCase())
       ) {
-        throw new Error('PARTY FULL: This party has reached its maximum player capacity.');
+        throw new Error(`${targetUser.username} zaten bu partide yer alıyor.`);
       }
 
-      const now = new Date().toISOString();
-      const effRole = authGuard.getEffectiveRole(session);
-      if (existingParticipant) {
-        existingParticipant.joinStatus = 'JOINED';
-        existingParticipant.role = effRole;
-        existingParticipant.joinedAt = now;
-      } else {
-        party.participants.push({
+      const invites = this.getAllInvitations();
+      const now = Date.now();
+      const duplicate = invites.find(
+        inv =>
+          inv.partyId === party.partyId &&
+          inv.recipientUsername.toLowerCase() === targetUser.username.toLowerCase() &&
+          inv.status === 'PENDING' &&
+          (!inv.expiresAt || new Date(inv.expiresAt).getTime() > now)
+      );
+      if (duplicate) {
+        throw new Error(`${targetUser.username} oyuncusuna zaten aktif bir davet gönderildi.`);
+      }
+
+      const invitation = {
+        id: generateId('INV'),
+        partyId: party.partyId,
+        partyCode: party.partyCode,
+        partyName: party.partyName,
+        inviterUsername: session.username,
+        recipientUsername: targetUser.username,
+        status: 'PENDING',
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + this.INVITE_TTL_MS).toISOString()
+      };
+
+      invites.unshift(invitation);
+      this._saveAllInvitations(invites);
+
+      const notif = notificationService.notifyUser(targetUser.username, {
+        type: 'PARTY_INVITE',
+        title: 'Parti Daveti',
+        message: `${session.username} sizi bir partiye davet etti.`,
+        meta: {
+          invitationId: invitation.id,
+          partyId: party.partyId,
+          partyCode: party.partyCode,
+          partyName: party.partyName,
+          fromUsername: session.username,
+          invitationStatus: 'PENDING'
+        }
+      });
+
+      invitation.notificationId = notif?.id || null;
+      this._saveAllInvitations(invites);
+
+      activityService.log(
+        'PARTY_INVITE',
+        session.username,
+        `${session.username}, ${targetUser.username} oyuncusuna "${party.partyName}" (${party.partyCode}) parti daveti gönderdi.`
+      );
+
+      return invitation;
+    },
+
+    /**
+     * #5: Parti Davetini Kabul Et ([ Kabul Et ])
+     */
+    acceptPartyInvitation(session, invitationId) {
+      authGuard.verifySession(session);
+      const invites = this.getAllInvitations();
+      const inv = invites.find(i => i.id === invitationId);
+
+      if (!inv) {
+        throw new Error('Parti daveti bulunamadı.');
+      }
+      if (inv.recipientUsername.toLowerCase() !== session.username.toLowerCase()) {
+        throw new Error('Bu parti daveti size ait değil.');
+      }
+      if (inv.status === 'ACCEPTED') {
+        throw new Error('Bu parti davetini zaten kabul ettiniz.');
+      }
+      if (inv.status === 'REJECTED') {
+        throw new Error('Reddedilmiş bir parti daveti kabul edilemez.');
+      }
+      if (
+        inv.status === 'EXPIRED' ||
+        (inv.expiresAt && new Date(inv.expiresAt).getTime() < Date.now())
+      ) {
+        inv.status = 'EXPIRED';
+        this._saveAllInvitations(invites);
+        throw new Error('Bu parti davetinin süresi dolmuş.');
+      }
+
+      const parties = this.getAllParties();
+      const party = parties.find(p => p.partyId === inv.partyId);
+      if (!party || party.status === 'CLOSED') {
+        inv.status = 'EXPIRED';
+        this._saveAllInvitations(invites);
+        throw new Error('Bu parti artık aktif değil.');
+      }
+
+      if (
+        !party.members.some(m => m.username.toLowerCase() === session.username.toLowerCase()) &&
+        party.members.length >= (party.maxMembers || 8)
+      ) {
+        throw new Error('Bu parti dolu.');
+      }
+
+      // Kullanıcının başka aktif partisi varsa ondan çıkar
+      parties.forEach(p => {
+        if (p.partyId !== party.partyId && p.status !== 'CLOSED') {
+          p.members = p.members.filter(
+            m => m.username.toLowerCase() !== session.username.toLowerCase()
+          );
+          if (p.members.length === 0) p.status = 'CLOSED';
+        }
+      });
+
+      if (!party.members.some(m => m.username.toLowerCase() === session.username.toLowerCase())) {
+        party.members.push({
           username: session.username,
-          role: effRole,
-          joinStatus: 'JOINED',
-          joinedAt: now
+          joinedAt: new Date().toISOString(),
+          score: 0
+        });
+      }
+      this._saveAllParties(parties);
+
+      inv.status = 'ACCEPTED';
+      inv.respondedAt = new Date().toISOString();
+      this._saveAllInvitations(invites);
+
+      if (inv.notificationId) {
+        notificationService.updateNotificationMeta(session.username, inv.notificationId, {
+          invitationStatus: 'ACCEPTED'
         });
       }
 
-      const newJoinedCount = party.participants.filter(pt => pt.joinStatus === 'JOINED').length;
-      if (newJoinedCount >= party.maxPlayers && party.status === 'WAITING') {
-        party.status = 'READY';
+      notificationService.notifyUser(inv.inviterUsername, {
+        type: 'PARTY_UPDATE',
+        title: '🎉 Parti Daveti Kabul Edildi',
+        message: `${session.username} parti davetinizi kabul etti ve "${party.partyName}" odasına katıldı!`
+      });
+
+      activityService.log(
+        'PARTY_INVITE_ACCEPT',
+        session.username,
+        `${session.username}, ${inv.inviterUsername} tarafından gönderilen "${party.partyName}" davetini kabul etti.`
+      );
+
+      return party;
+    },
+
+    /**
+     * #5: Parti Davetini Reddet ([ Reddet ])
+     */
+    rejectPartyInvitation(session, invitationId) {
+      authGuard.verifySession(session);
+      const invites = this.getAllInvitations();
+      const inv = invites.find(i => i.id === invitationId);
+
+      if (!inv) {
+        throw new Error('Parti daveti bulunamadı.');
+      }
+      if (inv.recipientUsername.toLowerCase() !== session.username.toLowerCase()) {
+        throw new Error('Bu parti daveti size ait değil.');
+      }
+      if (inv.status !== 'PENDING') {
+        throw new Error('Bu davet zaten yanıtlanmış.');
       }
 
-      this._saveAllRaw(all);
+      inv.status = 'REJECTED';
+      inv.respondedAt = new Date().toISOString();
+      this._saveAllInvitations(invites);
+
+      if (inv.notificationId) {
+        notificationService.updateNotificationMeta(session.username, inv.notificationId, {
+          invitationStatus: 'REJECTED'
+        });
+      }
+
+      notificationService.notifyUser(inv.inviterUsername, {
+        type: 'PARTY_UPDATE',
+        title: 'Parti Daveti Reddedildi',
+        message: `${session.username}, "${inv.partyName}" parti davetinizi reddetti.`
+      });
+
       activityService.log(
-        'PLAYER_JOINED',
+        'PARTY_INVITE_REJECT',
         session.username,
-        `Player ${session.username} joined party "${party.name}" (${party.inviteCode})`,
-        { partyId: party.id }
+        `${session.username}, "${inv.partyName}" parti davetini reddetti.`
       );
+
+      return inv;
+    },
+
+    kickPartyMember(session, partyId, targetUsername) {
+      authGuard.verifySession(session);
+      const parties = this.getAllParties();
+      const party = parties.find(p => p.partyId === partyId);
+      if (!party || party.status === 'CLOSED') {
+        throw new Error('Bu parti artık aktif değil.');
+      }
+
+      if (
+        party.leaderUsername.toLowerCase() !== session.username.toLowerCase() &&
+        !session.isAdminSession
+      ) {
+        throw new Error('Yalnızca parti lideri oyuncu çıkarabilir.');
+      }
+
+      party.members = party.members.filter(
+        m => m.username.toLowerCase() !== String(targetUsername).trim().toLowerCase()
+      );
+      this._saveAllParties(parties);
+
+      notificationService.notifyUser(targetUsername, {
+        type: 'PARTY_UPDATE',
+        title: 'Partiden Çıkarıldınız',
+        message: `"${party.partyName}" partisinden lider tarafından çıkarıldınız.`
+      });
 
       return party;
     },
 
     leaveParty(session, partyId) {
       authGuard.verifySession(session);
-      const all = this._getAllRaw();
-      const party = all.find(p => p.id === partyId);
-      if (!party) throw new Error('Party not found.');
+      const parties = this.getAllParties();
+      const party = parties.find(p => p.partyId === partyId);
+      if (!party) return true;
 
-      const idx = party.participants.findIndex(
-        pt => pt.username.toLowerCase() === session.username.toLowerCase()
+      party.members = party.members.filter(
+        m => m.username.toLowerCase() !== session.username.toLowerCase()
       );
-      if (idx === -1) {
-        throw new Error('You are not a participant in this party.');
+
+      if (party.members.length === 0) {
+        party.status = 'CLOSED';
+      } else if (party.leaderUsername.toLowerCase() === session.username.toLowerCase()) {
+        party.leaderUsername = party.members[0].username;
+        notificationService.notifyUser(party.leaderUsername, {
+          type: 'PARTY_UPDATE',
+          title: '👑 Yeni Parti Liderisiniz',
+          message: `"${party.partyName}" partisinde liderlik size devredildi.`
+        });
       }
 
-      party.participants.splice(idx, 1);
+      this._saveAllParties(parties);
+      activityService.log(
+        'PARTY_LEAVE',
+        session.username,
+        `${session.username}, "${party.partyName}" partisinden ayrıldı.`
+      );
+      return true;
+    },
+
+    startPartyMatch(session, partyId) {
+      authGuard.verifySession(session);
+      const parties = this.getAllParties();
+      const party = parties.find(p => p.partyId === partyId && p.status !== 'CLOSED');
+      if (!party) throw new Error('Bu parti artık aktif değil.');
+
       if (
-        party.status === 'READY' &&
-        party.participants.filter(pt => pt.joinStatus === 'JOINED').length < party.maxPlayers
+        party.leaderUsername.toLowerCase() !== session.username.toLowerCase() &&
+        !session.isAdminSession
       ) {
-        party.status = 'WAITING';
+        throw new Error('Yalnızca parti lideri maçı başlatabilir.');
       }
 
-      this._saveAllRaw(all);
-      activityService.log(
-        'PLAYER_LEFT_PARTY',
-        session.username,
-        `${session.username} left party "${party.name}"`,
-        { partyId: party.id }
-      );
+      party.status = 'IN_GAME';
+      this._saveAllParties(parties);
+
+      party.members.forEach(m => {
+        if (m.username.toLowerCase() !== session.username.toLowerCase()) {
+          notificationService.notifyUser(m.username, {
+            type: 'PARTY_UPDATE',
+            title: '⚔️ Parti Maçı Başladı!',
+            message: `"${party.partyName}" partisinde turnuva maçı lider tarafından başlatıldı!`
+          });
+        }
+      });
+
       return party;
     },
 
-    removeParticipant(session, partyId, targetUsername) {
-      const all = this._getAllRaw();
-      const party = all.find(p => p.id === partyId);
-      this._assertPartyOwnerOrAdmin(session, party);
+    updateMemberScore(username, scoreEarned) {
+      const parties = this.getAllParties();
+      const clean = String(username || '').trim().toLowerCase();
+      let updated = false;
 
-      const idx = party.participants.findIndex(
-        pt => pt.username.toLowerCase() === String(targetUsername).toLowerCase()
-      );
-      if (idx === -1) throw new Error('Player not found in this party.');
+      parties.forEach(p => {
+        if (p.status !== 'CLOSED') {
+          const member = p.members.find(m => m.username.toLowerCase() === clean);
+          if (member) {
+            member.score = Math.max(Number(member.score || 0), Number(scoreEarned || 0));
+            updated = true;
+          }
+        }
+      });
 
-      party.participants[idx].joinStatus = 'REMOVED';
-      this._saveAllRaw(all);
-
-      activityService.log(
-        'PLAYER_REMOVED',
-        session.username,
-        `${session.username} removed ${targetUsername} from party "${party.name}"`,
-        { partyId: party.id }
-      );
-      return party;
+      if (updated) this._saveAllParties(parties);
     },
 
-    setPartyStatus(session, partyId, newStatus) {
-      if (!PARTY_STATUSES.includes(newStatus)) {
-        throw new Error('Invalid party status.');
-      }
-      const all = this._getAllRaw();
-      const party = all.find(p => p.id === partyId);
-      this._assertPartyOwnerOrAdmin(session, party);
-
-      party.status = newStatus;
-      this._saveAllRaw(all);
-
+    adminCloseParty(session, partyId) {
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
+      const parties = this.getAllParties();
+      const party = parties.find(p => p.partyId === partyId);
+      if (!party) throw new Error('Parti bulunamadı.');
+      party.status = 'CLOSED';
+      this._saveAllParties(parties);
       activityService.log(
-        `PARTY_${newStatus}`,
+        'ADMIN_ACTION',
         session.username,
-        `${session.username} changed party "${party.name}" status to ${newStatus}`,
-        { partyId: party.id }
+        `Parti kapatıldı: ${party.partyName} (${party.partyCode})`
       );
       return party;
-    },
-
-    transferOwnership(session, partyId, newOwnerUsername) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const all = this._getAllRaw();
-      const party = all.find(p => p.id === partyId);
-      if (!party) throw new Error('Party not found.');
-
-      const cleanOwner = String(newOwnerUsername || '').trim();
-      if (!cleanOwner) throw new Error('New owner username is required.');
-
-      const prevOwner = party.organizer;
-      party.organizer = cleanOwner;
-      this._saveAllRaw(all);
-
-      activityService.log(
-        'PARTY_TRANSFER',
-        session.username,
-        `Admin ${session.username} transferred party "${party.name}" from ${prevOwner} to ${cleanOwner}`
-      );
-      return party;
-    },
-
-    deleteParty(session, partyId) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const all = this._getAllRaw();
-      const idx = all.findIndex(p => p.id === partyId);
-      if (idx === -1) throw new Error('Party not found.');
-
-      const removed = all.splice(idx, 1)[0];
-      this._saveAllRaw(all);
-
-      activityService.log(
-        'PARTY_DELETED',
-        session.username,
-        `Admin ${session.username} deleted party "${removed.name}" (${removed.id})`
-      );
-      return removed;
     }
   };
 
   // ==========================================
-  // 6. UNIFIED 4-TIER PRIORITY, SUPPORT, BUG REPORT & SUGGESTION SERVICE (Sections 21, 22, 23)
+  // DESTEK SİSTEMİ (supportService — #18)
+  // Kategoriler: Teknik, Hesap, Parti, Ödeme, Mağaza, Diğer
   // ==========================================
-  // Priority Order: CRITICAL (4) > VERY HIGH (3) > HIGH (2) > NORMAL (1)
-  const PRIORITY_WEIGHT = {
-    CRITICAL: 4,
-    'VERY HIGH': 3,
-    HIGH: 2,
-    NORMAL: 1
-  };
-
   const supportService = {
-    // Section 23: PLAYER -> Normal | VIP -> Yüksek (HIGH) | VIP+ / MVP / MVP+ / MVIP / MVIP+ -> Çok Yüksek (VERY HIGH) | ADMIN -> Kritik (CRITICAL)
-    computeUserPriority(session, kind = 'support') {
-      const effRole = authGuard.getEffectiveRole(session);
-      if (effRole === 'ADMIN') return 'CRITICAL';
+    getAllTickets() {
+      return storage.get(STORAGE_KEYS.SUPPORT_TICKETS, []);
+    },
 
-      const rankId = authGuard.getEffectiveRankId(session);
-      if (
-        [
-          'VIP_PLUS',
-          'MVP',
-          'MVP_PLUS',
-          'MVIP',
-          'MVIP_PLUS',
-          'ELITE',
-          'LEGEND',
-          'CHAMPION',
-          'MILLIONAIRE'
-        ].includes(rankId)
-      ) {
-        return 'VERY HIGH';
+    getUserTickets(username) {
+      const clean = String(username || '').trim().toLowerCase();
+      return this.getAllTickets().filter(t => t.username.toLowerCase() === clean);
+    },
+
+    createTicket(session, { category = 'Teknik', subject, message }) {
+      authGuard.verifySession(session);
+      const cleanSub = String(subject || '').trim();
+      const cleanMsg = String(message || '').trim();
+      if (!cleanSub || !cleanMsg) {
+        throw new Error('Lütfen konu başlığını ve mesajınızı eksiksiz yazın.');
       }
 
       const perms = authGuard.getUserPermissions(session);
-      if (kind === 'bug' && perms.bugPriority) return perms.bugPriority;
-      if (kind === 'suggestion' && perms.suggestionPriority) return perms.suggestionPriority;
-      if (perms.supportPriority) return perms.supportPriority;
-
-      if (rankId === 'VIP' || effRole === 'VIP') {
-        return 'HIGH';
-      }
-      return 'NORMAL';
-    },
-
-    formatPriorityTR(priority) {
-      const map = {
-        CRITICAL: 'Kritik',
-        'VERY HIGH': 'Çok Yüksek',
-        HIGH: 'Yüksek',
-        NORMAL: 'Normal'
-      };
-      return map[String(priority || 'NORMAL').toUpperCase()] || 'Normal';
-    },
-
-    _sortByPriorityAndDate(list) {
-      return [...list].sort((a, b) => {
-        const pwA = PRIORITY_WEIGHT[a.priority] || 1;
-        const pwB = PRIORITY_WEIGHT[b.priority] || 1;
-        if (pwB !== pwA) return pwB - pwA;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-    },
-
-    // --- A) SUPPORT TICKETS (Section 23) ---
-    _ensureSeedTickets() {
-      const existing = storageAdapter.get(STORAGE_KEYS.SUPPORT_TICKETS, null);
-      if (existing && Array.isArray(existing)) return existing;
-      const empty = [];
-      storageAdapter.set(STORAGE_KEYS.SUPPORT_TICKETS, empty);
-      return empty;
-    },
-
-    createSupportTicket(session, { category, title, description }) {
-      authGuard.verifySession(session);
-      const cleanTitle = String(title || '').trim();
-      const cleanDesc = String(description || '').trim();
-      if (!cleanTitle || !cleanDesc) {
-        throw new Error('Lütfen konu başlığını ve detaylı açıklamayı doldurun.');
-      }
-
-      const effRole = authGuard.getEffectiveRole(session);
-      const effRank = authGuard.getEffectiveRankId(session);
-      const isVip = effRole !== 'PLAYER';
-      const priority = this.computeUserPriority(session, 'support');
-      const list = this._ensureSeedTickets();
+      const tickets = this.getAllTickets();
       const ticket = {
-        id: 'TCK-' + Math.floor(1000 + Math.random() * 9000),
-        userId: session.userId || 'USR-0',
+        id: generateId('SUP'),
         username: session.username,
-        role: effRole,
-        rank: effRank,
-        isVip,
-        category: category || 'Teknik',
-        title: cleanTitle,
-        description: cleanDesc,
-        priority,
+        category: String(category || 'Teknik'),
+        subject: cleanSub,
+        priority: perms.supportPriority || 'NORMAL',
         status: 'OPEN',
-        adminReply: null,
+        messages: [
+          {
+            sender: session.username,
+            senderRole: 'USER',
+            text: cleanMsg,
+            createdAt: new Date().toISOString()
+          }
+        ],
         createdAt: new Date().toISOString()
       };
 
-      list.unshift(ticket);
-      storageAdapter.set(STORAGE_KEYS.SUPPORT_TICKETS, list);
+      tickets.unshift(ticket);
+      storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
       activityService.log(
-        'SUPPORT_TICKET_CREATED',
+        'SUPPORT_CREATE',
         session.username,
-        `${session.username} [${effRank} / ${priority}] destek talebi gönderdi: "${cleanTitle}"`
+        `${session.username} yeni bir destek talebi oluşturdu: "${cleanSub}"`
       );
       return ticket;
     },
 
-    listSupportTickets(session, onlyMine = false) {
-      authGuard.verifySession(session);
-      const all = this._ensureSeedTickets();
-      const effRole = authGuard.getEffectiveRole(session);
-      const filtered =
-        effRole === 'ADMIN' && !onlyMine
-          ? all
-          : all.filter(
-              t =>
-                (t.userId && session.userId && t.userId === session.userId) ||
-                t.username.toLowerCase() === session.username.toLowerCase()
-            );
-      return this._sortByPriorityAndDate(filtered);
-    },
+    replyToTicket(session, ticketId, replyText) {
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
+      const cleanReply = String(replyText || '').trim();
+      if (!cleanReply) throw new Error('Yanıt metni boş olamaz.');
 
-    adminUpdateSupportTicket(session, ticketId, { status, adminReply }) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const all = this._ensureSeedTickets();
-      const t = all.find(x => x.id === ticketId);
-      if (!t) throw new Error('Destek talebi bulunamadı.');
-      if (status) t.status = status;
-      if (adminReply !== undefined) t.adminReply = adminReply;
-      storageAdapter.set(STORAGE_KEYS.SUPPORT_TICKETS, all);
+      const tickets = this.getAllTickets();
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (!ticket) throw new Error('Destek talebi bulunamadı.');
+
+      ticket.messages.push({
+        sender: session.username,
+        senderRole: 'ADMIN',
+        text: cleanReply,
+        createdAt: new Date().toISOString()
+      });
+      ticket.status = 'ANSWERED';
+      storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+
+      notificationService.notifyUser(ticket.username, {
+        type: 'SUPPORT_REPLY',
+        title: '🎧 Destek Talebinize Yanıt Geldi',
+        message: `"${ticket.subject}" başlıklı destek talebiniz yanıtlandı: "${cleanReply}"`
+      });
+
       activityService.log(
-        'SUPPORT_TICKET_UPDATED',
+        'SUPPORT_REPLY',
         session.username,
-        `Admin ${session.username} destek talebini (${t.id}) güncelledi (${t.status})`
+        `Destek talebi yanıtlandı (#${ticket.id} - ${ticket.username}).`
       );
-      return t;
+      return ticket;
+    }
+  };
+
+  // ==========================================
+  // HATA BİLDİRİM SERVİSİ (bugService — #18)
+  // Alanlar: Başlık, Açıklama, Kategori, Screenshot, Related party
+  // ==========================================
+  const bugService = {
+    getAllBugs() {
+      return storage.get(STORAGE_KEYS.BUG_REPORTS, []);
     },
 
-    // --- B) BUG REPORTS (Section 21) ---
-    _ensureSeedBugs() {
-      const existing = storageAdapter.get(STORAGE_KEYS.BUG_REPORTS, null);
-      if (existing && Array.isArray(existing)) return existing;
-      const empty = [];
-      storageAdapter.set(STORAGE_KEYS.BUG_REPORTS, empty);
-      return empty;
+    getUserBugs(username) {
+      const clean = String(username || '').trim().toLowerCase();
+      return this.getAllBugs().filter(b => b.username.toLowerCase() === clean);
     },
 
     createBugReport(
       session,
-      { title, description, category, attachmentUrl = '', relatedParty = '' }
+      {
+        title,
+        category = 'Arayüz (UI)',
+        severity = 'Orta',
+        description,
+        screenshot = '',
+        relatedParty = ''
+      }
     ) {
       authGuard.verifySession(session);
       const cleanTitle = String(title || '').trim();
       const cleanDesc = String(description || '').trim();
       if (!cleanTitle || !cleanDesc) {
-        throw new Error('Lütfen hata başlığını ve detaylı açıklamayı girin.');
+        throw new Error('Lütfen hata başlığını ve açıklamasını girin.');
       }
 
-      const effRole = authGuard.getEffectiveRole(session);
-      const effRank = authGuard.getEffectiveRankId(session);
-      const isVip = effRole !== 'PLAYER';
-      const priority = this.computeUserPriority(session, 'bug');
-      const list = this._ensureSeedBugs();
-      const bug = {
-        id: 'BUG-' + Math.floor(1000 + Math.random() * 9000),
-        userId: session.userId || 'USR-0',
+      const bugs = this.getAllBugs();
+      const report = {
+        id: generateId('BUG'),
         username: session.username,
-        role: effRole,
-        rank: effRank,
-        isVip,
         title: cleanTitle,
+        category: String(category),
+        severity: String(severity),
         description: cleanDesc,
-        category: category || 'Oynanış',
-        attachmentUrl: String(attachmentUrl || '').trim(),
-        relatedParty: String(relatedParty || '').trim(),
-        priority,
+        screenshot: String(screenshot || '').trim(),
+        relatedParty: String(relatedParty || '').trim().toUpperCase(),
         status: 'OPEN',
+        adminNote: '',
         createdAt: new Date().toISOString()
       };
 
-      list.unshift(bug);
-      storageAdapter.set(STORAGE_KEYS.BUG_REPORTS, list);
+      bugs.unshift(report);
+      storage.set(STORAGE_KEYS.BUG_REPORTS, bugs);
       activityService.log(
-        'BUG_REPORTED',
+        'BUG_REPORT',
         session.username,
-        `${session.username} [${effRank} / ${priority}] hata bildirdi: "${cleanTitle}"`
+        `${session.username} hata bildiriminde bulundu: "${cleanTitle}"`
+      );
+      return report;
+    },
+
+    adminUpdateBug(session, bugId, { status = 'ÇÖZÜLDÜ', adminNote = '' }) {
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
+      const bugs = this.getAllBugs();
+      const bug = bugs.find(b => b.id === bugId);
+      if (!bug) throw new Error('Hata kaydı bulunamadı.');
+
+      bug.status = status;
+      if (adminNote !== undefined) bug.adminNote = String(adminNote).trim();
+      storage.set(STORAGE_KEYS.BUG_REPORTS, bugs);
+
+      notificationService.notifyUser(bug.username, {
+        type: 'BUG_REPORT_REPLY',
+        title: '🐞 Hata Bildiriminiz Güncellendi',
+        message: `"${bug.title}" hata kaydınızın durumu [${bug.status}] olarak güncellendi.${
+          bug.adminNote ? ` Yönetici Notu: ${bug.adminNote}` : ''
+        }`
+      });
+
+      activityService.log(
+        'BUG_RESOLVE',
+        session.username,
+        `Hata bildirimi güncellendi (#${bug.id} -> ${bug.status}).`
       );
       return bug;
-    },
-
-    listBugReports(session, onlyMine = false) {
-      authGuard.verifySession(session);
-      const all = this._ensureSeedBugs();
-      const effRole = authGuard.getEffectiveRole(session);
-      const filtered =
-        effRole === 'ADMIN' && !onlyMine
-          ? all
-          : all.filter(
-              b =>
-                (b.userId && session.userId && b.userId === session.userId) ||
-                b.username.toLowerCase() === session.username.toLowerCase()
-            );
-      return this._sortByPriorityAndDate(filtered);
-    },
-
-    adminUpdateBugStatus(session, bugId, newStatus) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const allowed = ['OPEN', 'IN PROGRESS', 'WAITING FOR USER', 'RESOLVED', 'CLOSED'];
-      if (!allowed.includes(newStatus)) throw new Error('Geçersiz hata durumu.');
-      const all = this._ensureSeedBugs();
-      const bug = all.find(b => b.id === bugId);
-      if (!bug) throw new Error('Hata bildirimi bulunamadı.');
-      bug.status = newStatus;
-      storageAdapter.set(STORAGE_KEYS.BUG_REPORTS, all);
-      activityService.log(
-        'BUG_STATUS_UPDATED',
-        session.username,
-        `Admin ${session.username} hata kaydını (${bug.id}) ${newStatus} olarak güncelledi`
-      );
-      return bug;
-    },
-
-    // --- C) SUGGESTIONS (Section 22) ---
-    _ensureSeedSuggestions() {
-      const existing = storageAdapter.get(STORAGE_KEYS.SUGGESTIONS, null);
-      if (existing && Array.isArray(existing)) return existing;
-      const empty = [];
-      storageAdapter.set(STORAGE_KEYS.SUGGESTIONS, empty);
-      return empty;
-    },
-
-    createSuggestion(session, { title, description, category }) {
-      authGuard.verifySession(session);
-      const cleanTitle = String(title || '').trim();
-      const cleanDesc = String(description || '').trim();
-      if (!cleanTitle || !cleanDesc) {
-        throw new Error('Lütfen öneri başlığını ve açıklamasını doldurun.');
-      }
-
-      const effRole = authGuard.getEffectiveRole(session);
-      const effRank = authGuard.getEffectiveRankId(session);
-      const isVip = effRole !== 'PLAYER';
-      const priority = this.computeUserPriority(session, 'suggestion');
-      const list = this._ensureSeedSuggestions();
-      const sug = {
-        id: 'SUG-' + Math.floor(1000 + Math.random() * 9000),
-        userId: session.userId || 'USR-0',
-        username: session.username,
-        role: effRole,
-        rank: effRank,
-        isVip,
-        title: cleanTitle,
-        description: cleanDesc,
-        category: category || 'Oynanış',
-        priority,
-        status: 'REVIEWING',
-        votes: 1,
-        votedBy: [session.username],
-        createdAt: new Date().toISOString()
-      };
-
-      list.unshift(sug);
-      storageAdapter.set(STORAGE_KEYS.SUGGESTIONS, list);
-      activityService.log(
-        'SUGGESTION_CREATED',
-        session.username,
-        `${session.username} [${effRank} / ${priority}] öneri gönderdi: "${cleanTitle}"`
-      );
-      return sug;
-    },
-
-    voteSuggestion(session, suggestionId) {
-      authGuard.verifySession(session);
-      const all = this._ensureSeedSuggestions();
-      const sug = all.find(s => s.id === suggestionId);
-      if (!sug) throw new Error('Öneri bulunamadı.');
-      sug.votedBy = sug.votedBy || [];
-      const already = sug.votedBy.some(u => u.toLowerCase() === session.username.toLowerCase());
-      if (already) {
-        sug.votedBy = sug.votedBy.filter(u => u.toLowerCase() !== session.username.toLowerCase());
-        sug.votes = Math.max(0, (sug.votes || 1) - 1);
-      } else {
-        sug.votedBy.push(session.username);
-        sug.votes = (sug.votes || 0) + 1;
-      }
-      storageAdapter.set(STORAGE_KEYS.SUGGESTIONS, all);
-      return sug;
-    },
-
-    listSuggestions(session, sortBy = 'PRIORITY', onlyMine = false) {
-      authGuard.verifySession(session);
-      const raw = this._ensureSeedSuggestions();
-      const effRole = authGuard.getEffectiveRole(session);
-      const all =
-        effRole === 'ADMIN' && !onlyMine
-          ? [...raw]
-          : raw.filter(
-              s =>
-                (s.userId && session.userId && s.userId === session.userId) ||
-                s.username.toLowerCase() === session.username.toLowerCase()
-            );
-      if (sortBy === 'NEWEST') {
-        all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      } else if (sortBy === 'OLDEST') {
-        all.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      } else if (sortBy === 'MOST_VOTES') {
-        all.sort((a, b) => (b.votes || 0) - (a.votes || 0));
-      } else {
-        return this._sortByPriorityAndDate(all);
-      }
-      return all;
-    },
-
-    formatSuggestionStatusTR(status) {
-      const map = {
-        REVIEWING: 'İnceleniyor',
-        UNDER_REVIEW: 'İnceleniyor',
-        'İNCELENİYOR': 'İnceleniyor',
-        PLANNED: 'Planlandı',
-        PLANLANDI: 'Planlandı',
-        'IN DEVELOPMENT': 'Geliştiriliyor',
-        IN_PROGRESS: 'Geliştiriliyor',
-        'GELİŞTİRİLİYOR': 'Geliştiriliyor',
-        COMPLETED: 'Tamamlandı',
-        APPROVED: 'Tamamlandı',
-        TAMAMLANDI: 'Tamamlandı',
-        DECLINED: 'Reddedildi',
-        REJECTED: 'Reddedildi',
-        'REDDEDİLDİ': 'Reddedildi'
-      };
-      return map[String(status || 'REVIEWING').toUpperCase()] || status || 'İnceleniyor';
-    },
-
-    adminUpdateSuggestionStatus(session, suggestionId, newStatus) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const statusMap = {
-        REVIEWING: 'REVIEWING',
-        UNDER_REVIEW: 'REVIEWING',
-        'İnceleniyor': 'REVIEWING',
-        PLANNED: 'PLANNED',
-        'Planlandı': 'PLANNED',
-        'IN DEVELOPMENT': 'IN DEVELOPMENT',
-        IN_PROGRESS: 'IN DEVELOPMENT',
-        'Geliştiriliyor': 'IN DEVELOPMENT',
-        COMPLETED: 'COMPLETED',
-        APPROVED: 'COMPLETED',
-        'Tamamlandı': 'COMPLETED',
-        DECLINED: 'DECLINED',
-        REJECTED: 'DECLINED',
-        'Reddedildi': 'DECLINED'
-      };
-      const normalized = statusMap[newStatus] || statusMap[String(newStatus || '').toUpperCase()];
-      if (!normalized) throw new Error('Geçersiz öneri durumu.');
-      const all = this._ensureSeedSuggestions();
-      const sug = all.find(s => s.id === suggestionId);
-      if (!sug) throw new Error('Öneri bulunamadı.');
-      sug.status = normalized;
-      storageAdapter.set(STORAGE_KEYS.SUGGESTIONS, all);
-      activityService.log(
-        'SUGGESTION_STATUS_UPDATED',
-        session.username,
-        `Admin ${session.username} öneri (${sug.id}) durumunu ${this.formatSuggestionStatusTR(normalized)} olarak güncelledi`
-      );
-      return sug;
     }
   };
 
   // ==========================================
-  // 7. STRIPE PAYMENT & NETHERITE EMERALD PACKAGE ARCHITECTURE (Sections 19, 20, 21, 22, 23)
+  // ÖNERİ SERVİSİ (suggestionService — #18)
+  // Alanlar: Başlık, Açıklama, Kategori
   // ==========================================
-  // Currency Rule: 5 Zümrüt = 1 TL -> 500 Zümrüt = 100 TL (Minimum: 500 Zümrüt)
-  const DEFAULT_EMERALD_PACKAGES = [
-    {
-      id: 'PKG-EMERALD-500',
-      name: '500 Zümrüt — Netherite Başlangıç Paketi',
-      emeralds: 500,
-      priceTL: 100,
-      currency: 'TRY',
-      icon: '⬛',
-      badge: 'BAŞLANGIÇ',
-      enabled: true
+  const suggestionService = {
+    getAllSuggestions() {
+      return storage.get(STORAGE_KEYS.SUGGESTIONS, []);
     },
-    {
-      id: 'PKG-EMERALD-1000',
-      name: '1.000 Zümrüt — Netherite Madenci Paketi',
-      emeralds: 1000,
-      priceTL: 200,
-      currency: 'TRY',
-      icon: '⬛',
-      badge: 'POPÜLER',
-      enabled: true
+
+    createSuggestion(session, { category = 'Yeni Özellik', title, details }) {
+      authGuard.verifySession(session);
+      const cleanTitle = String(title || '').trim();
+      const cleanDetails = String(details || '').trim();
+      if (!cleanTitle || !cleanDetails) {
+        throw new Error('Lütfen öneri başlığını ve açıklamasını yazın.');
+      }
+
+      const list = this.getAllSuggestions();
+      const item = {
+        id: generateId('SUG'),
+        username: session.username,
+        category: String(category),
+        title: cleanTitle,
+        details: cleanDetails,
+        status: 'İNCELENİYOR',
+        adminNote: '',
+        upvotes: [session.username],
+        downvotes: [],
+        createdAt: new Date().toISOString()
+      };
+
+      list.unshift(item);
+      storage.set(STORAGE_KEYS.SUGGESTIONS, list);
+      activityService.log(
+        'SUGGESTION_CREATE',
+        session.username,
+        `${session.username} yeni bir öneri gönderdi: "${cleanTitle}"`
+      );
+      return item;
     },
-    {
-      id: 'PKG-EMERALD-2500',
-      name: '2.500 Zümrüt — Netherite Sandığı',
-      emeralds: 2500,
-      priceTL: 500,
-      currency: 'TRY',
-      icon: '⬛',
-      badge: 'AVANTAJLI',
-      enabled: true
+
+    voteSuggestion(session, sugId, direction = 'UP') {
+      authGuard.verifySession(session);
+      const list = this.getAllSuggestions();
+      const item = list.find(s => s.id === sugId);
+      if (!item) throw new Error('Öneri bulunamadı.');
+
+      const u = session.username;
+      item.upvotes = (item.upvotes || []).filter(x => x.toLowerCase() !== u.toLowerCase());
+      item.downvotes = (item.downvotes || []).filter(x => x.toLowerCase() !== u.toLowerCase());
+
+      if (direction === 'UP') item.upvotes.push(u);
+      else item.downvotes.push(u);
+
+      storage.set(STORAGE_KEYS.SUGGESTIONS, list);
+      return item;
     },
-    {
-      id: 'PKG-EMERALD-5000',
-      name: '5.000 Zümrüt — Netherite Kasası',
-      emeralds: 5000,
-      priceTL: 1000,
-      currency: 'TRY',
-      icon: '⬛',
-      badge: 'PRO',
-      enabled: true
-    },
-    {
-      id: 'PKG-EMERALD-10000',
-      name: '10.000 Zümrüt — Netherite Milyoner Hazinesi',
-      emeralds: 10000,
-      priceTL: 2000,
-      currency: 'TRY',
-      icon: '⬛',
-      badge: 'EFSANEVİ',
-      enabled: true
+
+    adminUpdateSuggestion(session, sugId, { status, adminNote }) {
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
+      const list = this.getAllSuggestions();
+      const item = list.find(s => s.id === sugId);
+      if (!item) throw new Error('Öneri bulunamadı.');
+
+      if (status) item.status = status;
+      if (adminNote !== undefined) item.adminNote = String(adminNote).trim();
+      storage.set(STORAGE_KEYS.SUGGESTIONS, list);
+
+      notificationService.notifyUser(item.username, {
+        type: 'SUGGESTION_STATUS_CHANGED',
+        title: '💡 Öneri Durumunuz Güncellendi',
+        message: `"${item.title}" başlıklı önerinizin durumu [${item.status}] olarak güncellendi.${
+          item.adminNote ? ` Yönetici Notu: ${item.adminNote}` : ''
+        }`
+      });
+
+      activityService.log(
+        'SUGGESTION_UPDATE',
+        session.username,
+        `Öneri durumu güncellendi (#${item.id} -> ${item.status}).`
+      );
+      return item;
     }
-  ];
+  };
+
+  // ==========================================
+  // STRIPE ÖDEME HAZIRLIK SERVİSİ (paymentService — #15)
+  // Asla sahte ödeme yapmaz; "Ödeme sistemi yakında aktif olacaktır (Stripe entegrasyonu hazırlanıyor)" mesajı döner.
+  // ==========================================
+  const DEFAULT_STRIPE_CONFIG = {
+    publishableKey: '',
+    webhookEndpoint: '/api/stripe/webhook',
+    currency: 'TRY',
+    mode: 'PREPARATION',
+    enabled: false,
+    statusMessage: 'Ödeme sistemi yakında aktif olacaktır (Stripe entegrasyonu hazırlanıyor)'
+  };
 
   const paymentService = {
-    conversionRateEmeraldsPerTL: 5, // 5 Emeralds = 1 TL
-    minEmeraldPurchase: 500, // Minimum 500 Emeralds (100 TL)
-    backendEndpoint: '/api/v1/stripe/create-checkout-session',
-    webhookEndpoint: '/api/v1/stripe/webhook',
-
-    _ensurePackages() {
-      const existing = storageAdapter.get(STORAGE_KEYS.EMERALD_PACKAGES, null);
-      if (existing && Array.isArray(existing) && existing.length > 0) return existing;
-      storageAdapter.set(STORAGE_KEYS.EMERALD_PACKAGES, DEFAULT_EMERALD_PACKAGES);
-      return DEFAULT_EMERALD_PACKAGES;
+    getStripeConfig() {
+      return {
+        ...DEFAULT_STRIPE_CONFIG,
+        ...storage.get(STORAGE_KEYS.STRIPE_CONFIG, DEFAULT_STRIPE_CONFIG)
+      };
     },
 
-    listEmeraldPackages(includeDisabled = false) {
-      const all = this._ensurePackages().map(p => ({ ...p }));
-      return includeDisabled ? all : all.filter(p => p.enabled !== false);
-    },
-
-    adminSaveEmeraldPackage(session, pkgData) {
+    updateStripeConfig(session, updates = {}) {
       authGuard.requireRole(session, ['ADMIN']);
-      const emeralds = Math.round(Number(pkgData.emeralds) || 0);
-      if (emeralds < this.minEmeraldPurchase) {
-        throw new Error(
-          `Minimum Zümrüt paketi miktarı ${this.minEmeraldPurchase} Zümrüt (100 TL) olmalıdır.`
-        );
-      }
-      const priceTL =
-        pkgData.priceTL !== undefined
-          ? Math.max(1, Math.round(Number(pkgData.priceTL)))
-          : Math.round(emeralds / this.conversionRateEmeraldsPerTL);
-
-      const list = this._ensurePackages();
-      const existing = list.find(p => p.id === pkgData.id);
-      if (existing) {
-        existing.name = String(pkgData.name || existing.name).trim();
-        existing.emeralds = emeralds;
-        existing.priceTL = priceTL;
-        existing.icon = String(pkgData.icon || existing.icon || '⬛').trim();
-        existing.badge = String(pkgData.badge || existing.badge || 'PAKET').trim();
-        if (pkgData.enabled !== undefined) existing.enabled = Boolean(pkgData.enabled);
-      } else {
-        list.push({
-          id: pkgData.id || 'PKG-EMERALD-' + emeralds + '-' + Date.now().toString(36).toUpperCase(),
-          name: String(pkgData.name || `${emeralds.toLocaleString('tr-TR')} Zümrüt`).trim(),
-          emeralds,
-          priceTL,
-          currency: 'TRY',
-          icon: String(pkgData.icon || '⬛').trim(),
-          badge: String(pkgData.badge || 'ÖZEL').trim(),
-          enabled: pkgData.enabled !== false
-        });
-      }
-      storageAdapter.set(STORAGE_KEYS.EMERALD_PACKAGES, list);
+      const next = {
+        ...this.getStripeConfig(),
+        ...updates,
+        updatedAt: new Date().toISOString()
+      };
+      storage.set(STORAGE_KEYS.STRIPE_CONFIG, next);
       activityService.log(
-        'EMERALD_PACKAGE_SAVED',
+        'ADMIN_ACTION',
         session.username,
-        `Admin ${session.username} Zümrüt paketini kaydetti (${emeralds} 💚 = ${priceTL} TL)`
+        'Stripe ödeme hazırlık yapılandırması güncellendi.'
       );
-      return list;
+      return next;
     },
 
-    _getProcessedWebhookEvents() {
-      return storageAdapter.get(STORAGE_KEYS.WEBHOOK_EVENTS, []);
+    getCheckoutSessions(username = null) {
+      const all = storage.get(STORAGE_KEYS.STRIPE_SESSIONS, []);
+      if (!username) return all;
+      const clean = String(username).trim().toLowerCase();
+      return all.filter(s => s.username.toLowerCase() === clean);
     },
 
-    _saveProcessedWebhookEvents(list) {
-      storageAdapter.set(STORAGE_KEYS.WEBHOOK_EVENTS, list);
-    },
-
-    _ensureSeedPayments() {
-      const existing = storageAdapter.get(STORAGE_KEYS.PAYMENTS, null);
-      if (existing && Array.isArray(existing)) return existing;
-      const empty = [];
-      storageAdapter.set(STORAGE_KEYS.PAYMENTS, empty);
-      return empty;
-    },
-
-    // Step 1 & 2 of Stripe Flow: Create Checkout Session (Status = PENDING; NEVER grants Emeralds yet!)
-    createCheckoutSession(
+    createPreparedStripeSession(
       session,
       {
-        productType = 'EMERALD_PACKAGE',
-        packageId = 'PKG-EMERALD-500',
-        title = '500 Emeralds',
-        emeraldsGranted = 0,
-        rankGranted = null,
-        priceTL = 100,
+        productType = 'RANK_UPGRADE',
+        productId,
+        productName,
+        recipientUsername = null,
+        amountTry = 0,
         currency = 'TRY'
       }
     ) {
       authGuard.verifySession(session);
+      const cfg = this.getStripeConfig();
 
-      const cleanEmeralds = Math.round(Number(emeraldsGranted) || 0);
-      if (productType === 'EMERALD_PACKAGE' && cleanEmeralds < this.minEmeraldPurchase) {
-        throw new Error(
-          `Minimum Emerald purchase is ${this.minEmeraldPurchase} Emeralds (100 TL). Purchases below 500 Emeralds are not allowed.`
-        );
-      }
-
-      const cleanAmount = Math.max(1, Math.round(Number(priceTL) || 100));
-      const payments = this._ensureSeedPayments();
-      const paymentId =
-        'PAY-' +
-        Date.now().toString(36).toUpperCase() +
-        '-' +
-        Math.random().toString(36).slice(2, 5).toUpperCase();
-      const stripeSessionId =
-        'cs_test_' +
-        Date.now().toString(36) +
-        Math.random().toString(36).slice(2, 10);
-
-      // Compute cryptographic webhook verification token so client cannot spoof `payment = success`
-      const webhookVerificationToken = computeSaltedDigest(
-        `STRIPE_WH::${paymentId}::${stripeSessionId}::${session.username}::${cleanEmeralds}::${rankGranted || ''}`
-      );
-
-      const record = {
-        id: paymentId,
-        userId: session.userId || 'USR-0',
+      const sessionRecord = {
+        id: generateId('CS_PREP'),
         username: session.username,
+        recipientUsername: recipientUsername || session.username,
         productType,
-        packageId,
-        product: title,
-        title,
-        emeraldsGranted: cleanEmeralds,
-        rankGranted: rankGranted || null,
-        amount: cleanAmount,
-        currency: currency || 'TRY',
-        stripeSessionId,
-        stripePaymentId: null,
-        webhookEventId: null,
-        webhookVerificationToken,
-        status: 'PENDING', // PENDING | PAID | FAILED | REFUNDED
-        createdAt: new Date().toISOString(),
-        paidAt: null
+        productId,
+        productName,
+        amountTry: Number(amountTry || 0),
+        currency: currency || cfg.currency || 'TRY',
+        status: 'PREPARED_PENDING_STRIPE',
+        createdAt: new Date().toISOString()
       };
 
-      payments.unshift(record);
-      storageAdapter.set(STORAGE_KEYS.PAYMENTS, payments);
-
-      activityService.log(
-        'STRIPE_CHECKOUT_CREATED',
-        session.username,
-        `${session.username} opened Stripe Checkout Session (${stripeSessionId}) for "${title}" (${cleanAmount} ${record.currency}) — Status: PENDING`
-      );
+      const list = this.getCheckoutSessions();
+      list.unshift(sessionRecord);
+      if (list.length > 250) list.length = 250;
+      storage.set(STORAGE_KEYS.STRIPE_SESSIONS, list);
 
       return {
-        ok: true,
-        paymentCompleted: false, // Never true until verified webhook!
-        checkoutSession: {
-          paymentId: record.id,
-          stripeSessionId: record.stripeSessionId,
-          productType: record.productType,
-          title: record.title,
-          emeraldsGranted: record.emeraldsGranted,
-          rankGranted: record.rankGranted,
-          amount: record.amount,
-          currency: record.currency,
-          status: record.status,
-          webhookVerificationToken
-        }
-      };
-    },
-
-    // Backward-compatible alias that opens a PENDING checkout session (never fakes instant completion)
-    initiateCheckout(
-      session,
-      {
-        packageId = 'VIP_MEMBERSHIP_200TL',
-        title = '👑 VIP Membership',
-        priceTL = 200,
-        productType = 'RANK',
-        emeraldsGranted = 0,
-        rankGranted = 'VIP'
-      }
-    ) {
-      const res = this.createCheckoutSession(session, {
-        productType,
-        packageId,
-        title,
-        emeraldsGranted,
-        rankGranted,
-        priceTL,
-        currency: 'TRY'
-      });
-      return {
-        ok: false,
-        paymentCompleted: false,
-        providerConfigured: false,
-        intent: res.checkoutSession,
-        checkoutSession: res.checkoutSession,
-        message:
-          'Stripe Checkout Session created (Status: PENDING). Currency or Rank is only granted after a verified Stripe Webhook event (checkout.session.completed).'
-      };
-    },
-
-    // Rejects any direct client attempt to mark payment=success without a signed webhook event
-    verifyClientPaymentRedirect() {
-      throw new Error(
-        'Security Policy: Client-side payment=success flags are never trusted. Waiting for verified Stripe webhook event.'
-      );
-    },
-
-    // Step 3-8 of Stripe Flow: Process Verified Stripe Webhook Event with Strict Idempotency!
-    processStripeWebhook({
-      eventId,
-      eventType = 'checkout.session.completed',
-      stripeSessionId,
-      stripePaymentId = null,
-      webhookSignature = null
-    }) {
-      if (!eventId || !stripeSessionId) {
-        throw new Error('Invalid Stripe webhook payload: missing eventId or stripeSessionId.');
-      }
-
-      // 1. Strict Idempotency Check: Never grant currency twice if Stripe retries a webhook!
-      const processedEvents = this._getProcessedWebhookEvents();
-      if (processedEvents.includes(eventId)) {
-        throw new Error(`Duplicate Stripe webhook event "${eventId}" rejected (Idempotency Check).`);
-      }
-
-      const payments = this._ensureSeedPayments();
-      const payment = payments.find(
-        p => p.stripeSessionId === stripeSessionId || p.id === stripeSessionId
-      );
-      if (!payment) {
-        throw new Error(`Stripe Checkout Session "${stripeSessionId}" not found.`);
-      }
-
-      if (payment.status === 'PAID') {
-        processedEvents.push(eventId);
-        this._saveProcessedWebhookEvents(processedEvents);
-        throw new Error(`Payment "${payment.id}" was already fulfilled (Idempotency Protection).`);
-      }
-
-      // Verify cryptographic token if present on record
-      if (payment.webhookVerificationToken && webhookSignature) {
-        if (webhookSignature !== payment.webhookVerificationToken) {
-          throw new Error('Stripe Webhook Signature verification failed.');
-        }
-      }
-
-      // Record eventId in idempotency store before mutating balances
-      processedEvents.push(eventId);
-      this._saveProcessedWebhookEvents(processedEvents);
-
-      if (eventType === 'checkout.session.payment_failed') {
-        payment.status = 'FAILED';
-        payment.webhookEventId = eventId;
-        storageAdapter.set(STORAGE_KEYS.PAYMENTS, payments);
-        activityService.log(
-          'STRIPE_PAYMENT_FAILED',
-          payment.username,
-          `Stripe webhook reported FAILED payment for ${payment.username} (${payment.title})`
-        );
-        return { ok: false, status: 'FAILED', payment };
-      }
-
-      if (eventType !== 'checkout.session.completed') {
-        throw new Error(`Unsupported Stripe webhook event type: ${eventType}`);
-      }
-
-      // Mark payment PAID
-      payment.status = 'PAID';
-      payment.webhookEventId = eventId;
-      payment.stripePaymentId =
-        stripePaymentId ||
-        'pi_test_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      payment.paidAt = new Date().toISOString();
-      storageAdapter.set(STORAGE_KEYS.PAYMENTS, payments);
-
-      let updatedProfile = null;
-      let transaction = null;
-
-      // Grant Emeralds if Emerald Package
-      if (payment.emeraldsGranted > 0 && window.MCMServices && window.MCMServices.economyService) {
-        const econRes = window.MCMServices.economyService._creditVerifiedStripePurchase({
-          username: payment.username,
-          emeralds: payment.emeraldsGranted,
-          paymentId: payment.id,
-          stripePaymentId: payment.stripePaymentId,
-          productTitle: payment.title
-        });
-        updatedProfile = econRes.profile;
-        transaction = econRes.transaction;
-      }
-
-      // Grant Rank if Rank Purchase
-      if (payment.rankGranted) {
-        userService._grantRankInternal(payment.username, payment.rankGranted, null);
-        if (window.MCMServices && window.MCMServices.economyService) {
-          updatedProfile = window.MCMServices.economyService.getPlayerEconomyProfile(
-            payment.username
-          );
-        }
-      }
-
-      // Record purchase ID on user account
-      const rawUsers = userService._getAllRaw();
-      const u = rawUsers.find(
-        x => x.minecraftUsername.toLowerCase() === payment.username.toLowerCase()
-      );
-      if (u) {
-        u.purchases = Array.isArray(u.purchases) ? u.purchases : [];
-        u.purchases.unshift({
-          paymentId: payment.id,
-          packageId: payment.packageId,
-          title: payment.title,
-          amount: payment.amount,
-          currency: payment.currency,
-          stripePaymentId: payment.stripePaymentId,
-          purchasedAt: payment.paidAt
-        });
-        userService._saveAllRaw(rawUsers);
-      }
-
-      // Refresh active session if the logged-in user is the buyer
-      const activeSess = licenseService.getActiveSession();
-      if (activeSess && activeSess.username.toLowerCase() === payment.username.toLowerCase()) {
-        licenseService.refreshSessionRole(activeSess);
-      }
-
-      activityService.log(
-        'STRIPE_WEBHOOK_VERIFIED',
-        payment.username,
-        `Verified Stripe Webhook (${eventId}): Granted "${payment.title}" to ${payment.username} (${payment.amount} ${payment.currency})`
-      );
-
-      return {
-        ok: true,
-        status: 'PAID',
-        payment,
-        emeraldsGranted: payment.emeraldsGranted,
-        rankGranted: payment.rankGranted,
-        profile: updatedProfile,
-        transaction
-      };
-    },
-
-    // Helper for Stripe Sandbox Modal in Test Mode: Generates a signed test webhook & processes it
-    completeTestModeCheckout(session, stripeSessionId, outcome = 'SUCCESS') {
-      authGuard.verifySession(session);
-      const payments = this._ensureSeedPayments();
-      const payment = payments.find(
-        p => p.stripeSessionId === stripeSessionId || p.id === stripeSessionId
-      );
-      if (!payment) throw new Error('Checkout session not found.');
-
-      const eventId =
-        'evt_test_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
-      const eventType =
-        outcome === 'FAILED'
-          ? 'checkout.session.payment_failed'
-          : 'checkout.session.completed';
-
-      return this.processStripeWebhook({
-        eventId,
-        eventType,
-        stripeSessionId: payment.stripeSessionId,
-        webhookSignature: payment.webhookVerificationToken
-      });
-    },
-
-    // Section 27 & 28: Admin Refund Purchase
-    adminRefundPayment(session, paymentId) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const payments = this._ensureSeedPayments();
-      const payment = payments.find(p => p.id === paymentId);
-      if (!payment) throw new Error('Payment record not found.');
-      if (payment.status !== 'PAID') {
-        throw new Error(`Only PAID payments can be refunded (Current status: ${payment.status}).`);
-      }
-
-      payment.status = 'REFUNDED';
-      payment.refundedAt = new Date().toISOString();
-      payment.refundedBy = session.username;
-      storageAdapter.set(STORAGE_KEYS.PAYMENTS, payments);
-
-      if (payment.emeraldsGranted > 0 && window.MCMServices && window.MCMServices.economyService) {
-        window.MCMServices.economyService.adminModifyBalance(
-          session,
-          payment.username,
-          'REMOVE',
-          payment.emeraldsGranted,
-          `Stripe Refund (${payment.id} / ${payment.stripePaymentId})`
-        );
-      }
-
-      if (payment.rankGranted) {
-        userService._grantRankInternal(payment.username, 'PLAYER', null);
-      }
-
-      activityService.log(
-        'PAYMENT_REFUNDED',
-        session.username,
-        `Admin ${session.username} refunded payment ${payment.id} (${payment.title}) for ${payment.username}`
-      );
-
-      return payment;
-    },
-
-    listPayments(session, onlyMine = false) {
-      authGuard.verifySession(session);
-      const all = this._ensureSeedPayments();
-      const effRole = authGuard.getEffectiveRole(session);
-      if (effRole === 'ADMIN' && !onlyMine) {
-        return all;
-      }
-      return all.filter(p => p.username.toLowerCase() === session.username.toLowerCase());
-    },
-
-    listPaymentIntents(session) {
-      return this.listPayments(session, false);
-    },
-
-    getRevenueMetrics() {
-      const all = this._ensureSeedPayments();
-      const paid = all.filter(p => p.status === 'PAID');
-      const totalRevenueTL = paid.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-      const totalEmeraldsSold = paid.reduce(
-        (sum, p) => sum + (Number(p.emeraldsGranted) || 0),
-        0
-      );
-      return {
-        totalPayments: all.length,
-        paidCount: paid.length,
-        totalRevenueTL,
-        totalEmeraldsSold
+        stripePrepared: true,
+        userNotice: cfg.statusMessage,
+        sessionRecord
       };
     }
   };
 
   // ==========================================
-  // 8. VERSIONED BACKUP SYSTEM (Section 29: includes backup/payments/ + Download Backup)
+  // YEDEKLEME VE PLATFORM AYARLARI SERVİSİ (backupService)
   // ==========================================
   const backupService = {
-    _buildStructuredSnapshot(label = 'Manual Snapshot') {
-      // Never include plaintext passwords; userService.getAllUsers() strips passwordHash
-      const safeUsers = userService.getAllUsers();
-      const parties = partyService._getAllRaw();
-      const licenses = licenseService._getAllRaw().map(l => ({
-        id: l.id,
-        name: l.name,
-        role: normalizeRole(l.role),
-        rank: l.rank || l.role,
-        status: l.status,
-        createdAt: l.createdAt,
-        expiresAt: l.expiresAt,
-        assignedUsername: l.assignedUsername
-      }));
-      const transactions =
-        window.MCMServices && window.MCMServices.economyService
-          ? window.MCMServices.economyService._getAllRawTransactions()
-          : [];
-      const payments = paymentService._ensureSeedPayments().map(p => {
-        const copy = { ...p };
-        delete copy.webhookVerificationToken;
-        return copy;
+    getPlatformSettings() {
+      return storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {
+        siteTitle: 'MC Milyoner Olmak İster',
+        announcementText: 'Yeni Sezon Başladı! Ücretsiz kayıt ol ve +250 Netherite kazan!'
       });
-      const settings =
-        window.MCMServices && window.MCMServices.configService
-          ? window.MCMServices.configService.getConfig()
-          : {};
+    },
 
-      const now = new Date().toISOString();
-      const existing = storageAdapter.get(STORAGE_KEYS.BACKUPS, []);
-      const versionNumber = existing.length + 1;
+    updatePlatformSettings(session, updates = {}) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const next = {
+        ...this.getPlatformSettings(),
+        ...updates
+      };
+      storage.set(STORAGE_KEYS.PLATFORM_SETTINGS, next);
+      activityService.log('ADMIN_ACTION', session.username, 'Platform genel ayarları güncellendi.');
+      return next;
+    },
 
-      return {
-        id: `BKP-v${versionNumber}-${Date.now().toString(36).toUpperCase()}`,
-        version: `v${versionNumber}.0`,
-        label,
-        createdAt: now,
-        paths: {
-          'backup/users/': safeUsers,
-          'backup/parties/': parties,
-          'backup/licenses/': licenses,
-          'backup/transactions/': transactions,
-          'backup/payments/': payments,
-          'backup/settings/': settings
-        },
-        counts: {
-          users: safeUsers.length,
-          parties: parties.length,
-          licenses: licenses.length,
-          transactions: transactions.length,
-          payments: payments.length
+    getSnapshots() {
+      return storage.get(STORAGE_KEYS.BACKUPS, []);
+    },
+
+    createManualSnapshot(session, label = 'Yönetici Yedeği') {
+      authGuard.requireRole(session, ['ADMIN']);
+      const snapshots = this.getSnapshots();
+      const snap = {
+        id: generateId('SNAP'),
+        label: String(label || 'Yönetici Yedeği'),
+        createdBy: session.username,
+        createdAt: new Date().toISOString(),
+        data: {
+          users: storage.get(STORAGE_KEYS.USERS, []),
+          parties: storage.get(STORAGE_KEYS.PARTIES, []),
+          partyInvitations: storage.get(STORAGE_KEYS.PARTY_INVITATIONS, []),
+          notifications: storage.get(STORAGE_KEYS.NOTIFICATIONS, {}),
+          support: storage.get(STORAGE_KEYS.SUPPORT_TICKETS, []),
+          bugs: storage.get(STORAGE_KEYS.BUG_REPORTS, []),
+          suggestions: storage.get(STORAGE_KEYS.SUGGESTIONS, [])
         }
       };
-    },
-
-    _ensureInitialBackup() {
-      const existing = storageAdapter.get(STORAGE_KEYS.BACKUPS, null);
-      if (existing && Array.isArray(existing) && existing.length > 0) {
-        existing.forEach(b => {
-          if (b.paths && !b.paths['backup/payments/']) {
-            b.paths['backup/payments/'] = [];
-          }
-          if (b.counts && b.counts.payments === undefined) {
-            b.counts.payments = (b.paths?.['backup/payments/'] || []).length;
-          }
-        });
-        return existing;
-      }
-      const initial = [this._buildStructuredSnapshot('Initial System Architecture Backup')];
-      storageAdapter.set(STORAGE_KEYS.BACKUPS, initial);
-      return initial;
-    },
-
-    listBackups(session) {
-      authGuard.requireRole(session, ['ADMIN']);
-      return this._ensureInitialBackup();
-    },
-
-    createBackup(session, label = 'Admin Snapshot') {
-      authGuard.requireRole(session, ['ADMIN']);
-      const list = this._ensureInitialBackup();
-      const snap = this._buildStructuredSnapshot(label);
-      list.unshift(snap);
-      if (list.length > 20) list.length = 20;
-      storageAdapter.set(STORAGE_KEYS.BACKUPS, list);
-
+      snapshots.unshift(snap);
+      if (snapshots.length > 15) snapshots.length = 15;
+      storage.set(STORAGE_KEYS.BACKUPS, snapshots);
       activityService.log(
-        'BACKUP_CREATED',
+        'BACKUP_CREATE',
         session.username,
-        `Admin ${session.username} created backup ${snap.id} (${snap.version}: ${label})`
+        `Yeni sistem yedeği oluşturuldu: ${snap.label}`
       );
       return snap;
     },
 
-    exportBackupJson(session, backupId) {
+    restoreSnapshot(session, snapshotId) {
       authGuard.requireRole(session, ['ADMIN']);
-      const list = this._ensureInitialBackup();
-      const target = backupId ? list.find(b => b.id === backupId) : list[0];
-      if (!target) throw new Error('Backup snapshot not found.');
-      return {
-        filename: `minecraft-milyoner-${target.id.toLowerCase()}.json`,
-        json: JSON.stringify(target, null, 2),
-        backup: target
-      };
-    },
+      const snap = this.getSnapshots().find(s => s.id === snapshotId);
+      if (!snap || !snap.data) throw new Error('Yedek bulunamadı.');
 
-    restoreBackup(session, backupId) {
-      authGuard.requireRole(session, ['ADMIN']);
-      const list = this._ensureInitialBackup();
-      const target = list.find(b => b.id === backupId);
-      if (!target) throw new Error('Backup snapshot not found.');
-
-      if (Array.isArray(target.paths['backup/parties/'])) {
-        partyService._saveAllRaw(target.paths['backup/parties/']);
+      if (snap.data.users) storage.set(STORAGE_KEYS.USERS, snap.data.users);
+      if (snap.data.parties) storage.set(STORAGE_KEYS.PARTIES, snap.data.parties);
+      if (snap.data.partyInvitations) {
+        storage.set(STORAGE_KEYS.PARTY_INVITATIONS, snap.data.partyInvitations);
       }
-      if (Array.isArray(target.paths['backup/users/'])) {
-        const currentRaw = userService._getAllRaw();
-        const restoredUsers = target.paths['backup/users/'].map(u => {
-          const prev = currentRaw.find(
-            x => x.id === u.id || x.minecraftUsername === u.minecraftUsername
-          );
-          return {
-            ...u,
-            passwordHash: prev ? prev.passwordHash : null
-          };
-        });
-        userService._saveAllRaw(restoredUsers);
-      }
-
+      if (snap.data.notifications) storage.set(STORAGE_KEYS.NOTIFICATIONS, snap.data.notifications);
+      if (snap.data.support) storage.set(STORAGE_KEYS.SUPPORT_TICKETS, snap.data.support);
+      if (snap.data.bugs) storage.set(STORAGE_KEYS.BUG_REPORTS, snap.data.bugs);
+      if (snap.data.suggestions) storage.set(STORAGE_KEYS.SUGGESTIONS, snap.data.suggestions);
       activityService.log(
-        'BACKUP_RESTORED',
+        'BACKUP_RESTORE',
         session.username,
-        `Admin ${session.username} restored system state from backup ${target.id} (${target.version})`
+        `Sistem yedeği geri yüklendi: ${snap.label}`
       );
-      return target;
-    }
-  };
-
-  // ==========================================
-  // 9. PLAYER DIRECTORY SERVICE
-  // ==========================================
-  const playerService = {
-    getAllPlayers() {
-      const existing = storageAdapter.get(STORAGE_KEYS.PLAYERS, null);
-      if (existing && Array.isArray(existing)) {
-        return existing;
-      }
-      storageAdapter.set(STORAGE_KEYS.PLAYERS, []);
-      return [];
+      return true;
     },
 
-    TouchPlayer(username, role, licenseId) {
-      const all = this.getAllPlayers();
-      const now = new Date().toISOString();
-      const normRole = normalizeRole(role);
-      const existing = all.find(
-        p => p.username.toLowerCase() === String(username).toLowerCase()
-      );
-      if (existing) {
-        existing.role = normRole;
-        existing.licenseId = licenseId;
-        existing.lastSeenAt = now;
-        existing.status = 'ONLINE';
-      } else {
-        all.unshift({
-          username,
-          role: normRole,
-          licenseId,
-          lastSeenAt: now,
-          status: 'ONLINE'
-        });
-      }
-      storageAdapter.set(STORAGE_KEYS.PLAYERS, all);
-    }
-  };
-
-  // ==========================================
-  // 10. MINECRAFT AVATAR & PROFILE PHOTO SERVICE (Sections 9, 10, 11)
-  // ==========================================
-  const avatarService = {
-    ALLOWED_MIME_TYPES: ['image/png', 'image/jpeg', 'image/webp'],
-    MAX_FILE_SIZE_BYTES: 2 * 1024 * 1024, // 2 MB
-
-    validateImageFile(file) {
-      if (!file) {
-        return { ok: false, error: 'Lütfen bir görsel dosyası seçin.' };
-      }
-      if (!this.ALLOWED_MIME_TYPES.includes(file.type)) {
-        return {
-          ok: false,
-          error: 'Desteklenmeyen dosya türü! Yalnızca PNG, JPG/JPEG ve WEBP görselleri kabul edilir.'
-        };
-      }
-      if (file.size > this.MAX_FILE_SIZE_BYTES) {
-        return {
-          ok: false,
-          error: 'Dosya boyutu çok büyük! Maksimum 2 MB görsel yükleyebilirsiniz.'
-        };
-      }
-      return { ok: true };
-    },
-
-    // Deterministic 8x8 Pixel-Art Minecraft Skin Head SVG Data URL Generator
-    generateMinecraftAvatar(username = 'Steve') {
-      const clean = String(username || 'Steve').trim();
-      const lower = clean.toLowerCase();
-
-      // Preset skin palettes for iconic players
-      const presets = {
-        steve: { skin: '#b9855c', hair: '#4a3121', eyeW: '#ffffff', eyeP: '#493c7b', mouth: '#71442c', crown: false },
-        alex: { skin: '#f2ccb7', hair: '#d87f33', eyeW: '#ffffff', eyeP: '#3b6e2f', mouth: '#c9856e', crown: false },
-        mashallah: { skin: '#d8a076', hair: '#1d2436', eyeW: '#e8fff2', eyeP: '#17dd62', mouth: '#8a5536', crown: true },
-        dragonslayer99: { skin: '#c89269', hair: '#23172e', eyeW: '#ffffff', eyeP: '#a855f7', mouth: '#7c4c31', crown: true },
-        netherking_tr: { skin: '#a86752', hair: '#2c1010', eyeW: '#ffe4b5', eyeP: '#ff5252', mouth: '#5a2a1e', crown: true }
+    exportPlatformData(session) {
+      authGuard.requireRole(session, ['ADMIN']);
+      return {
+        exportedAt: new Date().toISOString(),
+        users: storage.get(STORAGE_KEYS.USERS, []),
+        parties: storage.get(STORAGE_KEYS.PARTIES, []),
+        partyInvitations: storage.get(STORAGE_KEYS.PARTY_INVITATIONS, []),
+        support: storage.get(STORAGE_KEYS.SUPPORT_TICKETS, []),
+        bugs: storage.get(STORAGE_KEYS.BUG_REPORTS, []),
+        suggestions: storage.get(STORAGE_KEYS.SUGGESTIONS, [])
       };
-
-      let pal = presets[lower];
-      if (!pal) {
-        let hash = 2166136261;
-        for (let i = 0; i < lower.length; i++) {
-          hash ^= lower.charCodeAt(i);
-          hash = Math.imul(hash, 16777619);
-        }
-        const h = Math.abs(hash);
-        const skins = ['#d8a076', '#b9855c', '#f2ccb7', '#8d5524', '#e0ac69', '#c68642'];
-        const hairs = ['#3b2314', '#1c1f2b', '#d87f33', '#273c2c', '#4a1c40', '#6b4423', '#162447'];
-        const eyes = ['#17dd62', '#3de0ff', '#493c7b', '#ffbe1a', '#ff5252', '#a855f7'];
-        pal = {
-          skin: skins[h % skins.length],
-          hair: hairs[(h >> 3) % hairs.length],
-          eyeW: '#ffffff',
-          eyeP: eyes[(h >> 6) % eyes.length],
-          mouth: '#7a492f',
-          crown: false
-        };
-      }
-
-      const crownPixels = pal.crown
-        ? `<rect x="0" y="0" width="8" height="2" fill="#ffbe1a"/>
-           <rect x="1" y="0" width="1" height="1" fill="#17dd62"/>
-           <rect x="4" y="0" width="1" height="1" fill="#3de0ff"/>
-           <rect x="6" y="0" width="1" height="1" fill="#ff3b3b"/>`
-        : '';
-
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges">
-        <rect width="8" height="8" fill="${pal.skin}"/>
-        <rect x="0" y="0" width="8" height="2" fill="${pal.hair}"/>
-        <rect x="0" y="2" width="1" height="2" fill="${pal.hair}"/>
-        <rect x="7" y="2" width="1" height="2" fill="${pal.hair}"/>
-        <rect x="2" y="2" width="4" height="1" fill="${pal.hair}"/>
-        ${crownPixels}
-        <rect x="1" y="4" width="2" height="1" fill="${pal.eyeW}"/>
-        <rect x="2" y="4" width="1" height="1" fill="${pal.eyeP}"/>
-        <rect x="5" y="4" width="2" height="1" fill="${pal.eyeW}"/>
-        <rect x="5" y="4" width="1" height="1" fill="${pal.eyeP}"/>
-        <rect x="3" y="5" width="2" height="1" fill="${pal.mouth}" opacity="0.55"/>
-        <rect x="2" y="6" width="4" height="1" fill="${pal.mouth}"/>
-      </svg>`;
-
-      return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-    },
-
-    getUserAvatarUrl(userOrUsername) {
-      if (!userOrUsername) return this.generateMinecraftAvatar('Steve');
-      if (typeof userOrUsername === 'object') {
-        if (userOrUsername.avatarDataUrl) return userOrUsername.avatarDataUrl;
-        const u = userService.getUserByUsername(
-          userOrUsername.minecraftUsername || userOrUsername.username
-        );
-        if (u && u.avatarDataUrl) return u.avatarDataUrl;
-        return this.generateMinecraftAvatar(
-          userOrUsername.minecraftUsername || userOrUsername.username || 'Steve'
-        );
-      }
-      const u = userService.getUserByUsername(String(userOrUsername));
-      if (u && u.avatarDataUrl) return u.avatarDataUrl;
-      return this.generateMinecraftAvatar(String(userOrUsername));
     }
   };
 
-  // ==========================================
-  // 11. DEDICATED BUG & SUGGESTION SERVICE FACADES (Section 37)
-  // ==========================================
-  const bugService = {
-    createBugReport: (session, payload) => supportService.createBugReport(session, payload),
-    listBugReports: (session, onlyMine) => supportService.listBugReports(session, onlyMine),
-    adminUpdateBugStatus: (session, bugId, status) =>
-      supportService.adminUpdateBugStatus(session, bugId, status),
-    computeUserPriority: session => supportService.computeUserPriority(session, 'bug'),
-    formatPriorityTR: p => supportService.formatPriorityTR(p)
-  };
-
-  const suggestionService = {
-    createSuggestion: (session, payload) => supportService.createSuggestion(session, payload),
-    listSuggestions: (session, sortBy) => supportService.listSuggestions(session, sortBy),
-    voteSuggestion: (session, id) => supportService.voteSuggestion(session, id),
-    adminUpdateSuggestionStatus: (session, id, status) =>
-      supportService.adminUpdateSuggestionStatus(session, id, status),
-    formatSuggestionStatusTR: s => supportService.formatSuggestionStatusTR(s),
-    computeUserPriority: session => supportService.computeUserPriority(session, 'suggestion'),
-    formatPriorityTR: p => supportService.formatPriorityTR(p)
-  };
-
-  // Export services to global namespace (Section 37: 15 Modular Services)
-  window.MCMServices = {
-    ...(window.MCMServices || {}),
+  window.MCMServices = Object.assign(window.MCMServices || {}, {
+    mcIconService,
+    activityService,
     authGuard,
-    authService: licenseService,
+    avatarService,
+    notificationService,
     userService,
-    licenseService,
+    authService,
     partyService,
-    playerService,
     supportService,
     bugService,
     suggestionService,
     paymentService,
-    backupService,
-    activityService,
-    avatarService,
-    soundService: window.soundManager || null,
-    PARTY_STATUSES
-  };
-})();
+    backupService
+  });
+})(window);
