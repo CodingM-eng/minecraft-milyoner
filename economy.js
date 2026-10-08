@@ -24,7 +24,7 @@
     ECONOMY_SETTINGS: 'mc_millionaire_tr_economy_settings_v8',
     TRANSACTIONS: 'mc_millionaire_tr_emerald_tx_v6',
     NETHERITE_TX: 'mc_millionaire_tr_netherite_tx_v6',
-    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v6',
+    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v8',
     PURCHASES: 'mc_millionaire_tr_purchases_v6',
     GIFT_HISTORY: 'mc_millionaire_tr_rank_gifts_v6',
     ACHIEVEMENTS: 'mc_millionaire_tr_achievements_v6',
@@ -1723,12 +1723,20 @@
       if (!existing || !Array.isArray(existing) || existing.length === 0) {
         safeWrite(STORAGE_KEYS.SHOP_ITEMS, DEFAULT_SHOP_ITEMS);
       } else {
-        // Ensure default items exist while preserving admin custom items
+        // Ensure default items exist with up-to-date cssValue & subCategory while preserving admin custom items
         const merged = [...existing];
         DEFAULT_SHOP_ITEMS.forEach(def => {
           const idx = merged.findIndex(i => i.id === def.id);
           if (idx === -1) {
             merged.push(def);
+          } else {
+            merged[idx] = {
+              ...def,
+              ...merged[idx],
+              subCategory: merged[idx].subCategory || def.subCategory,
+              cssValue: merged[idx].cssValue || def.cssValue,
+              icon: def.icon
+            };
           }
         });
         safeWrite(STORAGE_KEYS.SHOP_ITEMS, merged);
@@ -2212,12 +2220,23 @@
       const id = itemData.id ? String(itemData.id).trim() : generateId('ITEM');
       const idx = items.findIndex(i => i.id === id);
 
+      const subCat = String(itemData.subCategory || 'Badges').trim();
+      const itemIcon = String(itemData.icon || '💎').trim();
+      const itemName = String(itemData.name || 'Yeni Ürün').trim();
+      let defaultCssValue = String(itemData.cssValue || '').trim();
+      if (!defaultCssValue && String(itemData.category || 'Cosmetics').trim() === 'Cosmetics') {
+        if (subCat === 'Avatar Frames') defaultCssValue = 'frame-diamond';
+        else if (subCat === 'Name Colors') defaultCssValue = '#fbbf24';
+        else if (subCat === 'Profile Effects') defaultCssValue = 'effect-ender-aura';
+        else defaultCssValue = `${itemIcon} ${itemName}`;
+      }
+
       const cleanItem = {
         id,
-        name: String(itemData.name || 'Yeni Ürün').trim(),
+        name: itemName,
         category: String(itemData.category || 'Cosmetics').trim(),
-        subCategory: String(itemData.subCategory || 'Badges').trim(),
-        icon: String(itemData.icon || '🎁').trim(),
+        subCategory: subCat,
+        icon: itemIcon,
         currency: String(itemData.currency || 'EMERALD').toUpperCase(),
         price: Math.max(0, Number(itemData.price || 100)),
         emeraldPrice: Math.max(0, Number(itemData.emeraldPrice ?? itemData.price ?? 100)),
@@ -2226,7 +2245,7 @@
         maxPerUser: Math.max(1, Number(itemData.maxPerUser || 1)),
         requiredRank: normalizeRankId(itemData.requiredRank || 'MEMBER'),
         active: itemData.active !== false,
-        cssValue: String(itemData.cssValue || '').trim(),
+        cssValue: defaultCssValue,
         description: String(itemData.description || '').trim()
       };
 

@@ -87,19 +87,103 @@
   // ==========================================
   // ÖZEL MINECRAFT SVG İKONLARINI YERLEŞTİR (#20)
   // ==========================================
+  function mcIcon(iconOrKey, size = 18) {
+    const { mcIconService } = svc();
+    if (!mcIconService) return escapeHtml(iconOrKey || '');
+    return mcIconService.getIconSvg(iconOrKey, size);
+  }
+
+  function replaceEmojis(str, size = 16) {
+    const { mcIconService } = svc();
+    if (!mcIconService) return String(str || '');
+    return mcIconService.replaceEmojisInHtml(str, size);
+  }
+
   function injectCustomCurrencyIcons() {
     const { mcIconService } = svc();
     if (!mcIconService) return;
 
-    document.querySelectorAll('[data-mc-icon="emerald"]').forEach(el => {
+    document.querySelectorAll('[data-mc-icon]').forEach(el => {
+      const iconType = el.getAttribute('data-mc-icon') || 'emerald';
       const isLg = el.classList.contains('currency-svg-lg');
-      el.innerHTML = mcIconService.getEmeraldSvg(isLg ? 26 : 18);
+      el.innerHTML = mcIconService.getIconSvg(iconType, isLg ? 26 : 18);
     });
 
-    document.querySelectorAll('[data-mc-icon="netherite"]').forEach(el => {
-      const isLg = el.classList.contains('currency-svg-lg');
-      el.innerHTML = mcIconService.getNetheriteSvg(isLg ? 26 : 18);
+    // Mağaza ve Liderlik Tablosu sekmelerindeki düz emojileri Minecraft SVG ikonlarına dönüştür
+    document.querySelectorAll('#unified-shop-tabs .shop-tab, .leaderboard-sort-tabs .lb-tab').forEach(tab => {
+      if (!tab.dataset.mcIconReplaced) {
+        tab.innerHTML = mcIconService.replaceEmojisInHtml(tab.innerHTML, 16);
+        tab.dataset.mcIconReplaced = '1';
+      }
     });
+  }
+
+  function getUserCosmeticMeta(userObj) {
+    const { shopService, userService } = svc();
+    const fullUser =
+      userObj?.equippedCosmetics !== undefined
+        ? userObj
+        : userService?.getUserByUsername(userObj?.username) || userObj || {};
+    const equipped = fullUser?.equippedCosmetics || {};
+    const allItems = shopService?.getAllItems ? shopService.getAllItems(true) : [];
+
+    let frameClass = '';
+    let nameClass = '';
+    let nameColor = '';
+    let nameCssText = '';
+    let nameStyle = '';
+    let badgeText = '';
+    let badgeHtml = '';
+    let effectClass = '';
+
+    if (equipped.avatarFrame) {
+      const frameItem = allItems.find(i => i.id === equipped.avatarFrame);
+      if (frameItem?.cssValue) frameClass = frameItem.cssValue;
+    }
+
+    if (equipped.nameColor) {
+      const colorItem = allItems.find(i => i.id === equipped.nameColor);
+      if (colorItem?.cssValue === 'rgb-rainbow') {
+        nameClass = 'rgb-rainbow-text';
+      } else if (colorItem?.cssValue === '#fbbf24') {
+        nameClass = 'name-color-gold';
+        nameColor = colorItem.cssValue;
+        nameCssText = `color: ${colorItem.cssValue};`;
+        nameStyle = `style="color: ${escapeHtml(colorItem.cssValue)};"`;
+      } else if (colorItem?.cssValue) {
+        nameColor = colorItem.cssValue;
+        nameCssText = `color: ${colorItem.cssValue};`;
+        nameStyle = `style="color: ${escapeHtml(colorItem.cssValue)};"`;
+      }
+    }
+
+    if (equipped.badge) {
+      const badgeItem = allItems.find(i => i.id === equipped.badge);
+      if (badgeItem) {
+        badgeText = badgeItem.cssValue || badgeItem.name;
+        const cleanLabel = String(badgeText).replace(/^[🧨⚡💎👑🔥🌟🐉🌱⛏️🏆]\s*/u, '');
+        badgeHtml = `<span class="custom-cosmetic-badge-pill">${mcIcon(
+          badgeItem.id || badgeItem.icon,
+          14
+        )} ${escapeHtml(cleanLabel)}</span>`;
+      }
+    }
+
+    if (equipped.profileEffect) {
+      const effItem = allItems.find(i => i.id === equipped.profileEffect);
+      if (effItem?.cssValue) effectClass = effItem.cssValue;
+    }
+
+    return {
+      frameClass,
+      nameClass,
+      nameColor,
+      nameCssText,
+      nameStyle,
+      badgeText,
+      badgeHtml,
+      effectClass
+    };
   }
 
   // ==========================================
@@ -161,7 +245,7 @@
       return;
     }
 
-    // İlk kez giriş yapan kullanıcının 250 Netherite başlangıç bonusunu garanti altına al (#14)
+    // İlk kez en az VIP+ alan kullanıcının 250 Netherite bonusunu kontrol et
     netheriteService?.ensureInitialBonusOnce(session.username);
 
     const user = userService?.getUserByUsername(session.username) || session;
@@ -170,6 +254,7 @@
       name: 'Üye',
       badge: '🌱'
     };
+    const cosMeta = getUserCosmeticMeta(user);
     const emeralds = economyService?.getBalance(user.username) ?? Number(user.emeraldBalance || 0);
     const netherites =
       netheriteService?.getBalance(user.username) ?? Number(user.netheriteBalance || 0);
@@ -189,15 +274,23 @@
     if (hNetherite) hNetherite.textContent = netherites.toLocaleString('tr-TR');
 
     const hName = document.getElementById('header-user-name');
-    if (hName) hName.textContent = user.username;
+    if (hName) {
+      hName.textContent = user.username;
+      hName.className = `user-chip-name ${cosMeta.nameClass}`.trim();
+      hName.style.cssText = cosMeta.nameCssText || '';
+    }
 
     const hRole = document.getElementById('header-user-role');
     if (hRole) {
       hRole.className = getRankBadgeClass(rank.id);
-      hRole.textContent = `${rank.badge} ${rank.name}`;
+      hRole.innerHTML = `${mcIcon(rank.id, 14)} ${escapeHtml(rank.name)}`;
     }
 
-    setAvatarImageWithFallback(document.getElementById('header-user-avatar'), user);
+    const hAvatar = document.getElementById('header-user-avatar');
+    if (hAvatar) {
+      hAvatar.className = `header-avatar ${cosMeta.frameClass}`.trim();
+      setAvatarImageWithFallback(hAvatar, user);
+    }
 
     // Bildirim rozetleri (#7)
     const hNotifBadge = document.getElementById('header-notif-badge');
@@ -212,20 +305,34 @@
     }
 
     // Çekmece (Drawer) üst özeti
-    setAvatarImageWithFallback(document.getElementById('drawer-user-avatar'), user);
+    const dAvatar = document.getElementById('drawer-user-avatar');
+    if (dAvatar) {
+      dAvatar.className = `drawer-avatar ${cosMeta.frameClass}`.trim();
+      setAvatarImageWithFallback(dAvatar, user);
+    }
+
+    const dHeader = document.querySelector('.drawer-header');
+    if (dHeader) {
+      dHeader.className = `drawer-header ${cosMeta.effectClass}`.trim();
+    }
+
     const dName = document.getElementById('drawer-user-name');
-    if (dName) dName.textContent = user.username;
+    if (dName) {
+      dName.textContent = user.username;
+      dName.className = cosMeta.nameClass || '';
+      dName.style.cssText = cosMeta.nameCssText || '';
+    }
 
     const dRank = document.getElementById('drawer-user-rank');
     if (dRank) {
       dRank.className = getRankBadgeClass(rank.id);
-      dRank.textContent = `${rank.badge} ${rank.name}`;
+      dRank.innerHTML = `${mcIcon(rank.id, 14)} ${escapeHtml(rank.name)}`;
     }
 
     const dMcName = document.getElementById('drawer-user-mcname');
     if (dMcName) {
       if (user.minecraftPlayerName) {
-        dMcName.textContent = `🎮 MC: ${user.minecraftPlayerName}`;
+        dMcName.innerHTML = `${mcIcon('GRASS', 12)} MC: ${escapeHtml(user.minecraftPlayerName)}`;
         dMcName.classList.remove('hidden');
       } else {
         dMcName.classList.add('hidden');
@@ -257,7 +364,7 @@
     if (stNe) stNe.textContent = netherites.toLocaleString('tr-TR');
 
     const stLives = document.getElementById('stat-extra-lives');
-    if (stLives) stLives.textContent = `${extraLives} / 5 ❤️`;
+    if (stLives) stLives.innerHTML = `${extraLives} / 5 ${mcIcon('HEART', 16)}`;
 
     // Aktif parti afişi
     const activeParty = partyService?.getActivePartyForUser(user.username);
@@ -289,6 +396,8 @@
     const hasNetherite = Number(status.dailyAmount || 0) > 0;
     const dailyEm = Number(status.dailyEmerald || 50);
     const dailyNe = Number(status.dailyAmount || 0);
+    const emSvg = mcIcon('EMERALD', 16);
+    const neSvg = mcIcon('NETHERITE', 16);
 
     // 1. Ana Sayfa Günlük Ödül Kutusu
     const wTitle = document.getElementById('welcome-netherite-title');
@@ -298,23 +407,23 @@
     if (wTitle && wDesc && wBtn) {
       if (status.canClaimNow) {
         if (hasNetherite) {
-          wTitle.textContent = `⬛ ${status.rankName} Günlük Ödülünüz Hazır!`;
-          wDesc.textContent = `Bugünkü +${dailyNe} Netherite ve +${dailyEm} Zümrüt ödülünüzü hemen talep edebilirsiniz!`;
-          wBtn.textContent = `+${dailyNe} ⬛ & +${dailyEm} 🟢 Al`;
+          wTitle.innerHTML = `${neSvg} ${escapeHtml(status.rankName)} Günlük Ödülünüz Hazır!`;
+          wDesc.innerHTML = `Bugünkü +${dailyNe} ${neSvg} Netherite ve +${dailyEm} ${emSvg} Zümrüt ödülünüzü hemen talep edebilirsiniz!`;
+          wBtn.innerHTML = `+${dailyNe} ${neSvg} &amp; +${dailyEm} ${emSvg} Al`;
         } else {
-          wTitle.textContent = `🟢 ${status.rankName} Günlük Zümrüt Ödülünüz Hazır!`;
-          wDesc.textContent = `Bugünkü +${dailyEm} Zümrüt ödülünüzü hemen alın! (VIP+ ve üzeri ilk alımda +250 ⬛ ve günlük +25/50/100 ⬛ kazanır)`;
-          wBtn.textContent = `+${dailyEm} Zümrüt Al`;
+          wTitle.innerHTML = `${emSvg} ${escapeHtml(status.rankName)} Günlük Zümrüt Ödülünüz Hazır!`;
+          wDesc.innerHTML = `Bugünkü +${dailyEm} ${emSvg} Zümrüt ödülünüzü hemen alın! (VIP+ ve üzeri ilk alımda +250 ${neSvg} ve günlük +25/50/100 ${neSvg} kazanır)`;
+          wBtn.innerHTML = `+${dailyEm} ${emSvg} Zümrüt Al`;
         }
         wBtn.disabled = false;
         wBtn.dataset.actionMode = 'claim';
       } else {
-        wTitle.textContent = hasNetherite
-          ? `⬛ ${status.rankName} Günlük Ödülü Alındı`
-          : `🟢 ${status.rankName} Günlük Zümrüt Ödülü Alındı`;
-        wDesc.textContent = hasNetherite
-          ? `Yeni +${dailyNe} Netherite ve +${dailyEm} Zümrüt ödülü için kalan süre: ${status.remainingText}`
-          : `Yeni +${dailyEm} Zümrüt ödülü için kalan süre: ${status.remainingText} (VIP+ ile günlük +25 ⬛ kazanın!)`;
+        wTitle.innerHTML = hasNetherite
+          ? `${neSvg} ${escapeHtml(status.rankName)} Günlük Ödülü Alındı`
+          : `${emSvg} ${escapeHtml(status.rankName)} Günlük Zümrüt Ödülü Alındı`;
+        wDesc.innerHTML = hasNetherite
+          ? `Yeni +${dailyNe} ${neSvg} Netherite ve +${dailyEm} ${emSvg} Zümrüt ödülü için kalan süre: ${escapeHtml(status.remainingText)}`
+          : `Yeni +${dailyEm} ${emSvg} Zümrüt ödülü için kalan süre: ${escapeHtml(status.remainingText)} (VIP+ ile günlük +25 ${neSvg} kazanın!)`;
         wBtn.textContent = status.remainingText;
         wBtn.disabled = true;
         wBtn.dataset.actionMode = 'wait';
@@ -327,18 +436,18 @@
     if (sText && sBtn) {
       if (status.canClaimNow) {
         if (hasNetherite) {
-          sText.textContent = `${status.rankName} ayrıcalığınızla +${dailyNe} Netherite ve +${dailyEm} Zümrüt ödülünüz hazır!`;
-          sBtn.textContent = `+${dailyNe} ⬛ & +${dailyEm} 🟢 Al`;
+          sText.innerHTML = `${escapeHtml(status.rankName)} ayrıcalığınızla +${dailyNe} ${neSvg} Netherite ve +${dailyEm} ${emSvg} Zümrüt ödülünüz hazır!`;
+          sBtn.innerHTML = `+${dailyNe} ${neSvg} &amp; +${dailyEm} ${emSvg} Al`;
         } else {
-          sText.textContent = `${status.rankName} günlük +${dailyEm} Zümrüt ödülünüz hazır! (En az VIP+ ilk alımda +250 ⬛ + günlük +25/50/100 ⬛ verir)`;
-          sBtn.textContent = `+${dailyEm} Zümrüt Al`;
+          sText.innerHTML = `${escapeHtml(status.rankName)} günlük +${dailyEm} ${emSvg} Zümrüt ödülünüz hazır! (En az VIP+ ilk alımda +250 ${neSvg} + günlük +25/50/100 ${neSvg} verir)`;
+          sBtn.innerHTML = `+${dailyEm} ${emSvg} Zümrüt Al`;
         }
         sBtn.disabled = false;
         sBtn.dataset.actionMode = 'claim';
       } else {
-        sText.textContent = hasNetherite
-          ? `Sonraki +${dailyNe} Netherite & +${dailyEm} Zümrüt ödülüne kalan süre: ${status.remainingText}`
-          : `Sonraki +${dailyEm} Zümrüt ödülüne kalan süre: ${status.remainingText}`;
+        sText.innerHTML = hasNetherite
+          ? `Sonraki +${dailyNe} ${neSvg} Netherite &amp; +${dailyEm} ${emSvg} Zümrüt ödülüne kalan süre: ${escapeHtml(status.remainingText)}`
+          : `Sonraki +${dailyEm} ${emSvg} Zümrüt ödülüne kalan süre: ${escapeHtml(status.remainingText)}`;
         sBtn.textContent = status.remainingText;
         sBtn.disabled = true;
         sBtn.dataset.actionMode = 'wait';
@@ -350,12 +459,12 @@
     const pBtn = document.getElementById('btn-profile-claim-netherite');
     if (pStatus && pBtn) {
       if (status.canClaimNow) {
-        pStatus.textContent = hasNetherite
-          ? `+${dailyNe} Netherite ve +${dailyEm} Zümrüt hemen alınabilir!`
-          : `+${dailyEm} Günlük Zümrüt hemen alınabilir!`;
-        pBtn.textContent = hasNetherite
-          ? `+${dailyNe} ⬛ & +${dailyEm} 🟢 Al`
-          : `+${dailyEm} Zümrüt Al`;
+        pStatus.innerHTML = hasNetherite
+          ? `+${dailyNe} ${neSvg} Netherite ve +${dailyEm} ${emSvg} Zümrüt hemen alınabilir!`
+          : `+${dailyEm} ${emSvg} Günlük Zümrüt hemen alınabilir!`;
+        pBtn.innerHTML = hasNetherite
+          ? `+${dailyNe} ${neSvg} &amp; +${dailyEm} ${emSvg} Al`
+          : `+${dailyEm} ${emSvg} Zümrüt Al`;
         pBtn.disabled = false;
         pBtn.dataset.actionMode = 'claim';
       } else {
@@ -579,7 +688,8 @@
 
     setAvatarImageWithFallback(document.getElementById('profile-avatar-img'), user);
 
-    // Kozmetik çerçeve ve efektler
+    // Kozmetik çerçeve, efektler, ad rengi ve rozet (TÜM KOZMETİKLER AKTİF)
+    const cosMeta = getUserCosmeticMeta(user);
     const frameWrap = document.getElementById('profile-avatar-frame');
     const heroCard = document.getElementById('profile-hero-card');
     const allItems = shopService.getAllItems(true);
@@ -587,46 +697,32 @@
 
     if (frameWrap) {
       frameWrap.className = 'profile-avatar-wrapper';
-      if (equipped.avatarFrame) {
-        const frameItem = allItems.find(i => i.id === equipped.avatarFrame);
-        if (frameItem?.cssValue) frameWrap.classList.add(frameItem.cssValue);
-      }
+      if (cosMeta.frameClass) frameWrap.classList.add(cosMeta.frameClass);
     }
 
     if (heroCard) {
       heroCard.className = 'platform-card profile-hero-card';
-      if (equipped.profileEffect) {
-        const effItem = allItems.find(i => i.id === equipped.profileEffect);
-        if (effItem?.cssValue) heroCard.classList.add(effItem.cssValue);
-      }
+      if (cosMeta.effectClass) heroCard.classList.add(cosMeta.effectClass);
     }
 
     const uNameEl = document.getElementById('profile-username-display');
     if (uNameEl) {
       uNameEl.textContent = user.username;
-      uNameEl.className = '';
-      uNameEl.style.color = '';
-      if (equipped.nameColor) {
-        const colorItem = allItems.find(i => i.id === equipped.nameColor);
-        if (colorItem?.cssValue === 'rgb-rainbow') {
-          uNameEl.classList.add('rgb-rainbow-text');
-        } else if (colorItem?.cssValue) {
-          uNameEl.style.color = colorItem.cssValue;
-        }
-      }
+      uNameEl.className = cosMeta.nameClass || '';
+      uNameEl.style.color = cosMeta.nameColor || '';
     }
 
     const rBadge = document.getElementById('profile-rank-badge');
     if (rBadge) {
       rBadge.className = getRankBadgeClass(rank.id);
-      rBadge.textContent = `${rank.badge} ${rank.name}`;
+      rBadge.innerHTML = `${mcIcon(rank.badge, 14)} ${escapeHtml(rank.name)}`;
     }
 
     const mcDisplay = document.getElementById('profile-mc-player-display');
     if (mcDisplay) {
-      mcDisplay.textContent = user.minecraftPlayerName
-        ? `🎮 Bağlı Minecraft Oyuncu Adı: ${user.minecraftPlayerName}`
-        : '🎮 Bağlı Minecraft Oyuncu Adı: Belirtilmedi';
+      mcDisplay.innerHTML = user.minecraftPlayerName
+        ? `${mcIcon('GRASS', 14)} Bağlı Minecraft Oyuncu Adı: <strong>${escapeHtml(user.minecraftPlayerName)}</strong>`
+        : `${mcIcon('GRASS', 14)} Bağlı Minecraft Oyuncu Adı: Belirtilmedi`;
     }
 
     const mcInput = document.getElementById('profile-mcname-input');
@@ -634,11 +730,12 @@
 
     const customBadgeEl = document.getElementById('profile-custom-badge');
     if (customBadgeEl) {
-      if (equipped.badge) {
-        const badgeItem = allItems.find(i => i.id === equipped.badge);
-        customBadgeEl.textContent = badgeItem ? badgeItem.cssValue || badgeItem.name : '';
+      if (cosMeta.badgeText) {
+        customBadgeEl.className = 'custom-cosmetic-badge-pill';
+        customBadgeEl.innerHTML = replaceEmojis(escapeHtml(cosMeta.badgeText), 14);
       } else {
-        customBadgeEl.textContent = '';
+        customBadgeEl.className = '';
+        customBadgeEl.innerHTML = '';
       }
     }
 
@@ -646,10 +743,10 @@
     if (createdEl) createdEl.textContent = formatDateTR(user.createdAt);
 
     const pEm = document.getElementById('profile-emerald-balance');
-    if (pEm) pEm.textContent = `${emeralds.toLocaleString('tr-TR')} 🟢`;
+    if (pEm) pEm.innerHTML = `${emeralds.toLocaleString('tr-TR')} ${mcIcon('EMERALD', 16)}`;
 
     const pNe = document.getElementById('profile-netherite-balance');
-    if (pNe) pNe.textContent = `${netherites.toLocaleString('tr-TR')} ⬛`;
+    if (pNe) pNe.innerHTML = `${netherites.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 16)}`;
 
     const pPts = document.getElementById('profile-total-points');
     if (pPts) pPts.textContent = formatCurrencyTRY(user.points || user.bestScore || 0);
@@ -675,10 +772,10 @@
             const isEquipped = Object.values(equipped).includes(item.id);
             return `
               <div class="cosmetic-inv-card ${isEquipped ? 'equipped' : ''}">
-                <span class="cos-icon">${escapeHtml(item.icon)}</span>
+                <span class="cos-icon">${mcIcon(item.id || item.icon, 26)}</span>
                 <div class="cos-info">
                   <strong>${escapeHtml(item.name)}</strong>
-                  <span>${escapeHtml(item.subCategory || 'Kozmetik')}</span>
+                  <span>${escapeHtml(item.subCategory || 'Kozmetik')} ${isEquipped ? '• ✓ Kuşanıldı' : ''}</span>
                 </div>
                 <button type="button" class="mc-btn mc-btn-sm ${
                   isEquipped ? 'mc-btn-secondary' : 'mc-btn-primary'
@@ -700,13 +797,13 @@
         .map(
           a => `
           <div class="achievement-card ${a.unlocked ? 'unlocked' : 'locked'}">
-            <span class="ach-icon">${escapeHtml(a.icon)}</span>
+            <span class="ach-icon">${mcIcon(a.icon, 26)}</span>
             <div class="ach-meta">
               <strong>${escapeHtml(a.title)}</strong>
               <p>${escapeHtml(a.description)}</p>
-              <span class="ach-reward">+${a.emeraldReward} 🟢 Ödül</span>
+              <span class="ach-reward">+${a.emeraldReward} ${mcIcon('EMERALD', 14)} Ödül</span>
             </div>
-            <span class="ach-status">${a.unlocked ? '✅ Kazanıldı' : '🔒 Kilitli'}</span>
+            <span class="ach-status">${a.unlocked ? '✓ Kazanıldı' : 'Kilitli'}</span>
           </div>
         `
         )
@@ -734,7 +831,10 @@
         txContainer.innerHTML = combined
           .map(tx => {
             const isPos = Number(tx.amount) >= 0;
-            const unit = tx.currency === 'NETHERITE' ? '⬛ Netherite' : '🟢 Zümrüt';
+            const unitHtml =
+              tx.currency === 'NETHERITE'
+                ? `${mcIcon('NETHERITE', 14)} Netherite`
+                : `${mcIcon('EMERALD', 14)} Zümrüt`;
             return `
               <div class="tx-row">
                 <div>
@@ -742,7 +842,7 @@
                   <span class="tx-date">${formatDateTR(tx.createdAt)}</span>
                 </div>
                 <span class="tx-amount ${isPos ? 'pos' : 'neg'}">
-                  ${isPos ? '+' : ''}${tx.amount} ${unit}
+                  ${isPos ? '+' : ''}${tx.amount} ${unitHtml}
                 </span>
               </div>
             `;
@@ -806,26 +906,26 @@
               )}" data-notif-id="${escapeHtml(n.id)}">Reddet</button>
             `;
           } else if (invStatus === 'ACCEPTED') {
-            partyActionHtml = `<span class="notif-read-label">✅ Kabul Edildi</span>`;
+            partyActionHtml = `<span class="notif-read-label">✓ Kabul Edildi</span>`;
           } else if (invStatus === 'REJECTED') {
-            partyActionHtml = `<span class="notif-read-label">❌ Reddedildi</span>`;
+            partyActionHtml = `<span class="notif-read-label">✗ Reddedildi</span>`;
           }
         } else if (partyCode) {
           partyActionHtml = `<button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-notif-join-party="${escapeHtml(
             partyCode
-          )}">🎉 Partiye Katıl (${escapeHtml(partyCode)})</button>`;
+          )}">${mcIcon('SWORD', 14)} Partiye Katıl (${escapeHtml(partyCode)})</button>`;
         }
 
         return `
           <div class="notification-card ${n.read ? 'is-read' : 'is-unread'}">
-            <div class="notif-card-icon">${escapeHtml(n.icon || '🔔')}</div>
+            <div class="notif-card-icon">${mcIcon(n.icon || 'STAR', 22)}</div>
             <div class="notif-card-body">
               <div class="notif-card-top">
                 <span class="notif-type-tag">${escapeHtml(n.typeLabel || 'Bildirim')}</span>
                 <span class="notif-time">${formatDateTR(n.createdAt)}</span>
               </div>
-              <h4 class="notif-title">${escapeHtml(n.title)}</h4>
-              <p class="notif-message">${escapeHtml(n.message)}</p>
+              <h4 class="notif-title">${replaceEmojis(escapeHtml(n.title), 15)}</h4>
+              <p class="notif-message">${replaceEmojis(escapeHtml(n.message), 14)}</p>
               <div class="notif-card-actions">
                 ${
                   !n.read
@@ -855,8 +955,7 @@
       rankService,
       economyService,
       netheriteService,
-      extraLifeService,
-      shopService
+      extraLifeService
     } = svc();
 
     const user = userService.getUserByUsername(session.username);
@@ -910,14 +1009,15 @@
         const isCurrent = userRank.id === rank.id;
         const dailyNetheriteText =
           rank.dailyNetherite > 0
-            ? `<div class="rank-daily-netherite-pill">⬛ İlk Alımda +250 ⬛ • Günlük +${rank.dailyNetherite} ⬛ & +${rank.dailyEmerald || 200} 🟢</div>`
-            : `<div class="rank-daily-netherite-pill muted">🟢 Günlük +${rank.dailyEmerald || 100} Zümrüt Ödülü</div>`;
+            ? `<div class="rank-daily-netherite-pill">${mcIcon('NETHERITE', 14)} İlk Alımda +250 ${mcIcon('NETHERITE', 14)} • Günlük +${rank.dailyNetherite} ${mcIcon('NETHERITE', 14)} &amp; +${rank.dailyEmerald || 200} ${mcIcon('EMERALD', 14)}</div>`
+            : `<div class="rank-daily-netherite-pill muted">${mcIcon('EMERALD', 14)} Günlük +${rank.dailyEmerald || 100} Zümrüt Ödülü</div>`;
 
         return `
           <div class="rank-card" style="border-top: 4px solid ${escapeHtml(rank.color)};">
             <div class="rank-card-header">
-              <span class="rank-card-badge" style="color: ${escapeHtml(rank.color)}">${escapeHtml(
-          rank.badge
+              <span class="rank-card-badge" style="color: ${escapeHtml(rank.color)}">${mcIcon(
+          rank.badge,
+          18
         )} ${escapeHtml(rank.name)}</span>
               ${isCurrent ? `<span class="rank-current-tag">MEVCUT RÜTBENİZ</span>` : ''}
             </div>
@@ -925,14 +1025,14 @@
             ${dailyNetheriteText}
 
             <div class="rank-pricing-box">
-              <div class="rank-price-main">${rank.netheritePrice} ⬛ Netherite</div>
+              <div class="rank-price-main">${rank.netheritePrice} ${mcIcon('NETHERITE', 18)} Netherite</div>
               <div class="rank-price-sub">veya ${rank.emeraldPrice.toLocaleString(
                 'tr-TR'
-              )} 🟢 Zümrüt • ${rank.priceTry.toLocaleString('tr-TR')} ₺</div>
+              )} ${mcIcon('EMERALD', 14)} Zümrüt • ${rank.priceTry.toLocaleString('tr-TR')} ₺</div>
             </div>
 
             <ul class="rank-features-list">
-              ${(rank.features || []).map(f => `<li>✓ ${escapeHtml(f)}</li>`).join('')}
+              ${(rank.features || []).map(f => `<li>✓ ${replaceEmojis(escapeHtml(f), 14)}</li>`).join('')}
             </ul>
 
             <div class="rank-card-actions">
@@ -943,25 +1043,25 @@
                     <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-rank="${escapeHtml(
                       rank.id
                     )}" data-pay-method="NETHERITE">
-                      ⬛ ${rank.netheritePrice} Netherite ile Satın Al
+                      ${mcIcon('NETHERITE', 15)} ${rank.netheritePrice} Netherite ile Satın Al
                     </button>
                     <button type="button" class="mc-btn mc-btn-primary mc-btn-block" data-buy-rank="${escapeHtml(
                       rank.id
                     )}" data-pay-method="EMERALD">
-                      🟢 ${rank.emeraldPrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
+                      ${mcIcon('EMERALD', 15)} ${rank.emeraldPrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
                     </button>
                     <button type="button" class="mc-btn mc-btn-secondary mc-btn-block" data-buy-rank="${escapeHtml(
                       rank.id
                     )}" data-pay-method="STRIPE">
-                      💳 Kart ile Al (${rank.priceTry.toLocaleString('tr-TR')} ₺)
+                      ${mcIcon('CHEST', 15)} Kart ile Al (${rank.priceTry.toLocaleString('tr-TR')} ₺)
                     </button>
                   `
               }
-              <!-- #11: 🎁 Arkadaşına Hediye Et Butonu -->
+              <!-- #11: Arkadaşına Hediye Et Butonu -->
               <button type="button" class="mc-btn mc-btn-gift mc-btn-block" data-gift-rank="${escapeHtml(
                 rank.id
               )}">
-                🎁 Arkadaşına Hediye Et
+                ${mcIcon('CHEST', 15)} Arkadaşına Hediye Et
               </button>
             </div>
           </div>
@@ -974,9 +1074,11 @@
     const grid = document.getElementById('shop-items-grid');
     if (!grid) return;
 
-    const { shopService, rankService } = svc();
+    const { shopService, rankService, avatarService } = svc();
     const items = shopService.getItemsByCategory(category);
     const ownedCosmetics = Array.isArray(user.ownedCosmetics) ? user.ownedCosmetics : [];
+    const equipped = user.equippedCosmetics || {};
+    const avatarSrc = avatarService ? avatarService.getAvatarForUser(user) : '';
 
     if (items.length === 0) {
       grid.innerHTML = `<div class="empty-state-box">Bu kategoride henüz ürün bulunmuyor.</div>`;
@@ -991,20 +1093,57 @@
           item.category === 'Cosmetics' &&
           Number(item.maxPerUser) === 1 &&
           ownedCosmetics.includes(item.id);
+        const isEquipped = Object.values(equipped).includes(item.id);
+
+        // Kozmetik Canlı Önizleme Kutusu
+        let previewHtml = '';
+        if (item.category === 'Cosmetics') {
+          const sub = item.subCategory || 'Avatar Çerçevesi';
+          const cssVal = item.cssValue || '';
+          const previewFrameClass = sub === 'Avatar Çerçevesi' ? cssVal : '';
+          const previewEffectClass = sub === 'Profil Efekti' ? cssVal : '';
+          const previewNameClass = sub === 'Ad Rengi' && cssVal === 'rgb-rainbow' ? 'rgb-rainbow-text' : '';
+          const previewNameStyle =
+            sub === 'Ad Rengi' && cssVal && cssVal !== 'rgb-rainbow' ? `style="color:${escapeHtml(cssVal)}"` : '';
+          const previewBadgeHtml =
+            sub === 'Özel Rozet'
+              ? `<span class="custom-cosmetic-badge-pill">${replaceEmojis(escapeHtml(cssVal || item.name), 12)}</span>`
+              : '';
+
+          previewHtml = `
+            <div class="cosmetic-live-preview ${escapeHtml(previewEffectClass)}">
+              <div class="cosmetic-preview-avatar ${escapeHtml(previewFrameClass)}">
+                <img src="${escapeHtml(avatarSrc)}" alt="" />
+              </div>
+              <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+                <strong class="${escapeHtml(previewNameClass)}" ${previewNameStyle} style="font-size:0.84rem;">${escapeHtml(
+            user.username
+          )}</strong>
+                ${previewBadgeHtml || `<span style="font-size:0.72rem;color:var(--text-muted);">Canlı Önizleme</span>`}
+              </div>
+            </div>
+          `;
+        }
 
         let actionButtonsHtml = '';
         if (alreadyOwned) {
-          actionButtonsHtml = `<button type="button" class="mc-btn mc-btn-secondary mc-btn-block" disabled>✓ Envanterde Mevcut</button>`;
+          actionButtonsHtml = `
+            <button type="button" class="mc-btn ${
+              isEquipped ? 'mc-btn-secondary' : 'mc-btn-primary'
+            } mc-btn-block" data-equip-cosmetic="${escapeHtml(item.id)}">
+              ${isEquipped ? '✓ Kuşanıldı (Çıkarmak İçin Tıkla)' : '✨ Hemen Kuşan'}
+            </button>
+          `;
         } else if (rankLocked) {
           actionButtonsHtml = `<button type="button" class="mc-btn mc-btn-secondary mc-btn-block" disabled>🔒 ${escapeHtml(
             reqRank.name
-          )} Gerekli</button>`;
+          )} Rütbesi Gerekli</button>`;
         } else if (item.currency === 'STRIPE') {
           actionButtonsHtml = `
             <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
               item.id
             )}" data-item-currency="STRIPE">
-              💳 ${Number(item.priceTry || item.price).toLocaleString('tr-TR')} ₺ — Satın Al (Stripe)
+              ${mcIcon('CHEST', 15)} ${Number(item.priceTry || item.price).toLocaleString('tr-TR')} ₺ — Satın Al (Stripe)
             </button>
           `;
         } else if (item.currency === 'NETHERITE') {
@@ -1014,14 +1153,14 @@
             <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
               item.id
             )}" data-item-currency="NETHERITE">
-              ⬛ ${nPrice} Netherite ile Satın Al
+              ${mcIcon('NETHERITE', 15)} ${nPrice} Netherite ile Satın Al
             </button>
             ${
               ePrice > 0
                 ? `<button type="button" class="mc-btn mc-btn-primary mc-btn-block" data-buy-item="${escapeHtml(
                     item.id
                   )}" data-item-currency="EMERALD">
-                    🟢 ${ePrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
+                    ${mcIcon('EMERALD', 15)} ${ePrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
                   </button>`
                 : ''
             }
@@ -1033,14 +1172,14 @@
             <button type="button" class="mc-btn mc-btn-primary mc-btn-block" data-buy-item="${escapeHtml(
               item.id
             )}" data-item-currency="EMERALD">
-              🟢 ${ePrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
+              ${mcIcon('EMERALD', 15)} ${ePrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
             </button>
             ${
               nPrice > 0
                 ? `<button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
                     item.id
                   )}" data-item-currency="NETHERITE">
-                    ⬛ ${nPrice} Netherite ile Satın Al
+                    ${mcIcon('NETHERITE', 15)} ${nPrice} Netherite ile Satın Al
                   </button>`
                 : ''
             }
@@ -1050,11 +1189,12 @@
         return `
           <div class="shop-item-card">
             <div class="shop-item-top">
-              <span class="shop-item-icon">${escapeHtml(item.icon || '🛍️')}</span>
+              <span class="shop-item-icon">${mcIcon(item.id || item.icon, 28)}</span>
               <span class="shop-item-cat-tag">${escapeHtml(item.subCategory || item.category)}</span>
             </div>
             <h4 class="shop-item-title">${escapeHtml(item.name)}</h4>
             <p class="shop-item-desc">${escapeHtml(item.description)}</p>
+            ${previewHtml}
             <div class="shop-item-actions">
               ${actionButtonsHtml}
             </div>
@@ -1086,10 +1226,10 @@
     if (summaryBox) {
       summaryBox.innerHTML = `
         <div class="gift-rank-pill" style="border-left: 4px solid ${escapeHtml(rank.color)}">
-          <strong>${escapeHtml(rank.badge)} ${escapeHtml(rank.name)} Rütbesi Hediye Paketi</strong>
-          <span>${rank.netheritePrice} ⬛ Netherite veya ${rank.emeraldPrice.toLocaleString(
+          <strong>${mcIcon(rank.badge, 16)} ${escapeHtml(rank.name)} Rütbesi Hediye Paketi</strong>
+          <span>${rank.netheritePrice} ${mcIcon('NETHERITE', 14)} Netherite veya ${rank.emeraldPrice.toLocaleString(
         'tr-TR'
-      )} 🟢 Zümrüt</span>
+      )} ${mcIcon('EMERALD', 14)} Zümrüt</span>
         </div>
       `;
     }
@@ -1184,7 +1324,7 @@
         showToast(res.message, 'info');
       } else {
         showToast(
-          `🎁 ${res.recipientUsername} adlı arkadaşınıza ${res.rank.name} rütbesi başarıyla hediye edildi!`,
+          `${res.recipientUsername} adlı arkadaşınıza ${res.rank.name} rütbesi başarıyla hediye edildi!`,
           'success'
         );
       }
@@ -1225,7 +1365,7 @@
           .map(
             inv => `
             <div class="notification-card is-unread">
-              <div class="notif-card-icon">🎉</div>
+              <div class="notif-card-icon">${mcIcon('SWORD', 22)}</div>
               <div class="notif-card-body">
                 <div class="notif-card-top">
                   <span class="notif-type-tag">Parti Daveti</span>
@@ -1286,8 +1426,10 @@
       if (titleEl) titleEl.textContent = activeParty.partyName;
       if (codeEl) codeEl.textContent = activeParty.partyCode;
       if (statusEl) {
-        statusEl.textContent =
-          activeParty.status === 'IN_GAME' ? '⚔️ MAÇ DEVAM EDİYOR' : '⏳ LOBİDE BEKLİYOR';
+        statusEl.innerHTML =
+          activeParty.status === 'IN_GAME'
+            ? `${mcIcon('SWORD', 14)} MAÇ DEVAM EDİYOR`
+            : `⏳ LOBİDE BEKLİYOR`;
       }
       if (countEl) {
         countEl.textContent = `${activeParty.members.length}/${activeParty.maxMembers || 8}`;
@@ -1298,8 +1440,8 @@
         session.isAdminSession;
       if (startBtn) {
         startBtn.disabled = !isLeader;
-        startBtn.textContent = isLeader
-          ? '⚔️ Parti Maçını Başlat'
+        startBtn.innerHTML = isLeader
+          ? `${mcIcon('SWORD', 16)} Parti Maçını Başlat`
           : '⏳ Parti Liderinin Başlatması Bekleniyor';
       }
 
@@ -1309,6 +1451,7 @@
           .map(m => {
             const mUser = userService?.getUserByUsername(m.username) || { username: m.username };
             const mRank = rankService.getUserRank(m.username);
+            const mCos = getUserCosmeticMeta(mUser);
             const mAvatar = avatarService
               ? avatarService.getAvatarForUser(mUser)
               : '';
@@ -1318,18 +1461,23 @@
             const canKick =
               isLeader && m.username.toLowerCase() !== activeParty.leaderUsername.toLowerCase();
             return `
-              <div class="party-member-row">
+              <div class="party-member-row ${escapeHtml(mCos.effectClass)}">
                 <div class="pm-left">
                   <img src="${escapeHtml(mAvatar)}" onerror="this.onerror=null;this.src='${escapeHtml(
               mFallback
-            )}';" class="lb-avatar" alt="" />
-                  <span class="${getRankBadgeClass(mRank.id)}">${escapeHtml(mRank.badge)} ${escapeHtml(
+            )}';" class="lb-avatar ${escapeHtml(mCos.frameClass)}" alt="" />
+                  <span class="${getRankBadgeClass(mRank.id)}">${mcIcon(mRank.badge, 13)} ${escapeHtml(
               mRank.name
             )}</span>
-                  <strong>${escapeHtml(m.username)}</strong>
+                  <strong class="${escapeHtml(mCos.nameClass)}" ${mCos.nameStyle}>${escapeHtml(m.username)}</strong>
+                  ${
+                    mCos.badgeText
+                      ? `<span class="custom-cosmetic-badge-pill">${replaceEmojis(escapeHtml(mCos.badgeText), 12)}</span>`
+                      : ''
+                  }
                   ${
                     m.username.toLowerCase() === activeParty.leaderUsername.toLowerCase()
-                      ? '<span class="leader-crown">👑 Lider</span>'
+                      ? `<span class="leader-crown">${mcIcon('CROWN', 14)} Lider</span>`
                       : ''
                   }
                 </div>
@@ -1389,7 +1537,7 @@
   function renderStats() {
     const session = getSession();
     if (!session) return;
-    const { userService, economyService, netheriteService, extraLifeService } = svc();
+    const { userService, netheriteService, extraLifeService } = svc();
     const user = userService.getUserByUsername(session.username);
     if (!user) return;
 
@@ -1432,20 +1580,20 @@
           <strong class="kpi-val gold-text">${formatCurrencyTRY(bestScore)}</strong>
         </div>
         <div class="stat-kpi-card">
-          <span class="kpi-label">Kullanılan Emerald</span>
-          <strong class="kpi-val">${emeraldsSpent.toLocaleString('tr-TR')} 🟢</strong>
+          <span class="kpi-label">Kullanılan Zümrüt</span>
+          <strong class="kpi-val">${emeraldsSpent.toLocaleString('tr-TR')} ${mcIcon('EMERALD', 16)}</strong>
         </div>
         <div class="stat-kpi-card">
-          <span class="kpi-label">Kazanılan Emerald</span>
-          <strong class="kpi-val emerald-text">${emeraldsEarned.toLocaleString('tr-TR')} 🟢</strong>
+          <span class="kpi-label">Kazanılan Zümrüt</span>
+          <strong class="kpi-val emerald-text">${emeraldsEarned.toLocaleString('tr-TR')} ${mcIcon('EMERALD', 16)}</strong>
         </div>
         <div class="stat-kpi-card">
           <span class="kpi-label">Netherite</span>
-          <strong class="kpi-val netherite-text">${netheriteBalance.toLocaleString('tr-TR')} ⬛</strong>
+          <strong class="kpi-val netherite-text">${netheriteBalance.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 16)}</strong>
         </div>
         <div class="stat-kpi-card">
-          <span class="kpi-label">Extra Life</span>
-          <strong class="kpi-val">${extraLives} / 5 ❤️</strong>
+          <span class="kpi-label">Ekstra Can</span>
+          <strong class="kpi-val">${extraLives} / 5 ${mcIcon('HEART', 16)}</strong>
         </div>
       `;
     }
@@ -1470,7 +1618,11 @@
             m => `
             <div class="tx-row">
               <div>
-                <strong>${m.didWin ? '🏆 Milyoner Şampiyonu' : `🎯 ${m.reachedQuestion}. Soruya Ulaşıldı`}</strong>
+                <strong>${
+                  m.didWin
+                    ? `${mcIcon('TROPHY', 15)} Milyoner Şampiyonu`
+                    : `${mcIcon('SWORD', 15)} ${m.reachedQuestion}. Soruya Ulaşıldı`
+                }</strong>
                 <span class="tx-date">${formatDateTR(m.date)}</span>
               </div>
               <span class="tx-amount pos">${formatCurrencyTRY(m.prizeWon || 0)}</span>
@@ -1486,7 +1638,7 @@
   // 9. EKRAN: GERÇEK LİDERLİK TABLOSU (renderLeaderboard — #17, #18, #19)
   // ==========================================
   function renderLeaderboard() {
-    const { leaderboardService, avatarService } = svc();
+    const { leaderboardService, avatarService, userService } = svc();
     const tbody = document.getElementById('leaderboard-tbody');
     if (!tbody || !leaderboardService) return;
 
@@ -1513,13 +1665,15 @@
       .map(r => {
         const medal =
           r.position === 1
-            ? '🥇 1'
+            ? `${mcIcon('TROPHY', 16)} 1`
             : r.position === 2
-            ? '🥈 2'
+            ? `🥈 2`
             : r.position === 3
-            ? '🥉 3'
+            ? `🥉 3`
             : `#${r.position}`;
-        const avatarSrc = avatarService.getAvatarForUser(r);
+        const rUser = userService?.getUserByUsername(r.username) || r;
+        const rCos = getUserCosmeticMeta(rUser);
+        const avatarSrc = avatarService.getAvatarForUser(rUser);
         const fallbackSrc = avatarService.generatePixelAvatarDataUrl(r.username);
 
         return `
@@ -1529,24 +1683,31 @@
               <div class="lb-player-cell">
                 <img src="${escapeHtml(avatarSrc)}" onerror="this.onerror=null;this.src='${escapeHtml(
           fallbackSrc
-        )}';" class="lb-avatar" alt="" />
+        )}';" class="lb-avatar ${escapeHtml(rCos.frameClass)}" alt="" />
                 <div>
-                  <strong>${escapeHtml(r.username)}</strong>
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <strong class="${escapeHtml(rCos.nameClass)}" ${rCos.nameStyle}>${escapeHtml(r.username)}</strong>
+                    ${
+                      rCos.badgeText
+                        ? `<span class="custom-cosmetic-badge-pill">${replaceEmojis(escapeHtml(rCos.badgeText), 12)}</span>`
+                        : ''
+                    }
+                  </div>
                   ${
                     r.minecraftPlayerName
-                      ? `<span class="lb-mc-sub">🎮 ${escapeHtml(r.minecraftPlayerName)}</span>`
+                      ? `<span class="lb-mc-sub">${mcIcon('GRASS', 12)} ${escapeHtml(r.minecraftPlayerName)}</span>`
                       : ''
                   }
                 </div>
               </div>
             </td>
-            <td><span class="${getRankBadgeClass(r.rankId)}">${escapeHtml(r.rankBadge)} ${escapeHtml(
+            <td><span class="${getRankBadgeClass(r.rankId)}">${mcIcon(r.rankBadge, 14)} ${escapeHtml(
           r.rankName
         )}</span></td>
             <td><strong class="gold-text">${formatCurrencyTRY(r.points)}</strong></td>
             <td>${r.gamesWon}</td>
             <td>${r.gamesPlayed}</td>
-            <td><strong class="emerald-text">${r.emeraldBalance.toLocaleString('tr-TR')} 🟢</strong></td>
+            <td><strong class="emerald-text">${r.emeraldBalance.toLocaleString('tr-TR')} ${mcIcon('EMERALD', 15)}</strong></td>
           </tr>
         `;
       })
@@ -1634,25 +1795,38 @@
     const listEl = document.getElementById('user-bugs-list');
     if (!listEl) return;
 
+    // Eğer oyuncu aktif bir partideyse, ilgili parti kodu alanını otomatik doldur
+    const partyInput = document.getElementById('bug-related-party');
+    if (partyInput && !partyInput.value) {
+      const activeParty = svc().partyService?.getActivePartyForUser(session.username);
+      if (activeParty?.partyCode) {
+        partyInput.value = activeParty.partyCode;
+      }
+    }
+
     const bugs = svc().bugService.getUserBugs(session.username);
     if (bugs.length === 0) {
-      listEl.innerHTML = `<div class="empty-state-box">Henüz hata bildiriminiz bulunmuyor.</div>`;
+      listEl.innerHTML = `<div class="empty-state-box">Henüz hata bildiriminiz bulunmuyor. Karşılaştığınız hataları yukarıdaki formdan detaylıca bildirebilirsiniz.</div>`;
       return;
     }
 
     listEl.innerHTML = bugs
-      .map(
-        b => `
+      .map(b => {
+        const stLower = String(b.status || 'OPEN').toLowerCase();
+        const isResolved = stLower.includes('çözüldü') || stLower === 'resolved';
+        return `
         <div class="ticket-card">
           <div class="ticket-header">
-            <strong>🐞 ${escapeHtml(b.title)}</strong>
-            <span class="status-pill">${escapeHtml(b.status)}</span>
+            <strong>${mcIcon('REDSTONE', 16)} #${escapeHtml(b.id)} — ${escapeHtml(b.title)}</strong>
+            <span class="status-pill ${isResolved ? 'status-resolved' : 'status-open'}">${escapeHtml(
+          b.status
+        )}</span>
           </div>
-          <p class="ticket-meta">${escapeHtml(b.category)} • Önem: ${escapeHtml(
+          <p class="ticket-meta">Kategori: <strong>${escapeHtml(b.category)}</strong> • Önem: <strong>${escapeHtml(
           b.severity
-        )} ${b.relatedParty ? `• Parti: <code>${escapeHtml(b.relatedParty)}</code>` : ''} • ${formatDateTR(
-          b.createdAt
-        )}</p>
+        )}</strong> ${
+          b.relatedParty ? `• Parti: <code>${escapeHtml(b.relatedParty)}</code>` : ''
+        } • ${formatDateTR(b.createdAt)}</p>
           <p>${escapeHtml(b.description)}</p>
           ${
             b.screenshot
@@ -1663,14 +1837,15 @@
           }
           ${
             b.adminNote
-              ? `<div class="admin-reply-note">🛡️ <strong>Yönetici Notu:</strong> ${escapeHtml(
-                  b.adminNote
+              ? `<div class="admin-reply-note">${mcIcon('SHIELD', 14)} <strong>Yönetici Notu:</strong> ${replaceEmojis(
+                  escapeHtml(b.adminNote),
+                  14
                 )}</div>`
               : ''
           }
         </div>
-      `
-      )
+      `;
+      })
       .join('');
   }
 
@@ -1683,7 +1858,15 @@
     const listEl = document.getElementById('suggestions-list-container');
     if (!listEl) return;
 
-    const suggestions = svc().suggestionService.getAllSuggestions();
+    const uLower = session.username.toLowerCase();
+    const rawSuggestions = svc().suggestionService.getAllSuggestions();
+    const suggestions = [...rawSuggestions].sort((a, b) => {
+      const scoreA = (Array.isArray(a.upvotes) ? a.upvotes.length : 0) - (Array.isArray(a.downvotes) ? a.downvotes.length : 0);
+      const scoreB = (Array.isArray(b.upvotes) ? b.upvotes.length : 0) - (Array.isArray(b.downvotes) ? b.downvotes.length : 0);
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
     if (suggestions.length === 0) {
       listEl.innerHTML = `<div class="empty-state-box">Henüz paylaşılmış öneri bulunmuyor. İlk öneriyi siz paylaşın!</div>`;
       return;
@@ -1691,32 +1874,45 @@
 
     listEl.innerHTML = suggestions
       .map(s => {
-        const upCount = Array.isArray(s.upvotes) ? s.upvotes.length : 0;
-        const downCount = Array.isArray(s.downvotes) ? s.downvotes.length : 0;
+        const upvotes = Array.isArray(s.upvotes) ? s.upvotes : [];
+        const downvotes = Array.isArray(s.downvotes) ? s.downvotes : [];
+        const upCount = upvotes.length;
+        const downCount = downvotes.length;
+        const netScore = upCount - downCount;
+        const hasVotedUp = upvotes.includes(uLower);
+        const hasVotedDown = downvotes.includes(uLower);
+
         return `
           <div class="ticket-card">
             <div class="ticket-header">
-              <strong>💡 ${escapeHtml(s.title)}</strong>
+              <strong>${mcIcon('STAR', 16)} #${escapeHtml(s.id)} — ${escapeHtml(s.title)}</strong>
               <span class="status-pill">${escapeHtml(s.status)}</span>
             </div>
-            <p class="ticket-meta">Gönderen: ${escapeHtml(s.username)} • Kategori: ${escapeHtml(
+            <p class="ticket-meta">Gönderen: <strong>${escapeHtml(s.username)}</strong> • Kategori: <strong>${escapeHtml(
           s.category
-        )} • ${formatDateTR(s.createdAt)}</p>
+        )}</strong> • Net Skor: <strong>${netScore >= 0 ? `+${netScore}` : netScore}</strong> • ${formatDateTR(
+          s.createdAt
+        )}</p>
             <p>${escapeHtml(s.details)}</p>
             ${
               s.adminNote
-                ? `<div class="admin-reply-note">🛡️ <strong>Yönetici Notu:</strong> ${escapeHtml(
-                    s.adminNote
+                ? `<div class="admin-reply-note">${mcIcon('SHIELD', 14)} <strong>Yönetici Notu:</strong> ${replaceEmojis(
+                    escapeHtml(s.adminNote),
+                    14
                   )}</div>`
                 : ''
             }
             <div class="suggestion-votes">
-              <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-vote-sug="${escapeHtml(
-                s.id
-              )}" data-vote-dir="UP">👍 Destekle (${upCount})</button>
-              <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-vote-sug="${escapeHtml(
-                s.id
-              )}" data-vote-dir="DOWN">👎 (${downCount})</button>
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary suggestion-vote-btn ${
+                hasVotedUp ? 'voted-up' : ''
+              }" data-vote-sug="${escapeHtml(
+          s.id
+        )}" data-vote-dir="UP">▲ Destekle (${upCount})</button>
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary suggestion-vote-btn ${
+                hasVotedDown ? 'voted-down' : ''
+              }" data-vote-sug="${escapeHtml(
+          s.id
+        )}" data-vote-dir="DOWN">▼ Katılmıyorum (${downCount})</button>
             </div>
           </div>
         `;
@@ -1777,7 +1973,7 @@
       const users = userService.getAllUsers();
       const parties = partyService.getAllParties().filter(p => p.status !== 'CLOSED');
       const tickets = supportService.getAllTickets().filter(t => t.status === 'OPEN');
-      const bugs = bugService.getAllBugs().filter(b => b.status === 'OPEN');
+      const bugs = bugService.getAllBugs().filter(b => b.status === 'OPEN' || b.status === 'AÇIK');
       const suggestions = suggestionService.getAllSuggestions();
       const totalEmeralds = users.reduce((sum, u) => sum + Number(u.emeraldBalance || 0), 0);
       const totalNetherites = users.reduce((sum, u) => sum + Number(u.netheriteBalance || 0), 0);
@@ -1794,10 +1990,10 @@
             }</strong></div>
             <div class="stat-kpi-card"><span class="kpi-label">TOPLAM ZÜMRÜT</span><strong class="kpi-val emerald-text">${totalEmeralds.toLocaleString(
               'tr-TR'
-            )} 🟢</strong></div>
+            )} ${mcIcon('EMERALD', 16)}</strong></div>
             <div class="stat-kpi-card"><span class="kpi-label">TOPLAM NETHERITE</span><strong class="kpi-val netherite-text">${totalNetherites.toLocaleString(
               'tr-TR'
-            )} ⬛</strong></div>
+            )} ${mcIcon('NETHERITE', 16)}</strong></div>
             <div class="stat-kpi-card"><span class="kpi-label">AÇIK DESTEK / HATA</span><strong class="kpi-val">${
               tickets.length
             } / ${bugs.length}</strong></div>
@@ -1858,7 +2054,7 @@
                             u.points || 0
                           )} • Oyun: ${Number(u.gamesWon || 0)}/${Number(
                       u.gamesPlayed || 0
-                    )} • Can: ${Number(u.extraLives || 0)}❤️</div>
+                    )} • Can: ${Number(u.extraLives || 0)} ${mcIcon('HEART', 12)}</div>
                         </td>
                         <td>${escapeHtml(u.minecraftPlayerName || '-')}</td>
                         <td>
@@ -1870,14 +2066,14 @@
                                 r =>
                                   `<option value="${escapeHtml(r.id)}" ${
                                     uRank.id === r.id ? 'selected' : ''
-                                  }>${escapeHtml(r.badge)} ${escapeHtml(r.name)}</option>`
+                                  }>${escapeHtml(r.name)}</option>`
                               )
                               .join('')}
                           </select>
                         </td>
                         <td>
-                          <span class="emerald-text">${Number(u.emeraldBalance || 0)} 🟢</span> /
-                          <span class="netherite-text">${Number(u.netheriteBalance || 0)} ⬛</span>
+                          <span class="emerald-text">${Number(u.emeraldBalance || 0)} ${mcIcon('EMERALD', 14)}</span> /
+                          <span class="netherite-text">${Number(u.netheriteBalance || 0)} ${mcIcon('NETHERITE', 14)}</span>
                         </td>
                         <td>
                           <button type="button" class="mc-btn mc-btn-sm ${
@@ -1885,23 +2081,23 @@
                           }" data-admin-toggle-mod="${escapeHtml(u.username)}" data-mod-val="${
                       u.isModerator ? 'false' : 'true'
                     }">
-                            ${u.isModerator ? '⚔️ Moderatör (Kaldır)' : '⚔️ Moderatör Yap'}
+                            ${mcIcon('SWORD', 13)} ${u.isModerator ? 'Moderatör (Kaldır)' : 'Moderatör Yap'}
                           </button>
                         </td>
                         <td>
                           <div class="admin-action-btns">
                             <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-give-emerald="${escapeHtml(
                               u.username
-                            )}">+500 🟢</button>
+                            )}">+500 ${mcIcon('EMERALD', 13)}</button>
                             <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-admin-remove-emerald="${escapeHtml(
                               u.username
-                            )}">-250 🟢</button>
+                            )}">-250 ${mcIcon('EMERALD', 13)}</button>
                             <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-admin-give-netherite="${escapeHtml(
                               u.username
-                            )}">+100 ⬛</button>
+                            )}">+100 ${mcIcon('NETHERITE', 13)}</button>
                             <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-admin-remove-netherite="${escapeHtml(
                               u.username
-                            )}">-50 ⬛</button>
+                            )}">-50 ${mcIcon('NETHERITE', 13)}</button>
                             <button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-admin-delete-user="${escapeHtml(
                               u.username
                             )}">Sil</button>
@@ -1926,7 +2122,7 @@
 
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>👑 7 Rütbe Hiyerarşisi (Üye, VIP, VIP+, MVIP, MVIP+, Moderator, ADMIN)</h3>
+          <h3>${mcIcon('CROWN', 18)} 7 Rütbe Hiyerarşisi (Üye, VIP, VIP+, MVIP, MVIP+, Moderator, ADMIN)</h3>
           <div class="table-responsive">
             <table class="mc-table">
               <thead>
@@ -1946,7 +2142,7 @@
                     r => `
                     <tr>
                       <td>#${r.order}</td>
-                      <td><strong>${escapeHtml(r.badge)} ${escapeHtml(r.name)}</strong> (<code>${escapeHtml(
+                      <td><strong>${mcIcon(r.badge, 15)} ${escapeHtml(r.name)}</strong> (<code>${escapeHtml(
                       r.id
                     )}</code>)</td>
                       <td><input type="number" step="0.1" id="adm-rk-try-${r.id}" value="${
@@ -1974,7 +2170,7 @@
             </table>
           </div>
 
-          <h4 style="margin-top:24px;">⚔️ Moderator Yetki Yapılandırması</h4>
+          <h4 style="margin-top:24px;">${mcIcon('SWORD', 16)} Moderator Yetki Yapılandırması</h4>
           <div class="settings-toggle-list">
             <label class="setting-row">
               <span>Parti Odalarını Denetleme / Kapatma Yetkisi</span>
@@ -2006,7 +2202,7 @@
       const parties = partyService.getAllParties();
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>🎉 Parti Odaları Yönetimi (${parties.length})</h3>
+          <h3>${mcIcon('SWORD', 18)} Parti Odaları Yönetimi (${parties.length})</h3>
           ${
             parties.length === 0
               ? `<div class="empty-state-box">Kayıtlı parti odası bulunmuyor.</div>`
@@ -2064,7 +2260,7 @@
       container.innerHTML = `
         <div class="admin-panel-section">
           <div class="card-title-row">
-            <h3>🏆 Liderlik Tablosu Yönetimi</h3>
+            <h3>${mcIcon('TROPHY', 18)} Liderlik Tablosu Yönetimi</h3>
             <button type="button" id="btn-admin-tab-reset-lb" class="mc-btn mc-btn-danger">
               🗑️ Leaderboard'u Sıfırla
             </button>
@@ -2128,7 +2324,7 @@
       const settings = economyService.getSettings();
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>💎 Oyuncu Zümrüt &amp; Netherite Bakiye İşlemi</h3>
+          <h3>${mcIcon('DIAMOND', 18)} Oyuncu Zümrüt &amp; Netherite Bakiye İşlemi</h3>
           <form id="admin-custom-currency-form" class="platform-form" style="margin-bottom:24px;">
             <div class="input-row-2">
               <div class="input-group">
@@ -2138,8 +2334,8 @@
               <div class="input-group">
                 <label>PARA BİRİMİ</label>
                 <select id="adm-cur-type">
-                  <option value="EMERALD">🟢 Zümrüt (Emerald)</option>
-                  <option value="NETHERITE">⬛ Netherite</option>
+                  <option value="EMERALD">Zümrüt (Emerald)</option>
+                  <option value="NETHERITE">Netherite</option>
                 </select>
               </div>
             </div>
@@ -2178,7 +2374,7 @@
                 <input type="number" id="adm-eco-life-price" value="${settings.extraLifeBasePrice}" />
               </div>
               <div class="input-group">
-                <label>İlk Kayıt Tek Seferlik Netherite Ödülü</label>
+                <label>İlk VIP+ ve Üzeri Alım Tek Seferlik Netherite Ödülü</label>
                 <input type="number" id="adm-eco-init-netherite" value="${
                   settings.initialNetheriteBonus || 250
                 }" />
@@ -2196,7 +2392,7 @@
       const items = shopService.getAllItems(true);
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>🛒 Yeni Mağaza Ürünü Ekle / Güncelle</h3>
+          <h3>${mcIcon('CHEST', 18)} Yeni Mağaza Ürünü Ekle / Güncelle</h3>
           <form id="admin-shop-item-form" class="platform-form" style="margin-bottom: 24px;">
             <div class="input-row-2">
               <div class="input-group">
@@ -2247,11 +2443,11 @@
                   .map(
                     i => `
                     <tr>
-                      <td><strong>${escapeHtml(i.icon)} ${escapeHtml(i.name)}</strong></td>
-                      <td>${escapeHtml(i.category)}</td>
+                      <td><strong>${mcIcon(i.id || i.icon, 18)} ${escapeHtml(i.name)}</strong></td>
+                      <td>${escapeHtml(i.category)} ${i.subCategory ? `(${escapeHtml(i.subCategory)})` : ''}</td>
                       <td>${escapeHtml(i.currency)}</td>
-                      <td>${i.emeraldPrice || 0} 🟢 / ${i.netheritePrice || 0} ⬛</td>
-                      <td>${i.active !== false ? '✅ Aktif' : '⏸️ Pasif'}</td>
+                      <td>${i.emeraldPrice || 0} ${mcIcon('EMERALD', 13)} / ${i.netheritePrice || 0} ${mcIcon('NETHERITE', 13)}</td>
+                      <td>${i.active !== false ? '✓ Aktif' : 'Pasif'}</td>
                       <td>
                         <button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-admin-delete-item="${escapeHtml(
                           i.id
@@ -2277,7 +2473,7 @@
 
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>💳 Stripe Ödeme Altyapısı Hazırlık Ayarları</h3>
+          <h3>${mcIcon('CHEST', 18)} Stripe Ödeme Altyapısı Hazırlık Ayarları</h3>
           <p class="card-sub">
             Sistem şu anda hazırlık modundadır ve sahte ödeme gerçekleştirmez. Kullanıcılara <em>"${escapeHtml(
               stripeCfg.statusMessage
@@ -2306,7 +2502,7 @@
             <button type="submit" class="mc-btn mc-btn-primary">Stripe Ayarlarını Kaydet</button>
           </form>
 
-          <h4 style="margin-top:24px;">🎁 Gönderilen Rütbe Hediyeleri (${gifts.length})</h4>
+          <h4 style="margin-top:24px;">${mcIcon('CHEST', 16)} Gönderilen Rütbe Hediyeleri (${gifts.length})</h4>
           ${
             gifts.length === 0
               ? `<div class="empty-state-box">Henüz rütbe hediyesi kaydı bulunmuyor.</div>`
@@ -2459,7 +2655,7 @@
       const bugs = bugService.getAllBugs();
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>🐞 Hata Bildirimleri (${bugs.length})</h3>
+          <h3>${mcIcon('REDSTONE', 18)} Hata Bildirimleri (${bugs.length})</h3>
           ${
             bugs.length === 0
               ? `<div class="empty-state-box">Hata bildirimi bulunmuyor.</div>`
@@ -2468,14 +2664,14 @@
                     b => `
                     <div class="ticket-card">
                       <div class="ticket-header">
-                        <strong>${escapeHtml(b.title)} (${escapeHtml(b.username)})</strong>
+                        <strong>#${escapeHtml(b.id)} — ${escapeHtml(b.title)} (${escapeHtml(b.username)})</strong>
                         <span class="status-pill">${escapeHtml(b.status)}</span>
                       </div>
-                      <p class="ticket-meta">${escapeHtml(b.category)} • Önem: ${escapeHtml(
+                      <p class="ticket-meta">Kategori: <strong>${escapeHtml(b.category)}</strong> • Önem: <strong>${escapeHtml(
                       b.severity
-                    )} ${
+                    )}</strong> ${
                       b.relatedParty ? `• İlgili Parti: <code>${escapeHtml(b.relatedParty)}</code>` : ''
-                    }</p>
+                    } • ${formatDateTR(b.createdAt)}</p>
                       <p>${escapeHtml(b.description)}</p>
                       ${
                         b.screenshot
@@ -2486,13 +2682,24 @@
                             )}</a></p>`
                           : ''
                       }
-                      <div class="inline-form-row" style="margin-top:8px;">
+                      <div class="inline-form-row" style="margin-top:10px;flex-wrap:wrap;gap:8px;">
+                        <select id="adm-bug-status-${escapeHtml(b.id)}" class="admin-inline-select">
+                          <option value="İNCELENİYOR" ${b.status === 'İNCELENİYOR' ? 'selected' : ''}>İNCELENİYOR</option>
+                          <option value="ÇÖZÜLDÜ" ${b.status === 'ÇÖZÜLDÜ' ? 'selected' : ''}>ÇÖZÜLDÜ</option>
+                          <option value="GEÇERSİZ / KAPATILDI" ${b.status === 'GEÇERSİZ / KAPATILDI' ? 'selected' : ''}>GEÇERSİZ / KAPATILDI</option>
+                        </select>
                         <input type="text" id="adm-bug-note-${escapeHtml(
                           b.id
-                        )}" placeholder="Çözüm notu..." value="${escapeHtml(b.adminNote || '')}" />
+                        )}" placeholder="Oyuncuya çözüm / inceleme notu..." value="${escapeHtml(
+                      b.adminNote || ''
+                    )}" style="flex:1;min-width:200px;" />
+                        <label style="display:inline-flex;align-items:center;gap:4px;font-size:0.78rem;color:var(--mc-emerald);">
+                          <input type="checkbox" id="adm-bug-reward-${escapeHtml(b.id)}" />
+                          +100 ${mcIcon('EMERALD', 13)} Ödül Ver
+                        </label>
                         <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-resolve-bug="${escapeHtml(
                           b.id
-                        )}">Çözüldü İşaretle &amp; Bildir</button>
+                        )}">Kaydet &amp; Bildir</button>
                       </div>
                     </div>
                   `
@@ -2509,20 +2716,34 @@
       const suggestions = suggestionService.getAllSuggestions();
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>💡 Topluluk Önerileri (${suggestions.length})</h3>
+          <h3>${mcIcon('STAR', 18)} Topluluk Önerileri (${suggestions.length})</h3>
           ${
             suggestions.length === 0
               ? `<div class="empty-state-box">Öneri bulunmuyor.</div>`
               : suggestions
-                  .map(
-                    s => `
+                  .map(s => {
+                    const upC = Array.isArray(s.upvotes) ? s.upvotes.length : 0;
+                    const downC = Array.isArray(s.downvotes) ? s.downvotes.length : 0;
+                    return `
                     <div class="ticket-card">
                       <div class="ticket-header">
-                        <strong>${escapeHtml(s.title)} (${escapeHtml(s.username)})</strong>
+                        <strong>#${escapeHtml(s.id)} — ${escapeHtml(s.title)} (${escapeHtml(s.username)})</strong>
                         <span class="status-pill">${escapeHtml(s.status)}</span>
                       </div>
+                      <p class="ticket-meta">Kategori: <strong>${escapeHtml(s.category)}</strong> • Oylar: <strong>▲ ${upC} / ▼ ${downC}</strong> • ${formatDateTR(
+                      s.createdAt
+                    )}</p>
                       <p>${escapeHtml(s.details)}</p>
-                      <div class="inline-form-row" style="margin-top:8px;">
+                      <div class="inline-form-row" style="margin-top:10px;flex-wrap:wrap;gap:8px;">
+                        <input type="text" id="adm-sug-note-${escapeHtml(
+                          s.id
+                        )}" placeholder="Yönetici yanıtı / değerlendirme notu..." value="${escapeHtml(
+                      s.adminNote || ''
+                    )}" style="flex:1;min-width:200px;" />
+                        <label style="display:inline-flex;align-items:center;gap:4px;font-size:0.78rem;color:var(--mc-emerald);">
+                          <input type="checkbox" id="adm-sug-reward-${escapeHtml(s.id)}" />
+                          +100 ${mcIcon('EMERALD', 13)} Ödül Ver
+                        </label>
                         <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-sug-status="${escapeHtml(
                           s.id
                         )}" data-status="ONAYLANDI">Onayla</button>
@@ -2534,8 +2755,8 @@
                         )}" data-status="REDDEDİLDİ">Reddet</button>
                       </div>
                     </div>
-                  `
-                  )
+                  `;
+                  })
                   .join('')
           }
         </div>
@@ -3044,8 +3265,10 @@
         if (!session) return;
         try {
           svc().shopService.equipCosmetic(session, equipBtn.getAttribute('data-equip-cosmetic'));
-          showToast('Kozmetik görünümünüz güncellendi!', 'success');
-          renderProfile();
+          showToast('Kozmetik görünümünüz tüm platformda güncellendi!', 'success');
+          syncHeaderAndDrawer();
+          if (state.currentScreen === 'profile') renderProfile();
+          if (state.currentScreen === 'shop') renderShop();
         } catch (err) {
           showToast(err.message, 'error');
         }
@@ -3395,13 +3618,22 @@
       const resolveBugBtn = e.target.closest('[data-admin-resolve-bug]');
       if (resolveBugBtn) {
         const bId = resolveBugBtn.getAttribute('data-admin-resolve-bug');
+        const statusVal = document.getElementById(`adm-bug-status-${bId}`)?.value || 'ÇÖZÜLDÜ';
         const note = document.getElementById(`adm-bug-note-${bId}`)?.value || '';
+        const rewardEm = document.getElementById(`adm-bug-reward-${bId}`)?.checked ? 100 : 0;
         try {
           svc().bugService.adminUpdateBug(session, bId, {
-            status: 'ÇÖZÜLDÜ',
-            adminNote: note
+            status: statusVal,
+            adminNote: note,
+            rewardEmerald: rewardEm
           });
-          showToast('Hata kaydı güncellendi ve oyuncuya bildirim gönderildi.', 'success');
+          showToast(
+            rewardEm > 0
+              ? 'Hata kaydı güncellendi, oyuncuya +100 Zümrüt ödülü ve bildirim gönderildi!'
+              : 'Hata kaydı güncellendi ve oyuncuya bildirim gönderildi.',
+            'success'
+          );
+          syncHeaderAndDrawer();
           renderAdmin();
         } catch (err) {
           showToast(err.message, 'error');
@@ -3411,13 +3643,23 @@
 
       const sugStatusBtn = e.target.closest('[data-admin-sug-status]');
       if (sugStatusBtn) {
+        const sId = sugStatusBtn.getAttribute('data-admin-sug-status');
+        const statusVal = sugStatusBtn.getAttribute('data-status');
+        const note = document.getElementById(`adm-sug-note-${sId}`)?.value || '';
+        const rewardEm = document.getElementById(`adm-sug-reward-${sId}`)?.checked ? 100 : 0;
         try {
-          svc().suggestionService.adminUpdateSuggestion(
-            session,
-            sugStatusBtn.getAttribute('data-admin-sug-status'),
-            { status: sugStatusBtn.getAttribute('data-status') }
+          svc().suggestionService.adminUpdateSuggestion(session, sId, {
+            status: statusVal,
+            adminNote: note,
+            rewardEmerald: rewardEm
+          });
+          showToast(
+            rewardEm > 0
+              ? 'Öneri durumu güncellendi, oyuncuya +100 Zümrüt ödülü ve bildirim gönderildi!'
+              : 'Öneri durumu güncellendi ve oyuncuya bildirim gönderildi.',
+            'success'
           );
-          showToast('Öneri durumu güncellendi ve oyuncuya bildirim gönderildi.', 'success');
+          syncHeaderAndDrawer();
           renderAdmin();
         } catch (err) {
           showToast(err.message, 'error');

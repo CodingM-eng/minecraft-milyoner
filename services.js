@@ -180,7 +180,7 @@
   }
 
   // ==========================================
-  // ÖZEL MINECRAFT ZÜMRÜT, NETHERITE VE 3 ÇİZGİLİ MENÜ SVG SERVİSİ (#10, #12)
+  // ÖZEL MINECRAFT PİKSEL SVG İKON SERVİSİ (Zümrüt, Netherite, Elmas, Rütbe, Kozmetik ve UI İkonları)
   // ==========================================
   const mcIconService = {
     getEmeraldSvg(size = 18) {
@@ -190,11 +190,160 @@
     getNetheriteSvg(size = 18, stackCount = 1) {
       const badge =
         stackCount > 1 ? `<span class="netherite-stack-count">×${stackCount}</span>` : '';
-      return `<span class="mc-netherite-icon-wrap" style="display:inline-flex;align-items:center;position:relative;vertical-align:middle;"><svg class="mc-currency-svg mc-netherite-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><rect x="2" y="4" width="12" height="8" fill="#231D22"/><rect x="3" y="5" width="10" height="6" fill="#3B3339"/><rect x="2" y="6" width="12" height="4" fill="#4D434B"/><rect x="4" y="4" width="8" height="2" fill="#685D66"/><rect x="4" y="6" width="7" height="1" fill="#887A85"/><rect x="3" y="9" width="9" height="2" fill="#2B2429"/><rect x="5" y="7" width="5" height="2" fill="#5D515A"/><rect x="11" y="5" width="1" height="2" fill="#9E8F9B"/></svg>${badge}</span>`;
+      return `<span class="mc-netherite-icon-wrap" style="display:inline-flex;align-items:center;position:relative;vertical-align:middle;"><svg class="mc-currency-svg mc-netherite-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><rect x="1" y="4" width="14" height="8" fill="#1B161A"/><rect x="2" y="3" width="12" height="10" fill="#2A2227"/><rect x="3" y="4" width="10" height="3" fill="#736570"/><rect x="4" y="4" width="6" height="1" fill="#A899A5"/><rect x="2" y="7" width="12" height="3" fill="#4D424A"/><rect x="3" y="10" width="10" height="2" fill="#372E35"/><rect x="5" y="7" width="6" height="2" fill="#635660"/></svg>${badge}</span>`;
+    },
+
+    getDiamondSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-diamond-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M5 1H11V2H13V5H14V11H13V13H11V15H5V13H3V11H2V5H3V2H5V1Z" fill="#0C4A6E"/><path d="M5 2H11V4H13V11H11V14H5V11H3V4H5V2Z" fill="#38BDF8"/><path d="M6 3H10V5H11V7H5V5H6V3Z" fill="#BAE6FD"/><path d="M6 7H10V12H6V7Z" fill="#0284C7"/></svg>`;
+    },
+
+    getHeartSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-heart-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M2 3H6V4H7V5H9V4H10V3H14V4H15V9H14V11H12V13H10V14H9V15H7V14H6V13H4V11H2V9H1V4H2V3Z" fill="#450A0A"/><path d="M3 4H6V5H7V6H9V5H10V4H13V5H14V9H13V10H11V12H9V13H7V12H5V10H3V9H2V5H3V4Z" fill="#EF4444"/><rect x="3" y="5" width="2" height="2" fill="#FCA5A5"/><path d="M7 11H11V10H13V8H14V9H13V11H11V13H9V14H7V11Z" fill="#B91C1C"/></svg>`;
+    },
+
+    getHeartBundleSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-heart-bundle-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M1 3H5V4H6V3H10V4H11V8H9V10H7V12H5V10H3V8H1V3Z" fill="#991B1B"/><path d="M2 4H5V5H6V4H9V8H7V10H5V8H2V4Z" fill="#F43F5E"/><path d="M6 6H10V7H11V6H15V11H13V13H11V15H9V13H7V11H6V6Z" fill="#78350F"/><path d="M7 7H10V8H11V7H14V11H12V13H10V11H7V7Z" fill="#FBBF24"/><rect x="8" y="8" width="2" height="1" fill="#FEF08A"/></svg>`;
+    },
+
+    getCrownSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-crown-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M1 4H3V6H5V5H7V2H9V5H11V6H13V4H15V13H1V4Z" fill="#78350F"/><path d="M2 5H3V8H6V6H7V3H9V6H10V8H13V5H14V12H2V5Z" fill="#FBBF24"/><rect x="3" y="9" width="10" height="2" fill="#F59E0B"/><rect x="7" y="9" width="2" height="2" fill="#EF4444"/><rect x="4" y="9" width="1" height="2" fill="#38BDF8"/><rect x="11" y="9" width="1" height="2" fill="#17DD62"/></svg>`;
+    },
+
+    getFlameSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-flame-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M7 1H9V3H11V5H13V8H14V13H12V15H4V13H2V8H4V5H6V3H7V1Z" fill="#991B1B"/><path d="M7 3H9V5H11V8H12V13H4V8H6V5H7V3Z" fill="#F97316"/><path d="M7 6H9V8H10V13H6V8H7V6Z" fill="#FACC15"/><rect x="7" y="10" width="2" height="3" fill="#FEF08A"/></svg>`;
+    },
+
+    getStarSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-star-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M7 1H9V5H14V7H15V9H14V11H9V15H7V11H2V9H1V7H2V5H7V1Z" fill="#581C87"/><path d="M7 2H9V6H13V7H14V9H13V10H9V14H7V10H3V9H2V7H3V6H7V2Z" fill="#C084FC"/><rect x="6" y="6" width="4" height="4" fill="#F5D0FE"/><rect x="7" y="7" width="2" height="2" fill="#FFFFFF"/></svg>`;
+    },
+
+    getCreeperSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-creeper-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><rect x="1" y="1" width="14" height="14" fill="#14532D"/><rect x="2" y="2" width="12" height="12" fill="#22C55E"/><rect x="3" y="3" width="3" height="2" fill="#4ADE80"/><rect x="10" y="10" width="3" height="3" fill="#16A34A"/><rect x="3" y="4" width="3" height="3" fill="#090D16"/><rect x="10" y="4" width="3" height="3" fill="#090D16"/><rect x="6" y="7" width="4" height="3" fill="#090D16"/><rect x="5" y="9" width="6" height="3" fill="#090D16"/><rect x="5" y="12" width="2" height="2" fill="#090D16"/><rect x="9" y="12" width="2" height="2" fill="#090D16"/></svg>`;
+    },
+
+    getRedstoneSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-redstone-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M6 2H10V4H12V6H14V11H12V13H10V14H6V13H4V11H2V6H4V4H6V2Z" fill="#7F1D1D"/><path d="M6 4H10V6H12V11H10V13H6V11H4V6H6V4Z" fill="#EF4444"/><rect x="6" y="6" width="4" height="4" fill="#FCA5A5"/><rect x="7" y="7" width="2" height="2" fill="#FFFFFF"/></svg>`;
+    },
+
+    getEnderSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-ender-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><rect x="2" y="2" width="12" height="12" fill="#1E1B4B"/><rect x="3" y="3" width="10" height="10" fill="#7E22CE"/><rect x="4" y="6" width="8" height="4" fill="#C084FC"/><rect x="7" y="4" width="2" height="8" fill="#090D16"/><rect x="6" y="7" width="4" height="2" fill="#D8B4FE"/></svg>`;
+    },
+
+    getSwordSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-sword-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M11 2H14V5H13V7H11V9H9V11H7V9H5V7H7V5H9V3H11V2Z" fill="#0284C7"/><path d="M12 3H13V5H11V7H9V9H7V7H9V5H11V3H12Z" fill="#7DD3FC"/><rect x="3" y="9" width="6" height="2" fill="#10B981"/><rect x="2" y="12" width="3" height="2" fill="#78350F"/></svg>`;
+    },
+
+    getShieldSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-shield-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M2 2H14V9H13V11H11V13H9V15H7V13H5V11H3V9H2V2Z" fill="#831843"/><path d="M3 3H13V9H11V11H9V13H7V11H5V9H3V3Z" fill="#EC4899"/><rect x="7" y="4" width="2" height="7" fill="#FDE047"/><rect x="5" y="6" width="6" height="2" fill="#FDE047"/></svg>`;
+    },
+
+    getGrassSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-grass-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><rect x="2" y="2" width="12" height="12" fill="#451A03"/><rect x="3" y="6" width="10" height="7" fill="#78350F"/><rect x="2" y="2" width="12" height="4" fill="#15803D"/><rect x="3" y="3" width="10" height="2" fill="#22C55E"/><rect x="4" y="6" width="2" height="2" fill="#22C55E"/><rect x="9" y="6" width="2" height="1" fill="#22C55E"/></svg>`;
+    },
+
+    getPickaxeSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-pickaxe-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M7 2H13V4H14V8H12V6H10V4H7V2Z" fill="#38BDF8"/><rect x="8" y="3" width="4" height="1" fill="#BAE6FD"/><path d="M10 5H11V6H9V8H7V10H5V12H3V14H2V12H4V10H6V8H8V6H10V5Z" fill="#92400E"/></svg>`;
+    },
+
+    getTrophySvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-trophy-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M3 2H13V4H15V8H13V9H10V12H12V14H4V12H6V9H3V8H1V4H3V2Z" fill="#92400E"/><path d="M4 3H12V8H9V12H11V13H5V12H7V8H4V3Z" fill="#FBBF24"/><rect x="5" y="4" width="2" height="3" fill="#FEF08A"/></svg>`;
+    },
+
+    getChestSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-chest-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><rect x="2" y="3" width="12" height="10" fill="#451A03"/><rect x="3" y="4" width="10" height="3" fill="#B45309"/><rect x="3" y="8" width="10" height="4" fill="#92400E"/><rect x="2" y="7" width="12" height="1" fill="#1C1917"/><rect x="7" y="6" width="2" height="3" fill="#FBBF24"/></svg>`;
+    },
+
+    getRocketSvg(size = 18) {
+      return `<svg class="mc-currency-svg mc-rocket-svg" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true" style="display:inline-block;vertical-align:middle;image-rendering:pixelated;"><path d="M7 1H9V3H11V5H5V3H7V1Z" fill="#EF4444"/><rect x="6" y="5" width="4" height="6" fill="#F8FAFC"/><rect x="6" y="6" width="4" height="2" fill="#EF4444"/><rect x="6" y="9" width="4" height="1" fill="#EF4444"/><rect x="7" y="11" width="2" height="3" fill="#92400E"/><rect x="5" y="13" width="2" height="2" fill="#FBBF24"/><rect x="9" y="13" width="2" height="2" fill="#F97316"/></svg>`;
     },
 
     getHamburgerSvg() {
       return `<svg class="mc-hamburger-svg" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true"><rect class="hb-line hb-line-1" x="2" y="4" width="16" height="2.5" fill="currentColor"/><rect class="hb-line hb-line-2" x="2" y="9" width="16" height="2.5" fill="currentColor"/><rect class="hb-line hb-line-3" x="2" y="14" width="16" height="2.5" fill="currentColor"/></svg>`;
+    },
+
+    getIconSvg(iconOrKey, size = 18) {
+      const key = String(iconOrKey || '').trim();
+      if (!key) return this.getEmeraldSvg(size);
+      const upper = key.toUpperCase();
+
+      if (key === '🟢' || upper === 'EMERALD' || upper === 'FRAME_EMERALD' || upper === 'EMERALD_COLLECTOR') {
+        return this.getEmeraldSvg(size);
+      }
+      if (key === '⬛' || upper === 'NETHERITE') {
+        return this.getNetheriteSvg(size);
+      }
+      if (key === '💎' || key === '💠' || upper === 'DIAMOND' || upper === 'VIP' || upper === 'FRAME_DIAMOND') {
+        return this.getDiamondSvg(size);
+      }
+      if (key === '❤️' || upper === 'HEART' || upper === 'ITEM_EXTRA_LIFE') {
+        return this.getHeartSvg(size);
+      }
+      if (key === '💖' || upper === 'HEART_BUNDLE' || upper === 'ITEM_EXTRA_LIFE_BUNDLE_3') {
+        return this.getHeartBundleSvg(size);
+      }
+      if (key === '👑' || key === '✨' || upper === 'CROWN' || upper === 'MVIP_PLUS' || upper === 'NAME_COLOR_GOLD') {
+        return this.getCrownSvg(size);
+      }
+      if (key === '🔥' || upper === 'FLAME' || upper === 'MVIP' || upper === 'FRAME_NETHERITE_FLAME' || upper === 'STREAK_10') {
+        return this.getFlameSvg(size);
+      }
+      if (key === '🌟' || key === '🌈' || upper === 'STAR' || upper === 'VIP_PLUS' || upper === 'NAME_COLOR_RGB') {
+        return this.getStarSvg(size);
+      }
+      if (key === '🧨' || upper === 'CREEPER' || upper === 'BADGE_CREEPER_HUNTER') {
+        return this.getCreeperSvg(size);
+      }
+      if (key === '⚡' || upper === 'REDSTONE' || upper === 'BADGE_REDSTONE_MASTER') {
+        return this.getRedstoneSvg(size);
+      }
+      if (key === '🐉' || upper === 'ENDER' || upper === 'EFFECT_ENDER_AURA') {
+        return this.getEnderSvg(size);
+      }
+      if (key === '⚔️' || upper === 'SWORD' || upper === 'MODERATOR') {
+        return this.getSwordSvg(size);
+      }
+      if (key === '🛡️' || upper === 'SHIELD' || upper === 'ADMIN') {
+        return this.getShieldSvg(size);
+      }
+      if (key === '🌱' || upper === 'GRASS' || upper === 'MEMBER') {
+        return this.getGrassSvg(size);
+      }
+      if (key === '⛏️' || upper === 'PICKAXE' || upper === 'FIRST_GAME') {
+        return this.getPickaxeSvg(size);
+      }
+      if (key === '🏆' || key === '🏅' || upper === 'TROPHY' || upper === 'FIRST_WIN') {
+        return this.getTrophySvg(size);
+      }
+      if (key === '🚀' || key === '🎉' || upper === 'ROCKET' || upper === 'ITEM_TOURNAMENT_BOOST' || upper === 'PARTY_CHAMPION') {
+        return this.getRocketSvg(size);
+      }
+      if (key === '💳' || key === '🏦' || key === '🛍️' || key === '🎁' || key === '🛒' || upper === 'CHEST') {
+        return this.getChestSvg(size);
+      }
+      return `<span>${key}</span>`;
+    },
+
+    replaceEmojisInHtml(str, size = 16) {
+      if (!str) return '';
+      return String(str)
+        .replace(/🟢/g, this.getEmeraldSvg(size))
+        .replace(/⬛/g, this.getNetheriteSvg(size))
+        .replace(/💠/g, this.getDiamondSvg(size))
+        .replace(/💎/g, this.getDiamondSvg(size))
+        .replace(/❤️/g, this.getHeartSvg(size))
+        .replace(/💖/g, this.getHeartBundleSvg(size))
+        .replace(/🧨/g, this.getCreeperSvg(size))
+        .replace(/⚡/g, this.getRedstoneSvg(size))
+        .replace(/🐉/g, this.getEnderSvg(size))
+        .replace(/👑/g, this.getCrownSvg(size))
+        .replace(/🔥/g, this.getFlameSvg(size))
+        .replace(/🌟/g, this.getStarSvg(size))
+        .replace(/🌈/g, this.getStarSvg(size))
+        .replace(/⚔️/g, this.getSwordSvg(size))
+        .replace(/🛡️/g, this.getShieldSvg(size))
+        .replace(/🌱/g, this.getGrassSvg(size))
+        .replace(/⛏️/g, this.getPickaxeSvg(size))
+        .replace(/🏆/g, this.getTrophySvg(size));
     }
   };
 
@@ -1777,7 +1926,7 @@
 
   // ==========================================
   // HATA BİLDİRİM SERVİSİ (bugService — #18)
-  // Alanlar: Başlık, Açıklama, Kategori, Screenshot, Related party
+  // Alanlar: Başlık, Açıklama, Kategori, Screenshot, Related party, Priority, Reward
   // ==========================================
   const bugService = {
     getAllBugs() {
@@ -1807,6 +1956,7 @@
         throw new Error('Lütfen hata başlığını ve açıklamasını girin.');
       }
 
+      const perms = authGuard.getUserPermissions(session);
       const bugs = this.getAllBugs();
       const report = {
         id: generateId('BUG'),
@@ -1814,11 +1964,13 @@
         title: cleanTitle,
         category: String(category),
         severity: String(severity),
+        priority: perms.bugPriority || 'NORMAL',
         description: cleanDesc,
         screenshot: String(screenshot || '').trim(),
         relatedParty: String(relatedParty || '').trim().toUpperCase(),
-        status: 'OPEN',
+        status: 'İNCELENİYOR',
         adminNote: '',
+        rewardEmerald: 0,
         createdAt: new Date().toISOString()
       };
 
@@ -1832,14 +1984,30 @@
       return report;
     },
 
-    adminUpdateBug(session, bugId, { status = 'ÇÖZÜLDÜ', adminNote = '' }) {
+    adminUpdateBug(session, bugId, { status = 'ÇÖZÜLDÜ', adminNote = '', rewardEmerald = 0 }) {
       authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
       const bugs = this.getAllBugs();
       const bug = bugs.find(b => b.id === bugId);
       if (!bug) throw new Error('Hata kaydı bulunamadı.');
 
-      bug.status = status;
+      if (status) bug.status = status;
       if (adminNote !== undefined) bug.adminNote = String(adminNote).trim();
+
+      let rewardGranted = 0;
+      const numReward = Math.max(0, Number(rewardEmerald || 0));
+      if (numReward > 0 && !bug.rewarded && window.MCMServices?.economyService) {
+        window.MCMServices.economyService.addEmeralds(
+          bug.username,
+          numReward,
+          `Hata Bildirimi Ödülü (#${bug.id})`,
+          false,
+          true
+        );
+        bug.rewarded = true;
+        bug.rewardEmerald = numReward;
+        rewardGranted = numReward;
+      }
+
       storage.set(STORAGE_KEYS.BUG_REPORTS, bugs);
 
       notificationService.notifyUser(bug.username, {
@@ -1847,13 +2015,15 @@
         title: '🐞 Hata Bildiriminiz Güncellendi',
         message: `"${bug.title}" hata kaydınızın durumu [${bug.status}] olarak güncellendi.${
           bug.adminNote ? ` Yönetici Notu: ${bug.adminNote}` : ''
-        }`
+        }${rewardGranted > 0 ? ` (+${rewardGranted} Zümrüt Hata Ödülü hesabınıza eklendi!)` : ''}`
       });
 
       activityService.log(
         'BUG_RESOLVE',
         session.username,
-        `Hata bildirimi güncellendi (#${bug.id} -> ${bug.status}).`
+        `Hata bildirimi güncellendi (#${bug.id} -> ${bug.status}${
+          rewardGranted > 0 ? `, +${rewardGranted} Zümrüt ödül` : ''
+        }).`
       );
       return bug;
     }
@@ -1861,7 +2031,7 @@
 
   // ==========================================
   // ÖNERİ SERVİSİ (suggestionService — #18)
-  // Alanlar: Başlık, Açıklama, Kategori
+  // Alanlar: Başlık, Açıklama, Kategori, Oylar, Yönetici Notu, Ödül
   // ==========================================
   const suggestionService = {
     getAllSuggestions() {
@@ -1876,15 +2046,18 @@
         throw new Error('Lütfen öneri başlığını ve açıklamasını yazın.');
       }
 
+      const perms = authGuard.getUserPermissions(session);
       const list = this.getAllSuggestions();
       const item = {
         id: generateId('SUG'),
         username: session.username,
         category: String(category),
+        priority: perms.suggestionPriority || 'NORMAL',
         title: cleanTitle,
         details: cleanDetails,
         status: 'İNCELENİYOR',
         adminNote: '',
+        rewardEmerald: 0,
         upvotes: [session.username],
         downvotes: [],
         createdAt: new Date().toISOString()
@@ -1907,17 +2080,23 @@
       if (!item) throw new Error('Öneri bulunamadı.');
 
       const u = session.username;
+      const alreadyUp = (item.upvotes || []).some(x => x.toLowerCase() === u.toLowerCase());
+      const alreadyDown = (item.downvotes || []).some(x => x.toLowerCase() === u.toLowerCase());
+
       item.upvotes = (item.upvotes || []).filter(x => x.toLowerCase() !== u.toLowerCase());
       item.downvotes = (item.downvotes || []).filter(x => x.toLowerCase() !== u.toLowerCase());
 
-      if (direction === 'UP') item.upvotes.push(u);
-      else item.downvotes.push(u);
+      if (direction === 'UP' && !alreadyUp) {
+        item.upvotes.push(u);
+      } else if (direction === 'DOWN' && !alreadyDown) {
+        item.downvotes.push(u);
+      }
 
       storage.set(STORAGE_KEYS.SUGGESTIONS, list);
       return item;
     },
 
-    adminUpdateSuggestion(session, sugId, { status, adminNote }) {
+    adminUpdateSuggestion(session, sugId, { status, adminNote, rewardEmerald = 0 }) {
       authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
       const list = this.getAllSuggestions();
       const item = list.find(s => s.id === sugId);
@@ -1925,6 +2104,22 @@
 
       if (status) item.status = status;
       if (adminNote !== undefined) item.adminNote = String(adminNote).trim();
+
+      let rewardGranted = 0;
+      const numReward = Math.max(0, Number(rewardEmerald || 0));
+      if (numReward > 0 && !item.rewarded && window.MCMServices?.economyService) {
+        window.MCMServices.economyService.addEmeralds(
+          item.username,
+          numReward,
+          `Öneri Katkı Ödülü (#${item.id})`,
+          false,
+          true
+        );
+        item.rewarded = true;
+        item.rewardEmerald = numReward;
+        rewardGranted = numReward;
+      }
+
       storage.set(STORAGE_KEYS.SUGGESTIONS, list);
 
       notificationService.notifyUser(item.username, {
@@ -1932,13 +2127,15 @@
         title: '💡 Öneri Durumunuz Güncellendi',
         message: `"${item.title}" başlıklı önerinizin durumu [${item.status}] olarak güncellendi.${
           item.adminNote ? ` Yönetici Notu: ${item.adminNote}` : ''
-        }`
+        }${rewardGranted > 0 ? ` (+${rewardGranted} Zümrüt Öneri Ödülü hesabınıza eklendi!)` : ''}`
       });
 
       activityService.log(
         'SUGGESTION_UPDATE',
         session.username,
-        `Öneri durumu güncellendi (#${item.id} -> ${item.status}).`
+        `Öneri durumu güncellendi (#${item.id} -> ${item.status}${
+          rewardGranted > 0 ? `, +${rewardGranted} Zümrüt ödül` : ''
+        }).`
       );
       return item;
     }
