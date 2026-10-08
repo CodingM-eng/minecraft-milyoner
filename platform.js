@@ -1,19 +1,16 @@
 /**
- * MINECRAFT MILYONER — TOURNAMENT, ACCOUNT, PARTY, VIP, ECONOMY & ADMIN CONTROLLER
+ * MINECRAFT MİLYONER — TURNUVA, HESAP, PARTİ, VIP, EKONOMİ, AVATAR & ADMİN KONTROLCÜSÜ
  *
- * Connects all UI views to the modular service layer:
- * - Step-by-Step License -> Username Login & Welcome Back flow
- * - User Dashboard & VIP Dashboard
- * - Party System (Strict VIP/ADMIN create & invite; PLAYER join/leave; NEVER resets license/account)
- * - Leaderboard (Sort by Points, Wins, Emeralds, Games Played + Top 3 Podium)
- * - Emerald Shop & Rank Shop (Categories: Gameplay, Ranks, Cosmetics, VIP, Special)
- * - Separate VIP Shop (200 TL VIP Package via paymentService abstraction)
- * - Player Profile, Achievements & RGB Username Cosmetics
- * - Support Tickets, Bug Reports & Suggestions (with automatic VIP HIGH Priority)
- * - Account Settings (Immutable User ID username change, salted SHA-256 password hash, Cosmetics)
- * - 16-Page English-Only Admin Panel (Dashboard, Users, Licenses, Parties, Leaderboard,
- *   Economy, Shop, VIP, Support, Bug Reports, Suggestions, Transactions, Achievements,
- *   Backups, Activity Logs, Settings)
+ * Tüm arayüz ekranlarını 15 modüler servise bağlar:
+ * - Adım Adım Lisans -> Kullanıcı Adı Girişi & "Tekrar Hoş Geldin" akışı
+ * - Tam Boyutlu Minecraft Yan Menü Çekmecesi (☰ MENÜ) & Mobil Admin Çekmecesi
+ * - Oyuncu Profili, Profil Fotoğrafı Yükleme (160x160 Kare Kırpma + Önizleme) & Minecraft Piksel Avatar
+ * - Profil Özelleştirme (Çerçeve, Arka Plan, Tema, Gizlilik, Başarım Vitrini, RGB İsim)
+ * - Parti Sistemi (Sadece Rütbeli/ADMIN oluşturur & davet eder; Normal oyuncu katılır/ayrılır; Lisansı ASLA sıfırlamaz)
+ * - Liderlik Tablosu (Puan, Galibiyet, Zümrüt, Oyun Sayısı sıralaması + İlk 3 Podyumu)
+ * - Zümrüt Mağazası, Rütbe Mağazası, Kozmetikler & VIP Mağazası (Stripe Test Modu & Webhook Doğrulaması)
+ * - Destek Talepleri, Hata Bildirimleri & Öneriler (VIP Yüksek, VIP+/MVP Çok Yüksek Öncelik)
+ * - 18 Sayfalı %100 Türkçe Admin Paneli
  */
 
 (function () {
@@ -21,10 +18,14 @@
 
   const {
     authGuard,
+    authService,
     userService,
     licenseService,
     partyService,
     supportService,
+    bugService,
+    suggestionService,
+    avatarService,
     paymentService,
     backupService,
     activityService,
@@ -36,8 +37,18 @@
     dailyRewardService,
     achievementService,
     leaderboardService,
+    soundService,
     PARTY_STATUSES
   } = window.MCMServices;
+
+  const PARTY_STATUS_LABELS_TR = {
+    WAITING: 'BEKLİYOR',
+    READY: 'HAZIR',
+    STARTING: 'BAŞLIYOR',
+    ACTIVE: 'AKTİF',
+    FINISHED: 'TAMAMLANDI',
+    CANCELLED: 'İPTAL EDİLDİ'
+  };
 
   class TournamentPlatformController {
     constructor() {
@@ -52,6 +63,7 @@
       this.extraLifeCallbacks = null;
       this.leaderboardRefreshTimer = null;
       this.activeCheckoutSession = null;
+      this.pendingCroppedAvatarDataUrl = null;
 
       this.init();
     }
@@ -59,6 +71,7 @@
     init() {
       this.bindLicenseGate();
       this.bindTopBar();
+      this.bindMainMenuDrawer();
       this.bindPartyLobby();
       this.bindLeaderboardScreen();
       this.bindEmeraldShopScreen();
@@ -71,8 +84,9 @@
       this.bindAdminPanel();
       this.bindConfirmModal();
       this.bindInvitationModal();
+      this.bindGranularAudioSettings();
 
-      // Live automatic refresh for Leaderboard & Economy header
+      // Liderlik tablosu ve üst bar için canlı otomatik yenileme
       this.leaderboardRefreshTimer = setInterval(() => {
         if (!this.session) return;
         const lbScreen = document.getElementById('screen-leaderboard');
@@ -82,7 +96,7 @@
         this.syncEconomyHeaderUI();
       }, 10000);
 
-      // Check URL for ?invite=MCM-XXXX parameter
+      // URL ?invite=MCM-XXXX kontrolü
       try {
         const params = new URLSearchParams(window.location.search);
         const inviteParam = params.get('invite');
@@ -91,14 +105,14 @@
         }
       } catch (e) {}
 
-      // 1. Check active session in storage
+      // 1. Aktif oturumu kontrol et
       const existingSession = licenseService.getActiveSession();
       if (existingSession) {
         this.applyAuthenticatedSession(existingSession, false);
         return;
       }
 
-      // 2. Check remembered account for "WELCOME BACK" screen
+      // 2. Kayıtlı hesabı kontrol et ("TEKRAR HOŞ GELDİN" ekranı)
       const remembered = licenseService.getRememberedUser();
       if (remembered && remembered.username) {
         this.lockWithLicenseGate(true);
@@ -108,11 +122,15 @@
     }
 
     // ==========================================
-    // TOAST NOTIFICATION SYSTEM
+    // BİLDİRİM (TOAST) SİSTEMİ
     // ==========================================
     showToast(message, type = 'success') {
       const container = document.getElementById('toast-container');
       if (!container) return;
+
+      if (window.soundManager) {
+        if (type === 'info') window.soundManager.playNotification();
+      }
 
       const toast = document.createElement('div');
       toast.className = `mc-toast toast-${type}`;
@@ -129,7 +147,7 @@
     }
 
     // ==========================================
-    // CONFIRMATION DIALOG
+    // ONAY PENCERESİ (CONFIRM MODAL)
     // ==========================================
     askConfirmation(title, message, acceptLabel, onConfirm) {
       const modal = document.getElementById('modal-confirm');
@@ -138,9 +156,9 @@
       const acceptText = document.getElementById('btn-confirm-accept-text');
 
       if (!modal) return;
-      if (titleEl) titleEl.textContent = title || '⚠️ Confirm Action';
-      if (msgEl) msgEl.textContent = message || 'Are you sure you want to proceed?';
-      if (acceptText) acceptText.textContent = acceptLabel || 'Confirm';
+      if (titleEl) titleEl.textContent = title || '⚠️ İşlemi Onayla';
+      if (msgEl) msgEl.textContent = message || 'Devam etmek istediğinize emin misiniz?';
+      if (acceptText) acceptText.textContent = acceptLabel || 'Onayla';
 
       this.confirmCallback = onConfirm;
       modal.classList.remove('hidden');
@@ -170,7 +188,202 @@
     }
 
     // ==========================================
-    // SECTION 1 & 2: STEP-BY-STEP LOGIN & WELCOME BACK GATE
+    // DETAYLI SES AYARLARI BAĞLANTILARI (BÖLÜM 4 & 30)
+    // ==========================================
+    bindGranularAudioSettings() {
+      const menuChk = document.getElementById('chk-audio-menu-sound');
+      const notifChk = document.getElementById('chk-audio-notif-sound');
+      const shopChk = document.getElementById('chk-audio-shop-sound');
+      const accAudioBtn = document.getElementById('btn-acc-open-audio');
+
+      const syncCheckboxes = () => {
+        if (!window.soundManager) return;
+        if (menuChk) menuChk.checked = window.soundManager.menuSoundEnabled !== false;
+        if (notifChk) notifChk.checked = window.soundManager.notificationSoundEnabled !== false;
+        if (shopChk) shopChk.checked = window.soundManager.shopSoundEnabled !== false;
+      };
+
+      syncCheckboxes();
+
+      if (menuChk) {
+        menuChk.addEventListener('change', () => {
+          if (window.soundManager) {
+            window.soundManager.setMenuSoundEnabled(menuChk.checked);
+            window.soundManager.playClick();
+          }
+        });
+      }
+      if (notifChk) {
+        notifChk.addEventListener('change', () => {
+          if (window.soundManager) {
+            window.soundManager.setNotificationSoundEnabled(notifChk.checked);
+            window.soundManager.playNotification();
+          }
+        });
+      }
+      if (shopChk) {
+        shopChk.addEventListener('change', () => {
+          if (window.soundManager) {
+            window.soundManager.setShopSoundEnabled(shopChk.checked);
+            window.soundManager.playPurchase();
+          }
+        });
+      }
+      if (accAudioBtn) {
+        accAudioBtn.addEventListener('click', () => {
+          window.soundManager.playMenuOpen();
+          syncCheckboxes();
+          if (window.mcQuizGame) window.mcQuizGame.openModal('modal-audio');
+        });
+      }
+    }
+
+    // ==========================================
+    // BÖLÜM 5, 6 & 27: TAM BOYUTLU ANA MENÜ ÇEKMECESİ (☰ MENÜ)
+    // ==========================================
+    bindMainMenuDrawer() {
+      const openBtn = document.getElementById('btn-open-main-drawer');
+      const closeBtn = document.getElementById('btn-close-main-drawer');
+      const backdrop = document.getElementById('main-menu-backdrop');
+      const drawer = document.getElementById('main-menu-drawer');
+      const drawerLogoutBtn = document.getElementById('btn-drawer-logout');
+      const drawerUserCard = document.getElementById('drawer-user-card');
+
+      const openDrawer = () => {
+        if (!this.session) return;
+        this.syncMainMenuDrawerUI();
+        if (drawer) {
+          drawer.classList.remove('hidden');
+          drawer.setAttribute('aria-hidden', 'false');
+          requestAnimationFrame(() => drawer.classList.add('open'));
+        }
+        if (backdrop) backdrop.classList.remove('hidden');
+        if (window.soundManager) window.soundManager.playMenuOpen();
+      };
+
+      const closeDrawer = (playSound = true) => {
+        if (drawer) {
+          drawer.classList.remove('open');
+          drawer.setAttribute('aria-hidden', 'true');
+          setTimeout(() => {
+            if (!drawer.classList.contains('open')) drawer.classList.add('hidden');
+          }, 240);
+        }
+        if (backdrop) backdrop.classList.add('hidden');
+        if (playSound && window.soundManager) window.soundManager.playMenuClose();
+      };
+
+      this.openMainMenuDrawer = openDrawer;
+      this.closeMainMenuDrawer = closeDrawer;
+
+      if (openBtn) {
+        openBtn.addEventListener('click', () => openDrawer());
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeDrawer(true));
+      }
+      if (backdrop) {
+        backdrop.addEventListener('click', () => closeDrawer(true));
+      }
+      if (drawerUserCard) {
+        drawerUserCard.addEventListener('click', () => {
+          closeDrawer(false);
+          this.navigateToScreen('screen-profile');
+        });
+      }
+      if (drawerLogoutBtn) {
+        drawerLogoutBtn.addEventListener('click', () => {
+          closeDrawer(false);
+          window.soundManager.playClick();
+          this.handleLogout(false);
+        });
+      }
+
+      document.querySelectorAll('[data-drawer-nav]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const targetScreen = btn.getAttribute('data-drawer-nav');
+          const shopCat = btn.getAttribute('data-drawer-shop-cat');
+          const supportTab = btn.getAttribute('data-drawer-support-tab');
+
+          closeDrawer(false);
+
+          if (shopCat) {
+            this.selectedShopCategory = shopCat;
+            document.querySelectorAll('[data-shop-cat]').forEach(b => {
+              b.classList.toggle('active', b.getAttribute('data-shop-cat') === shopCat);
+            });
+          }
+
+          if (targetScreen) {
+            this.navigateToScreen(targetScreen);
+          }
+
+          if (supportTab) {
+            this.switchSupportTab(supportTab);
+          }
+        });
+      });
+    }
+
+    syncMainMenuDrawerUI() {
+      if (!this.session) return;
+      const effRole = authGuard.getEffectiveRole(this.session);
+      const profile = economyService.getPlayerEconomyProfile(this.session.username);
+      const userObj = userService.getUserByUsername(this.session.username);
+      const avatarUrl = avatarService.getUserAvatarUrl(userObj || this.session.username);
+      const borderKey = userObj?.profileBorder || 'stone';
+
+      const dAvatar = document.getElementById('drawer-user-avatar');
+      const dName = document.getElementById('drawer-user-name');
+      const dRole = document.getElementById('drawer-user-role');
+      const dEmeralds = document.getElementById('drawer-user-emeralds');
+      const dAdminBtn = document.getElementById('btn-drawer-admin');
+
+      if (dAvatar) {
+        dAvatar.src = avatarUrl;
+        dAvatar.className = `mc-avatar-img mc-avatar-sm avatar-border-${borderKey}`;
+      }
+      if (dName) {
+        dName.innerHTML = this.formatUsernameHtml(
+          this.session.username,
+          profile.rgbOwned && profile.rgbEnabled
+        );
+      }
+      if (dRole) {
+        dRole.textContent = profile.rankBadge || effRole;
+        dRole.className = `role-badge role-${effRole.toLowerCase()}`;
+      }
+      if (dEmeralds) {
+        dEmeralds.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Zümrüt`;
+      }
+      if (dAdminBtn) {
+        dAdminBtn.classList.toggle('hidden', effRole !== 'ADMIN');
+      }
+    }
+
+    // ==========================================
+    // AVATAR & TEMA YARDIMCILARI (BÖLÜM 9, 10, 11, 29)
+    // ==========================================
+    getAvatarImgHtml(username, sizeClass = 'mc-avatar-xs') {
+      const userObj = userService.getUserByUsername(username);
+      const url = avatarService.getUserAvatarUrl(userObj || username);
+      const border = userObj?.profileBorder || 'stone';
+      return `<img src="${url}" alt="${this.escapeHtml(username)}" class="mc-avatar-img ${sizeClass} avatar-border-${border}" />`;
+    }
+
+    applyUserThemePreference() {
+      if (!this.session) {
+        document.body.classList.remove('theme-mc-light');
+        return;
+      }
+      const userObj = userService.getUserByUsername(this.session.username);
+      const theme = userObj?.settings?.theme || 'dark';
+      document.body.classList.toggle('theme-mc-light', theme === 'light');
+    }
+
+    // ==========================================
+    // ADIM ADIM LİSANS GİRİŞİ & TEKRAR HOŞ GELDİN EKRANI
     // ==========================================
     lockWithLicenseGate(showWelcomeBack = false) {
       this.session = null;
@@ -179,6 +392,7 @@
         window.mcQuizGame.isUnlocked = false;
       }
       document.body.classList.add('gate-locked');
+      document.body.classList.remove('theme-mc-light');
 
       const gateEl = document.getElementById('access-gate');
       const wbStep = document.getElementById('gate-step-welcome-back');
@@ -200,12 +414,17 @@
         const wbName = document.getElementById('wb-username-display');
         const wbRole = document.getElementById('wb-role-badge');
         const wbLic = document.getElementById('wb-license-badge');
+        const wbAvatarBox = document.getElementById('wb-avatar-box');
+
         if (wbName) wbName.textContent = remembered.username;
         if (wbRole) {
           wbRole.textContent = remembered.role || 'PLAYER';
           wbRole.className = `role-badge role-${String(remembered.role || 'player').toLowerCase()}`;
         }
-        if (wbLic) wbLic.textContent = remembered.licenseName || 'Saved License';
+        if (wbLic) wbLic.textContent = remembered.licenseName || 'Kayıtlı Lisans';
+        if (wbAvatarBox) {
+          wbAvatarBox.innerHTML = this.getAvatarImgHtml(remembered.username, 'mc-avatar-sm');
+        }
       } else {
         if (wbStep) wbStep.classList.add('hidden');
         if (licForm) licForm.classList.remove('hidden');
@@ -250,10 +469,10 @@
         });
       }
 
-      // Welcome Back -> Continue
+      // Tekrar Hoş Geldin -> Devam Et
       if (wbContinueBtn) {
         wbContinueBtn.addEventListener('click', () => {
-          window.soundManager.playCorrect();
+          window.soundManager.playSuccess();
           const resumed = licenseService.resumeRememberedAccount();
           if (resumed) {
             this.applyAuthenticatedSession(resumed, true);
@@ -263,7 +482,7 @@
         });
       }
 
-      // Welcome Back -> Switch Account
+      // Tekrar Hoş Geldin -> Hesap Değiştir
       if (wbSwitchBtn) {
         wbSwitchBtn.addEventListener('click', () => {
           window.soundManager.playClick();
@@ -271,7 +490,7 @@
         });
       }
 
-      // Step 1: Validate License Code
+      // Adım 1: Lisans Kodunu Doğrula
       if (licForm && codeInput) {
         licForm.addEventListener('submit', async e => {
           e.preventDefault();
@@ -287,7 +506,7 @@
           if (submitLicBtn) submitLicBtn.disabled = false;
 
           if (!res.ok) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             if (errorEl) {
               errorEl.textContent = `❌ ${res.error}`;
               errorEl.classList.remove('hidden');
@@ -301,8 +520,8 @@
             return;
           }
 
-          // License valid -> Move to Step 2 (Enter Minecraft Username)
-          window.soundManager.playClick();
+          // Lisans geçerli -> Adım 2 (Minecraft Kullanıcı Adı)
+          window.soundManager.playSuccess();
           this.pendingLicenseToken = res.licenseToken;
           if (wbStep) wbStep.classList.add('hidden');
           licForm.classList.add('hidden');
@@ -319,7 +538,7 @@
         });
       }
 
-      // Back to Step 1
+      // Adım 1'e Geri Dön
       if (backToLicBtn) {
         backToLicBtn.addEventListener('click', () => {
           window.soundManager.playClick();
@@ -329,7 +548,7 @@
         });
       }
 
-      // Step 2: Enter Minecraft Username -> Create/Load Account -> Dashboard
+      // Adım 2: Minecraft Kullanıcı Adı -> Hesap Oluştur/Yükle -> Ana Sayfa
       if (userForm && userInput) {
         userForm.addEventListener('submit', async e => {
           e.preventDefault();
@@ -352,7 +571,7 @@
           if (submitUserBtn) submitUserBtn.disabled = false;
 
           if (!res.ok) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             if (userErrorEl) {
               userErrorEl.textContent = `❌ ${res.error}`;
               userErrorEl.classList.remove('hidden');
@@ -360,7 +579,7 @@
             return;
           }
 
-          window.soundManager.playCorrect();
+          window.soundManager.playSuccess();
           if (pwdInput) pwdInput.value = '';
           this.applyAuthenticatedSession(res.session, true);
         });
@@ -374,8 +593,9 @@
       const gateEl = document.getElementById('access-gate');
       if (gateEl) gateEl.classList.add('hidden');
 
-      // Ensure economy profile & user account are synchronized
+      // Ekonomi ve kullanıcı profilini senkronize et
       economyService.getOrCreateAccount(this.session.username, this.session.role);
+      this.applyUserThemePreference();
 
       if (window.mcQuizGame) {
         window.mcQuizGame.isUnlocked = true;
@@ -395,14 +615,15 @@
       this.updateTopBarSessionUI();
       this.syncEconomyHeaderUI();
 
-      // If URL had ?invite=MCM-XXXX, automatically join or open party lobby
+      // URL'de ?invite=MCM-XXXX varsa otomatik partiye katıl
       if (this.pendingInviteCodeFromUrl) {
         const code = this.pendingInviteCodeFromUrl;
         this.pendingInviteCodeFromUrl = null;
         try {
           const joined = partyService.joinPartyByInviteCode(this.session, code);
           this.selectedPartyId = joined.id;
-          this.showToast(`You joined the party "${joined.name}" successfully.`, 'success');
+          window.soundManager.playPartyJoin();
+          this.showToast(`"${joined.name}" partisine başarıyla katıldınız!`, 'success');
           this.navigateToScreen('screen-party');
           return;
         } catch (err) {
@@ -413,18 +634,18 @@
       if (isFreshLogin) {
         const effRole = authGuard.getEffectiveRole(this.session);
         if (effRole === 'ADMIN') {
-          this.showToast(`Welcome back, ${this.session.username}! Admin Panel unlocked.`, 'info');
+          this.showToast(`Tekrar hoş geldin, ${this.session.username}! Admin Paneli aktif.`, 'info');
         } else if (effRole === 'VIP') {
-          this.showToast(`Welcome, 👑 VIP ${this.session.username}!`, 'success');
+          this.showToast(`Hoş geldin, 👑 VIP ${this.session.username}!`, 'success');
         } else {
-          this.showToast(`Welcome, ${this.session.username}!`, 'success');
+          this.showToast(`Hoş geldin, ${this.session.username}!`, 'success');
         }
       }
     }
 
     handleLogout(clearRemembered = false) {
       licenseService.logout(clearRemembered);
-      this.showToast('Signed out. You can continue with your saved account or switch license.', 'info');
+      this.showToast('Çıkış yapıldı. Kayıtlı hesabınızla devam edebilir veya lisans değiştirebilirsiniz.', 'info');
       if (window.mcQuizGame) {
         window.mcQuizGame.showScreen('screen-menu');
       }
@@ -432,7 +653,7 @@
     }
 
     // ==========================================
-    // RGB USERNAME HELPER (SECTION 13)
+    // RGB KULLANICI ADI YARDIMCISI
     // ==========================================
     formatUsernameHtml(username, forceRgb = null) {
       const clean = this.escapeHtml(username);
@@ -448,20 +669,23 @@
     }
 
     // ==========================================
-    // TOP BAR, NAVIGATION & USER/VIP DASHBOARD
+    // ÜST BAR, MENÜ ÇUBUĞU VE KULLANICI PANELİ
     // ==========================================
     updateTopBarSessionUI() {
+      const openDrawerBtn = document.getElementById('btn-open-main-drawer');
       const navBar = document.getElementById('main-nav-bar');
       const navAdminBtn = document.getElementById('btn-nav-admin');
       const emeraldPill = document.getElementById('top-emerald-pill');
       const dailyBtn = document.getElementById('btn-daily-reward');
       const badge = document.getElementById('top-session-badge');
+      const topAvatar = document.getElementById('top-session-avatar');
       const nameEl = document.getElementById('top-session-username');
       const roleEl = document.getElementById('top-session-role');
       const adminBtn = document.getElementById('btn-top-admin');
       const logoutBtn = document.getElementById('btn-top-logout');
 
       if (!this.session) {
+        if (openDrawerBtn) openDrawerBtn.classList.add('hidden');
         if (navBar) navBar.classList.add('hidden');
         if (emeraldPill) emeraldPill.classList.add('hidden');
         if (dailyBtn) dailyBtn.classList.add('hidden');
@@ -473,12 +697,20 @@
 
       const effRole = authGuard.getEffectiveRole(this.session);
       this.session.role = effRole;
+      const userObj = userService.getUserByUsername(this.session.username);
+      const avatarUrl = avatarService.getUserAvatarUrl(userObj || this.session.username);
+      const borderKey = userObj?.profileBorder || 'stone';
 
+      if (openDrawerBtn) openDrawerBtn.classList.remove('hidden');
       if (navBar) navBar.classList.remove('hidden');
       if (navAdminBtn) navAdminBtn.classList.toggle('hidden', effRole !== 'ADMIN');
       if (emeraldPill) emeraldPill.classList.remove('hidden');
       if (dailyBtn) dailyBtn.classList.remove('hidden');
       if (badge) badge.classList.remove('hidden');
+      if (topAvatar) {
+        topAvatar.src = avatarUrl;
+        topAvatar.className = `mc-avatar-img mc-avatar-xs avatar-border-${borderKey}`;
+      }
       if (nameEl) {
         nameEl.innerHTML = this.formatUsernameHtml(this.session.username);
       }
@@ -490,6 +722,8 @@
         adminBtn.classList.toggle('hidden', effRole !== 'ADMIN');
       }
       if (logoutBtn) logoutBtn.classList.remove('hidden');
+
+      this.syncMainMenuDrawerUI();
     }
 
     syncEconomyHeaderUI() {
@@ -499,29 +733,40 @@
       const profile = economyService.getPlayerEconomyProfile(this.session.username);
       const rankSummary = leaderboardService.getPlayerRankAndSummary(this.session.username);
       const dailyStatus = dailyRewardService.canClaimDailyReward(this.session.username);
+      const userObj = userService.getUserByUsername(this.session.username);
+      const avatarUrl = avatarService.getUserAvatarUrl(userObj || this.session.username);
+      const borderKey = userObj?.profileBorder || 'stone';
 
       const extraOwned =
         (profile.inventory?.extraLives || 0) + (profile.inventory?.secondChance || 0);
 
-      // Top Header Pill
+      // Üst Bar Zümrüt & Ekstra Can Göstergesi
       const topBal = document.getElementById('top-emerald-balance');
       const topExtra = document.getElementById('top-extralives-count');
-      if (topBal) topBal.textContent = profile.emeraldCoins.toLocaleString('en-US');
+      if (topBal) topBal.textContent = profile.emeraldCoins.toLocaleString('tr-TR');
       if (topExtra) topExtra.textContent = extraOwned;
 
-      // Game Stage Extra Life Pill
+      // Oyun Ekranı Ekstra Can Göstergesi
       const gameExtra = document.getElementById('game-extralife-count');
       if (gameExtra) gameExtra.textContent = extraOwned;
 
-      // User Dashboard Welcome & VIP Banner (Sections 31 & 32)
+      // Ana Sayfa Karşılama & VIP Paneli
+      const dashAvatarEl = document.getElementById('dash-welcome-avatar');
       const dashUserEl = document.getElementById('dash-welcome-username');
       const dashRoleBadge = document.getElementById('dash-welcome-role-badge');
       const dashRankBadge = document.getElementById('dash-welcome-rank-badge');
       const vipDashPanel = document.getElementById('vip-dashboard-panel');
       const vipDashExpiry = document.getElementById('vip-dash-expiry');
 
+      if (dashAvatarEl) {
+        dashAvatarEl.src = avatarUrl;
+        dashAvatarEl.className = `mc-avatar-img mc-avatar-sm avatar-border-${borderKey}`;
+      }
       if (dashUserEl) {
-        dashUserEl.innerHTML = this.formatUsernameHtml(this.session.username, profile.rgbOwned && profile.rgbEnabled);
+        dashUserEl.innerHTML = this.formatUsernameHtml(
+          this.session.username,
+          profile.rgbOwned && profile.rgbEnabled
+        );
       }
       if (dashRoleBadge) {
         dashRoleBadge.textContent = effRole;
@@ -537,34 +782,34 @@
       }
       if (vipDashExpiry && profile.vipStatus) {
         vipDashExpiry.textContent = profile.vipStatus.expiresAt
-          ? `Expires: ${new Date(profile.vipStatus.expiresAt).toLocaleDateString('en-US')}`
-          : 'Lifetime VIP Access';
+          ? `Bitiş: ${new Date(profile.vipStatus.expiresAt).toLocaleDateString('tr-TR')}`
+          : 'Sınırsız VIP Erişimi';
       }
 
-      // Daily Reward Button State
+      // Günlük Ödül Butonu Durumu
       const dailyBtn = document.getElementById('btn-daily-reward');
       const dailyLabel = document.getElementById('daily-reward-label');
       const widgetDailyBtn = document.getElementById('btn-widget-claim-daily');
       if (dailyBtn && dailyLabel) {
         if (dailyStatus.canClaim) {
-          dailyLabel.textContent = `DAILY (+${dailyStatus.rewardAmount} 💚)`;
+          dailyLabel.textContent = `GÜNLÜK (+${dailyStatus.rewardAmount} 💚)`;
           dailyBtn.disabled = false;
         } else {
-          dailyLabel.textContent = `STREAK: ${dailyStatus.currentStreak}d`;
+          dailyLabel.textContent = `SERİ: ${dailyStatus.currentStreak} Gün`;
           dailyBtn.disabled = false;
         }
       }
       if (widgetDailyBtn) {
         if (dailyStatus.canClaim) {
-          widgetDailyBtn.textContent = `🎁 Claim Daily Reward (+${dailyStatus.rewardAmount} 💚)`;
+          widgetDailyBtn.textContent = `🎁 Günlük Ödülü Al (+${dailyStatus.rewardAmount} 💚)`;
           widgetDailyBtn.disabled = false;
         } else {
-          widgetDailyBtn.textContent = `✅ Claimed (Streak: ${dailyStatus.currentStreak}d)`;
+          widgetDailyBtn.textContent = `✅ Alındı (Seri: ${dailyStatus.currentStreak} Gün)`;
           widgetDailyBtn.disabled = true;
         }
       }
 
-      // Dashboard Economy Widget (Section 31)
+      // Ana Sayfa Ekonomi Özeti
       const dRank = document.getElementById('dash-econ-rank');
       const dPoints = document.getElementById('dash-econ-points');
       const dEmeralds = document.getElementById('dash-econ-emeralds');
@@ -573,13 +818,15 @@
       const dExtra = document.getElementById('dash-econ-extralives');
 
       if (dRank) dRank.textContent = `#${rankSummary.rank}`;
-      if (dPoints) dPoints.textContent = `${profile.totalPoints.toLocaleString('en-US')}`;
+      if (dPoints) dPoints.textContent = `${profile.totalPoints.toLocaleString('tr-TR')}`;
       if (dEmeralds) {
-        dEmeralds.textContent = `💚 ${profile.emeraldCoins.toLocaleString('en-US')} Emeralds`;
+        dEmeralds.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Zümrüt`;
       }
-      if (dGames) dGames.textContent = profile.gamesPlayed.toLocaleString('en-US');
-      if (dWins) dWins.textContent = profile.gamesWon.toLocaleString('en-US');
+      if (dGames) dGames.textContent = profile.gamesPlayed.toLocaleString('tr-TR');
+      if (dWins) dWins.textContent = profile.gamesWon.toLocaleString('tr-TR');
       if (dExtra) dExtra.textContent = `❤️ ${extraOwned}`;
+
+      this.syncMainMenuDrawerUI();
     }
 
     navigateToScreen(screenId) {
@@ -738,12 +985,12 @@
     }
 
     // ==========================================
-    // DAILY EMERALD REWARD (Normal +25 / VIP +50)
+    // GÜNLÜK ZÜMRÜT ÖDÜLÜ (Normal +25 / VIP +50)
     // ==========================================
     claimDailyReward() {
       try {
         const res = dailyRewardService.claimDailyReward(this.session);
-        window.soundManager.playCorrect();
+        window.soundManager.playEmeraldGain();
         if (window.mcQuizGame) {
           window.mcQuizGame.particles.spawnBurst(
             window.innerWidth / 2,
@@ -753,18 +1000,18 @@
           );
         }
         this.showToast(
-          `🎁 +${res.rewardAmount} Emerald Coins Claimed! (Streak: ${res.streak}d)`,
+          `🎁 +${res.rewardAmount} Zümrüt Coin Alındı! (Seri: ${res.streak} Gün)`,
           'success'
         );
         this.syncEconomyHeaderUI();
       } catch (err) {
-        window.soundManager.playWrong();
+        window.soundManager.playError();
         this.showToast(err.message, 'error');
       }
     }
 
     // ==========================================
-    // SECTION 26: EXTRA LIFE REVIVE SYSTEM
+    // EKSTRA CAN (EXTRA LIFE) DEVAM SİSTEMİ
     // ==========================================
     canOfferExtraLife(gameId, questionNumber) {
       if (!this.session) return false;
@@ -783,7 +1030,7 @@
       const qLabel = document.getElementById('extralife-question-label');
       const countEl = document.getElementById('extralife-modal-count');
 
-      if (qLabel) qLabel.textContent = `Question ${questionNumber} / 15`;
+      if (qLabel) qLabel.textContent = `Soru ${questionNumber} / 15`;
       if (countEl) countEl.textContent = `❤️ ${check.availableCount}`;
 
       this.extraLifeCallbacks = { gameId, questionNumber, onRevive, onExit };
@@ -810,7 +1057,7 @@
               this.selectedPartyId
             );
             this.syncEconomyHeaderUI();
-            this.showToast('❤️ EXTRA LIFE USED — "You have returned to the game!"', 'success');
+            this.showToast('❤️ EKSTRA CAN KULLANILDI — "Oyuna geri döndünüz!"', 'success');
             if (typeof onRevive === 'function') onRevive();
           } catch (err) {
             this.showToast(err.message, 'error');
@@ -831,7 +1078,7 @@
     }
 
     // ==========================================
-    // GAME OUTCOME -> EMERALD & LEADERBOARD REWARDS
+    // OYUN SONUCU -> ZÜMRÜT & LİDERLİK ÖDÜLLERİ
     // ==========================================
     onGameFinished(outcome) {
       if (!this.session) return;
@@ -840,24 +1087,26 @@
         this.syncEconomyHeaderUI();
 
         if (res.emeraldReward > 0 || res.pointsEarned > 0) {
+          window.soundManager.playEmeraldGain();
           this.showToast(
-            `🟩 +${res.emeraldReward} Emerald Coins & ⭐ +${res.pointsEarned} Leaderboard Points earned!`,
+            `🟩 +${res.emeraldReward} Zümrüt Coin & ⭐ +${res.pointsEarned} Liderlik Puanı kazanıldı!`,
             'success'
           );
         }
 
         if (res.newlyUnlocked && res.newlyUnlocked.length > 0) {
+          window.soundManager.playAchievementUnlock();
           res.newlyUnlocked.forEach(ach => {
-            this.showToast(`🎖️ Achievement Unlocked: ${ach.icon} ${ach.title}!`, 'info');
+            this.showToast(`🎖️ Başarım Açıldı: ${ach.icon} ${ach.title}!`, 'info');
           });
         }
       } catch (err) {
-        console.warn('Game outcome economy error:', err);
+        console.warn('Oyun sonucu ekonomi hatası:', err);
       }
     }
 
     // ==========================================
-    // SECTION 24: LEADERBOARD SYSTEM UI
+    // LİDERLİK TABLOSU EKRANI
     // ==========================================
     bindLeaderboardScreen() {
       document.querySelectorAll('[data-lb-limit]').forEach(btn => {
@@ -892,7 +1141,7 @@
         refreshBtn.addEventListener('click', () => {
           window.soundManager.playClick();
           this.renderLeaderboard();
-          this.showToast('Leaderboard refreshed!', 'info');
+          this.showToast('Liderlik tablosu yenilendi!', 'info');
         });
       }
     }
@@ -915,36 +1164,37 @@
         this.leaderboardSort
       );
 
-      // 1. Current User Position Banner
+      // 1. Mevcut Oyuncu Sıralama Bandı
       const bannerEl = document.getElementById('leaderboard-current-user-banner');
       if (bannerEl) {
         bannerEl.innerHTML = `
-          <div>
-            <span>👤 Your Position: </span>
+          <div style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap;">
+            ${this.getAvatarImgHtml(currentUserSummary.username, 'mc-avatar-xs')}
+            <span>Senin Sıralaman: </span>
             <strong class="gold-text">#${currentUserSummary.rank} ${this.formatUsernameHtml(
               currentUserSummary.username,
               currentUserSummary.rgbOwned && currentUserSummary.rgbEnabled
             )}</strong>
-            <span class="role-badge role-${currentUserSummary.role.toLowerCase()}" style="margin-left:0.4rem;">${currentUserSummary.rankBadge}</span>
+            <span class="role-badge role-${currentUserSummary.role.toLowerCase()}" style="margin-left:0.25rem;">${currentUserSummary.rankBadge}</span>
           </div>
           <div style="display:flex; gap:1.1rem; flex-wrap:wrap;">
-            <span>⭐ Points: <strong>${currentUserSummary.totalPoints.toLocaleString('en-US')}</strong></span>
-            <span>💚 Emeralds: <strong class="emerald-text">${currentUserSummary.emeraldCoins.toLocaleString('en-US')}</strong></span>
-            <span>🏆 Wins: <strong>${currentUserSummary.gamesWon}</strong></span>
+            <span>⭐ Puan: <strong>${currentUserSummary.totalPoints.toLocaleString('tr-TR')}</strong></span>
+            <span>💚 Zümrüt: <strong class="emerald-text">${currentUserSummary.emeraldCoins.toLocaleString('tr-TR')}</strong></span>
+            <span>🏆 Galibiyet: <strong>${currentUserSummary.gamesWon}</strong></span>
           </div>
         `;
       }
 
-      // 2. Top 3 Podium (2nd Silver, 1st Gold, 3rd Bronze)
+      // 2. İlk 3 Podyumu (2. Gümüş, 1. Altın, 3. Bronz)
       const podiumEl = document.getElementById('leaderboard-podium');
       if (podiumEl) {
         const top1 = allRanked[0];
         const top2 = allRanked[1];
         const top3 = allRanked[2];
         const podiumOrder = [
-          { data: top2, rank: '2nd', medal: '🥈', cls: 'podium-rank-2' },
-          { data: top1, rank: '1st', medal: '🥇', cls: 'podium-rank-1' },
-          { data: top3, rank: '3rd', medal: '🥉', cls: 'podium-rank-3' }
+          { data: top2, rank: '2.', medal: '🥈', cls: 'podium-rank-2' },
+          { data: top1, rank: '1.', medal: '🥇', cls: 'podium-rank-1' },
+          { data: top3, rank: '3.', medal: '🥉', cls: 'podium-rank-3' }
         ];
 
         podiumEl.innerHTML = podiumOrder
@@ -953,15 +1203,16 @@
             item => `
             <div class="podium-card ${item.cls}">
               <div class="podium-medal">${item.medal} ${item.rank}</div>
+              <div style="margin:0.35rem auto;">${this.getAvatarImgHtml(item.data.username, 'mc-avatar-sm')}</div>
               <div class="podium-username">${this.formatUsernameHtml(
                 item.data.username,
                 item.data.rgbOwned && item.data.rgbEnabled
               )}</div>
               <div style="margin:0.2rem 0;"><span class="role-badge role-${item.data.role.toLowerCase()}">${item.data.rankBadge}</span></div>
-              <div class="podium-points">${item.data.totalPoints.toLocaleString('en-US')} Points</div>
+              <div class="podium-points">${item.data.totalPoints.toLocaleString('tr-TR')} Puan</div>
               <div class="podium-meta">
-                <span class="emerald-text">💚 ${item.data.emeraldCoins.toLocaleString('en-US')}</span>
-                <span>🏆 ${item.data.gamesWon} Wins</span>
+                <span class="emerald-text">💚 ${item.data.emeraldCoins.toLocaleString('tr-TR')}</span>
+                <span>🏆 ${item.data.gamesWon} Galibiyet</span>
               </div>
             </div>
           `
@@ -969,7 +1220,7 @@
           .join('');
       }
 
-      // 3. Leaderboard Table Rows
+      // 3. Liderlik Tablosu Satırları
       const tbody = document.getElementById('leaderboard-table-body');
       if (!tbody) return;
 
@@ -977,7 +1228,7 @@
         tbody.innerHTML = `
           <tr>
             <td colspan="9" style="text-align:center; padding:1.5rem; color:var(--text-muted);">
-              No matching players found.
+              Eşleşen oyuncu bulunamadı.
             </td>
           </tr>
         `;
@@ -989,29 +1240,32 @@
           const isMe = row.username.toLowerCase() === this.session.username.toLowerCase();
           const rankBadge =
             row.rank === 1
-              ? '🥇 1st'
+              ? '🥇 1.'
               : row.rank === 2
-              ? '🥈 2nd'
+              ? '🥈 2.'
               : row.rank === 3
-              ? '🥉 3rd'
+              ? '🥉 3.'
               : `#${row.rank}`;
 
           return `
             <tr class="${isMe ? 'lb-current-user-row' : ''}">
               <td class="lb-rank-cell">${rankBadge}</td>
               <td>
-                <strong>⛏️ ${this.formatUsernameHtml(
-                  row.username,
-                  row.rgbOwned && row.rgbEnabled
-                )}</strong>
-                ${isMe ? '<span class="role-badge role-player" style="margin-left:0.4rem;">YOU</span>' : ''}
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                  ${this.getAvatarImgHtml(row.username, 'mc-avatar-xs')}
+                  <strong>${this.formatUsernameHtml(
+                    row.username,
+                    row.rgbOwned && row.rgbEnabled
+                  )}</strong>
+                  ${isMe ? '<span class="role-badge role-player" style="margin-left:0.25rem;">SEN</span>' : ''}
+                </div>
               </td>
               <td><span class="role-badge role-${row.role.toLowerCase()}">${this.escapeHtml(row.rankBadge)}</span></td>
-              <td><strong class="gold-text">${row.totalPoints.toLocaleString('en-US')} Points</strong></td>
-              <td><strong class="emerald-text">💚 ${row.emeraldCoins.toLocaleString('en-US')}</strong></td>
+              <td><strong class="gold-text">${row.totalPoints.toLocaleString('tr-TR')} Puan</strong></td>
+              <td><strong class="emerald-text">💚 ${row.emeraldCoins.toLocaleString('tr-TR')}</strong></td>
               <td>${row.gamesPlayed}</td>
               <td class="emerald-text">${row.gamesWon}</td>
-              <td><strong>${row.winRate}%</strong></td>
+              <td><strong>%${row.winRate}</strong></td>
               <td>❤️ ${row.extraLivesUsed}</td>
             </tr>
           `;
@@ -1020,7 +1274,7 @@
     }
 
     // ==========================================
-    // SECTION 16-27: EMERALD SHOP, RANK SHOP & STRIPE CHECKOUT UI
+    // ZÜMRÜT MAĞAZASI, RÜTBE MAĞAZASI & STRIPE ÖDEME EKRANI
     // ==========================================
     bindEmeraldShopScreen() {
       document.querySelectorAll('[data-shop-cat]').forEach(btn => {
@@ -1042,14 +1296,19 @@
         this.selectedShopCategory === 'Emeralds'
           ? []
           : shopService.listShopItems(false, this.selectedShopCategory);
+      const rawPackages = paymentService.listEmeraldPackages
+        ? paymentService.listEmeraldPackages(false)
+        : paymentService.getEmeraldPackages
+        ? paymentService.getEmeraldPackages(false)
+        : [];
       const emeraldPackages =
         this.selectedShopCategory === 'ALL' || this.selectedShopCategory === 'Emeralds'
-          ? paymentService.getEmeraldPackages(false)
+          ? rawPackages
           : [];
 
       const balEl = document.getElementById('shop-emerald-balance');
       if (balEl) {
-        balEl.textContent = `💚 ${profile.emeraldCoins.toLocaleString('en-US')} Emerald Coins`;
+        balEl.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Zümrüt Coin`;
       }
 
       const invExtra = document.getElementById('shop-inv-extralife');
@@ -1067,42 +1326,43 @@
       if (invRgb) {
         invRgb.textContent = profile.rgbOwned
           ? profile.rgbEnabled
-            ? 'Enabled 🌈'
-            : 'Owned (Disabled)'
-          : 'Locked';
+            ? 'Aktif 🌈'
+            : 'Sahip (Kapalı)'
+          : 'Kilitli';
       }
 
       const grid = document.getElementById('emerald-shop-grid');
       if (!grid) return;
 
       const packagesHtml = emeraldPackages
-        .map(
-          pkg => `
+        .map(pkg => {
+          const pkgTitle = pkg.name || pkg.title || `${pkg.emeralds} Zümrüt Paketi`;
+          return `
             <div class="shop-item-card">
               <div>
                 <div class="shop-item-top">
                   <div class="shop-item-icon">${this.escapeHtml(pkg.icon || '💚')}</div>
-                  <span class="shop-item-price-tag">${pkg.priceTL.toLocaleString('en-US')} TL</span>
+                  <span class="shop-item-price-tag">${pkg.priceTL.toLocaleString('tr-TR')} TL</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
-                  <h3 class="shop-item-title" style="margin:0;">${this.escapeHtml(pkg.title)}</h3>
+                  <h3 class="shop-item-title" style="margin:0;">${this.escapeHtml(pkgTitle)}</h3>
                   <span class="role-badge role-vip">${this.escapeHtml(pkg.badge || '5 💚 = 1 TL')}</span>
                 </div>
-                <p class="shop-item-desc">"Purchase ${pkg.emeralds.toLocaleString('en-US')} Emerald Coins securely via Stripe (${pkg.priceTL} TL)."</p>
+                <p class="shop-item-desc">"${pkg.emeralds.toLocaleString('tr-TR')} Zümrüt Coin paketini Stripe güvencesiyle satın alın (${pkg.priceTL} TL)."</p>
               </div>
               <div class="shop-item-footer">
-                <span class="meta-muted">Stripe Verified Webhook</span>
+                <span class="meta-muted">Stripe Doğrulanmış Webhook</span>
                 <button
                   type="button"
                   class="mc-btn mc-btn-emerald mc-btn-small btn-buy-emerald-pkg"
                   data-pkg-id="${this.escapeHtml(pkg.id)}"
                 >
-                  <span class="btn-inner">Buy (${pkg.priceTL} TL)</span>
+                  <span class="btn-inner">Satın Al (${pkg.priceTL} TL)</span>
                 </button>
               </div>
             </div>
-          `
-        )
+          `;
+        })
         .join('');
 
       const itemsHtml = items
@@ -1111,10 +1371,10 @@
           const priceStr =
             item.currency === 'TRY'
               ? `${item.price} TL`
-              : `💚 ${item.price.toLocaleString('en-US')} Emeralds`;
+              : `💚 ${item.price.toLocaleString('tr-TR')} Zümrüt`;
           const reqBadge =
             item.requiredRole === 'VIP'
-              ? '<span class="role-badge role-vip">Requires VIP</span>'
+              ? '<span class="role-badge role-vip">VIP Gerekli</span>'
               : `<span class="meta-muted">${this.escapeHtml(item.category)}</span>`;
           const rankTlBtn =
             item.effectType === 'GRANT_RANK' && item.priceTL && check.canBuy
@@ -1185,7 +1445,11 @@
             const res = shopService.purchaseItem(this.session, itemId);
             this.session = licenseService.refreshSessionRole(this.session) || this.session;
             this.updateTopBarSessionUI();
-            window.soundManager.playCorrect();
+            if (res.item.effectType === 'GRANT_RANK') {
+              window.soundManager.playRankUpgrade();
+            } else {
+              window.soundManager.playPurchase();
+            }
             if (window.mcQuizGame) {
               const rect = btn.getBoundingClientRect();
               window.mcQuizGame.particles.spawnBurst(
@@ -1196,13 +1460,13 @@
               );
             }
             this.showToast(
-              `✅ Purchased ${res.item.icon} ${res.item.name} (-${res.item.price} Emeralds)!`,
+              `✅ ${res.item.icon} ${res.item.name} satın alındı (-${res.item.price} Zümrüt)!`,
               'success'
             );
             this.syncEconomyHeaderUI();
             this.renderEmeraldShop();
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
             btn.disabled = false;
           }
@@ -1211,7 +1475,7 @@
     }
 
     // ==========================================
-    // STRIPE CHECKOUT & WEBHOOK VERIFICATION MODAL (SECTIONS 23-27)
+    // STRIPE CHECKOUT & WEBHOOK DOĞRULAMA MODALI
     // ==========================================
     openStripeCheckoutModal(payload) {
       try {
@@ -1233,7 +1497,7 @@
         }
         if (modal) modal.classList.remove('hidden');
       } catch (err) {
-        window.soundManager.playWrong();
+        window.soundManager.playError();
         this.showToast(err.message, 'error');
       }
     }
@@ -1260,7 +1524,7 @@
             this.renderEmeraldShop();
             this.renderVipShop();
 
-            window.soundManager.playCorrect();
+            window.soundManager.playPurchase();
             if (window.mcQuizGame) {
               window.mcQuizGame.particles.spawnBurst(
                 window.innerWidth / 2,
@@ -1270,11 +1534,11 @@
               );
             }
             this.showToast(
-              `✅ Stripe Webhook Verified (${webhookRes.eventId}): ${webhookRes.payment.title} credited!`,
+              `✅ Stripe Webhook Doğrulandı (${webhookRes.eventId}): ${webhookRes.payment.title} hesabınıza tanımlandı!`,
               'success'
             );
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
@@ -1283,16 +1547,16 @@
       if (failBtn) {
         failBtn.addEventListener('click', () => {
           if (!this.activeCheckoutSession) return;
-          window.soundManager.playWrong();
+          window.soundManager.playError();
           try {
             paymentService.failCheckoutSession(
               this.activeCheckoutSession.id,
-              'Simulated card decline in Stripe Test Mode'
+              'Stripe Test Modunda kart reddi simülasyonu'
             );
             this.activeCheckoutSession = null;
             if (modal) modal.classList.add('hidden');
             this.showToast(
-              '❌ Payment failed in Stripe Test Mode. 0 Emeralds were granted.',
+              '❌ Stripe Test Modunda ödeme başarısız oldu. 0 Zümrüt tanımlandı.',
               'error'
             );
           } catch (err) {
@@ -1303,7 +1567,7 @@
     }
 
     // ==========================================
-    // SECTION 9 & 10: SEPARATE VIP SHOP & PAYMENT ABSTRACTION
+    // VIP MAĞAZASI & ÖDEME ENTEGRASYONU
     // ==========================================
     bindVipShopScreen() {
       const buyVipBtn = document.getElementById('btn-buy-vip-package');
@@ -1316,14 +1580,14 @@
             type: 'RANK',
             rankId: 'VIP',
             packageId: 'VIP_PACKAGE_200TL',
-            title: '👑 VIP Membership (200 TL)',
+            title: '👑 VIP Üyelik (200 TL)',
             priceTL: 200
           });
           this.activeCheckoutSession = res.intent;
           const statusBox = document.getElementById('payment-service-status-box');
           const statusMsg = document.getElementById('payment-service-status-msg');
           if (statusBox && statusMsg) {
-            statusMsg.textContent = `${res.message} (Session ID: ${res.intent.id})`;
+            statusMsg.textContent = `${res.message} (Oturum ID: ${res.intent.id})`;
             statusBox.classList.remove('hidden');
           }
           const modal = document.getElementById('modal-stripe-checkout');
@@ -1376,11 +1640,140 @@
     }
 
     // ==========================================
-    // SECTION 13, 25 & 33: PLAYER PROFILE, RGB COSMETICS & ACHIEVEMENTS
+    // BÖLÜM 9, 10, 11 & 29: OYUNCU PROFİLİ, AVATAR KIRPMA & ÖZELLEŞTİRME
     // ==========================================
     bindProfileAndCosmetics() {
       const enableRgbBtn = document.getElementById('btn-profile-rgb-enable');
       const disableRgbBtn = document.getElementById('btn-profile-rgb-disable');
+      const avatarFileInp = document.getElementById('inp-profile-avatar-file');
+      const saveAvatarBtn = document.getElementById('btn-save-profile-avatar');
+      const removeAvatarBtn = document.getElementById('btn-remove-profile-avatar');
+      const saveCustBtn = document.getElementById('btn-save-profile-customization');
+
+      // 1. Profil Fotoğrafı Seçimi + 160x160 Kare Canvas Kırpma + Önizleme
+      if (avatarFileInp) {
+        avatarFileInp.addEventListener('change', () => {
+          const file = avatarFileInp.files && avatarFileInp.files[0];
+          if (!file) return;
+
+          const validation = avatarService.validateImageFile(file);
+          if (!validation.ok) {
+            window.soundManager.playError();
+            this.showToast(validation.error, 'error');
+            avatarFileInp.value = '';
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = ev => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = 160;
+              canvas.height = 160;
+              const ctx = canvas.getContext('2d');
+              const minSide = Math.min(img.width, img.height);
+              const sx = Math.floor((img.width - minSide) / 2);
+              const sy = Math.floor((img.height - minSide) / 2);
+              ctx.imageSmoothingEnabled = false;
+              ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, 160, 160);
+
+              const croppedDataUrl = canvas.toDataURL('image/png');
+              this.pendingCroppedAvatarDataUrl = croppedDataUrl;
+
+              const previewWrap = document.getElementById('profile-avatar-crop-preview-wrap');
+              const previewImg = document.getElementById('profile-avatar-preview-img');
+              if (previewImg) previewImg.src = croppedDataUrl;
+              if (previewWrap) previewWrap.classList.remove('hidden');
+              if (saveAvatarBtn) saveAvatarBtn.classList.remove('hidden');
+
+              window.soundManager.playClick();
+              this.showToast('Fotoğraf kare olarak kırpıldı. Kaydetmek için "Fotoğrafı Kaydet" butonuna basın.', 'info');
+            };
+            img.onerror = () => {
+              this.showToast('Görsel dosyası okunamadı.', 'error');
+            };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // 2. Kırpılan Profil Fotoğrafını Kaydet
+      if (saveAvatarBtn) {
+        saveAvatarBtn.addEventListener('click', () => {
+          if (!this.pendingCroppedAvatarDataUrl) return;
+          try {
+            userService.updateProfileAvatar(this.session, this.pendingCroppedAvatarDataUrl);
+            this.pendingCroppedAvatarDataUrl = null;
+            const previewWrap = document.getElementById('profile-avatar-crop-preview-wrap');
+            if (previewWrap) previewWrap.classList.add('hidden');
+            saveAvatarBtn.classList.add('hidden');
+            if (avatarFileInp) avatarFileInp.value = '';
+
+            window.soundManager.playSuccess();
+            this.showToast('📸 Profil fotoğrafınız başarıyla güncellendi!', 'success');
+            this.updateTopBarSessionUI();
+            this.syncEconomyHeaderUI();
+            this.renderPlayerProfile();
+          } catch (err) {
+            window.soundManager.playError();
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
+
+      // 3. Profil Fotoğrafını Kaldır (Varsayılan Minecraft Avatarına Dön)
+      if (removeAvatarBtn) {
+        removeAvatarBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          try {
+            userService.updateProfileAvatar(this.session, null);
+            this.pendingCroppedAvatarDataUrl = null;
+            const previewWrap = document.getElementById('profile-avatar-crop-preview-wrap');
+            if (previewWrap) previewWrap.classList.add('hidden');
+            if (saveAvatarBtn) saveAvatarBtn.classList.add('hidden');
+            if (avatarFileInp) avatarFileInp.value = '';
+
+            this.showToast('Profil fotoğrafı kaldırıldı. Minecraft piksel avatarı aktif.', 'info');
+            this.updateTopBarSessionUI();
+            this.syncEconomyHeaderUI();
+            this.renderPlayerProfile();
+          } catch (err) {
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
+
+      // 4. Profil Özelleştirme Kaydet (Çerçeve, Arka Plan, Tema, Gizlilik)
+      if (saveCustBtn) {
+        saveCustBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          try {
+            const profileBorder = document.getElementById('sel-profile-border')?.value || 'stone';
+            const profileBackground = document.getElementById('sel-profile-bg')?.value || 'overworld';
+            const theme = document.getElementById('sel-profile-theme')?.value || 'dark';
+            const profilePrivacy = document.getElementById('sel-profile-privacy')?.value || 'PUBLIC';
+
+            userService.updateProfileCustomization(this.session, {
+              profileBorder,
+              profileBackground,
+              theme,
+              profilePrivacy
+            });
+
+            this.applyUserThemePreference();
+            window.soundManager.playSuccess();
+            this.showToast('🎨 Profil özelleştirmeleri kaydedildi!', 'success');
+            this.updateTopBarSessionUI();
+            this.syncEconomyHeaderUI();
+            this.renderPlayerProfile();
+          } catch (err) {
+            window.soundManager.playError();
+            this.showToast(err.message, 'error');
+          }
+        });
+      }
 
       if (enableRgbBtn) {
         enableRgbBtn.addEventListener('click', () => {
@@ -1391,7 +1784,7 @@
               acc.rgbOwned = true;
               acc.rgbEnabled = true;
             });
-            this.showToast('🌈 RGB Username enabled!', 'success');
+            this.showToast('🌈 RGB Kullanıcı Adı etkinleştirildi!', 'success');
             this.updateTopBarSessionUI();
             this.syncEconomyHeaderUI();
             this.renderPlayerProfile();
@@ -1409,7 +1802,7 @@
             economyService._mutateAccount(this.session.username, acc => {
               acc.rgbEnabled = false;
             });
-            this.showToast('RGB Username disabled.', 'info');
+            this.showToast('RGB Kullanıcı Adı kapatıldı.', 'info');
             this.updateTopBarSessionUI();
             this.syncEconomyHeaderUI();
             this.renderPlayerProfile();
@@ -1425,13 +1818,37 @@
       const summary = leaderboardService.getPlayerRankAndSummary(this.session.username);
       const achievements = achievementService.getPlayerAchievements(this.session.username);
       const dailyStatus = dailyRewardService.canClaimDailyReward(this.session.username);
+      const userObj = userService.getUserByUsername(this.session.username);
 
+      const avatarImg = document.getElementById('profile-avatar-img');
+      const heroBanner = document.getElementById('profile-hero-banner');
       const uName = document.getElementById('profile-username');
       const uRole = document.getElementById('profile-role-badge');
       const uRank = document.getElementById('profile-rank-badge');
       const uIdEl = document.getElementById('profile-immutable-id');
       const rgbPreview = document.getElementById('profile-rgb-preview');
       const rgbPill = document.getElementById('profile-rgb-status-pill');
+
+      const borderKey = userObj?.profileBorder || 'stone';
+      const bgKey = userObj?.profileBackground || 'overworld';
+
+      if (avatarImg) {
+        avatarImg.src = avatarService.getUserAvatarUrl(userObj || this.session.username);
+        avatarImg.className = `mc-avatar-img mc-avatar-xl avatar-border-${borderKey}`;
+      }
+      if (heroBanner) {
+        heroBanner.className = `profile-hero-card profile-bg-${bgKey}`;
+      }
+
+      // Özelleştirme seçim kutularını senkronize et
+      const selBorder = document.getElementById('sel-profile-border');
+      const selBg = document.getElementById('sel-profile-bg');
+      const selTheme = document.getElementById('sel-profile-theme');
+      const selPrivacy = document.getElementById('sel-profile-privacy');
+      if (selBorder) selBorder.value = borderKey;
+      if (selBg) selBg.value = bgKey;
+      if (selTheme) selTheme.value = userObj?.settings?.theme || 'dark';
+      if (selPrivacy) selPrivacy.value = userObj?.profilePrivacy || 'PUBLIC';
 
       if (uName) {
         uName.innerHTML = this.formatUsernameHtml(
@@ -1443,15 +1860,15 @@
         uRole.textContent = summary.role;
         uRole.className = `role-badge role-${summary.role.toLowerCase()}`;
       }
-      if (uRank) uRank.textContent = `${summary.rankBadge} • Rank #${summary.rank}`;
-      if (uIdEl) uIdEl.textContent = `Immutable Account ID: ${summary.userId || this.session.userId}`;
+      if (uRank) uRank.textContent = `${summary.rankBadge} • Sıra #${summary.rank}`;
+      if (uIdEl) uIdEl.textContent = `Sabit Hesap ID: ${summary.userId || this.session.userId}`;
       if (rgbPreview) rgbPreview.textContent = summary.username;
       if (rgbPill) {
         const statusStr = summary.rgbOwned
           ? summary.rgbEnabled
-            ? 'ENABLED'
-            : 'OWNED (OFF)'
-          : 'LOCKED';
+            ? 'AKTİF'
+            : 'SAHİP (KAPALI)'
+          : 'KİLİTLİ';
         rgbPill.textContent = statusStr;
         rgbPill.className = `status-pill status-${summary.rgbOwned && summary.rgbEnabled ? 'ACTIVE' : 'DISABLED'}`;
       }
@@ -1461,31 +1878,31 @@
 
       document.getElementById('prof-stat-rank').textContent = `#${summary.rank}`;
       document.getElementById('prof-stat-points').textContent =
-        `${summary.totalPoints.toLocaleString('en-US')} Points`;
+        `${summary.totalPoints.toLocaleString('tr-TR')} Puan`;
       document.getElementById('prof-stat-emeralds').textContent =
-        `💚 ${summary.emeraldCoins.toLocaleString('en-US')} Emerald Coins`;
+        `💚 ${summary.emeraldCoins.toLocaleString('tr-TR')} Zümrüt Coin`;
       document.getElementById('prof-stat-games').textContent =
-        summary.gamesPlayed.toLocaleString('en-US');
+        summary.gamesPlayed.toLocaleString('tr-TR');
       document.getElementById('prof-stat-winloss').textContent =
-        `${summary.gamesWon} W / ${summary.gamesLost} L`;
-      document.getElementById('prof-stat-winrate').textContent = `${summary.winRate}%`;
+        `${summary.gamesWon} G / ${summary.gamesLost} M`;
+      document.getElementById('prof-stat-winrate').textContent = `%${summary.winRate}`;
       document.getElementById('prof-stat-extralives').textContent =
-        `${extraOwned} Owned / ${summary.extraLivesUsed} Used`;
+        `${extraOwned} Sahip / ${summary.extraLivesUsed} Kullanıldı`;
       document.getElementById('prof-stat-avgscore').textContent =
-        `${summary.averageScore.toLocaleString('en-US')} Pts`;
+        `${summary.averageScore.toLocaleString('tr-TR')} Puan`;
       document.getElementById('prof-stat-bestscore').textContent =
-        `${summary.bestScore.toLocaleString('en-US')} Emerald`;
+        `${summary.bestScore.toLocaleString('tr-TR')} Zümrüt`;
       document.getElementById('prof-stat-earned').textContent =
-        `+${summary.totalEmeraldsEarned.toLocaleString('en-US')} Emeralds`;
+        `+${summary.totalEmeraldsEarned.toLocaleString('tr-TR')} Zümrüt`;
       document.getElementById('prof-stat-spent').textContent =
-        `-${summary.totalEmeraldsSpent.toLocaleString('en-US')} Emeralds`;
+        `-${summary.totalEmeraldsSpent.toLocaleString('tr-TR')} Zümrüt`;
       document.getElementById('prof-stat-streak').textContent =
-        `${dailyStatus.currentStreak} Days`;
+        `${dailyStatus.currentStreak} Gün`;
 
       const unlockedCount = achievements.filter(a => a.unlocked).length;
       const counterEl = document.getElementById('prof-achievements-counter');
       if (counterEl) {
-        counterEl.textContent = `${unlockedCount} / ${achievements.length} Unlocked`;
+        counterEl.textContent = `${unlockedCount} / ${achievements.length} Açıldı`;
       }
 
       const achGrid = document.getElementById('profile-achievements-grid');
@@ -1509,7 +1926,7 @@
     }
 
     // ==========================================
-    // EMERALD TRANSACTION HISTORY UI
+    // ZÜMRÜT İŞLEM GEÇMİŞİ EKRANI
     // ==========================================
     renderEmeraldHistory() {
       if (!this.session) return;
@@ -1518,7 +1935,7 @@
 
       const balEl = document.getElementById('history-emerald-balance');
       if (balEl) {
-        balEl.textContent = `💚 ${profile.emeraldCoins.toLocaleString('en-US')} Emerald Coins`;
+        balEl.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Zümrüt Coin`;
       }
 
       const listEl = document.getElementById('player-history-list');
@@ -1526,7 +1943,7 @@
 
       if (txs.length === 0) {
         listEl.innerHTML =
-          '<div class="empty-state-box">No Emerald Coin transactions recorded yet.</div>';
+          '<div class="empty-state-box">Henüz kayıtlı Zümrüt Coin işlemi bulunmuyor.</div>';
         return;
       }
 
@@ -1536,13 +1953,13 @@
           const sign = tx.amount > 0 ? '+' : '';
           const amountText =
             tx.amount === 0
-              ? '❤️ 1 Extra Life Consumed'
-              : `${sign}${tx.amount.toLocaleString('en-US')} Emeralds`;
+              ? '❤️ 1 Ekstra Can Kullanıldı'
+              : `${sign}${tx.amount.toLocaleString('tr-TR')} Zümrüt`;
           return `
             <div class="tx-row ${isNeg ? 'tx-negative' : ''}">
               <div class="tx-main">
                 <span class="tx-reason">${this.escapeHtml(tx.reason)} <span class="meta-muted">(${this.escapeHtml(tx.id)})</span></span>
-                <span class="tx-meta">🕒 ${tx.dateFormatted} • Prev: 💚 ${Number(tx.previousBalance || 0).toLocaleString('en-US')} → New: 💚 ${tx.balanceAfter.toLocaleString('en-US')} • Source: ${this.escapeHtml(tx.source || 'System')}</span>
+                <span class="tx-meta">🕒 ${tx.dateFormatted} • Önceki: 💚 ${Number(tx.previousBalance || 0).toLocaleString('tr-TR')} → Yeni: 💚 ${tx.balanceAfter.toLocaleString('tr-TR')} • Kaynak: ${this.escapeHtml(tx.source || 'Sistem')}</span>
               </div>
               <div class="tx-amount ${isNeg ? 'wrong-text' : 'emerald-text'}">
                 ${amountText}
@@ -1554,7 +1971,7 @@
     }
 
     // ==========================================
-    // SECTIONS 6, 7 & 8: PARTY SYSTEM (STRICT PERMISSIONS, NEVER RESETS LICENSE)
+    // PARTİ SİSTEMİ (YETKİ KONTROLLÜ, LİSANSI ASLA SIFIRLAMAZ)
     // ==========================================
     openPartyLobby(openCreateBox = false) {
       if (!this.session) {
@@ -1593,7 +2010,7 @@
 
       if (playSoloBtn) {
         playSoloBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
+          window.soundManager.playGameStart();
           if (window.mcQuizGame) window.mcQuizGame.startNewGame();
         });
       }
@@ -1603,7 +2020,7 @@
           window.soundManager.playClick();
           const perms = authGuard.getUserPermissions(this.session);
           if (!perms.canCreateParty) {
-            this.showToast('Access Denied: Only VIP, MVP, and ADMIN users can create parties.', 'error');
+            this.showToast('Erişim Reddedildi: Sadece VIP, MVP ve ADMIN kullanıcılar parti oluşturabilir.', 'error');
             return;
           }
           createBox.classList.toggle('hidden');
@@ -1623,23 +2040,23 @@
             const newParty = partyService.createParty(this.session, {
               name: nameInput.value,
               maxPlayers: Number(maxSelect.value),
-              gameMode: modeSelect ? modeSelect.value : 'Classic Millionaire (15 Qs)',
+              gameMode: modeSelect ? modeSelect.value : 'Klasik Milyoner (15 Soru)',
               description: descInput ? descInput.value : ''
             });
             nameInput.value = '';
             if (descInput) descInput.value = '';
             this.selectedPartyId = newParty.id;
-            window.soundManager.playCorrect();
-            this.showToast(`Party "${newParty.name}" created! Invite Code: ${newParty.inviteCode}`, 'success');
+            window.soundManager.playPartyJoin();
+            this.showToast(`"${newParty.name}" partisi oluşturuldu! Davet Kodu: ${newParty.inviteCode}`, 'success');
             this.renderPartyLobby(false);
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
       }
 
-      // Section 1 & 8: Join Party — NEVER resets license or account!
+      // Partiye Katıl — Lisansı veya hesabı ASLA sıfırlamaz!
       if (joinForm) {
         joinForm.addEventListener('submit', e => {
           e.preventDefault();
@@ -1648,11 +2065,11 @@
             const joinedParty = partyService.joinPartyByInviteCode(this.session, codeInp.value);
             codeInp.value = '';
             this.selectedPartyId = joinedParty.id;
-            window.soundManager.playCorrect();
-            this.showToast('SUCCESS — "You joined the party successfully."', 'success');
+            window.soundManager.playPartyJoin();
+            this.showToast(`BAŞARILI — "${joinedParty.name}" partisine başarıyla katıldınız.`, 'success');
             this.renderPartyLobby(false);
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
@@ -1677,15 +2094,15 @@
       const maxSelect = document.getElementById('input-party-max');
 
       if (welcomeTitle) {
-        welcomeTitle.innerHTML = `Welcome, ${this.formatUsernameHtml(this.session.username)}`;
+        welcomeTitle.innerHTML = `Hoş Geldin, ${this.formatUsernameHtml(this.session.username)}`;
       }
       if (roleBadge) {
         roleBadge.textContent = profile.rankBadge || effRole;
         roleBadge.className = `role-badge role-${effRole.toLowerCase()}`;
       }
-      if (licName) licName.textContent = this.session.licenseName || 'Active Account';
+      if (licName) licName.textContent = this.session.licenseName || 'Aktif Hesap';
 
-      // Populate maxPlayers options dynamically up to user's rank maxPartySize (Section 8)
+      // Kullanıcının rütbe limitine göre maksimum oyuncu seçeneklerini doldur
       if (maxSelect && perms.canCreateParty) {
         const cap = Math.min(32, perms.maxPartySize || 4);
         const sizes = [2, 4, 6, 8, 10, 12, 14, 16, 20, 32].filter(n => n <= cap);
@@ -1693,14 +2110,14 @@
         maxSelect.innerHTML = sizes
           .map(
             n =>
-              `<option value="${n}" ${n === cap ? 'selected' : ''}>${n} Players ${
-                n === cap ? `(${profile.rank || effRole} Max)` : ''
+              `<option value="${n}" ${n === cap ? 'selected' : ''}>${n} Oyuncu ${
+                n === cap ? `(${profile.rank || effRole} Maks)` : ''
               }</option>`
           )
           .join('');
       }
 
-      // Section 9: Normal PLAYER sees [ Join Party ] ONLY. Ranked & ADMIN see [ Create Party ]
+      // Normal PLAYER sadece [ Partiye Katıl ] görür. Rütbeli ve ADMIN [ Parti Oluştur ] görür
       const canCreateParty = Boolean(perms.canCreateParty);
       if (createBtn) createBtn.classList.toggle('hidden', !canCreateParty);
       if (createBox) {
@@ -1733,7 +2150,7 @@
       if (parties.length === 0) {
         listEl.innerHTML = `
           <div class="empty-state-box">
-            No parties found. Enter a Party Code (e.g. <strong>MCM-8K2P</strong>) above to join!
+            Aktif parti bulunamadı. Katılmak için yukarıya bir Davet Kodu (örn. <strong>MCM-8K2P</strong>) girin!
           </div>
         `;
         return;
@@ -1743,17 +2160,18 @@
         .map(p => {
           const joinedCount = p.participants.filter(pt => pt.joinStatus === 'JOINED').length;
           const isSelected = p.id === this.selectedPartyId;
+          const statusTr = PARTY_STATUS_LABELS_TR[p.status] || p.status;
           return `
             <div class="party-item-card ${isSelected ? 'selected' : ''}" data-party-id="${p.id}">
               <div class="party-item-top">
                 <span class="party-item-title">${this.escapeHtml(p.name)}</span>
-                <span class="status-pill status-${p.status}">${p.status}</span>
+                <span class="status-pill status-${p.status}">${statusTr}</span>
               </div>
               <div class="party-item-meta">
-                <span>👑 Owner: <strong>${this.escapeHtml(p.organizer)}</strong></span>
-                <span>🎮 Mode: <strong>${this.escapeHtml(p.gameMode || 'Classic')}</strong></span>
-                <span>👥 Players: <strong>${joinedCount} / ${p.maxPlayers}</strong></span>
-                <span>🎟️ Invite Code: <strong class="emerald-text">${p.inviteCode}</strong></span>
+                <span>👑 Kurucu: <strong>${this.escapeHtml(p.organizer)}</strong></span>
+                <span>🎮 Mod: <strong>${this.escapeHtml(p.gameMode || 'Klasik Milyoner')}</strong></span>
+                <span>👥 Oyuncular: <strong>${joinedCount} / ${p.maxPlayers}</strong></span>
+                <span>🎟️ Davet Kodu: <strong class="emerald-text">${p.inviteCode}</strong></span>
               </div>
             </div>
           `;
@@ -1781,7 +2199,7 @@
       if (!party) {
         container.innerHTML = `
           <div class="empty-state-box">
-            Select a party from the left list or enter an Invite Code to view party details.
+            Detayları görüntülemek için sol listeden bir parti seçin veya bir Davet Kodu girin.
           </div>
         `;
         return;
@@ -1790,25 +2208,25 @@
       const effRole = authGuard.getEffectiveRole(this.session);
       const perms = authGuard.getUserPermissions(this.session);
       const isOwner = party.organizer.toLowerCase() === this.session.username.toLowerCase();
-      // Section 9 & 10: ONLY ranked owner with canInvitePlayers or ADMIN can see party management & invite controls
       const canManage = effRole === 'ADMIN' || (Boolean(perms.canInvitePlayers) && isOwner);
       const isParticipant = party.participants.some(
         pt => pt.username.toLowerCase() === this.session.username.toLowerCase() && pt.joinStatus === 'JOINED'
       );
       const joinedCount = party.participants.filter(pt => pt.joinStatus === 'JOINED').length;
-      const createdDate = new Date(party.createdAt).toLocaleString('en-US');
+      const createdDate = new Date(party.createdAt).toLocaleString('tr-TR');
+      const statusTr = PARTY_STATUS_LABELS_TR[party.status] || party.status;
 
       const managementToolbarHtml = canManage
         ? `
           <div class="party-owner-toolbar">
-            <div class="owner-toolbar-title">👑 RANKED OWNER / ADMIN PARTY MANAGEMENT</div>
+            <div class="owner-toolbar-title">👑 RÜTBELİ KURUCU / ADMİN PARTİ YÖNETİMİ</div>
             <div class="inline-join-form">
-              <input type="text" id="inp-invite-username" class="mc-input mc-input-sm" placeholder="Minecraft username to invite..." />
+              <input type="text" id="inp-invite-username" class="mc-input mc-input-sm" placeholder="Davet edilecek Minecraft kullanıcı adı..." />
               <button type="button" id="btn-detail-invite" class="mc-btn mc-btn-emerald mc-btn-small">
-                <span class="btn-inner">✉️ Invite Player</span>
+                <span class="btn-inner">✉️ Oyuncu Davet Et</span>
               </button>
               <button type="button" id="btn-detail-copy-code" class="mc-btn mc-btn-stone mc-btn-small">
-                <span class="btn-inner">📋 Copy Invite Code</span>
+                <span class="btn-inner">📋 Davet Kodunu Kopyala</span>
               </button>
             </div>
 
@@ -1816,17 +2234,17 @@
               <button type="button" id="btn-party-start" class="mc-btn mc-btn-emerald mc-btn-small" ${
                 party.status === 'CANCELLED' ? 'disabled' : ''
               }>
-                <span class="btn-inner">▶️ Start Party Game</span>
+                <span class="btn-inner">▶️ Parti Oyununu Başlat</span>
               </button>
               <select id="sel-party-status-change" class="mc-select mc-select-xs">
                 ${PARTY_STATUSES.map(
-                  st => `<option value="${st}" ${party.status === st ? 'selected' : ''}>Status: ${st}</option>`
+                  st => `<option value="${st}" ${party.status === st ? 'selected' : ''}>Durum: ${PARTY_STATUS_LABELS_TR[st] || st}</option>`
                 ).join('')}
               </select>
               <button type="button" id="btn-party-cancel" class="mc-btn mc-btn-danger mc-btn-small" ${
                 party.status === 'CANCELLED' ? 'disabled' : ''
               }>
-                <span class="btn-inner">✖ Cancel Party</span>
+                <span class="btn-inner">✖ Partiyi İptal Et</span>
               </button>
             </div>
           </div>
@@ -1838,14 +2256,14 @@
           ${
             !isParticipant && party.status !== 'CANCELLED'
               ? `<button type="button" id="btn-detail-quick-join" class="mc-btn mc-btn-emerald mc-btn-small">
-                   <span class="btn-inner">🎟️ Join This Party (${party.inviteCode})</span>
+                   <span class="btn-inner">🎟️ Bu Partiye Katıl (${party.inviteCode})</span>
                  </button>`
               : ''
           }
           ${
             isParticipant
               ? `<button type="button" id="btn-detail-leave-party" class="mc-btn mc-btn-danger mc-btn-small">
-                   <span class="btn-inner">🚪 Leave Party</span>
+                   <span class="btn-inner">🚪 Partiden Ayrıl</span>
                  </button>`
               : ''
           }
@@ -1856,27 +2274,27 @@
         <div class="party-detail-header">
           <div>
             <div class="party-detail-title">${this.escapeHtml(party.name)}</div>
-            <div class="meta-muted">Party ID: <strong>${party.id}</strong> • Created At: ${createdDate}</div>
+            <div class="meta-muted">Parti ID: <strong>${party.id}</strong> • Oluşturulma: ${createdDate}</div>
             ${party.description ? `<p class="panel-sec-desc" style="margin-top:0.3rem;">${this.escapeHtml(party.description)}</p>` : ''}
           </div>
-          <span class="status-pill status-${party.status}">${party.status}</span>
+          <span class="status-pill status-${party.status}">${statusTr}</span>
         </div>
 
         <div class="party-meta-grid">
           <div class="party-meta-box">
-            <span>Owner</span>
+            <span>Kurucu</span>
             <strong class="gold-text">${this.formatUsernameHtml(party.organizer)}</strong>
           </div>
           <div class="party-meta-box">
-            <span>Players / Max</span>
+            <span>Oyuncu / Maks</span>
             <strong>${joinedCount} / ${party.maxPlayers}</strong>
           </div>
           <div class="party-meta-box">
-            <span>Game Mode</span>
-            <strong>${this.escapeHtml(party.gameMode || 'Classic Millionaire')}</strong>
+            <span>Oyun Modu</span>
+            <strong>${this.escapeHtml(party.gameMode || 'Klasik Milyoner')}</strong>
           </div>
           <div class="party-meta-box">
-            <span>Invite Code</span>
+            <span>Davet Kodu</span>
             <strong class="emerald-text">${party.inviteCode}</strong>
           </div>
         </div>
@@ -1884,31 +2302,35 @@
         ${participantActionBar}
         ${managementToolbarHtml}
 
-        <h4 class="panel-sec-title">👥 Participants (${party.participants.length})</h4>
+        <h4 class="panel-sec-title">👥 Katılımcılar (${party.participants.length})</h4>
         <div class="participants-grid">
           ${party.participants
             .map(pt => {
-              const joinedTime = new Date(pt.joinedAt).toLocaleTimeString('en-US', {
+              const joinedTime = new Date(pt.joinedAt).toLocaleTimeString('tr-TR', {
                 hour: '2-digit',
                 minute: '2-digit'
               });
               const canRemoveThis =
                 canManage && pt.username.toLowerCase() !== party.organizer.toLowerCase();
+              const joinStatusTr = pt.joinStatus === 'JOINED' ? 'KATILDI' : pt.joinStatus === 'INVITED' ? 'DAVET EDİLDİ' : pt.joinStatus;
               return `
                 <div class="participant-card">
                   <div class="participant-top">
-                    <span class="participant-name">⛏️ ${this.formatUsernameHtml(pt.username)}</span>
+                    <span class="participant-name" style="display:inline-flex; align-items:center; gap:0.4rem;">
+                      ${this.getAvatarImgHtml(pt.username, 'mc-avatar-xs')}
+                      ${this.formatUsernameHtml(pt.username)}
+                    </span>
                     <span class="role-badge role-${pt.role.toLowerCase()}">${pt.role}</span>
                   </div>
                   <div class="participant-sub">
-                    <span class="status-pill status-${pt.joinStatus}">${pt.joinStatus}</span>
-                    <span>Joined: ${joinedTime}</span>
+                    <span class="status-pill status-${pt.joinStatus}">${joinStatusTr}</span>
+                    <span>Katılım: ${joinedTime}</span>
                   </div>
                   ${
                     canRemoveThis
                       ? `<button type="button" class="act-btn danger btn-remove-pt" data-username="${this.escapeHtml(
                           pt.username
-                        )}">Remove Player</button>`
+                        )}">Oyuncuyu Çıkar</button>`
                       : ''
                   }
                 </div>
@@ -1918,17 +2340,17 @@
         </div>
       `;
 
-      // Quick Join / Leave Party bindings
+      // Hızlı Katıl / Partiden Ayrıl bağlantıları
       const quickJoinBtn = document.getElementById('btn-detail-quick-join');
       if (quickJoinBtn) {
         quickJoinBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
           try {
             partyService.joinPartyByInviteCode(this.session, party.inviteCode);
-            window.soundManager.playCorrect();
-            this.showToast('SUCCESS — "You joined the party successfully."', 'success');
+            window.soundManager.playPartyJoin();
+            this.showToast(`BAŞARILI — "${party.name}" partisine başarıyla katıldınız.`, 'success');
             this.renderPartyLobby(false);
           } catch (err) {
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
@@ -1940,7 +2362,7 @@
           window.soundManager.playClick();
           try {
             partyService.leaveParty(this.session, party.id);
-            this.showToast(`You left "${party.name}". Your license and account remain active.`, 'info');
+            this.showToast(`"${party.name}" partisinden ayrıldınız. Lisansınız ve hesabınız aktif kalmaya devam ediyor.`, 'info');
             this.renderPartyLobby(false);
           } catch (err) {
             this.showToast(err.message, 'error');
@@ -1957,18 +2379,19 @@
 
         if (inviteBtn) {
           inviteBtn.addEventListener('click', () => {
-            window.soundManager.playClick();
             const userInp = document.getElementById('inp-invite-username');
             const targetUser = userInp ? userInp.value.trim() : '';
             try {
               const invData = partyService.invitePlayer(this.session, party.id, targetUser);
               if (userInp) userInp.value = '';
+              window.soundManager.playPartyInvite();
               this.openInvitationModal(invData);
               if (targetUser) {
-                this.showToast(`Player ${targetUser} invited successfully.`, 'success');
+                this.showToast(`${targetUser} oyuncusu başarıyla davet edildi.`, 'success');
               }
               this.renderPartyLobby(false);
             } catch (err) {
+              window.soundManager.playError();
               this.showToast(err.message, 'error');
             }
           });
@@ -1979,17 +2402,17 @@
             window.soundManager.playClick();
             this.copyToClipboard(
               party.inviteCode,
-              `Invite code copied: ${party.inviteCode}`
+              `Davet kodu kopyalandı: ${party.inviteCode}`
             );
           });
         }
 
         if (startBtn) {
           startBtn.addEventListener('click', () => {
-            window.soundManager.playCorrect();
+            window.soundManager.playGameStart();
             try {
               partyService.setPartyStatus(this.session, party.id, 'ACTIVE');
-              this.showToast('Party game started!', 'success');
+              this.showToast('Parti oyunu başlatıldı!', 'success');
               this.renderPartyLobby(false);
               if (window.mcQuizGame) {
                 window.mcQuizGame.startNewGame();
@@ -2004,7 +2427,7 @@
           statusSel.addEventListener('change', () => {
             try {
               partyService.setPartyStatus(this.session, party.id, statusSel.value);
-              this.showToast(`Party status updated to ${statusSel.value}`, 'info');
+              this.showToast(`Parti durumu güncellendi: ${PARTY_STATUS_LABELS_TR[statusSel.value] || statusSel.value}`, 'info');
               this.renderPartyLobby(false);
             } catch (err) {
               this.showToast(err.message, 'error');
@@ -2016,13 +2439,13 @@
           cancelBtn.addEventListener('click', () => {
             window.soundManager.playClick();
             this.askConfirmation(
-              '✖ Cancel Party',
-              `Are you sure you want to cancel "${party.name}"?`,
-              'Cancel Party',
+              '✖ Partiyi İptal Et',
+              `"${party.name}" partisini iptal etmek istediğinize emin misiniz?`,
+              'Partiyi İptal Et',
               () => {
                 try {
                   partyService.setPartyStatus(this.session, party.id, 'CANCELLED');
-                  this.showToast('Party cancelled.', 'info');
+                  this.showToast('Parti iptal edildi.', 'info');
                   this.renderPartyLobby(false);
                 } catch (err) {
                   this.showToast(err.message, 'error');
@@ -2037,13 +2460,13 @@
             window.soundManager.playClick();
             const targetUser = btn.getAttribute('data-username');
             this.askConfirmation(
-              '👥 Remove Participant',
-              `Are you sure you want to remove "${targetUser}" from this party?`,
-              'Remove Player',
+              '👥 Katılımcıyı Çıkar',
+              `"${targetUser}" oyuncusunu bu partiden çıkarmak istediğinize emin misiniz?`,
+              'Oyuncuyu Çıkar',
               () => {
                 try {
                   partyService.removeParticipant(this.session, party.id, targetUser);
-                  this.showToast(`${targetUser} removed from party.`, 'info');
+                  this.showToast(`${targetUser} partiden çıkarıldı.`, 'info');
                   this.renderPartyLobby(false);
                 } catch (err) {
                   this.showToast(err.message, 'error');
@@ -2056,7 +2479,7 @@
     }
 
     // ==========================================
-    // INVITATION MODAL
+    // DAVET MODALI
     // ==========================================
     openInvitationModal(invData) {
       const modal = document.getElementById('modal-invite');
@@ -2080,14 +2503,14 @@
           window.soundManager.playClick();
           this.copyToClipboard(
             this.currentInvitationText,
-            'Party invitation copied to clipboard!'
+            'Parti daveti panoya kopyalandı!'
           );
         });
       }
     }
 
     // ==========================================
-    // SECTIONS 14, 15, 16 & 17: SUPPORT, BUG REPORTS & SUGGESTIONS HUB
+    // BÖLÜM 23, 24 & 25: DESTEK, HATA BİLDİRİMİ & ÖNERİ MERKEZİ
     // ==========================================
     bindSupportHub() {
       document.querySelectorAll('[data-support-pane]').forEach(btn => {
@@ -2111,9 +2534,10 @@
               description
             });
             supForm.reset();
-            window.soundManager.playCorrect();
+            window.soundManager.playSuccess();
+            const prioTr = supportService.formatPriorityTR(ticket.priority);
             this.showToast(
-              `Support ticket ${ticket.id} submitted (${ticket.priority} Priority)!`,
+              `Destek talebi ${ticket.id} gönderildi (${prioTr} Öncelik)!`,
               'success'
             );
             this.renderSupportHub();
@@ -2133,7 +2557,7 @@
             const relatedParty = document.getElementById('bug-party')?.value;
             const attachmentUrl = document.getElementById('bug-attachment')?.value;
             const description = document.getElementById('bug-desc')?.value;
-            const bug = supportService.createBugReport(this.session, {
+            const bug = bugService.createBugReport(this.session, {
               title,
               category,
               relatedParty,
@@ -2141,9 +2565,10 @@
               description
             });
             bugForm.reset();
-            window.soundManager.playCorrect();
+            window.soundManager.playSuccess();
+            const prioTr = supportService.formatPriorityTR(bug.priority);
             this.showToast(
-              `Bug report ${bug.id} submitted (${bug.priority} Priority)!`,
+              `Hata bildirimi ${bug.id} gönderildi (${prioTr} Öncelik)!`,
               'success'
             );
             this.renderSupportHub();
@@ -2161,15 +2586,16 @@
             const title = document.getElementById('sug-title')?.value;
             const category = document.getElementById('sug-category')?.value;
             const description = document.getElementById('sug-desc')?.value;
-            const sug = supportService.createSuggestion(this.session, {
+            const sug = suggestionService.createSuggestion(this.session, {
               title,
               category,
               description
             });
             sugForm.reset();
-            window.soundManager.playCorrect();
+            window.soundManager.playSuccess();
+            const prioTr = supportService.formatPriorityTR(sug.priority);
             this.showToast(
-              `Suggestion ${sug.id} submitted (${sug.priority} Priority)!`,
+              `Öneri ${sug.id} gönderildi (${prioTr} Öncelik)!`,
               'success'
             );
             this.renderSupportHub();
@@ -2201,99 +2627,101 @@
       const prioInd = document.getElementById('support-priority-indicator');
       if (prioInd) {
         prioInd.textContent =
-          priority === 'HIGH'
-            ? '🔥 VIP PRIORITY ACTIVE'
+          priority === 'VERY HIGH'
+            ? '⚡ ÇOK YÜKSEK ÖNCELİK (VIP+/MVP)'
+            : priority === 'HIGH'
+            ? '🔥 YÜKSEK ÖNCELİK (VIP)'
             : priority === 'CRITICAL'
-            ? '🛡️ ADMIN PRIORITY'
-            : 'STANDARD PRIORITY';
-        prioInd.className = `priority-pill priority-${priority}`;
+            ? '🛡️ KRİTİK ÖNCELİK (ADMIN)'
+            : 'NORMAL ÖNCELİK';
+        prioInd.className = `priority-pill priority-${priority.replace(/\s+/g, '_')}`;
       }
 
-      // 1. User Support Tickets
+      // 1. Destek Talepleri
       const supListEl = document.getElementById('user-support-tickets-list');
       if (supListEl) {
         const tickets = supportService.listSupportTickets(this.session, true);
         supListEl.innerHTML =
           tickets.length === 0
-            ? '<div class="empty-state-box">You have not submitted any support tickets yet.</div>'
+            ? '<div class="empty-state-box">Henüz destek talebi göndermediniz.</div>'
             : tickets
-                .map(
-                  t => `
-                <div class="tx-row">
-                  <div class="tx-main">
-                    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                      <span class="tx-reason">${this.escapeHtml(t.title)}</span>
-                      <span class="priority-pill priority-${t.priority}">${
-                        t.priority === 'HIGH' ? '🔥 VIP PRIORITY' : t.priority
-                      }</span>
-                      <span class="status-pill status-${t.status === 'RESOLVED' ? 'ACTIVE' : 'WAITING'}">${t.status}</span>
+                .map(t => {
+                  const prioTr = supportService.formatPriorityTR(t.priority);
+                  return `
+                  <div class="tx-row">
+                    <div class="tx-main">
+                      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                        <span class="tx-reason">${this.escapeHtml(t.title)}</span>
+                        <span class="priority-pill priority-${t.priority.replace(/\s+/g, '_')}">${prioTr} Öncelik</span>
+                        <span class="status-pill status-${t.status === 'RESOLVED' ? 'ACTIVE' : 'WAITING'}">${t.status}</span>
+                      </div>
+                      <span class="tx-meta">[${t.id}] • ${this.escapeHtml(t.category)} • ${new Date(t.createdAt).toLocaleString('tr-TR')}</span>
+                      <p class="panel-sec-desc" style="margin-top:0.25rem;">${this.escapeHtml(t.description)}</p>
+                      ${
+                        t.adminReply
+                          ? `<div class="emerald-text" style="font-size:0.84rem; margin-top:0.25rem;">🛡️ Admin Yanıtı: ${this.escapeHtml(t.adminReply)}</div>`
+                          : ''
+                      }
                     </div>
-                    <span class="tx-meta">[${t.id}] • ${this.escapeHtml(t.category)} • ${new Date(t.createdAt).toLocaleString('en-US')}</span>
-                    <p class="panel-sec-desc" style="margin-top:0.25rem;">${this.escapeHtml(t.description)}</p>
-                    ${
-                      t.adminReply
-                        ? `<div class="emerald-text" style="font-size:0.84rem; margin-top:0.25rem;">🛡️ Admin Reply: ${this.escapeHtml(t.adminReply)}</div>`
-                        : ''
-                    }
                   </div>
-                </div>
-              `
-                )
+                `;
+                })
                 .join('');
       }
 
-      // 2. User Bug Reports
+      // 2. Hata Bildirimleri
       const bugListEl = document.getElementById('user-bug-reports-list');
       if (bugListEl) {
-        const bugs = supportService.listBugReports(this.session, false);
+        const bugs = bugService.listBugReports(this.session, false);
         bugListEl.innerHTML =
           bugs.length === 0
-            ? '<div class="empty-state-box">No bug reports submitted yet.</div>'
+            ? '<div class="empty-state-box">Henüz hata bildirimi bulunmuyor.</div>'
             : bugs
-                .map(
-                  b => `
-                <div class="tx-row">
-                  <div class="tx-main">
-                    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                      <span class="tx-reason">${this.escapeHtml(b.title)}</span>
-                      <span class="priority-pill priority-${b.priority}">${
-                        b.priority === 'HIGH' ? '🔥 VIP PRIORITY' : b.priority
-                      }</span>
-                      <span class="status-pill status-WAITING">${b.status}</span>
+                .map(b => {
+                  const prioTr = supportService.formatPriorityTR(b.priority);
+                  return `
+                  <div class="tx-row">
+                    <div class="tx-main">
+                      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                        <span class="tx-reason">${this.escapeHtml(b.title)}</span>
+                        <span class="priority-pill priority-${b.priority.replace(/\s+/g, '_')}">${prioTr} Öncelik</span>
+                        <span class="status-pill status-WAITING">${b.status}</span>
+                      </div>
+                      <span class="tx-meta">[${b.id}] • Gönderen: ${this.escapeHtml(b.username)} • ${this.escapeHtml(b.category)} ${b.relatedParty ? `• Parti: ${this.escapeHtml(b.relatedParty)}` : ''}</span>
+                      <p class="panel-sec-desc" style="margin-top:0.25rem;">${this.escapeHtml(b.description)}</p>
                     </div>
-                    <span class="tx-meta">[${b.id}] by ${this.escapeHtml(b.username)} • ${this.escapeHtml(b.category)} ${b.relatedParty ? `• Party: ${this.escapeHtml(b.relatedParty)}` : ''}</span>
-                    <p class="panel-sec-desc" style="margin-top:0.25rem;">${this.escapeHtml(b.description)}</p>
                   </div>
-                </div>
-              `
-                )
+                `;
+                })
                 .join('');
       }
 
-      // 3. Community Suggestions
+      // 3. Topluluk Önerileri
       const sugListEl = document.getElementById('user-suggestions-list');
       const sortBy = document.getElementById('filter-user-suggestions-sort')?.value || 'PRIORITY';
       if (sugListEl) {
-        const sugs = supportService.listSuggestions(this.session, sortBy);
+        const sugs = suggestionService.listSuggestions(this.session, sortBy);
         sugListEl.innerHTML =
           sugs.length === 0
-            ? '<div class="empty-state-box">No suggestions yet.</div>'
+            ? '<div class="empty-state-box">Henüz öneri gönderilmedi.</div>'
             : sugs
                 .map(s => {
                   const voted = (s.votedBy || []).some(
                     u => u.toLowerCase() === this.session.username.toLowerCase()
                   );
+                  const prioTr = supportService.formatPriorityTR(s.priority);
+                  const statusTr = supportService.formatSuggestionStatusTR
+                    ? supportService.formatSuggestionStatusTR(s.status)
+                    : s.status;
                   return `
                   <div class="tx-row">
                     <div class="tx-main">
                       <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
                         <span class="tx-reason">${this.escapeHtml(s.title)}</span>
-                        <span class="priority-pill priority-${s.priority}">${
-                          s.priority === 'HIGH' ? '👑 VIP PRIORITY' : s.priority
-                        }</span>
-                        <span class="status-pill status-ACTIVE">${s.status}</span>
+                        <span class="priority-pill priority-${s.priority.replace(/\s+/g, '_')}">${prioTr} Öncelik</span>
+                        <span class="status-pill status-ACTIVE">${this.escapeHtml(statusTr)}</span>
                       </div>
-                      <span class="tx-meta">[${s.id}] by ${this.escapeHtml(s.username)} • ${this.escapeHtml(s.category)}</span>
+                      <span class="tx-meta">[${s.id}] • Gönderen: ${this.escapeHtml(s.username)} • ${this.escapeHtml(s.category)}</span>
                       <p class="panel-sec-desc" style="margin-top:0.25rem;">${this.escapeHtml(s.description)}</p>
                     </div>
                     <button type="button" class="act-btn ${voted ? 'emerald' : ''} btn-vote-sug" data-sug-id="${s.id}">
@@ -2308,7 +2736,7 @@
           btn.addEventListener('click', () => {
             window.soundManager.playClick();
             const id = btn.getAttribute('data-sug-id');
-            supportService.voteSuggestion(this.session, id);
+            suggestionService.voteSuggestion(this.session, id);
             this.renderSupportHub();
           });
         });
@@ -2316,7 +2744,7 @@
     }
 
     // ==========================================
-    // SECTION 27: ACCOUNT SETTINGS
+    // HESAP AYARLARI EKRANI
     // ==========================================
     bindAccountSettings() {
       const unameForm = document.getElementById('form-acc-username');
@@ -2334,16 +2762,16 @@
             const res = userService.changeUsername(this.session, inp.value);
             this.session = res.session;
             inp.value = '';
-            window.soundManager.playCorrect();
+            window.soundManager.playSuccess();
             this.showToast(
-              `Username updated to "${this.session.username}" (Account ID ${res.user.id} preserved)!`,
+              `Kullanıcı adı "${this.session.username}" olarak güncellendi (Hesap ID ${res.user.id} korundu)!`,
               'success'
             );
             this.updateTopBarSessionUI();
             this.syncEconomyHeaderUI();
             this.renderAccountSettings();
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
@@ -2357,11 +2785,11 @@
             const next = document.getElementById('inp-acc-new-pwd')?.value || '';
             userService.changePassword(this.session, curr, next);
             pwdForm.reset();
-            window.soundManager.playCorrect();
-            this.showToast('Password hash updated securely (salted SHA-256).', 'success');
+            window.soundManager.playSuccess();
+            this.showToast('Şifre güvenli bir şekilde güncellendi (tuzlanmış SHA-256).', 'success');
             this.renderAccountSettings();
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
@@ -2376,7 +2804,7 @@
               acc.rgbOwned = true;
               acc.rgbEnabled = true;
             });
-            this.showToast('🌈 RGB Username enabled!', 'success');
+            this.showToast('🌈 RGB Kullanıcı Adı etkinleştirildi!', 'success');
             this.updateTopBarSessionUI();
             this.syncEconomyHeaderUI();
             this.renderAccountSettings();
@@ -2394,7 +2822,7 @@
             economyService._mutateAccount(this.session.username, acc => {
               acc.rgbEnabled = false;
             });
-            this.showToast('RGB Username disabled.', 'info');
+            this.showToast('RGB Kullanıcı Adı kapatıldı.', 'info');
             this.updateTopBarSessionUI();
             this.syncEconomyHeaderUI();
             this.renderAccountSettings();
@@ -2407,7 +2835,7 @@
       if (notifChk) {
         notifChk.addEventListener('change', () => {
           userService.updateSettings(this.session, { notifications: notifChk.checked });
-          this.showToast('Notification settings saved.', 'info');
+          this.showToast('Bildirim ayarları kaydedildi.', 'info');
         });
       }
 
@@ -2432,16 +2860,16 @@
       );
       document.getElementById('acc-info-role').textContent = `${user.role} (${profile.rankBadge})`;
       document.getElementById('acc-info-vip').textContent = user.vipStatus?.isVip
-        ? `👑 ACTIVE (${user.vipStatus.expiresAt || 'Lifetime'})`
-        : 'Standard Player';
-      document.getElementById('acc-info-license').textContent = `${user.licenseId} (${this.session.codeMasked || 'Verified'})`;
+        ? `👑 AKTİF (${user.vipStatus.expiresAt || 'Sınırsız'})`
+        : 'Standart Oyuncu';
+      document.getElementById('acc-info-license').textContent = `${user.licenseId} (${this.session.codeMasked || 'Doğrulandı'})`;
       document.getElementById('acc-info-pwd-status').textContent = user.hasPassword
-        ? '🔒 Password Hash Set (SHA-256)'
-        : 'No Password Set (License Auth)';
+        ? '🔒 Şifre Hash Ayarlı (SHA-256)'
+        : 'Şifre Ayarlanmadı (Lisans Girişi)';
     }
 
     // ==========================================
-    // SECTIONS 31-37: ADMIN PANEL — 100% ENGLISH ONLY (18 PAGES)
+    // BÖLÜM 26 & 27: ADMİN PANELİ — %100 TÜRKÇE (18 SAYFA)
     // ==========================================
     openAdminPanel() {
       try {
@@ -2468,19 +2896,31 @@
     }
 
     bindAdminPanel() {
+      const sidebarNav = document.getElementById('admin-sidebar-nav');
+      const openAdminDrawerBtn = document.getElementById('btn-open-admin-drawer');
+
+      if (openAdminDrawerBtn && sidebarNav) {
+        openAdminDrawerBtn.addEventListener('click', () => {
+          window.soundManager.playMenuOpen();
+          sidebarNav.classList.toggle('mobile-drawer-open');
+          sidebarNav.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      }
+
       document.querySelectorAll('[data-admin-tab]').forEach(btn => {
         btn.addEventListener('click', () => {
           window.soundManager.playClick();
           const tab = btn.getAttribute('data-admin-tab');
+          if (sidebarNav) sidebarNav.classList.remove('mobile-drawer-open');
           this.switchAdminTab(tab);
         });
       });
 
       const mobMoreBtn = document.getElementById('btn-admin-mob-more');
-      const sidebarNav = document.getElementById('admin-sidebar-nav');
       if (mobMoreBtn && sidebarNav) {
         mobMoreBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
+          window.soundManager.playMenuOpen();
+          sidebarNav.classList.toggle('mobile-drawer-open');
           sidebarNav.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
       }
@@ -2501,13 +2941,13 @@
         });
       }
 
-      // Users Search & Filter
+      // Oyuncu Arama & Filtre
       const searchUsers = document.getElementById('search-adm-users');
       const filterUsersRole = document.getElementById('filter-adm-users-role');
       if (searchUsers) searchUsers.addEventListener('input', () => this.renderAdminUsers());
       if (filterUsersRole) filterUsersRole.addEventListener('change', () => this.renderAdminUsers());
 
-      // Ranks Save Form (Section 6, 7, 34)
+      // Rütbe Kaydetme Formu
       const saveRankForm = document.getElementById('form-admin-save-rank');
       if (saveRankForm) {
         saveRankForm.addEventListener('submit', e => {
@@ -2515,10 +2955,10 @@
           try {
             const id = document.getElementById('adm-rank-id')?.value.trim();
             const name = document.getElementById('adm-rank-name')?.value.trim();
-            const badgeIcon = document.getElementById('adm-rank-icon')?.value.trim() || '⚡';
-            const badgeColor = document.getElementById('adm-rank-color')?.value.trim() || '#fbbf24';
+            const badge = document.getElementById('adm-rank-icon')?.value.trim() || '⚡';
+            const color = document.getElementById('adm-rank-color')?.value.trim() || '#fbbf24';
             const emeraldPrice = Number(document.getElementById('adm-rank-emerald-price')?.value || 0);
-            const tlPrice = Number(document.getElementById('adm-rank-tl-price')?.value || 0);
+            const price = Number(document.getElementById('adm-rank-tl-price')?.value || 0);
             const maxPartySize = Number(document.getElementById('adm-rank-party-limit')?.value || 4);
             const emeraldMultiplier = Number(document.getElementById('adm-rank-multiplier')?.value || 1.0);
             const supportPriority = document.getElementById('adm-rank-priority')?.value || 'HIGH';
@@ -2527,10 +2967,10 @@
             const saved = rankService.adminSaveRank(this.session, {
               id,
               name,
-              badgeIcon,
-              badgeColor,
+              badge,
+              color,
               emeraldPrice,
-              tlPrice,
+              price,
               permissions: {
                 canCreateParty,
                 canInvitePlayers: canCreateParty,
@@ -2547,17 +2987,17 @@
             });
 
             saveRankForm.reset();
-            window.soundManager.playCorrect();
-            this.showToast(`Rank "${saved.name}" (${saved.id}) saved!`, 'success');
+            window.soundManager.playSuccess();
+            this.showToast(`Rütbe "${saved.name}" (${saved.id}) kaydedildi!`, 'success');
             this.renderAdminAll();
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
       }
 
-      // Licenses Create & Filter
+      // Lisans Oluştur & Filtrele
       const genCodeBtn = document.getElementById('btn-adm-gen-code');
       const codeInp = document.getElementById('adm-lic-code');
       const roleSel = document.getElementById('adm-lic-role');
@@ -2589,11 +3029,11 @@
             });
 
             createLicForm.reset();
-            window.soundManager.playCorrect();
-            this.showToast(`License created: ${created.code} (${created.role})`, 'success');
+            window.soundManager.playSuccess();
+            this.showToast(`Lisans oluşturuldu: ${created.code} (${created.role})`, 'success');
             this.renderAdminAll();
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
@@ -2604,7 +3044,7 @@
       if (searchLic) searchLic.addEventListener('input', () => this.renderAdminLicenses());
       if (filterLic) filterLic.addEventListener('change', () => this.renderAdminLicenses());
 
-      // Parties Search & Filter
+      // Partiler Arama & Filtre
       const searchPrt = document.getElementById('search-adm-parties');
       const filterPrt = document.getElementById('filter-adm-parties');
       const quickPartyBtn = document.getElementById('btn-adm-quick-party');
@@ -2617,13 +3057,13 @@
         });
       }
 
-      // Admin Leaderboard Sort
+      // Admin Liderlik Sıralaması
       const admLbSort = document.getElementById('adm-lb-sort');
       if (admLbSort) {
         admLbSort.addEventListener('change', () => this.renderAdminLeaderboard());
       }
 
-      // Economy Balance Operations
+      // Ekonomi Bakiye İşlemleri
       document.querySelectorAll('[data-adm-econ-op]').forEach(btn => {
         btn.addEventListener('click', () => {
           window.soundManager.playClick();
@@ -2633,14 +3073,14 @@
           const reasonVal = (document.getElementById('adm-econ-reason')?.value || '').trim();
 
           if (!targetUser) {
-            this.showToast('Please enter a player username.', 'error');
+            this.showToast('Lütfen bir oyuncu kullanıcı adı girin.', 'error');
             return;
           }
 
           this.askConfirmation(
-            `💚 Admin Economy Action (${op})`,
-            `Are you sure you want to execute ${op} (${amountVal} Emeralds) for "${targetUser}"?`,
-            `Confirm ${op}`,
+            `💚 Admin Ekonomi İşlemi (${op})`,
+            `"${targetUser}" oyuncusu için ${op} (${amountVal} Zümrüt) işlemini uygulamak istediğinize emin misiniz?`,
+            `Onayla (${op})`,
             () => {
               try {
                 economyService.adminModifyBalance(this.session, {
@@ -2649,12 +3089,12 @@
                   amount: amountVal,
                   reason: reasonVal || `Admin ${op}`
                 });
-                window.soundManager.playCorrect();
-                this.showToast(`Updated Emerald balance for "${targetUser}" (${op}).`, 'success');
+                window.soundManager.playEmeraldGain();
+                this.showToast(`"${targetUser}" oyuncusunun Zümrüt bakiyesi güncellendi (${op}).`, 'success');
                 this.syncEconomyHeaderUI();
                 this.renderAdminAll();
               } catch (err) {
-                window.soundManager.playWrong();
+                window.soundManager.playError();
                 this.showToast(err.message, 'error');
               }
             }
@@ -2662,7 +3102,7 @@
         });
       });
 
-      // Economy Config Form
+      // Ekonomi Yapılandırma Formu
       const cfgForm = document.getElementById('form-admin-economy-config');
       if (cfgForm) {
         cfgForm.addEventListener('submit', e => {
@@ -2688,18 +3128,18 @@
               extraLife: newExtraLife
             });
 
-            window.soundManager.playCorrect();
-            this.showToast('Economy, VIP Bonus & Extra Life configuration saved!', 'success');
+            window.soundManager.playSuccess();
+            this.showToast('Ekonomi, VIP Bonus ve Ekstra Can ayarları kaydedildi!', 'success');
             this.syncEconomyHeaderUI();
             this.renderAdminAll();
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
       }
 
-      // Admin Create Shop Item
+      // Admin Mağaza Ürünü Oluştur
       const createShopForm = document.getElementById('form-admin-create-shop-item');
       if (createShopForm) {
         createShopForm.addEventListener('submit', e => {
@@ -2725,17 +3165,17 @@
             });
 
             createShopForm.reset();
-            window.soundManager.playCorrect();
-            this.showToast(`Shop item "${name}" created successfully!`, 'success');
+            window.soundManager.playSuccess();
+            this.showToast(`Mağaza ürünü "${name}" başarıyla oluşturuldu!`, 'success');
             this.renderAdminAll();
           } catch (err) {
-            window.soundManager.playWrong();
+            window.soundManager.playError();
             this.showToast(err.message, 'error');
           }
         });
       }
 
-      // Admin Rank Shop / VIP Assignment Form (Section 34)
+      // Admin VIP / Rütbe Atama Formu
       const grantVipForm = document.getElementById('form-admin-grant-vip');
       const revokeVipBtn = document.getElementById('btn-adm-revoke-vip');
       if (grantVipForm) {
@@ -2755,8 +3195,8 @@
               acc.isVip = targetRank !== 'PLAYER';
               if (acc.role !== 'ADMIN') acc.role = targetRank === 'PLAYER' ? 'PLAYER' : 'VIP';
             });
-            window.soundManager.playCorrect();
-            this.showToast(`👑 Rank ${targetRank} assigned to ${uname}!`, 'success');
+            window.soundManager.playRankUpgrade();
+            this.showToast(`👑 ${targetRank} rütbesi ${uname} oyuncusuna atandı!`, 'success');
             this.syncEconomyHeaderUI();
             this.renderAdminAll();
           } catch (err) {
@@ -2769,7 +3209,7 @@
           window.soundManager.playClick();
           const uname = document.getElementById('adm-vip-username')?.value.trim();
           if (!uname) {
-            this.showToast('Please enter a username.', 'error');
+            this.showToast('Lütfen bir kullanıcı adı girin.', 'error');
             return;
           }
           try {
@@ -2783,7 +3223,7 @@
               acc.isVip = false;
               if (acc.role === 'VIP') acc.role = 'PLAYER';
             });
-            this.showToast(`Reset ${uname} rank to PLAYER.`, 'info');
+            this.showToast(`${uname} oyuncusunun rütbesi PLAYER olarak sıfırlandı.`, 'info');
             this.syncEconomyHeaderUI();
             this.renderAdminAll();
           } catch (err) {
@@ -2792,33 +3232,33 @@
         });
       }
 
-      // Admin Payments Status Filter (Section 36)
+      // Admin Ödemeler Durum Filtresi
       const filterPayments = document.getElementById('filter-adm-payments-status');
       if (filterPayments) {
         filterPayments.addEventListener('change', () => this.renderAdminPaymentsTab());
       }
 
-      // Admin Suggestions Sort
+      // Admin Öneriler Sıralaması
       const admSugSort = document.getElementById('adm-suggestions-sort');
       if (admSugSort) {
         admSugSort.addEventListener('change', () => this.renderAdminSuggestions());
       }
 
-      // Admin Transactions Search
+      // Admin İşlemler Arama
       const searchTx = document.getElementById('search-adm-tx-history');
       if (searchTx) {
         searchTx.addEventListener('input', () => this.renderAdminTransactions());
       }
 
-      // Admin Create & Download Backup (Section 37)
+      // Admin Yedek Oluştur & İndir
       const createBackupBtn = document.getElementById('btn-adm-create-backup');
       if (createBackupBtn) {
         createBackupBtn.addEventListener('click', () => {
           window.soundManager.playClick();
           try {
-            const snap = backupService.createBackup(this.session, 'Manual Admin Backup');
-            window.soundManager.playCorrect();
-            this.showToast(`Backup ${snap.version} (${snap.id}) created!`, 'success');
+            const snap = backupService.createBackup(this.session, 'Manuel Admin Yedeği');
+            window.soundManager.playSuccess();
+            this.showToast(`Yedek ${snap.version} (${snap.id}) oluşturuldu!`, 'success');
             this.renderAdminBackups();
           } catch (err) {
             this.showToast(err.message, 'error');
@@ -2832,27 +3272,27 @@
           window.soundManager.playClick();
           try {
             const jsonStr = backupService.exportBackupJson(this.session, null);
-            this.downloadJsonFile(`minecraft-milyoner-backup-${Date.now()}.json`, jsonStr);
-            this.showToast('Backup JSON downloaded!', 'success');
+            this.downloadJsonFile(`minecraft-milyoner-yedek-${Date.now()}.json`, jsonStr);
+            this.showToast('Yedek JSON dosyası indirildi!', 'success');
           } catch (err) {
             this.showToast(err.message, 'error');
           }
         });
       }
 
-      // Clear Activity Logs
+      // Aktivite Günlüğünü Temizle
       const clearLogsBtn = document.getElementById('btn-adm-clear-logs');
       if (clearLogsBtn) {
         clearLogsBtn.addEventListener('click', () => {
           window.soundManager.playClick();
           this.askConfirmation(
-            '🗑️ Clear Activity Logs',
-            'Are you sure you want to clear all system activity logs?',
-            'Clear Logs',
+            '🗑️ Aktivite Günlüğünü Temizle',
+            'Tüm sistem aktivite kayıtlarını temizlemek istediğinize emin misiniz?',
+            'Günlüğü Temizle',
             () => {
               try {
                 activityService.clearAll(this.session);
-                this.showToast('Activity logs cleared.', 'info');
+                this.showToast('Aktivite günlüğü temizlendi.', 'info');
                 this.renderAdminAll();
               } catch (err) {
                 this.showToast(err.message, 'error');
@@ -2862,11 +3302,11 @@
         });
       }
 
-      // Settings Buttons
+      // Ayarlar Butonları
       const admAudioBtn = document.getElementById('btn-adm-open-audio');
       if (admAudioBtn) {
         admAudioBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
+          window.soundManager.playMenuOpen();
           if (window.mcQuizGame) window.mcQuizGame.openModal('modal-audio');
         });
       }
@@ -2911,22 +3351,27 @@
       this.renderAdminActivity();
     }
 
-    // 1. Admin Dashboard (Section 32: 12 Cards)
+    // 1. Admin Gösterge Paneli (12 Kart)
     renderAdminDashboard() {
       const users = userService.getAllUsers();
       const parties = partyService.listParties(this.session);
       const econProfiles = economyService.getAllProfiles();
       const tickets = supportService.listSupportTickets(this.session, false);
-      const bugs = supportService.listBugReports(this.session, false);
-      const sugs = supportService.listSuggestions(this.session, 'PRIORITY');
+      const bugs = bugService.listBugReports(this.session, false);
+      const sugs = suggestionService.listSuggestions(this.session, 'PRIORITY');
       const logs = activityService.getAll();
       const cfg = configService.getConfig();
-      const revMetrics = paymentService.getRevenueMetrics();
+      const revMetrics = paymentService.getRevenueMetrics
+        ? paymentService.getRevenueMetrics()
+        : { emeraldsSold: 0, totalRevenueTL: 0 };
 
       const totalUsers = users.length;
       const activeUsers = users.filter(u => u.status === 'ACTIVE').length;
       const vipUsers = users.filter(
-        u => ['VIP', 'VIP_PLUS'].includes(u.rank) || (u.vipStatus?.isVip && !['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(u.rank))
+        u =>
+          ['VIP', 'VIP_PLUS'].includes(u.rank) ||
+          (u.vipStatus?.isVip &&
+            !['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(u.rank))
       ).length;
       const mvpUsers = users.filter(u =>
         ['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(u.rank)
@@ -2936,10 +3381,12 @@
         ['WAITING', 'READY', 'STARTING', 'ACTIVE'].includes(p.status)
       ).length;
       const totalEmeralds = econProfiles.reduce((sum, p) => sum + (p.emeraldCoins || 0), 0);
-      const openTickets = tickets.filter(t => t.status === 'OPEN' || t.status === 'IN PROGRESS').length;
+      const openTickets = tickets.filter(
+        t => t.status === 'OPEN' || t.status === 'IN PROGRESS'
+      ).length;
       const openBugs = bugs.filter(b => b.status !== 'RESOLVED' && b.status !== 'CLOSED').length;
       const openSuggestions = sugs.filter(
-        s => s.status !== 'COMPLETED' && s.status !== 'DECLINED'
+        s => s.status !== 'COMPLETED' && s.status !== 'DECLINED' && s.status !== 'REJECTED'
       ).length;
 
       const setTxt = (id, v) => {
@@ -2953,16 +3400,16 @@
       setTxt('adm-card-mvp-users', mvpUsers);
       setTxt('adm-card-active-parties', activeParties);
       setTxt('adm-card-total-parties', totalParties);
-      setTxt('adm-card-total-emeralds', `${totalEmeralds.toLocaleString('en-US')} 💚`);
-      setTxt('adm-card-emeralds-sold', `${revMetrics.emeraldsSold.toLocaleString('en-US')} 💚`);
-      setTxt('adm-card-revenue', `${revMetrics.totalRevenueTL.toLocaleString('en-US')} TL`);
+      setTxt('adm-card-total-emeralds', `${totalEmeralds.toLocaleString('tr-TR')} 💚`);
+      setTxt('adm-card-emeralds-sold', `${(revMetrics.emeraldsSold || 0).toLocaleString('tr-TR')} 💚`);
+      setTxt('adm-card-revenue', `${(revMetrics.totalRevenueTL || 0).toLocaleString('tr-TR')} TL`);
       setTxt('adm-card-open-tickets', openTickets);
       setTxt('adm-card-open-bugs', openBugs);
       setTxt('adm-card-open-suggestions', openSuggestions);
 
       const stEx = document.getElementById('adm-status-extralife');
       if (stEx) {
-        stEx.textContent = cfg.extraLife.enabled ? 'ENABLED' : 'DISABLED';
+        stEx.textContent = cfg.extraLife.enabled ? 'AKTİF' : 'DEVRE DIŞI';
         stEx.className = cfg.extraLife.enabled ? 'emerald-text' : 'wrong-text';
       }
 
@@ -2971,7 +3418,7 @@
         const recent = logs.slice(0, 8);
         recentEl.innerHTML =
           recent.length === 0
-            ? '<div class="empty-state-box">No recent system activity.</div>'
+            ? '<div class="empty-state-box">Henüz sistem aktivitesi bulunmuyor.</div>'
             : recent
                 .map(
                   item => `
@@ -2985,7 +3432,7 @@
       }
     }
 
-    // 2. Admin Users Page (Section 33)
+    // 2. Admin Oyuncular Sayfası
     renderAdminUsers() {
       const wrap = document.getElementById('adm-users-list');
       if (!wrap) return;
@@ -3010,33 +3457,34 @@
       wrap.innerHTML = users
         .map(u => {
           const prof = economyService.getPlayerEconomyProfile(u.minecraftUsername);
-          const createdStr = new Date(u.createdAt).toLocaleDateString('en-US');
-          const loginStr = new Date(u.lastLogin).toLocaleString('en-US');
+          const createdStr = new Date(u.createdAt).toLocaleDateString('tr-TR');
+          const loginStr = new Date(u.lastLogin).toLocaleString('tr-TR');
           const rankLabel = u.rank || u.role || 'PLAYER';
 
           return `
             <div class="adm-row-card">
               <div class="adm-row-main">
                 <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                  <strong>⛏️ ${this.formatUsernameHtml(u.minecraftUsername, prof.rgbOwned && prof.rgbEnabled)}</strong>
+                  ${this.getAvatarImgHtml(u.minecraftUsername, 'mc-avatar-xs')}
+                  <strong>${this.formatUsernameHtml(u.minecraftUsername, prof.rgbOwned && prof.rgbEnabled)}</strong>
                   <span class="meta-muted">(${u.id})</span>
                   <span class="role-badge role-${u.role.toLowerCase()}">${this.escapeHtml(prof.rankBadge || rankLabel)}</span>
-                  <span class="status-pill status-${u.status === 'ACTIVE' ? 'ACTIVE' : 'REVOKED'}">${u.status}</span>
+                  <span class="status-pill status-${u.status === 'ACTIVE' ? 'ACTIVE' : 'REVOKED'}">${u.status === 'ACTIVE' ? 'AKTİF' : 'ASKIYA ALINDI'}</span>
                 </div>
                 <div class="adm-row-sub">
-                  <span>Rank: <strong class="gold-text">${this.escapeHtml(rankLabel)}</strong></span>
-                  <span>⭐ Points: <strong>${prof.totalPoints.toLocaleString('en-US')}</strong></span>
-                  <span>💚 Emeralds: <strong class="emerald-text">${prof.emeraldCoins.toLocaleString('en-US')}</strong></span>
-                  <span>🎮 Games: <strong>${prof.gamesPlayed} (${prof.gamesWon}W / ${prof.gamesLost}L)</strong></span>
-                  <span>📅 Created: ${createdStr}</span>
-                  <span>🕒 Last Login: ${loginStr}</span>
+                  <span>Rütbe: <strong class="gold-text">${this.escapeHtml(rankLabel)}</strong></span>
+                  <span>⭐ Puan: <strong>${prof.totalPoints.toLocaleString('tr-TR')}</strong></span>
+                  <span>💚 Zümrüt: <strong class="emerald-text">${prof.emeraldCoins.toLocaleString('tr-TR')}</strong></span>
+                  <span>🎮 Oyun: <strong>${prof.gamesPlayed} (${prof.gamesWon}G / ${prof.gamesLost}M)</strong></span>
+                  <span>📅 Kayıt: ${createdStr}</span>
+                  <span>🕒 Son Giriş: ${loginStr}</span>
                 </div>
               </div>
               <div class="adm-row-actions">
-                <button type="button" class="act-btn" data-usr-act="role" data-user="${this.escapeHtml(u.minecraftUsername)}" data-role="${u.rank || u.role}">Assign Rank / Role</button>
-                <button type="button" class="act-btn emerald" data-usr-act="econ" data-user="${this.escapeHtml(u.minecraftUsername)}">Edit Emeralds</button>
-                <button type="button" class="act-btn ${u.status === 'SUSPENDED' ? 'emerald' : 'danger'}" data-usr-act="suspend" data-user="${this.escapeHtml(u.minecraftUsername)}">${u.status === 'SUSPENDED' ? 'Unsuspend' : 'Suspend'}</button>
-                <button type="button" class="act-btn danger" data-usr-act="reset" data-user="${this.escapeHtml(u.minecraftUsername)}">Reset Account</button>
+                <button type="button" class="act-btn" data-usr-act="role" data-user="${this.escapeHtml(u.minecraftUsername)}" data-role="${u.rank || u.role}">Rütbe / Rol Ata</button>
+                <button type="button" class="act-btn emerald" data-usr-act="econ" data-user="${this.escapeHtml(u.minecraftUsername)}">Zümrüt Düzenle</button>
+                <button type="button" class="act-btn ${u.status === 'SUSPENDED' ? 'emerald' : 'danger'}" data-usr-act="suspend" data-user="${this.escapeHtml(u.minecraftUsername)}">${u.status === 'SUSPENDED' ? 'Askıyı Kaldır' : 'Askıya Al'}</button>
+                <button type="button" class="act-btn danger" data-usr-act="reset" data-user="${this.escapeHtml(u.minecraftUsername)}">Hesabı Sıfırla</button>
               </div>
             </div>
           `;
@@ -3052,7 +3500,7 @@
 
           if (act === 'role') {
             const nextRole = prompt(
-              `Enter new Rank or Role for ${uname} (PLAYER, VIP, VIP+, MVP, MVP+, ELITE, LEGEND, CHAMPION, MILLIONAIRE, or ADMIN):`,
+              `${uname} için yeni Rütbe veya Rol girin (PLAYER, VIP, VIP+, MVP, MVP+, ELITE, LEGEND, CHAMPION, MILLIONAIRE veya ADMIN):`,
               currRole === 'PLAYER' ? 'VIP' : 'MVP'
             );
             if (nextRole) {
@@ -3064,7 +3512,7 @@
                   acc.isVip = normRank !== 'PLAYER';
                   acc.role = normRank === 'ADMIN' ? 'ADMIN' : normRank === 'PLAYER' ? 'PLAYER' : 'VIP';
                 });
-                this.showToast(`Rank/Role for ${uname} updated to ${nextRole.toUpperCase()}`, 'success');
+                this.showToast(`${uname} rütbesi ${nextRole.toUpperCase()} olarak güncellendi`, 'success');
                 this.syncEconomyHeaderUI();
                 this.renderAdminAll();
               } catch (err) {
@@ -3081,20 +3529,20 @@
           } else if (act === 'suspend') {
             try {
               const updated = userService.adminToggleSuspendUser(this.session, uname);
-              this.showToast(`${uname} status is now ${updated.status}`, 'info');
+              this.showToast(`${uname} durumu: ${updated.status}`, 'info');
               this.renderAdminAll();
             } catch (err) {
               this.showToast(err.message, 'error');
             }
           } else if (act === 'reset') {
             this.askConfirmation(
-              '⚠️ Reset Account',
-              `Are you sure you want to reset Emeralds, Points, and Game statistics for "${uname}"?`,
-              'Reset Account',
+              '⚠️ Hesabı Sıfırla',
+              `"${uname}" oyuncusunun Zümrüt, Puan ve Oyun istatistiklerini sıfırlamak istediğinize emin misiniz?`,
+              'Hesabı Sıfırla',
               () => {
                 try {
                   userService.adminResetUserAccount(this.session, uname);
-                  this.showToast(`Account reset completed for ${uname}.`, 'info');
+                  this.showToast(`${uname} hesabı sıfırlandı.`, 'info');
                   this.syncEconomyHeaderUI();
                   this.renderAdminAll();
                 } catch (err) {
@@ -3107,38 +3555,42 @@
       });
     }
 
-    // 3. Admin Ranks Page (Section 6, 7, 34)
+    // 3. Admin Rütbeler Sayfası
     renderAdminRanksTab() {
       const wrap = document.getElementById('adm-ranks-list');
       if (!wrap) return;
-      const ranks = rankService.getAllRanks();
+      const ranks = rankService.getRanks ? rankService.getRanks(true) : [];
 
       wrap.innerHTML = ranks
         .map(r => {
           const p = r.permissions || {};
           const isProtected = ['PLAYER', 'VIP', 'ADMIN'].includes(r.id);
+          const icon = r.badge || r.badgeIcon || '👑';
+          const color = r.color || r.badgeColor || '#fbbf24';
+          const tlPrice = r.price ?? r.tlPrice ?? 0;
+          const prioTr = supportService.formatPriorityTR(p.supportPriority || 'NORMAL');
           return `
             <div class="adm-row-card">
               <div class="adm-row-main">
                 <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
-                  <span style="font-size:1.3rem;">${this.escapeHtml(r.badgeIcon)}</span>
-                  <span class="adm-code-title" style="color:${this.escapeHtml(r.badgeColor)};">${this.escapeHtml(r.name)} (${this.escapeHtml(r.id)})</span>
-                  <strong class="emerald-text">💚 ${(r.emeraldPrice || 0).toLocaleString('en-US')} Emeralds</strong>
-                  <strong class="gold-text">💳 ${(r.tlPrice || 0).toLocaleString('en-US')} TL</strong>
+                  <span style="font-size:1.3rem;">${this.escapeHtml(icon)}</span>
+                  <span class="adm-code-title" style="color:${this.escapeHtml(color)};">${this.escapeHtml(r.name)} (${this.escapeHtml(r.id)})</span>
+                  <strong class="emerald-text">💚 ${(r.emeraldPrice || 0).toLocaleString('tr-TR')} Zümrüt</strong>
+                  <strong class="gold-text">💳 ${tlPrice.toLocaleString('tr-TR')} TL</strong>
                 </div>
                 <div class="adm-row-sub">
-                  <span>Create Party: <strong>${p.canCreateParty ? 'YES' : 'NO'}</strong></span>
-                  <span>Max Party Size: <strong>${p.maxPartySize >= 999 ? 'Unlimited' : p.maxPartySize}</strong></span>
-                  <span>Emerald Multiplier: <strong>${p.emeraldMultiplier || 1}x</strong></span>
-                  <span>Priority: <strong>${p.supportPriority || 'NORMAL'}</strong></span>
-                  <span>RGB Included: <strong>${p.rgbName ? 'YES' : 'NO'}</strong></span>
+                  <span>Parti Oluşturma: <strong>${p.canCreateParty ? 'EVET' : 'HAYIR'}</strong></span>
+                  <span>Maks Parti Boyutu: <strong>${p.maxPartySize >= 999 ? 'Sınırsız' : p.maxPartySize}</strong></span>
+                  <span>Zümrüt Çarpanı: <strong>${p.emeraldMultiplier || 1}x</strong></span>
+                  <span>Öncelik: <strong>${this.escapeHtml(prioTr)}</strong></span>
+                  <span>RGB İsim: <strong>${p.rgbName ? 'EVET' : 'HAYIR'}</strong></span>
                 </div>
               </div>
               <div class="adm-row-actions">
-                <button type="button" class="act-btn emerald" data-rnk-act="edit" data-id="${this.escapeHtml(r.id)}">Load into Editor</button>
+                <button type="button" class="act-btn emerald" data-rnk-act="edit" data-id="${this.escapeHtml(r.id)}">Düzenleyiciye Yükle</button>
                 ${
                   !isProtected
-                    ? `<button type="button" class="act-btn danger" data-rnk-act="delete" data-id="${this.escapeHtml(r.id)}">Delete</button>`
+                    ? `<button type="button" class="act-btn danger" data-rnk-act="delete" data-id="${this.escapeHtml(r.id)}">Sil</button>`
                     : ''
                 }
               </div>
@@ -3158,19 +3610,19 @@
           if (act === 'edit') {
             document.getElementById('adm-rank-id').value = r.id;
             document.getElementById('adm-rank-name').value = r.name;
-            document.getElementById('adm-rank-icon').value = r.badgeIcon;
-            document.getElementById('adm-rank-color').value = r.badgeColor;
-            document.getElementById('adm-rank-emerald-price').value = r.emeraldPrice;
-            document.getElementById('adm-rank-tl-price').value = r.tlPrice;
-            document.getElementById('adm-rank-party-limit').value = r.permissions.maxPartySize;
-            document.getElementById('adm-rank-multiplier').value = r.permissions.emeraldMultiplier;
-            document.getElementById('adm-rank-priority').value = r.permissions.supportPriority;
-            document.getElementById('adm-rank-can-party').value = String(r.permissions.canCreateParty);
-            this.showToast(`Loaded rank ${r.name} into editor.`, 'info');
+            document.getElementById('adm-rank-icon').value = r.badge || r.badgeIcon || '👑';
+            document.getElementById('adm-rank-color').value = r.color || r.badgeColor || '#fbbf24';
+            document.getElementById('adm-rank-emerald-price').value = r.emeraldPrice || 0;
+            document.getElementById('adm-rank-tl-price').value = r.price ?? r.tlPrice ?? 0;
+            document.getElementById('adm-rank-party-limit').value = r.permissions?.maxPartySize || 4;
+            document.getElementById('adm-rank-multiplier').value = r.permissions?.emeraldMultiplier || 1;
+            document.getElementById('adm-rank-priority').value = r.permissions?.supportPriority || 'HIGH';
+            document.getElementById('adm-rank-can-party').value = String(Boolean(r.permissions?.canCreateParty));
+            this.showToast(`${r.name} rütbesi düzenleyiciye yüklendi.`, 'info');
           } else if (act === 'delete') {
             try {
               rankService.adminDeleteRank(this.session, id);
-              this.showToast(`Rank ${id} deleted.`, 'info');
+              this.showToast(`${id} rütbesi silindi.`, 'info');
               this.renderAdminAll();
             } catch (err) {
               this.showToast(err.message, 'error');
@@ -3180,7 +3632,7 @@
       });
     }
 
-    // 4. Admin Licenses Page
+    // 4. Admin Lisanslar Sayfası
     renderAdminLicenses() {
       const wrap = document.getElementById('adm-licenses-list');
       if (!wrap) return;
@@ -3202,21 +3654,21 @@
       }
 
       if (list.length === 0) {
-        wrap.innerHTML = '<div class="empty-state-box">No matching licenses found.</div>';
+        wrap.innerHTML = '<div class="empty-state-box">Eşleşen lisans bulunamadı.</div>';
         return;
       }
 
       wrap.innerHTML = list
         .map(l => {
-          const createdStr = new Date(l.createdAt).toLocaleDateString('en-US');
+          const createdStr = new Date(l.createdAt).toLocaleDateString('tr-TR');
           const expiresStr = l.expiresAt
-            ? new Date(l.expiresAt).toLocaleDateString('en-US')
-            : 'Never';
+            ? new Date(l.expiresAt).toLocaleDateString('tr-TR')
+            : 'Süresiz';
           const sessionInfo = l.currentSessionUser
-            ? `🟢 Active User: ${this.escapeHtml(l.currentSessionUser)}`
+            ? `🟢 Aktif Kullanıcı: ${this.escapeHtml(l.currentSessionUser)}`
             : l.assignedUsername
-            ? `👤 Assigned: ${this.escapeHtml(l.assignedUsername)}`
-            : 'Unassigned';
+            ? `👤 Atanan: ${this.escapeHtml(l.assignedUsername)}`
+            : 'Atanmamış';
 
           return `
             <div class="adm-row-card">
@@ -3228,25 +3680,25 @@
                   <strong>${this.escapeHtml(l.name)}</strong>
                 </div>
                 <div class="adm-row-sub">
-                  <span>📅 Created: ${createdStr}</span>
-                  <span>⏳ Expires: <strong>${expiresStr}</strong></span>
+                  <span>📅 Oluşturulma: ${createdStr}</span>
+                  <span>⏳ Bitiş: <strong>${expiresStr}</strong></span>
                   <span>${sessionInfo}</span>
                 </div>
               </div>
               <div class="adm-row-actions">
-                <button type="button" class="act-btn emerald" data-lic-action="copy" data-code="${this.escapeHtml(l.code)}">Copy</button>
-                <button type="button" class="act-btn" data-lic-action="role" data-id="${l.id}" data-role="${l.role}">Assign Role</button>
+                <button type="button" class="act-btn emerald" data-lic-action="copy" data-code="${this.escapeHtml(l.code)}">Kopyala</button>
+                <button type="button" class="act-btn" data-lic-action="role" data-id="${l.id}" data-role="${l.role}">Rol Ata</button>
                 ${
                   l.effectiveStatus === 'ACTIVE'
-                    ? `<button type="button" class="act-btn" data-lic-action="disable" data-id="${l.id}">Disable</button>`
-                    : `<button type="button" class="act-btn emerald" data-lic-action="activate" data-id="${l.id}">Reactivate</button>`
+                    ? `<button type="button" class="act-btn" data-lic-action="disable" data-id="${l.id}">Devre Dışı Bırak</button>`
+                    : `<button type="button" class="act-btn emerald" data-lic-action="activate" data-id="${l.id}">Aktifleştir</button>`
                 }
                 ${
                   l.effectiveStatus !== 'REVOKED'
-                    ? `<button type="button" class="act-btn danger" data-lic-action="revoke" data-id="${l.id}">Revoke</button>`
+                    ? `<button type="button" class="act-btn danger" data-lic-action="revoke" data-id="${l.id}">İptal Et</button>`
                     : ''
                 }
-                <button type="button" class="act-btn danger" data-lic-action="delete" data-id="${l.id}">Delete</button>
+                <button type="button" class="act-btn danger" data-lic-action="delete" data-id="${l.id}">Sil</button>
               </div>
             </div>
           `;
@@ -3262,44 +3714,44 @@
           const currRole = btn.getAttribute('data-role');
 
           if (action === 'copy') {
-            this.copyToClipboard(code, `License code copied: ${code}`);
+            this.copyToClipboard(code, `Lisans kodu kopyalandı: ${code}`);
           } else if (action === 'role') {
             const nextRole = prompt(
-              'Enter role for this license (PLAYER, VIP, or ADMIN):',
+              'Bu lisans için rol girin (PLAYER, VIP veya ADMIN):',
               currRole === 'PLAYER' ? 'VIP' : 'PLAYER'
             );
             if (nextRole) {
               licenseService.updateLicenseRoleOrExpiry(this.session, id, { role: nextRole });
-              this.showToast('License role updated.', 'success');
+              this.showToast('Lisans rolü güncellendi.', 'success');
               this.renderAdminAll();
             }
           } else if (action === 'disable') {
             licenseService.updateLicenseStatus(this.session, id, 'DISABLED');
-            this.showToast('License disabled.', 'info');
+            this.showToast('Lisans devre dışı bırakıldı.', 'info');
             this.renderAdminAll();
           } else if (action === 'activate') {
             licenseService.updateLicenseStatus(this.session, id, 'ACTIVE');
-            this.showToast('License reactivated.', 'success');
+            this.showToast('Lisans yeniden aktifleştirildi.', 'success');
             this.renderAdminAll();
           } else if (action === 'revoke') {
             this.askConfirmation(
-              '⚠️ Revoke License',
-              'Are you sure you want to revoke this license?',
-              'Revoke',
+              '⚠️ Lisansı İptal Et',
+              'Bu lisansı iptal etmek istediğinize emin misiniz?',
+              'İptal Et',
               () => {
                 licenseService.updateLicenseStatus(this.session, id, 'REVOKED');
-                this.showToast('License revoked.', 'info');
+                this.showToast('Lisans iptal edildi.', 'info');
                 this.renderAdminAll();
               }
             );
           } else if (action === 'delete') {
             this.askConfirmation(
-              '🗑️ Delete License',
-              'Are you sure you want to permanently delete this license?',
-              'Delete',
+              '🗑️ Lisansı Sil',
+              'Bu lisansı kalıcı olarak silmek istediğinize emin misiniz?',
+              'Sil',
               () => {
                 licenseService.deleteLicense(this.session, id);
-                this.showToast('License deleted.', 'info');
+                this.showToast('Lisans silindi.', 'info');
                 this.renderAdminAll();
               }
             );
@@ -3308,7 +3760,7 @@
       });
     }
 
-    // 5. Admin Parties Page
+    // 5. Admin Partiler Sayfası
     renderAdminParties() {
       const wrap = document.getElementById('adm-parties-list');
       if (!wrap) return;
@@ -3330,34 +3782,35 @@
       }
 
       if (parties.length === 0) {
-        wrap.innerHTML = '<div class="empty-state-box">No parties found.</div>';
+        wrap.innerHTML = '<div class="empty-state-box">Parti bulunamadı.</div>';
         return;
       }
 
       wrap.innerHTML = parties
         .map(p => {
           const joinedCount = p.participants.filter(pt => pt.joinStatus === 'JOINED').length;
+          const statusTr = PARTY_STATUS_LABELS_TR[p.status] || p.status;
           return `
             <div class="adm-row-card">
               <div class="adm-row-main">
                 <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
                   <span class="adm-code-title">${this.escapeHtml(p.name)}</span>
-                  <span class="status-pill status-${p.status}">${p.status}</span>
+                  <span class="status-pill status-${p.status}">${statusTr}</span>
                   <span class="meta-muted">(${p.id})</span>
                 </div>
                 <div class="adm-row-sub">
-                  <span>👑 Owner: <strong>${this.escapeHtml(p.organizer)}</strong></span>
-                  <span>🎮 Mode: <strong>${this.escapeHtml(p.gameMode || 'Classic')}</strong></span>
-                  <span>👥 Players: <strong>${joinedCount} / ${p.maxPlayers}</strong></span>
-                  <span>🎟️ Invite Code: <strong class="emerald-text">${p.inviteCode}</strong></span>
+                  <span>👑 Kurucu: <strong>${this.escapeHtml(p.organizer)}</strong></span>
+                  <span>🎮 Mod: <strong>${this.escapeHtml(p.gameMode || 'Klasik')}</strong></span>
+                  <span>👥 Oyuncular: <strong>${joinedCount} / ${p.maxPlayers}</strong></span>
+                  <span>🎟️ Davet Kodu: <strong class="emerald-text">${p.inviteCode}</strong></span>
                 </div>
               </div>
               <div class="adm-row-actions">
-                <button type="button" class="act-btn emerald" data-prt-action="inspect" data-id="${p.id}">Inspect / Manage</button>
-                <button type="button" class="act-btn emerald" data-prt-action="forcestart" data-id="${p.id}">Force Start</button>
-                <button type="button" class="act-btn" data-prt-action="transfer" data-id="${p.id}">Transfer Owner</button>
-                <button type="button" class="act-btn danger" data-prt-action="cancel" data-id="${p.id}">Cancel</button>
-                <button type="button" class="act-btn danger" data-prt-action="delete" data-id="${p.id}">Delete</button>
+                <button type="button" class="act-btn emerald" data-prt-action="inspect" data-id="${p.id}">İncele / Yönet</button>
+                <button type="button" class="act-btn emerald" data-prt-action="forcestart" data-id="${p.id}">Zorla Başlat</button>
+                <button type="button" class="act-btn" data-prt-action="transfer" data-id="${p.id}">Kurucu Devret</button>
+                <button type="button" class="act-btn danger" data-prt-action="cancel" data-id="${p.id}">İptal Et</button>
+                <button type="button" class="act-btn danger" data-prt-action="delete" data-id="${p.id}">Sil</button>
               </div>
             </div>
           `;
@@ -3375,14 +3828,14 @@
             this.openPartyLobby(false);
           } else if (act === 'forcestart') {
             partyService.setPartyStatus(this.session, id, 'ACTIVE');
-            this.showToast('Party force-started by Admin.', 'success');
+            this.showToast('Parti Admin tarafından başlatıldı.', 'success');
             this.renderAdminAll();
           } else if (act === 'transfer') {
-            const newOwner = prompt('Enter new party owner Minecraft username:');
+            const newOwner = prompt('Yeni parti kurucusunun Minecraft kullanıcı adını girin:');
             if (newOwner && newOwner.trim()) {
               try {
                 partyService.transferOwnership(this.session, id, newOwner.trim());
-                this.showToast(`Party ownership transferred to ${newOwner.trim()}.`, 'success');
+                this.showToast(`Parti kuruculuğu ${newOwner.trim()} oyuncusuna devredildi.`, 'success');
                 this.renderAdminAll();
               } catch (err) {
                 this.showToast(err.message, 'error');
@@ -3390,16 +3843,16 @@
             }
           } else if (act === 'cancel') {
             partyService.setPartyStatus(this.session, id, 'CANCELLED');
-            this.showToast('Party cancelled.', 'info');
+            this.showToast('Parti iptal edildi.', 'info');
             this.renderAdminAll();
           } else if (act === 'delete') {
             this.askConfirmation(
-              '🗑️ Delete Party',
-              'Are you sure you want to permanently delete this party?',
-              'Delete Party',
+              '🗑️ Partiyi Sil',
+              'Bu partiyi kalıcı olarak silmek istediğinize emin misiniz?',
+              'Partiyi Sil',
               () => {
                 partyService.deleteParty(this.session, id);
-                this.showToast('Party deleted.', 'info');
+                this.showToast('Parti silindi.', 'info');
                 this.renderAdminAll();
               }
             );
@@ -3408,7 +3861,7 @@
       });
     }
 
-    // 6. Admin Leaderboard Page
+    // 6. Admin Liderlik Tablosu Sayfası
     renderAdminLeaderboard() {
       const wrap = document.getElementById('adm-leaderboard-list');
       if (!wrap) return;
@@ -3422,14 +3875,15 @@
             <div class="adm-row-main">
               <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
                 <span class="gold-text" style="font-weight:800;">#${r.rank}</span>
-                <strong>⛏️ ${this.formatUsernameHtml(r.username, r.rgbOwned && r.rgbEnabled)}</strong>
+                ${this.getAvatarImgHtml(r.username, 'mc-avatar-xs')}
+                <strong>${this.formatUsernameHtml(r.username, r.rgbOwned && r.rgbEnabled)}</strong>
                 <span class="role-badge role-${r.role.toLowerCase()}">${r.rankBadge}</span>
               </div>
               <div class="adm-row-sub">
-                <span>⭐ Points: <strong>${r.totalPoints.toLocaleString('en-US')}</strong></span>
-                <span>💚 Emeralds: <strong class="emerald-text">${r.emeraldCoins.toLocaleString('en-US')}</strong></span>
-                <span>🏆 Wins: <strong>${r.gamesWon} (${r.winRate}%)</strong></span>
-                <span>🎮 Games Played: <strong>${r.gamesPlayed}</strong></span>
+                <span>⭐ Puan: <strong>${r.totalPoints.toLocaleString('tr-TR')}</strong></span>
+                <span>💚 Zümrüt: <strong class="emerald-text">${r.emeraldCoins.toLocaleString('tr-TR')}</strong></span>
+                <span>🏆 Galibiyet: <strong>${r.gamesWon} (%${r.winRate})</strong></span>
+                <span>🎮 Oyun: <strong>${r.gamesPlayed}</strong></span>
               </div>
             </div>
           </div>
@@ -3438,7 +3892,7 @@
         .join('');
     }
 
-    // 7. Admin Economy Page (Section 35)
+    // 7. Admin Ekonomi Sayfası
     renderAdminEconomyTab() {
       const cfg = configService.getConfig();
       const econProfiles = economyService.getAllProfiles();
@@ -3450,7 +3904,7 @@
             p =>
               `<option value="${this.escapeHtml(p.username)}">${this.escapeHtml(
                 p.username
-              )} (💚 ${p.emeraldCoins} Emeralds | ⭐ ${p.totalPoints} Pts)</option>`
+              )} (💚 ${p.emeraldCoins} Zümrüt | ⭐ ${p.totalPoints} Puan)</option>`
           )
           .join('');
       }
@@ -3470,31 +3924,36 @@
       setVal('cfg-extralife-max', cfg.extraLife.maxPerGame);
       setVal('cfg-extralife-enabled', String(cfg.extraLife.enabled));
 
-      // Render Emerald Purchase Packages (500 - 10,000 💚)
+      // Zümrüt Satın Alma Paketleri (500 - 10.000 💚)
       const pkgWrap = document.getElementById('adm-emerald-packages-list');
       if (pkgWrap) {
-        const pkgs = paymentService.getEmeraldPackages(true);
+        const pkgs = paymentService.listEmeraldPackages
+          ? paymentService.listEmeraldPackages(true)
+          : paymentService.getEmeraldPackages
+          ? paymentService.getEmeraldPackages(true)
+          : [];
         pkgWrap.innerHTML = pkgs
-          .map(
-            pkg => `
+          .map(pkg => {
+            const pkgTitle = pkg.name || pkg.title || `${pkg.emeralds} Zümrüt Paketi`;
+            return `
             <div class="adm-row-card">
               <div class="adm-row-main">
                 <div style="display:flex; align-items:center; gap:0.65rem; flex-wrap:wrap;">
                   <span>${this.escapeHtml(pkg.icon || '💚')}</span>
-                  <strong>${this.escapeHtml(pkg.title)}</strong>
-                  <span class="emerald-text">💚 ${pkg.emeralds.toLocaleString('en-US')} Emeralds</span>
-                  <span class="gold-text">💳 ${pkg.priceTL.toLocaleString('en-US')} TL</span>
+                  <strong>${this.escapeHtml(pkgTitle)}</strong>
+                  <span class="emerald-text">💚 ${pkg.emeralds.toLocaleString('tr-TR')} Zümrüt</span>
+                  <span class="gold-text">💳 ${pkg.priceTL.toLocaleString('tr-TR')} TL</span>
                   <span class="status-pill status-${pkg.enabled !== false ? 'ACTIVE' : 'DISABLED'}">${
-                    pkg.enabled !== false ? 'ENABLED' : 'DISABLED'
+                    pkg.enabled !== false ? 'AKTİF' : 'DEVRE DIŞI'
                   }</span>
                 </div>
               </div>
               <div class="adm-row-actions">
-                <button type="button" class="act-btn" data-pkg-edit="${this.escapeHtml(pkg.id)}">Edit TL Price</button>
+                <button type="button" class="act-btn" data-pkg-edit="${this.escapeHtml(pkg.id)}">TL Fiyatını Düzenle</button>
               </div>
             </div>
-          `
-          )
+          `;
+          })
           .join('');
 
         pkgWrap.querySelectorAll('[data-pkg-edit]').forEach(btn => {
@@ -3503,8 +3962,9 @@
             const id = btn.getAttribute('data-pkg-edit');
             const target = pkgs.find(x => x.id === id);
             if (!target) return;
+            const pkgTitle = target.name || target.title || id;
             const rawPrice = prompt(
-              `Enter TL price for ${target.title} (min 100 TL):`,
+              `${pkgTitle} için yeni TL fiyatı girin (min 100 TL):`,
               String(target.priceTL)
             );
             if (rawPrice !== null && rawPrice.trim() !== '') {
@@ -3513,7 +3973,7 @@
                   ...target,
                   priceTL: Number(rawPrice)
                 });
-                this.showToast(`Updated ${target.title} price to ${rawPrice} TL.`, 'success');
+                this.showToast(`${pkgTitle} fiyatı ${rawPrice} TL olarak güncellendi.`, 'success');
                 this.renderAdminAll();
               } catch (err) {
                 this.showToast(err.message, 'error');
@@ -3524,7 +3984,7 @@
       }
     }
 
-    // 8. Admin Emerald Shop Page
+    // 8. Admin Zümrüt Mağazası Sayfası
     renderAdminShopTab() {
       const shopWrap = document.getElementById('adm-shop-items-list');
       if (!shopWrap) return;
@@ -3539,21 +3999,21 @@
                 <span style="font-size:1.35rem;">${this.escapeHtml(item.icon)}</span>
                 <span class="adm-code-title">${this.escapeHtml(item.name)}</span>
                 <span class="status-pill status-${item.enabled ? 'ACTIVE' : 'DISABLED'}">${
-                  item.enabled ? 'ENABLED' : 'DISABLED'
+                  item.enabled ? 'AKTİF' : 'DEVRE DIŞI'
                 }</span>
                 <span class="role-badge role-player">${this.escapeHtml(item.category)}</span>
-                <strong class="emerald-text">💚 ${item.price.toLocaleString('en-US')} Emeralds</strong>
+                <strong class="emerald-text">💚 ${item.price.toLocaleString('tr-TR')} Zümrüt</strong>
               </div>
               <div class="adm-row-sub">
-                <span>Effect: <strong>${item.effectType}</strong></span>
-                <span>Required Role: <strong>${item.requiredRole}</strong></span>
+                <span>Etki: <strong>${item.effectType}</strong></span>
+                <span>Gerekli Rol: <strong>${item.requiredRole}</strong></span>
                 <span>Limit: <strong>${item.purchaseLimit}</strong></span>
                 <span>"${this.escapeHtml(item.description)}"</span>
               </div>
             </div>
             <div class="adm-row-actions">
-              <button type="button" class="act-btn" data-shop-adm="price" data-id="${this.escapeHtml(item.id)}">Change Price</button>
-              <button type="button" class="act-btn ${item.enabled ? 'danger' : 'emerald'}" data-shop-adm="toggle" data-id="${this.escapeHtml(item.id)}">${item.enabled ? 'Disable' : 'Enable'}</button>
+              <button type="button" class="act-btn" data-shop-adm="price" data-id="${this.escapeHtml(item.id)}">Fiyat Değiştir</button>
+              <button type="button" class="act-btn ${item.enabled ? 'danger' : 'emerald'}" data-shop-adm="toggle" data-id="${this.escapeHtml(item.id)}">${item.enabled ? 'Devre Dışı Bırak' : 'Aktifleştir'}</button>
             </div>
           </div>
         `
@@ -3575,13 +4035,13 @@
               enabled: !target.enabled
             });
             this.showToast(
-              `${target.name} is now ${!target.enabled ? 'ENABLED' : 'DISABLED'}.`,
+              `${target.name} durumu: ${!target.enabled ? 'AKTİF' : 'DEVRE DIŞI'}.`,
               'info'
             );
             this.renderAdminAll();
           } else if (act === 'price') {
             const rawNewPrice = prompt(
-              `Enter new Emerald Coin price for "${target.name}":`,
+              `"${target.name}" için yeni Zümrüt Coin fiyatını girin:`,
               String(target.price)
             );
             if (rawNewPrice !== null && rawNewPrice.trim() !== '') {
@@ -3591,7 +4051,7 @@
                   ...target,
                   price: parsed
                 });
-                this.showToast(`${target.name} price updated to ${parsed} Emeralds.`, 'success');
+                this.showToast(`${target.name} fiyatı ${parsed} Zümrüt olarak güncellendi.`, 'success');
                 this.renderAdminAll();
               }
             }
@@ -3600,18 +4060,24 @@
       });
     }
 
-    // 9. Admin Rank Shop & VIP Management Page (Section 34)
+    // 9. Admin VIP ve Rütbe Yönetimi Sayfası
     renderAdminVipTab() {
       const vipWrap = document.getElementById('adm-vip-users-list');
       if (!vipWrap) return;
 
       const rankedUsers = userService
         .getAllUsers()
-        .filter(u => u.role === 'VIP' || u.role === 'ADMIN' || u.vipStatus?.isVip || (u.rank && u.rank !== 'PLAYER'));
+        .filter(
+          u =>
+            u.role === 'VIP' ||
+            u.role === 'ADMIN' ||
+            u.vipStatus?.isVip ||
+            (u.rank && u.rank !== 'PLAYER')
+        );
 
       vipWrap.innerHTML =
         rankedUsers.length === 0
-          ? '<div class="empty-state-box">No ranked members found.</div>'
+          ? '<div class="empty-state-box">Rütbeli üye bulunamadı.</div>'
           : rankedUsers
               .map(u => {
                 const prof = economyService.getPlayerEconomyProfile(u.minecraftUsername);
@@ -3619,13 +4085,14 @@
                   <div class="adm-row-card">
                     <div class="adm-row-main">
                       <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                        ${this.getAvatarImgHtml(u.minecraftUsername, 'mc-avatar-xs')}
                         <strong>👑 ${this.escapeHtml(u.minecraftUsername)}</strong>
                         <span class="role-badge role-${u.role.toLowerCase()}">${this.escapeHtml(prof.rankBadge || u.rank || u.role)}</span>
                       </div>
                       <div class="adm-row-sub">
-                        <span>Rank Tier: <strong>${this.escapeHtml(u.rank || u.vipStatus?.tier || 'VIP')}</strong></span>
-                        <span>Max Party Size: <strong>${prof.permissions?.maxPartySize || 4}</strong></span>
-                        <span>Expires: <strong>${u.rankExpiration || u.vipStatus?.expiresAt || 'Lifetime'}</strong></span>
+                        <span>Rütbe Kademesi: <strong>${this.escapeHtml(u.rank || u.vipStatus?.tier || 'VIP')}</strong></span>
+                        <span>Maks Parti Boyutu: <strong>${prof.permissions?.maxPartySize || 4}</strong></span>
+                        <span>Bitiş: <strong>${u.rankExpiration || u.vipStatus?.expiresAt || 'Sınırsız'}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -3634,7 +4101,7 @@
               .join('');
     }
 
-    // 10. Admin Payments Page (Section 25, 36)
+    // 10. Admin Ödemeler Sayfası
     renderAdminPaymentsTab() {
       const payWrap = document.getElementById('adm-vip-payments-list');
       if (!payWrap) return;
@@ -3647,7 +4114,7 @@
 
       if (payments.length === 0) {
         payWrap.innerHTML =
-          '<div class="empty-state-box">No Stripe payment sessions recorded for this filter.</div>';
+          '<div class="empty-state-box">Bu filtre için kayıtlı Stripe ödeme oturumu bulunamadı.</div>';
         return;
       }
 
@@ -3669,16 +4136,16 @@
                   <strong class="gold-text">${p.amount} ${this.escapeHtml(p.currency)}</strong>
                 </div>
                 <div class="adm-row-sub">
-                  <span>Item: <strong>${this.escapeHtml(p.title)}</strong></span>
-                  <span>Type: <strong>${this.escapeHtml(p.type || 'EMERALDS')}</strong></span>
-                  ${p.webhookEventId ? `<span>Webhook Event: <code>${this.escapeHtml(p.webhookEventId)}</code></span>` : ''}
-                  <span>Created: ${new Date(p.createdAt).toLocaleString('en-US')}</span>
+                  <span>Ürün: <strong>${this.escapeHtml(p.title)}</strong></span>
+                  <span>Tür: <strong>${this.escapeHtml(p.type || 'EMERALDS')}</strong></span>
+                  ${p.webhookEventId ? `<span>Webhook Olayı: <code>${this.escapeHtml(p.webhookEventId)}</code></span>` : ''}
+                  <span>Tarih: ${new Date(p.createdAt).toLocaleString('tr-TR')}</span>
                 </div>
               </div>
               <div class="adm-row-actions">
                 ${
                   p.status === 'PAID'
-                    ? `<button type="button" class="act-btn danger" data-pay-act="refund" data-id="${this.escapeHtml(p.id)}">Refund</button>`
+                    ? `<button type="button" class="act-btn danger" data-pay-act="refund" data-id="${this.escapeHtml(p.id)}">İade Et</button>`
                     : ''
                 }
               </div>
@@ -3692,13 +4159,13 @@
           window.soundManager.playClick();
           const id = btn.getAttribute('data-id');
           this.askConfirmation(
-            '💸 Refund Payment',
-            `Are you sure you want to mark payment ${id} as REFUNDED and reverse credited Emeralds?`,
-            'Confirm Refund',
+            '💸 Ödemeyi İade Et',
+            `${id} numaralı ödemeyi İADE EDİLDİ olarak işaretlemek ve tanımlanan Zümrütleri geri almak istediğinize emin misiniz?`,
+            'İadeyi Onayla',
             () => {
               try {
-                paymentService.adminRefundPayment(this.session, id, 'Admin Panel Refund');
-                this.showToast(`Payment ${id} refunded.`, 'info');
+                paymentService.adminRefundPayment(this.session, id, 'Admin Paneli İadesi');
+                this.showToast(`Ödeme ${id} iade edildi.`, 'info');
                 this.syncEconomyHeaderUI();
                 this.renderAdminAll();
               } catch (err) {
@@ -3710,7 +4177,7 @@
       });
     }
 
-    // 11. Admin Support Tickets Page (Section 28 & 30)
+    // 11. Admin Destek Talepleri Sayfası
     renderAdminSupport() {
       const wrap = document.getElementById('adm-support-list');
       if (!wrap) return;
@@ -3718,33 +4185,34 @@
 
       wrap.innerHTML =
         tickets.length === 0
-          ? '<div class="empty-state-box">No support tickets found.</div>'
+          ? '<div class="empty-state-box">Destek talebi bulunamadı.</div>'
           : tickets
-              .map(
-                t => `
+              .map(t => {
+                const prioTr = supportService.formatPriorityTR(t.priority);
+                return `
               <div class="adm-row-card">
                 <div class="adm-row-main">
                   <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${t.priority.replace(/\s+/g, '_')}">${this.escapeHtml(t.priority)} PRIORITY</span>
+                    <span class="priority-pill priority-${t.priority.replace(/\s+/g, '_')}">${prioTr} ÖNCELİK</span>
                     <strong>${this.escapeHtml(t.title)}</strong>
                     <span class="status-pill status-${t.status === 'RESOLVED' ? 'ACTIVE' : 'WAITING'}">${t.status}</span>
                   </div>
                   <div class="adm-row-sub">
-                    <span>Ticket ID: <strong>${t.id}</strong></span>
-                    <span>User: <strong>${this.escapeHtml(t.username)} (${this.escapeHtml(t.rank || t.role)})</strong></span>
-                    <span>Category: <strong>${this.escapeHtml(t.category)}</strong></span>
-                    <span>Created: ${new Date(t.createdAt).toLocaleString('en-US')}</span>
+                    <span>Talep ID: <strong>${t.id}</strong></span>
+                    <span>Oyuncu: <strong>${this.escapeHtml(t.username)} (${this.escapeHtml(t.rank || t.role)})</strong></span>
+                    <span>Kategori: <strong>${this.escapeHtml(t.category)}</strong></span>
+                    <span>Tarih: ${new Date(t.createdAt).toLocaleString('tr-TR')}</span>
                   </div>
                   <p class="panel-sec-desc" style="margin-top:0.3rem;">${this.escapeHtml(t.description)}</p>
-                  ${t.adminReply ? `<div class="emerald-text" style="font-size:0.84rem; margin-top:0.2rem;">Reply: ${this.escapeHtml(t.adminReply)}</div>` : ''}
+                  ${t.adminReply ? `<div class="emerald-text" style="font-size:0.84rem; margin-top:0.2rem;">Yanıt: ${this.escapeHtml(t.adminReply)}</div>` : ''}
                 </div>
                 <div class="adm-row-actions">
-                  <button type="button" class="act-btn emerald" data-adm-sup="reply" data-id="${t.id}">Reply &amp; Resolve</button>
-                  <button type="button" class="act-btn" data-adm-sup="close" data-id="${t.id}">Close</button>
+                  <button type="button" class="act-btn emerald" data-adm-sup="reply" data-id="${t.id}">Yanıtla ve Çöz</button>
+                  <button type="button" class="act-btn" data-adm-sup="close" data-id="${t.id}">Kapat</button>
                 </div>
               </div>
-            `
-              )
+            `;
+              })
               .join('');
 
       wrap.querySelectorAll('[data-adm-sup]').forEach(btn => {
@@ -3753,50 +4221,57 @@
           const act = btn.getAttribute('data-adm-sup');
           const id = btn.getAttribute('data-id');
           if (act === 'reply') {
-            const reply = prompt('Enter Admin reply for this support ticket:');
+            const reply = prompt('Bu destek talebi için Admin yanıtını girin:');
             if (reply !== null) {
               supportService.adminUpdateSupportTicket(this.session, id, {
                 status: 'RESOLVED',
-                adminReply: reply.trim() || 'Resolved by Admin.'
+                adminReply: reply.trim() || 'Admin tarafından çözüldü.'
               });
-              this.showToast(`Ticket ${id} resolved.`, 'success');
+              this.showToast(`Talep ${id} çözüldü olarak işaretlendi.`, 'success');
               this.renderAdminAll();
             }
           } else if (act === 'close') {
             supportService.adminUpdateSupportTicket(this.session, id, { status: 'CLOSED' });
-            this.showToast(`Ticket ${id} closed.`, 'info');
+            this.showToast(`Talep ${id} kapatıldı.`, 'info');
             this.renderAdminAll();
           }
         });
       });
     }
 
-    // 12. Admin Bug Reports Page (Section 28 & 30)
+    // 12. Admin Hata Bildirimleri Sayfası
     renderAdminBugs() {
       const wrap = document.getElementById('adm-bugs-list');
       if (!wrap) return;
-      const bugs = supportService.listBugReports(this.session, false);
-      const statuses = ['OPEN', 'IN PROGRESS', 'WAITING FOR USER', 'RESOLVED', 'CLOSED'];
+      const bugs = bugService.listBugReports(this.session, false);
+      const statuses = [
+        { val: 'OPEN', label: 'AÇIK' },
+        { val: 'IN PROGRESS', label: 'İNCELENİYOR' },
+        { val: 'WAITING FOR USER', label: 'OYUNCU BEKLENİYOR' },
+        { val: 'RESOLVED', label: 'ÇÖZÜLDÜ' },
+        { val: 'CLOSED', label: 'KAPATILDI' }
+      ];
 
       wrap.innerHTML =
         bugs.length === 0
-          ? '<div class="empty-state-box">No bug reports found.</div>'
+          ? '<div class="empty-state-box">Hata bildirimi bulunamadı.</div>'
           : bugs
-              .map(
-                b => `
+              .map(b => {
+                const prioTr = supportService.formatPriorityTR(b.priority);
+                return `
               <div class="adm-row-card">
                 <div class="adm-row-main">
                   <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${b.priority.replace(/\s+/g, '_')}">${this.escapeHtml(b.priority)} PRIORITY</span>
+                    <span class="priority-pill priority-${b.priority.replace(/\s+/g, '_')}">${prioTr} ÖNCELİK</span>
                     <strong>${this.escapeHtml(b.title)}</strong>
                     <span class="status-pill status-WAITING">${b.status}</span>
                   </div>
                   <div class="adm-row-sub">
                     <span>ID: <strong>${b.id}</strong></span>
-                    <span>User: <strong>${this.escapeHtml(b.username)} (${this.escapeHtml(b.rank || (b.isVip ? 'VIP' : 'PLAYER'))})</strong></span>
-                    <span>Category: <strong>${this.escapeHtml(b.category)}</strong></span>
-                    ${b.relatedParty ? `<span>Party: <strong>${this.escapeHtml(b.relatedParty)}</strong></span>` : ''}
-                    <span>Created: ${new Date(b.createdAt).toLocaleString('en-US')}</span>
+                    <span>Oyuncu: <strong>${this.escapeHtml(b.username)} (${this.escapeHtml(b.rank || (b.isVip ? 'VIP' : 'PLAYER'))})</strong></span>
+                    <span>Kategori: <strong>${this.escapeHtml(b.category)}</strong></span>
+                    ${b.relatedParty ? `<span>Parti: <strong>${this.escapeHtml(b.relatedParty)}</strong></span>` : ''}
+                    <span>Tarih: ${new Date(b.createdAt).toLocaleString('tr-TR')}</span>
                   </div>
                   <p class="panel-sec-desc" style="margin-top:0.3rem;">${this.escapeHtml(b.description)}</p>
                 </div>
@@ -3804,53 +4279,63 @@
                   <select class="mc-select mc-select-xs adm-bug-status-sel" data-bug-id="${b.id}">
                     ${statuses
                       .map(
-                        st => `<option value="${st}" ${b.status === st ? 'selected' : ''}>${st}</option>`
+                        st => `<option value="${st.val}" ${b.status === st.val ? 'selected' : ''}>${st.label}</option>`
                       )
                       .join('')}
                   </select>
                 </div>
               </div>
-            `
-              )
+            `;
+              })
               .join('');
 
       wrap.querySelectorAll('.adm-bug-status-sel').forEach(sel => {
         sel.addEventListener('change', () => {
           const id = sel.getAttribute('data-bug-id');
-          supportService.adminUpdateBugStatus(this.session, id, sel.value);
-          this.showToast(`Bug ${id} status updated to ${sel.value}.`, 'success');
+          bugService.adminUpdateBugStatus(this.session, id, sel.value);
+          this.showToast(`Hata bildirimi ${id} durumu güncellendi: ${sel.value}.`, 'success');
           this.renderAdminAll();
         });
       });
     }
 
-    // 13. Admin Suggestions Page (Section 29 & 30)
+    // 13. Admin Öneriler Sayfası (Bölüm 24: İnceleniyor, Planlandı, Geliştiriliyor, Tamamlandı, Reddedildi)
     renderAdminSuggestions() {
       const wrap = document.getElementById('adm-suggestions-list');
       if (!wrap) return;
       const sortBy = document.getElementById('adm-suggestions-sort')?.value || 'PRIORITY';
-      const sugs = supportService.listSuggestions(this.session, sortBy);
-      const statuses = ['REVIEWING', 'PLANNED', 'IN DEVELOPMENT', 'COMPLETED', 'DECLINED'];
+      const sugs = suggestionService.listSuggestions(this.session, sortBy);
+      const statuses = [
+        { val: 'REVIEWING', label: 'İnceleniyor' },
+        { val: 'PLANNED', label: 'Planlandı' },
+        { val: 'IN DEVELOPMENT', label: 'Geliştiriliyor' },
+        { val: 'COMPLETED', label: 'Tamamlandı' },
+        { val: 'DECLINED', label: 'Reddedildi' }
+      ];
 
       wrap.innerHTML =
         sugs.length === 0
-          ? '<div class="empty-state-box">No suggestions found.</div>'
+          ? '<div class="empty-state-box">Öneri bulunamadı.</div>'
           : sugs
-              .map(
-                s => `
+              .map(s => {
+                const prioTr = supportService.formatPriorityTR(s.priority);
+                const statusTr = supportService.formatSuggestionStatusTR
+                  ? supportService.formatSuggestionStatusTR(s.status)
+                  : s.status;
+                return `
               <div class="adm-row-card">
                 <div class="adm-row-main">
                   <div style="display:flex; gap:0.55rem; align-items:center; flex-wrap:wrap;">
-                    <span class="priority-pill priority-${s.priority.replace(/\s+/g, '_')}">${this.escapeHtml(s.priority)} PRIORITY</span>
+                    <span class="priority-pill priority-${s.priority.replace(/\s+/g, '_')}">${prioTr} ÖNCELİK</span>
                     <strong>${this.escapeHtml(s.title)}</strong>
-                    <span class="status-pill status-ACTIVE">${s.status}</span>
-                    <span class="gold-text">👍 ${s.votes || 0} Votes</span>
+                    <span class="status-pill status-ACTIVE">${this.escapeHtml(statusTr)}</span>
+                    <span class="gold-text">👍 ${s.votes || 0} Oy</span>
                   </div>
                   <div class="adm-row-sub">
                     <span>ID: <strong>${s.id}</strong></span>
-                    <span>User: <strong>${this.escapeHtml(s.username)} (${this.escapeHtml(s.rank || s.role)})</strong></span>
-                    <span>Category: <strong>${this.escapeHtml(s.category)}</strong></span>
-                    <span>Created: ${new Date(s.createdAt).toLocaleString('en-US')}</span>
+                    <span>Oyuncu: <strong>${this.escapeHtml(s.username)} (${this.escapeHtml(s.rank || s.role)})</strong></span>
+                    <span>Kategori: <strong>${this.escapeHtml(s.category)}</strong></span>
+                    <span>Tarih: ${new Date(s.createdAt).toLocaleString('tr-TR')}</span>
                   </div>
                   <p class="panel-sec-desc" style="margin-top:0.3rem;">${this.escapeHtml(s.description)}</p>
                 </div>
@@ -3858,27 +4343,30 @@
                   <select class="mc-select mc-select-xs adm-sug-status-sel" data-sug-id="${s.id}">
                     ${statuses
                       .map(
-                        st => `<option value="${st}" ${s.status === st ? 'selected' : ''}>${st}</option>`
+                        st => `<option value="${st.val}" ${s.status === st.val ? 'selected' : ''}>${st.label}</option>`
                       )
                       .join('')}
                   </select>
                 </div>
               </div>
-            `
-              )
+            `;
+              })
               .join('');
 
       wrap.querySelectorAll('.adm-sug-status-sel').forEach(sel => {
         sel.addEventListener('change', () => {
           const id = sel.getAttribute('data-sug-id');
-          supportService.adminUpdateSuggestionStatus(this.session, id, sel.value);
-          this.showToast(`Suggestion ${id} status updated to ${sel.value}.`, 'success');
+          suggestionService.adminUpdateSuggestionStatus(this.session, id, sel.value);
+          const statusTr = supportService.formatSuggestionStatusTR
+            ? supportService.formatSuggestionStatusTR(sel.value)
+            : sel.value;
+          this.showToast(`Öneri ${id} durumu güncellendi: ${statusTr}.`, 'success');
           this.renderAdminAll();
         });
       });
     }
 
-    // 14. Admin Transactions Page
+    // 14. Admin İşlemler Sayfası
     renderAdminTransactions() {
       const txListEl = document.getElementById('adm-tx-history-list');
       if (!txListEl) return;
@@ -3895,7 +4383,7 @@
 
       txListEl.innerHTML =
         allTxs.length === 0
-          ? '<div class="empty-state-box">No transactions found.</div>'
+          ? '<div class="empty-state-box">İşlem kaydı bulunamadı.</div>'
           : allTxs
               .slice(0, 100)
               .map(tx => {
@@ -3903,15 +4391,15 @@
                 const sign = tx.amount > 0 ? '+' : '';
                 const amtStr =
                   tx.amount === 0
-                    ? '❤️ 1 Extra Life Used'
-                    : `${sign}${tx.amount.toLocaleString('en-US')} Emeralds`;
+                    ? '❤️ 1 Ekstra Can Kullanıldı'
+                    : `${sign}${tx.amount.toLocaleString('tr-TR')} Zümrüt`;
                 return `
                   <div class="tx-row ${isNeg ? 'tx-negative' : ''}">
                     <div class="tx-main">
                       <span class="tx-reason"><strong>⛏️ ${this.escapeHtml(
                         tx.username
                       )}</strong> — ${this.escapeHtml(tx.reason)} <span class="meta-muted">[${tx.id}]</span></span>
-                      <span class="tx-meta">[${tx.dateFormatted}] • Prev Balance: 💚 ${Number(tx.previousBalance || 0).toLocaleString('en-US')} → New Balance: 💚 ${tx.balanceAfter.toLocaleString('en-US')} • Source: ${this.escapeHtml(tx.source || 'System')}</span>
+                      <span class="tx-meta">[${tx.dateFormatted}] • Önceki Bakiye: 💚 ${Number(tx.previousBalance || 0).toLocaleString('tr-TR')} → Yeni Bakiye: 💚 ${tx.balanceAfter.toLocaleString('tr-TR')} • Kaynak: ${this.escapeHtml(tx.source || 'Sistem')}</span>
                     </div>
                     <div class="tx-amount ${isNeg ? 'wrong-text' : 'emerald-text'}">${amtStr}</div>
                   </div>
@@ -3920,7 +4408,7 @@
               .join('');
     }
 
-    // 15. Admin Achievements Page
+    // 15. Admin Başarımlar Sayfası
     renderAdminAchievements() {
       const wrap = document.getElementById('adm-achievements-list');
       if (!wrap) return;
@@ -3946,7 +4434,7 @@
         .join('');
     }
 
-    // 16. Admin Backups Page (Section 37)
+    // 16. Admin Yedekler Sayfası
     renderAdminBackups() {
       const wrap = document.getElementById('adm-backups-list');
       if (!wrap) return;
@@ -3963,19 +4451,19 @@
                 <strong>${this.escapeHtml(b.label)}</strong>
               </div>
               <div class="adm-row-sub">
-                <span>📅 Created: ${new Date(b.createdAt).toLocaleString('en-US')}</span>
+                <span>📅 Tarih: ${new Date(b.createdAt).toLocaleString('tr-TR')}</span>
                 <span>📁 <code>backup/users/</code> (${b.counts.users})</span>
                 <span>📁 <code>backup/parties/</code> (${b.counts.parties})</span>
                 <span>📁 <code>backup/licenses/</code> (${b.counts.licenses})</span>
                 <span>📁 <code>backup/transactions/</code> (${b.counts.transactions})</span>
                 <span>📁 <code>backup/payments/</code> (${b.counts.payments || 0})</span>
-                <span>📁 <code>backup/settings/</code> (Ready)</span>
+                <span>📁 <code>backup/settings/</code> (Hazır)</span>
               </div>
             </div>
             <div class="adm-row-actions">
-              <button type="button" class="act-btn emerald" data-bkp-act="download" data-id="${b.id}">⬇️ Download Backup</button>
-              <button type="button" class="act-btn" data-bkp-act="export" data-id="${b.id}">Copy JSON</button>
-              <button type="button" class="act-btn danger" data-bkp-act="restore" data-id="${b.id}">Restore Snapshot</button>
+              <button type="button" class="act-btn emerald" data-bkp-act="download" data-id="${b.id}">⬇️ Yedeği İndir</button>
+              <button type="button" class="act-btn" data-bkp-act="export" data-id="${b.id}">JSON Kopyala</button>
+              <button type="button" class="act-btn danger" data-bkp-act="restore" data-id="${b.id}">Yedeği Geri Yükle</button>
             </div>
           </div>
         `
@@ -3993,20 +4481,20 @@
           if (act === 'download') {
             const jsonStr = JSON.stringify(target, null, 2);
             this.downloadJsonFile(`minecraft-milyoner-${target.id}.json`, jsonStr);
-            this.showToast(`Downloaded ${target.id}.json!`, 'success');
+            this.showToast(`${target.id}.json indirildi!`, 'success');
           } else if (act === 'export') {
             this.copyToClipboard(
               JSON.stringify(target, null, 2),
-              `Backup ${target.id} JSON copied to clipboard!`
+              `Yedek ${target.id} JSON panoya kopyalandı!`
             );
           } else if (act === 'restore') {
             this.askConfirmation(
-              '💾 Restore Backup Snapshot',
-              `Are you sure you want to restore system state to ${target.id} (${target.version})?`,
-              'Restore Backup',
+              '💾 Yedeği Geri Yükle',
+              `Sistem durumunu ${target.id} (${target.version}) yedeğine geri yüklemek istediğinize emin misiniz?`,
+              'Geri Yükle',
               () => {
                 backupService.restoreBackup(this.session, id);
-                this.showToast(`Restored backup ${target.id}.`, 'success');
+                this.showToast(`Yedek ${target.id} başarıyla geri yüklendi.`, 'success');
                 this.renderAdminAll();
               }
             );
@@ -4015,14 +4503,14 @@
       });
     }
 
-    // 17. Admin Activity Logs
+    // 17. Admin Aktivite Günlüğü
     renderAdminActivity() {
       const wrap = document.getElementById('adm-full-activity-list');
       if (!wrap) return;
       const logs = activityService.getAll();
       wrap.innerHTML =
         logs.length === 0
-          ? '<div class="empty-state-box">No activity logs recorded.</div>'
+          ? '<div class="empty-state-box">Kayıtlı aktivite günlüğü bulunamadı.</div>'
           : logs
               .map(
                 item => `
@@ -4036,7 +4524,7 @@
     }
 
     // ==========================================
-    // UTILITIES
+    // YARDIMCI FONKSİYONLAR
     // ==========================================
     downloadJsonFile(filename, content) {
       try {
@@ -4050,7 +4538,7 @@
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch (e) {
-        this.copyToClipboard(content, 'Backup JSON copied to clipboard!');
+        this.copyToClipboard(content, 'Yedek JSON panoya kopyalandı!');
       }
     }
 
@@ -4074,7 +4562,7 @@
         document.execCommand('copy');
         this.showToast(successMsg, 'success');
       } catch (e) {
-        this.showToast('Copy failed.', 'error');
+        this.showToast('Kopyalama başarısız oldu.', 'error');
       }
       ta.remove();
     }

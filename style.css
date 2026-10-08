@@ -3646,3 +3646,305 @@ input[type="range"] {
     display: none;
   }
 }
+
+/* ==========================================================================
+   SECTIONS 5, 6, 9, 10, 11, 27 & 29: MAIN MENU DRAWER, AVATARS, BORDERS & THEMES
+   ========================================================================== */
+
+/* Main Menu Button in Top Bar */
+.main-drawer-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.78rem;
+  background: linear-gradient(180deg, #1b9b47 0%, #116930 100%);
+  border: 2px solid #090b10;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.main-drawer-trigger-btn:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 0 12px rgba(23, 221, 98, 0.35);
+}
+
+/* Slide-in Main Menu Drawer & Backdrop */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 12, 0.76);
+  backdrop-filter: blur(4px);
+  z-index: 1200;
+}
+
+.main-menu-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(320px, 88vw);
+  height: 100dvh;
+  background: linear-gradient(180deg, #111624 0%, #0b0e18 100%);
+  border-right: 4px solid var(--emerald);
+  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.75);
+  z-index: 1250;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transform: translateX(-104%);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow-y: auto;
+}
+
+.main-menu-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.15rem;
+  border-bottom: 3px solid #1d253b;
+  background: rgba(7, 10, 16, 0.9);
+}
+
+.drawer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.drawer-brand-icon {
+  font-size: 1.65rem;
+}
+
+.drawer-brand-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--emerald);
+  letter-spacing: 0.6px;
+}
+
+.drawer-brand-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.drawer-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  padding: 0.9rem 0.85rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.drawer-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.68rem 0.85rem;
+  background: rgba(20, 26, 40, 0.86);
+  border: 2px solid #242d46;
+  color: var(--text-main);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.drawer-nav-item:hover {
+  border-color: var(--emerald);
+  background: rgba(23, 221, 98, 0.16);
+  color: #fff;
+  transform: translateX(3px);
+}
+
+.drawer-nav-admin {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.drawer-footer {
+  padding: 0.95rem 1rem;
+  border-top: 3px solid #1d253b;
+  background: rgba(7, 9, 15, 0.95);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.drawer-user-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(18, 24, 38, 0.9);
+  border: 2px solid #28324e;
+  cursor: pointer;
+  transition: border-color 0.14s ease;
+}
+
+.drawer-user-summary:hover {
+  border-color: var(--emerald);
+}
+
+.drawer-user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.drawer-user-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-user-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+}
+
+/* Minecraft Pixel-Art & Uploaded Square Avatars */
+.mc-avatar-img {
+  display: inline-block;
+  object-fit: cover;
+  image-rendering: pixelated;
+  background: #1a2030;
+  border: 2px solid #4b5563;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.mc-avatar-xs {
+  width: 24px;
+  height: 24px;
+}
+
+.mc-avatar-sm {
+  width: 40px;
+  height: 40px;
+}
+
+.mc-avatar-lg {
+  width: 64px;
+  height: 64px;
+}
+
+.mc-avatar-xl {
+  width: 88px;
+  height: 88px;
+}
+
+/* Profile Borders (Section 11 & 29) */
+.avatar-border-stone {
+  border: 3px solid #6b7280;
+  box-shadow: 0 0 0 2px #111827;
+}
+
+.avatar-border-emerald {
+  border: 3px solid #17dd62;
+  box-shadow: 0 0 12px rgba(23, 221, 98, 0.55);
+}
+
+.avatar-border-gold {
+  border: 3px solid #fbbf24;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.55);
+}
+
+.avatar-border-diamond {
+  border: 3px solid #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.65);
+}
+
+.avatar-border-obsidian {
+  border: 3px solid #a855f7;
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.6);
+}
+
+.avatar-border-nether {
+  border: 3px solid #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.65);
+}
+
+/* Profile Hero Backgrounds (Section 11 & 29) */
+.profile-bg-overworld {
+  background: linear-gradient(135deg, rgba(16, 48, 30, 0.92) 0%, rgba(15, 23, 42, 0.95) 100%) !important;
+}
+
+.profile-bg-emerald_temple {
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.94) 0%, rgba(20, 83, 45, 0.9) 50%, rgba(10, 18, 30, 0.96) 100%) !important;
+  border-color: var(--emerald) !important;
+}
+
+.profile-bg-nether_fortress {
+  background: linear-gradient(135deg, rgba(88, 18, 18, 0.94) 0%, rgba(45, 12, 24, 0.95) 100%) !important;
+  border-color: #ef4444 !important;
+}
+
+.profile-bg-end_dimension {
+  background: linear-gradient(135deg, rgba(46, 16, 101, 0.94) 0%, rgba(17, 12, 36, 0.96) 100%) !important;
+  border-color: #a855f7 !important;
+}
+
+.profile-bg-diamond_vault {
+  background: linear-gradient(135deg, rgba(12, 74, 110, 0.94) 0%, rgba(15, 23, 42, 0.96) 100%) !important;
+  border-color: var(--diamond) !important;
+}
+
+/* Minecraft Light Theme Option */
+body.theme-mc-light {
+  --bg-dark: #1e293b;
+  --panel-bg: rgba(30, 41, 59, 0.94);
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+}
+
+/* Mobile Admin Drawer Toggle */
+.admin-drawer-toggle-btn {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .admin-drawer-toggle-btn {
+    display: inline-flex;
+  }
+
+  #admin-sidebar-nav {
+    display: none;
+  }
+
+  #admin-sidebar-nav.mobile-drawer-open {
+    display: flex;
+    flex-direction: column;
+    max-height: 65vh;
+    overflow-y: auto;
+    background: rgba(10, 13, 22, 0.98);
+    border-bottom: 3px solid var(--emerald);
+    padding: 0.65rem;
+  }
+}
+

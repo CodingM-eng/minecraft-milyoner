@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Minecraft Milyoner — Tournament, Party &amp; Emerald Platform</title>
+  <title>Minecraft Milyoner — Turnuva, Parti ve Zümrüt Platformu</title>
   <!-- Google Fonts with full character support -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,47 +16,47 @@
   <canvas id="fx-canvas" aria-hidden="true"></canvas>
 
   <!-- ==========================================
-       1 & 2. STEP-BY-STEP LOGIN & WELCOME BACK GATE
+       1 & 2. ADIM ADIM GİRİŞ & TEKRAR HOŞ GELDİN EKRANI
        ========================================== -->
   <div id="access-gate" class="access-gate-overlay" role="dialog" aria-modal="true" aria-labelledby="gate-title">
     <div class="gate-card mc-panel">
-      <div class="gate-lock-badge">🛡️ MINECRAFT MILYONER PLATFORM</div>
+      <div class="gate-lock-badge">🛡️ MINECRAFT MİLYONER PLATFORMU</div>
       <h2 id="gate-title" class="mc-title gate-heading">Minecraft Milyoner</h2>
 
-      <!-- STEP A: WELCOME BACK (Shown on future visits when account is remembered) -->
+      <!-- ADIM A: TEKRAR HOŞ GELDİN (Hesap hatırlandığında gösterilir) -->
       <div id="gate-step-welcome-back" class="gate-step-pane hidden">
-        <p class="gate-desc">WELCOME BACK</p>
+        <p class="gate-desc">TEKRAR HOŞ GELDİN</p>
         <div class="welcome-back-profile-box mc-panel-inset">
-          <div class="wb-avatar">⛏️</div>
+          <div class="wb-avatar" id="wb-avatar-box">⛏️</div>
           <div class="wb-name" id="wb-username-display">Mashallah</div>
           <div class="wb-badges">
-            <span id="wb-role-badge" class="role-badge role-player">PLAYER</span>
-            <span id="wb-license-badge" class="meta-muted">Saved License</span>
+            <span id="wb-role-badge" class="role-badge role-player">OYUNCU</span>
+            <span id="wb-license-badge" class="meta-muted">Kayıtlı Lisans</span>
           </div>
         </div>
         <button type="button" id="btn-wb-continue" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
-          <span class="btn-inner">🚀 Continue</span>
+          <span class="btn-inner">🚀 Devam Et</span>
         </button>
         <button type="button" id="btn-wb-switch-account" class="mc-btn mc-btn-stone mc-btn-small" style="width:100%; margin-top:0.5rem;">
-          <span class="btn-inner">🔄 Switch Account / Change License</span>
+          <span class="btn-inner">🔄 Hesap Değiştir / Lisans Değiştir</span>
         </button>
       </div>
 
-      <!-- STEP B: STEP 1 — ENTER LICENSE CODE -->
+      <!-- ADIM B: ADIM 1 — LİSANS KODU GİRİŞİ -->
       <form id="gate-form-license" class="gate-form" autocomplete="off">
-        <p class="gate-desc">Enter your license code to continue</p>
+        <p class="gate-desc">Devam etmek için lisans kodunuzu girin</p>
         <div class="gate-field-group">
-          <label for="access-code-input" class="gate-field-label">License Code</label>
+          <label for="access-code-input" class="gate-field-label">Lisans Kodu</label>
           <div class="gate-input-wrap">
             <input
               type="password"
               id="access-code-input"
               class="mc-input"
-              placeholder="Enter License Code..."
+              placeholder="Lisans Kodunu Girin..."
               required
               autofocus
             />
-            <button type="button" id="btn-toggle-code-vis" class="mc-icon-btn gate-eye-btn" title="Show / Hide Code" aria-label="Show or Hide Code">
+            <button type="button" id="btn-toggle-code-vis" class="mc-icon-btn gate-eye-btn" title="Kodu Göster / Gizle" aria-label="Kodu Göster veya Gizle">
               👁️
             </button>
           </div>
@@ -64,44 +64,44 @@
 
         <div id="access-gate-loading" class="gate-loading hidden" aria-live="polite">
           <span class="mc-spinner">⛏️</span>
-          <span>Validating license...</span>
+          <span>Lisans doğrulanıyor...</span>
         </div>
 
         <p id="access-gate-error" class="gate-error hidden" role="alert">
-          ❌ Invalid, expired, or revoked license code!
+          ❌ Geçersiz, süresi dolmuş veya iptal edilmiş lisans kodu!
         </p>
 
         <button type="submit" id="btn-license-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
-          <span class="btn-inner">🔑 Continue</span>
+          <span class="btn-inner">🔑 Devam Et</span>
         </button>
       </form>
 
-      <!-- STEP C: STEP 2 — ENTER MINECRAFT USERNAME -->
+      <!-- ADIM C: ADIM 2 — MINECRAFT KULLANICI ADI GİRİŞİ -->
       <form id="gate-form-username" class="gate-form hidden" autocomplete="off">
         <div class="verified-lic-banner mc-panel-inset">
-          <span>✅ License Verified:</span>
-          <strong id="gate-verified-lic-name" class="emerald-text">Standard License</strong>
+          <span>✅ Lisans Doğrulandı:</span>
+          <strong id="gate-verified-lic-name" class="emerald-text">Standart Lisans</strong>
         </div>
 
         <div class="gate-field-group">
-          <label for="access-username-input" class="gate-field-label">Minecraft Username</label>
+          <label for="access-username-input" class="gate-field-label">Minecraft Kullanıcı Adı</label>
           <input
             type="text"
             id="access-username-input"
             class="mc-input"
-            placeholder="e.g. Mashallah, Steve..."
+            placeholder="Örn: Mashallah, Steve..."
             maxlength="24"
             required
           />
         </div>
 
         <div class="gate-field-group">
-          <label for="access-password-input" class="gate-field-label">Account Password (Optional)</label>
+          <label for="access-password-input" class="gate-field-label">Hesap Şifresi (İsteğe Bağlı)</label>
           <input
             type="password"
             id="access-password-input"
             class="mc-input mc-input-sm"
-            placeholder="Leave blank if not set"
+            placeholder="Şifre belirlenmediyse boş bırakın"
           />
         </div>
 
@@ -109,122 +109,215 @@
 
         <div style="display:flex; gap:0.6rem; width:100%;">
           <button type="button" id="btn-gate-back-to-license" class="mc-btn mc-btn-stone mc-btn-small">
-            <span class="btn-inner">← Back</span>
+            <span class="btn-inner">← Geri</span>
           </button>
           <button type="submit" id="btn-username-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn" style="flex:1;">
-            <span class="btn-inner">⛏️ Continue to Dashboard</span>
+            <span class="btn-inner">⛏️ Ana Sayfaya Devam Et</span>
           </button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Toast Notification Container -->
+  <!-- Toast Bildirim Alanı -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-  <!-- Top Persistent Header Bar -->
-  <header class="top-bar">
-    <div class="brand-mini" id="top-brand-btn" role="button" tabindex="0" title="Return to Dashboard">
-      <span class="emerald-svg-wrap" id="header-emerald-icon"></span>
-      <span class="brand-mini-text">Minecraft Milyoner</span>
+  <!-- ==========================================
+       SECTIONS 5 & 6: TAM YÜKSEKLİKTE MİNECRAFT YAN MENÜ ÇEKMECESİ (DRAWER)
+       ========================================== -->
+  <div id="main-menu-backdrop" class="drawer-backdrop hidden" aria-hidden="true"></div>
+  <aside id="main-menu-drawer" class="main-menu-drawer mc-panel hidden" aria-label="Ana Menü Çekmecesi">
+    <div class="drawer-header mc-panel-inset">
+      <div class="drawer-brand">
+        <span class="drawer-brand-icon">🟩</span>
+        <div>
+          <div class="drawer-title">MINECRAFT MİLYONER</div>
+          <div class="drawer-sub">ANA MENÜ</div>
+        </div>
+      </div>
+      <button type="button" id="btn-close-main-drawer" class="mc-icon-btn" title="Menüyü Kapat" aria-label="Menüyü Kapat">✖</button>
     </div>
 
-    <!-- Main Navigation Bar (Desktop / Tablet & Mobile Bottom Nav) -->
-    <nav id="main-nav-bar" class="main-nav-bar hidden" aria-label="Main Navigation">
+    <nav class="drawer-nav-list" aria-label="Yan Menü Navigasyonu">
+      <button type="button" class="drawer-nav-item active" data-drawer-screen="screen-menu">
+        <span class="drawer-item-icon">🏠</span>
+        <span class="drawer-item-text">Ana Sayfa</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-party">
+        <span class="drawer-item-icon">🎮</span>
+        <span class="drawer-item-text">Partiler</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-leaderboard">
+        <span class="drawer-item-icon">🏆</span>
+        <span class="drawer-item-text">Liderlik Tablosu</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-shop" data-drawer-shop-cat="ALL">
+        <span class="drawer-item-icon">💚</span>
+        <span class="drawer-item-text">Zümrüt Mağazası</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-shop" data-drawer-shop-cat="Ranks">
+        <span class="drawer-item-icon">👑</span>
+        <span class="drawer-item-text">Rütbe Mağazası</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-shop" data-drawer-shop-cat="Cosmetics">
+        <span class="drawer-item-icon">🎨</span>
+        <span class="drawer-item-text">Kozmetikler</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-profile">
+        <span class="drawer-item-icon">👤</span>
+        <span class="drawer-item-text">Profil</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-support-tab="support">
+        <span class="drawer-item-icon">🎧</span>
+        <span class="drawer-item-text">Destek</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-support-tab="bug">
+        <span class="drawer-item-icon">🐛</span>
+        <span class="drawer-item-text">Hata Bildir</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-support-tab="suggestion">
+        <span class="drawer-item-icon">💡</span>
+        <span class="drawer-item-text">Öneri</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-account-settings">
+        <span class="drawer-item-icon">⚙️</span>
+        <span class="drawer-item-text">Ayarlar</span>
+      </button>
+      <button type="button" id="btn-drawer-admin" class="drawer-nav-item drawer-admin-item hidden" data-drawer-screen="screen-admin">
+        <span class="drawer-item-icon">🛡️</span>
+        <span class="drawer-item-text">Admin Paneli</span>
+      </button>
+    </nav>
+
+    <div class="drawer-footer mc-panel-inset">
+      <div class="drawer-user-card" id="drawer-user-card" role="button" tabindex="0">
+        <img id="drawer-user-avatar" class="mc-avatar-img mc-avatar-sm avatar-border-stone" src="" alt="Avatar" />
+        <div class="drawer-user-meta">
+          <div class="drawer-user-name-row">
+            <strong id="drawer-user-name">Steve</strong>
+            <span id="drawer-user-rank" class="role-badge role-player">OYUNCU</span>
+          </div>
+          <div class="drawer-user-emeralds emerald-text">
+            💚 <strong id="drawer-user-emeralds">0</strong> Zümrüt
+          </div>
+        </div>
+      </div>
+      <button type="button" id="btn-drawer-logout" class="mc-btn mc-btn-danger mc-btn-small" style="width:100%; margin-top:0.55rem;">
+        <span class="btn-inner">🚪 Çıkış Yap</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Üst Sabit Başlık Çubuğu -->
+  <header class="top-bar">
+    <div style="display:flex; align-items:center; gap:0.55rem;">
+      <!-- Section 5 & 6: Ana Menü Çekmece Butonu -->
+      <button type="button" id="btn-open-main-drawer" class="mc-btn mc-btn-emerald mc-btn-small top-menu-trigger hidden" title="Ana Menüyü Aç" aria-label="Ana Menüyü Aç">
+        <span class="btn-inner">☰ MENÜ</span>
+      </button>
+
+      <div class="brand-mini" id="top-brand-btn" role="button" tabindex="0" title="Ana Sayfaya Dön">
+        <span class="emerald-svg-wrap" id="header-emerald-icon"></span>
+        <span class="brand-mini-text">Minecraft Milyoner</span>
+      </div>
+    </div>
+
+    <!-- Ana Navigasyon Çubuğu (Masaüstü / Tablet & Mobil Alt Menü) -->
+    <nav id="main-nav-bar" class="main-nav-bar hidden" aria-label="Ana Navigasyon">
       <button type="button" class="main-nav-btn active" data-nav-screen="screen-menu">
-        <span>🏠</span> <span class="nav-label">Dashboard</span>
+        <span>🏠</span> <span class="nav-label">Ana Sayfa</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-party">
-        <span>🎉</span> <span class="nav-label">Parties</span>
+        <span>🎮</span> <span class="nav-label">Partiler</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-leaderboard">
-        <span>🏆</span> <span class="nav-label">Leaderboard</span>
+        <span>🏆</span> <span class="nav-label">Liderlik Tablosu</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-shop">
-        <span>💚</span> <span class="nav-label">Emerald Shop</span>
+        <span>💚</span> <span class="nav-label">Zümrüt Mağazası</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-vip-shop">
-        <span>👑</span> <span class="nav-label">VIP Shop</span>
+        <span>👑</span> <span class="nav-label">Rütbe &amp; VIP</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-profile">
-        <span>👤</span> <span class="nav-label">Profile</span>
+        <span>👤</span> <span class="nav-label">Profil</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-support">
-        <span>🎧</span> <span class="nav-label">Support</span>
+        <span>🎧</span> <span class="nav-label">Destek</span>
       </button>
       <button type="button" class="main-nav-btn" data-nav-screen="screen-account-settings">
-        <span>⚙️</span> <span class="nav-label">Account</span>
+        <span>⚙️</span> <span class="nav-label">Ayarlar</span>
       </button>
       <button type="button" id="btn-nav-admin" class="main-nav-btn nav-admin-btn hidden" data-nav-screen="screen-admin">
-        <span>🛡️</span> <span class="nav-label">Admin Panel</span>
+        <span>🛡️</span> <span class="nav-label">Admin Paneli</span>
       </button>
     </nav>
 
     <div class="top-controls">
-      <!-- Persistent Emerald Coin Balance & Extra Life Pill -->
-      <div id="top-emerald-pill" class="emerald-balance-pill hidden" title="Emerald Balance & Extra Lives">
+      <!-- Sabit Zümrüt Bakiyesi ve Ekstra Can Göstergesi -->
+      <div id="top-emerald-pill" class="emerald-balance-pill hidden" title="Zümrüt Bakiyesi ve Ekstra Canlar">
         <span class="emerald-pill-item" id="btn-pill-open-shop" role="button" tabindex="0">
           <span>💚</span>
           <strong id="top-emerald-balance">0</strong>
-          <span class="emerald-pill-unit">Emerald Coins</span>
+          <span class="emerald-pill-unit">Zümrüt</span>
         </span>
         <span class="emerald-pill-divider">|</span>
-        <span class="emerald-pill-item" title="Extra Lives Owned">
+        <span class="emerald-pill-item" title="Sahip Olunan Ekstra Can">
           <span>❤️</span>
           <strong id="top-extralives-count">0</strong>
         </span>
       </div>
 
-      <!-- Daily Login Reward Button -->
-      <button type="button" id="btn-daily-reward" class="mc-icon-btn mc-icon-btn-emerald hidden" title="Claim Daily Emerald Reward">
+      <!-- Günlük Giriş Ödülü Butonu -->
+      <button type="button" id="btn-daily-reward" class="mc-icon-btn mc-icon-btn-emerald hidden" title="Günlük Zümrüt Ödülünü Al">
         <span>🎁</span>
-        <span class="btn-label-desktop" id="daily-reward-label">DAILY</span>
+        <span class="btn-label-desktop" id="daily-reward-label">GÜNLÜK</span>
       </button>
 
-      <!-- Active Session User & Role Pill -->
-      <div id="top-session-badge" class="session-profile-pill hidden" role="button" tabindex="0" title="Open Player Profile">
-        <span class="session-user-icon">👤</span>
+      <!-- Aktif Kullanıcı & Rütbe Rozeti -->
+      <div id="top-session-badge" class="session-profile-pill hidden" role="button" tabindex="0" title="Oyuncu Profilini Aç">
+        <img id="top-session-avatar" class="mc-avatar-img mc-avatar-xs avatar-border-stone" src="" alt="Avatar" />
         <span id="top-session-username" class="session-username">Steve</span>
-        <span id="top-session-role" class="role-badge role-player">PLAYER</span>
+        <span id="top-session-role" class="role-badge role-player">OYUNCU</span>
       </div>
 
-      <!-- Admin Panel Quick Switch (ONLY visible for ADMIN role) -->
-      <button type="button" id="btn-top-admin" class="mc-icon-btn mc-icon-btn-gold hidden" title="Admin Panel">
+      <!-- Admin Paneli Hızlı Geçiş (Sadece ADMIN rolü için görünür) -->
+      <button type="button" id="btn-top-admin" class="mc-icon-btn mc-icon-btn-gold hidden" title="Admin Paneli">
         <span>🛡️</span>
-        <span class="btn-label-desktop">ADMIN</span>
+        <span class="btn-label-desktop">ADMİN</span>
       </button>
 
-      <button type="button" id="btn-toggle-atmos" class="mc-icon-btn" title="Toggle Day / Night Atmosphere">
+      <button type="button" id="btn-toggle-atmos" class="mc-icon-btn" title="Gece / Gündüz Atmosferini Değiştir">
         <span class="icon-indicator" id="atmos-icon">🌙</span>
       </button>
-      <button type="button" id="btn-quick-music" class="mc-icon-btn" title="Toggle Music" aria-label="Toggle Music">
+      <button type="button" id="btn-quick-music" class="mc-icon-btn" title="Müziği Aç / Kapat" aria-label="Müziği Aç / Kapat">
         <span class="icon-indicator" id="quick-music-icon">🎵</span>
       </button>
-      <button type="button" id="btn-quick-sfx" class="mc-icon-btn" title="Toggle SFX" aria-label="Toggle SFX">
+      <button type="button" id="btn-quick-sfx" class="mc-icon-btn" title="Ses Efektlerini Aç / Kapat" aria-label="Ses Efektlerini Aç / Kapat">
         <span class="icon-indicator" id="quick-sfx-icon">🔊</span>
       </button>
-      <button type="button" id="btn-top-settings" class="mc-icon-btn" title="Audio Settings">
+      <button type="button" id="btn-top-settings" class="mc-icon-btn" title="Ses Ayarları">
         <span>🔊</span>
       </button>
-      <button type="button" id="btn-top-logout" class="mc-icon-btn mc-icon-btn-danger hidden" title="Logout">
+      <button type="button" id="btn-top-logout" class="mc-icon-btn mc-icon-btn-danger hidden" title="Çıkış Yap">
         <span>🚪</span>
       </button>
     </div>
   </header>
 
-  <!-- MAIN APPLICATION CONTAINER -->
+  <!-- ANA UYGULAMA KAPSAYICISI -->
   <main class="app-container">
 
     <!-- ==========================================
-         SCREEN 1: USER & VIP DASHBOARD (SECTIONS 31 & 32)
+         EKRAN 1: KULLANICI & VIP ANA SAYFASI (BÖLÜM 31 & 32)
          ========================================== -->
     <section id="screen-menu" class="screen active" aria-labelledby="main-title">
       <div class="menu-card mc-panel">
-        <!-- Floating Emerald & Diamond Badges -->
+        <!-- Yüzen Zümrüt & Elmas Rozetleri -->
         <div class="hero-emblems">
-          <div class="floating-item delay-1" id="hero-emerald-left" title="Emerald"></div>
-          <div class="crown-badge">5.000.000 EMERALD ÖDÜL</div>
-          <div class="floating-item delay-2" id="hero-diamond-right" title="Diamond"></div>
+          <div class="floating-item delay-1" id="hero-emerald-left" title="Zümrüt"></div>
+          <div class="crown-badge">5.000.000 ZÜMRÜT ÖDÜL</div>
+          <div class="floating-item delay-2" id="hero-diamond-right" title="Elmas"></div>
         </div>
 
         <h1 id="main-title" class="mc-title">KİM MİLYONER OLMAK İSTER?</h1>
@@ -232,105 +325,106 @@
           <span class="mc-subtitle">MINECRAFT EDITION</span>
         </div>
 
-        <!-- Section 31: Personalized Welcome Banner -->
+        <!-- Kişiselleştirilmiş Karşılama Çubuğu -->
         <div class="user-dashboard-welcome mc-panel-inset">
           <div class="ud-welcome-left">
-            <span class="ud-greeting">Welcome, <strong id="dash-welcome-username">Steve</strong></span>
-            <span id="dash-welcome-role-badge" class="role-badge role-player">PLAYER</span>
-            <span id="dash-welcome-rank-badge" class="profile-rank-pill">⛏️ PLAYER</span>
+            <img id="dash-welcome-avatar" class="mc-avatar-img mc-avatar-sm avatar-border-stone" src="" alt="Avatar" />
+            <span class="ud-greeting">Hoş Geldin, <strong id="dash-welcome-username">Steve</strong></span>
+            <span id="dash-welcome-role-badge" class="role-badge role-player">OYUNCU</span>
+            <span id="dash-welcome-rank-badge" class="profile-rank-pill">⛏️ OYUNCU</span>
           </div>
           <div class="ud-welcome-right">
             <button type="button" id="btn-widget-claim-daily" class="act-btn emerald">
-              🎁 Claim Daily Reward (+25 💚)
+              🎁 Günlük Ödülü Al (+25 💚)
             </button>
           </div>
         </div>
 
-        <!-- Section 31: User Dashboard 5 Core Stats -->
+        <!-- Kullanıcı Gösterge Paneli 6 Temel İstatistik -->
         <div id="dashboard-economy-widget" class="dashboard-economy-widget mc-panel-inset">
           <div class="econ-widget-grid">
             <div class="econ-stat-card" id="card-goto-shop" role="button" tabindex="0">
-              <span class="econ-stat-label">💚 Emeralds</span>
+              <span class="econ-stat-label">💚 Zümrüt Bakiyesi</span>
               <strong class="econ-stat-val emerald-text" id="dash-econ-emeralds">0 💚</strong>
             </div>
             <div class="econ-stat-card">
-              <span class="econ-stat-label">🏆 Points</span>
+              <span class="econ-stat-label">🏆 Toplam Puan</span>
               <strong class="econ-stat-val diamond-text" id="dash-econ-points">0</strong>
             </div>
             <div class="econ-stat-card" id="card-goto-leaderboard" role="button" tabindex="0">
-              <span class="econ-stat-label">🥇 Leaderboard Rank</span>
+              <span class="econ-stat-label">🥇 Liderlik Sırası</span>
               <strong class="econ-stat-val gold-text" id="dash-econ-rank">#1</strong>
             </div>
             <div class="econ-stat-card">
-              <span class="econ-stat-label">🎮 Games</span>
+              <span class="econ-stat-label">🎮 Oynanan Oyun</span>
               <strong class="econ-stat-val" id="dash-econ-games">0</strong>
             </div>
             <div class="econ-stat-card" id="card-goto-profile" role="button" tabindex="0">
-              <span class="econ-stat-label">❤️ Extra Lives</span>
+              <span class="econ-stat-label">❤️ Ekstra Can</span>
               <strong class="econ-stat-val wrong-text" id="dash-econ-extralives">0</strong>
             </div>
             <div class="econ-stat-card">
-              <span class="econ-stat-label">🏅 Games Won</span>
+              <span class="econ-stat-label">🏅 Kazanılan Oyun</span>
               <strong class="econ-stat-val gold-text" id="dash-econ-wins">0</strong>
             </div>
           </div>
         </div>
 
-        <!-- Section 32: VIP Dashboard Panel (Shown for VIP & ADMIN users) -->
+        <!-- VIP Gösterge Paneli (VIP, MVP ve ADMIN kullanıcıları için gösterilir) -->
         <div id="vip-dashboard-panel" class="vip-dashboard-panel mc-panel-inset hidden">
           <div class="vip-dash-header">
             <div>
-              <span class="vip-crown-pill">👑 VIP MEMBERSHIP ACTIVE</span>
-              <span class="meta-muted" id="vip-dash-expiry">Lifetime Access</span>
+              <span class="vip-crown-pill">👑 VIP ÜYELİĞİ AKTİF</span>
+              <span class="meta-muted" id="vip-dash-expiry">Sınırsız Erişim</span>
             </div>
             <div class="vip-dash-actions">
-              <button type="button" id="btn-vip-dash-create-party" class="act-btn emerald">➕ Create Party</button>
-              <button type="button" id="btn-vip-dash-manage-party" class="act-btn">🛠️ Manage Party</button>
-              <button type="button" data-nav-screen="screen-vip-shop" class="act-btn">👑 VIP Benefits</button>
+              <button type="button" id="btn-vip-dash-create-party" class="act-btn emerald">➕ Parti Oluştur</button>
+              <button type="button" id="btn-vip-dash-manage-party" class="act-btn">🛠️ Partiyi Yönet</button>
+              <button type="button" data-nav-screen="screen-vip-shop" class="act-btn">👑 VIP Ayrıcalıkları</button>
             </div>
           </div>
           <div class="vip-benefits-mini-grid">
-            <span>✓ Create Party</span>
-            <span>✓ Invite Players</span>
-            <span>✓ Priority Support</span>
-            <span>✓ Priority Bugs</span>
-            <span>✓ Priority Suggestions</span>
-            <span>✓ Bonus Emeralds</span>
-            <span>✓ RGB Username</span>
-            <span>✓ VIP Badge</span>
+            <span>✓ Parti Oluşturma</span>
+            <span>✓ Oyuncu Davet Etme</span>
+            <span>✓ Öncelikli Destek</span>
+            <span>✓ Öncelikli Hata Bildirimi</span>
+            <span>✓ Öncelikli Öneriler</span>
+            <span>✓ Bonus Zümrüt Çarpanı</span>
+            <span>✓ RGB Kullanıcı Adı</span>
+            <span>✓ Özel VIP Rozeti</span>
           </div>
         </div>
 
-        <!-- Primary Action Buttons (Section 31) -->
+        <!-- Ana Eylem Butonları -->
         <div class="menu-buttons">
           <button type="button" id="btn-start-game" class="mc-btn mc-btn-emerald mc-btn-large">
-            <span class="btn-inner">⚔️ OYUNA BAŞLA (PLAY SOLO QUIZ)</span>
+            <span class="btn-inner">⚔️ OYUNA BAŞLA (BİREYSEL YARIŞMA)</span>
           </button>
 
           <div class="dashboard-quick-grid">
             <button type="button" id="btn-open-party-hub" class="mc-btn mc-btn-emerald">
-              <span class="btn-inner">🎉 Join Party</span>
+              <span class="btn-inner">🎮 Partiye Katıl</span>
             </button>
             <button type="button" id="btn-open-leaderboard-hero" class="mc-btn mc-btn-gold">
-              <span class="btn-inner">🏆 Leaderboard</span>
+              <span class="btn-inner">🏆 Liderlik Tablosu</span>
             </button>
             <button type="button" id="btn-open-shop-hero" class="mc-btn mc-btn-emerald">
-              <span class="btn-inner">💚 Emerald Shop</span>
+              <span class="btn-inner">💚 Zümrüt Mağazası</span>
             </button>
             <button type="button" class="mc-btn mc-btn-gold" data-nav-screen="screen-vip-shop">
-              <span class="btn-inner">👑 VIP Shop</span>
+              <span class="btn-inner">👑 Rütbe &amp; VIP Mağazası</span>
             </button>
             <button type="button" class="mc-btn mc-btn-stone" data-nav-screen="screen-profile">
-              <span class="btn-inner">👤 Profile</span>
+              <span class="btn-inner">👤 Profil</span>
             </button>
             <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="support">
-              <span class="btn-inner">🎧 Support</span>
+              <span class="btn-inner">🎧 Destek</span>
             </button>
             <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="bug">
-              <span class="btn-inner">🐛 Report Bug</span>
+              <span class="btn-inner">🐛 Hata Bildir</span>
             </button>
             <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="suggestion">
-              <span class="btn-inner">💡 Suggestion</span>
+              <span class="btn-inner">💡 Öneri Gönder</span>
             </button>
           </div>
 
@@ -347,11 +441,11 @@
           </div>
         </div>
 
-        <!-- Mini Live Stats Preview on Main Menu -->
+        <!-- Alt İstatistik Özeti -->
         <div class="menu-footer-stats">
           <div class="mini-stat-pill">
             <span class="stat-label">En Yüksek Ödül:</span>
-            <strong id="menu-best-prize" class="emerald-text">0 Emerald</strong>
+            <strong id="menu-best-prize" class="emerald-text">0 Zümrüt</strong>
           </div>
           <div class="mini-stat-pill">
             <span class="stat-label">En Yüksek Soru:</span>
@@ -366,7 +460,7 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 2: OYUN EKRANI (QUIZ GAME)
+         EKRAN 2: OYUN EKRANI (BİLGİ YARIŞMASI)
          ========================================== -->
     <section id="screen-game" class="screen" aria-label="Oyun Ekranı">
       <div class="game-layout">
@@ -375,9 +469,9 @@
             <div class="status-left">
               <span class="level-badge" id="current-level-badge">Soru 1 / 15</span>
               <span class="difficulty-badge" id="current-difficulty-badge">Kolay</span>
-              <span class="category-badge" id="current-category-badge">Mobs</span>
-              <span class="extralife-stage-pill" id="game-extralife-pill" title="Available Extra Lives">
-                ❤️ Extra Life: <strong id="game-extralife-count">0</strong>
+              <span class="category-badge" id="current-category-badge">Yaratıklar</span>
+              <span class="extralife-stage-pill" id="game-extralife-pill" title="Kullanılabilir Ekstra Canlar">
+                ❤️ Ekstra Can: <strong id="game-extralife-count">0</strong>
               </span>
             </div>
             <div class="status-right">
@@ -394,8 +488,8 @@
           <div id="extralife-revive-banner" class="extralife-revive-banner mc-panel hidden" role="status" aria-live="polite">
             <span class="revive-heart-icon">❤️</span>
             <div class="revive-banner-text">
-              <strong>EXTRA LIFE USED</strong>
-              <span>"You have returned to the game!" — Oyuna geri döndün!</span>
+              <strong>EKSTRA CAN KULLANILDI!</strong>
+              <span>"Oyuna geri döndün!" — Yarışmaya kaldığın sorudan devam ediyorsun!</span>
             </div>
           </div>
 
@@ -481,7 +575,7 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 3: VICTORY EKRANI
+         EKRAN 3: ZAFER EKRANI
          ========================================== -->
     <section id="screen-victory" class="screen" aria-labelledby="victory-title">
       <div class="result-card victory-card mc-panel">
@@ -522,7 +616,7 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 4: GAMEOVER EKRANI
+         EKRAN 4: OYUN BİTTİ EKRANI
          ========================================== -->
     <section id="screen-gameover" class="screen" aria-labelledby="gameover-title">
       <div class="result-card gameover-card mc-panel">
@@ -548,7 +642,7 @@
             <strong class="r-value gold-text" id="gameover-level">1 / 15</strong>
           </div>
           <div class="result-stat-item">
-            <span class="r-label">Kazanılan Emerald</span>
+            <span class="r-label">Kazanılan Zümrüt</span>
             <strong class="r-value emerald-text" id="gameover-prize">0 Emerald</strong>
           </div>
           <div class="result-stat-item">
@@ -573,125 +667,127 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 5: PARTIES SYSTEM (SECTIONS 6, 7, 8)
-         Normal PLAYER: [ Join Party ] ONLY.
-         VIP & ADMIN: [ Create Party ], [ Join Party ], [ Invite Player ]
+         EKRAN 5: PARTİ SİSTEMİ (BÖLÜM 6, 7, 8)
+         Normal OYUNCU: Sadece [ Partiye Katıl ]
+         VIP, MVP & ADMIN: [ Parti Oluştur ], [ Partiye Katıl ], [ Oyuncu Davet Et ]
          ========================================== -->
-    <section id="screen-party" class="screen" aria-label="Parties">
+    <section id="screen-party" class="screen" aria-label="Partiler">
       <div class="party-hub-wrapper">
         <div class="party-welcome-bar mc-panel">
           <div class="welcome-user-info">
-            <span class="welcome-greeting" id="party-welcome-title">Welcome, Steve</span>
+            <span class="welcome-greeting" id="party-welcome-title">Hoş Geldin, Steve</span>
             <div class="welcome-meta">
-              <span id="party-user-role-badge" class="role-badge role-player">PLAYER</span>
-              <span id="party-user-license-name" class="meta-muted">Active Account</span>
+              <span id="party-user-role-badge" class="role-badge role-player">OYUNCU</span>
+              <span id="party-user-license-name" class="meta-muted">Aktif Hesap</span>
             </div>
           </div>
           <div class="welcome-actions">
-            <!-- ONLY visible & authorized for VIP and ADMIN -->
+            <!-- Sadece VIP, MVP ve ADMIN kullanıcılar için görünür -->
             <button type="button" id="btn-open-create-party" class="mc-btn mc-btn-emerald mc-btn-small hidden">
-              <span class="btn-inner">➕ Create Party</span>
+              <span class="btn-inner">➕ Parti Oluştur</span>
             </button>
             <button type="button" id="btn-party-play-solo" class="mc-btn mc-btn-gold mc-btn-small">
-              <span class="btn-inner">⚔️ Play Solo Quiz</span>
+              <span class="btn-inner">⚔️ Bireysel Oyna</span>
             </button>
             <button type="button" id="btn-party-back-menu" class="mc-btn mc-btn-stone mc-btn-small">
-              <span class="btn-inner">🏠 Dashboard</span>
+              <span class="btn-inner">🏠 Ana Sayfa</span>
             </button>
           </div>
         </div>
 
         <div class="party-hub-grid">
-          <!-- Left Column: Join Party + (VIP/Admin Create Party) + Party List -->
+          <!-- Sol Sütun: Partiye Katıl + (VIP/Admin Parti Oluştur) + Parti Listesi -->
           <div class="party-left-col">
-            <!-- Section 8: Simple Join Party Card -->
+            <!-- Partiye Katıl Kartı -->
             <div class="mc-panel party-join-card">
-              <h3 class="panel-sec-title">🎟️ Join Party</h3>
-              <p class="panel-sec-desc">Enter a Party Code (e.g. <code>MCM-8K2P</code> or <code>MCM-VIP9</code>) to join immediately.</p>
+              <h3 class="panel-sec-title">🎟️ Partiye Katıl</h3>
+              <p class="panel-sec-desc">Anında katılmak için bir Parti Davet Kodu girin (Örn: <code>MCM-8K2P</code> veya <code>MCM-VIP9</code>).</p>
               <form id="form-join-party" class="inline-join-form" autocomplete="off">
                 <input
                   type="text"
                   id="input-join-invite-code"
                   class="mc-input mc-input-sm"
-                  placeholder="Enter Party Code (MCM-XXXX)"
+                  placeholder="Parti Kodu Girin (MCM-XXXX)"
                   maxlength="16"
                   required
                 />
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">Join</span>
+                  <span class="btn-inner">Katıl</span>
                 </button>
               </form>
             </div>
 
-            <!-- Section 7: Create Party Card (Strictly Authorized for VIP & ADMIN ONLY) -->
+            <!-- Parti Oluştur Kartı (Yalnızca VIP, MVP ve ADMIN Yetkilidir) -->
             <div id="organizer-create-party-box" class="mc-panel party-create-card hidden">
-              <h3 class="panel-sec-title">👑 Create Party (VIP / Admin)</h3>
+              <h3 class="panel-sec-title">👑 Parti Oluştur (VIP / Admin)</h3>
               <form id="form-create-party" class="stack-form" autocomplete="off">
                 <div class="form-row">
-                  <label for="input-party-name">Party Name</label>
+                  <label for="input-party-name">Parti Adı</label>
                   <input
                     type="text"
                     id="input-party-name"
                     class="mc-input mc-input-sm"
-                    placeholder="e.g. Diamond Championship #2"
+                    placeholder="Örn: Elmas Şampiyonası #2"
                     maxlength="40"
                     required
                   />
                 </div>
                 <div class="form-row">
-                  <label for="input-party-max">Maximum Players</label>
+                  <label for="input-party-max">Maksimum Oyuncu</label>
                   <select id="input-party-max" class="mc-select">
-                    <option value="2">2 Players</option>
-                    <option value="4" selected>4 Players</option>
-                    <option value="8">8 Players</option>
-                    <option value="12">12 Players</option>
-                    <option value="16">16 Players</option>
+                    <option value="2">2 Oyuncu</option>
+                    <option value="4" selected>4 Oyuncu</option>
+                    <option value="6">6 Oyuncu</option>
+                    <option value="8">8 Oyuncu</option>
+                    <option value="12">12 Oyuncu</option>
+                    <option value="16">16 Oyuncu</option>
+                    <option value="20">20 Oyuncu</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label for="input-party-mode">Game Mode</label>
+                  <label for="input-party-mode">Oyun Modu</label>
                   <select id="input-party-mode" class="mc-select">
-                    <option value="Classic Millionaire (15 Qs)" selected>Classic Millionaire (15 Qs)</option>
-                    <option value="Speed Blitz">Speed Blitz</option>
-                    <option value="Hardcore Nether">Hardcore Nether</option>
-                    <option value="Redstone Masters">Redstone Masters</option>
+                    <option value="Classic Millionaire (15 Qs)" selected>Klasik Milyoner (15 Soru)</option>
+                    <option value="Speed Blitz">Hızlı Blitz Turnuvası</option>
+                    <option value="Hardcore Nether">Zorlu Nether Modu</option>
+                    <option value="Redstone Masters">Kızıltaş Ustaları</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label for="input-party-desc">Optional Description</label>
+                  <label for="input-party-desc">Açıklama (İsteğe Bağlı)</label>
                   <input
                     type="text"
                     id="input-party-desc"
                     class="mc-input mc-input-sm"
-                    placeholder="Optional notes or tournament rules..."
+                    placeholder="Turnuva kuralları veya parti notu..."
                     maxlength="120"
                   />
                 </div>
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">✨ Create Party</span>
+                  <span class="btn-inner">✨ Parti Oluştur</span>
                 </button>
               </form>
             </div>
 
-            <!-- Active Parties List -->
+            <!-- Aktif Partiler Listesi -->
             <div class="mc-panel party-list-card">
               <div class="panel-header-row">
-                <h3 class="panel-sec-title">📋 Parties</h3>
+                <h3 class="panel-sec-title">📋 Partiler</h3>
                 <select id="filter-user-party-status" class="mc-select mc-select-xs">
-                  <option value="ALL">All Statuses</option>
-                  <option value="WAITING">WAITING</option>
-                  <option value="READY">READY</option>
-                  <option value="STARTING">STARTING</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="FINISHED">FINISHED</option>
-                  <option value="CANCELLED">CANCELLED</option>
+                  <option value="ALL">Tüm Durumlar</option>
+                  <option value="WAITING">BEKLİYOR</option>
+                  <option value="READY">HAZIR</option>
+                  <option value="STARTING">BAŞLIYOR</option>
+                  <option value="ACTIVE">AKTİF</option>
+                  <option value="FINISHED">BİTTİ</option>
+                  <option value="CANCELLED">İPTAL EDİLDİ</option>
                 </select>
               </div>
               <div id="user-parties-list" class="user-parties-list"></div>
             </div>
           </div>
 
-          <!-- Right Column: Selected Party Details -->
+          <!-- Sağ Sütun: Seçili Parti Detayları -->
           <div class="party-right-col">
             <div id="party-detail-container" class="mc-panel party-detail-card"></div>
           </div>
@@ -700,45 +796,45 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 6: LEADERBOARD SYSTEM (SECTION 24)
-         Sort by: Points, Wins, Emeralds, Games Played
+         EKRAN 6: LİDERLİK TABLOSU (BÖLÜM 20)
+         Sıralama: Puan, Kazanma, Zümrüt, Oynanan Oyun
          ========================================== -->
-    <section id="screen-leaderboard" class="screen" aria-label="Minecraft Milyoner Leaderboard">
+    <section id="screen-leaderboard" class="screen" aria-label="Minecraft Milyoner Liderlik Tablosu">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
-            <h2 class="hub-page-title">🏆 Minecraft Milyoner Leaderboard</h2>
-            <p class="hub-page-sub">Official Tournament Rankings — Sort by Points, Wins, Emeralds, or Games Played</p>
+            <h2 class="hub-page-title">🏆 Minecraft Milyoner Liderlik Tablosu</h2>
+            <p class="hub-page-sub">Resmî Turnuva Sıralaması — Puan, Kazanılan Oyun, Zümrüt veya Oynanan Oyuna Göre Sırala</p>
           </div>
           <div class="hub-header-actions">
-            <span class="live-refresh-badge" id="leaderboard-live-indicator">● LIVE AUTO-REFRESH</span>
+            <span class="live-refresh-badge" id="leaderboard-live-indicator">● CANLI OTOMATİK YENİLEME</span>
             <button type="button" id="btn-leaderboard-refresh" class="mc-btn mc-btn-stone mc-btn-small">
-              <span class="btn-inner">🔄 Refresh</span>
+              <span class="btn-inner">🔄 Yenile</span>
             </button>
             <button type="button" class="mc-btn mc-btn-emerald mc-btn-small" data-nav-screen="screen-shop">
-              <span class="btn-inner">💚 Emerald Shop</span>
+              <span class="btn-inner">💚 Zümrüt Mağazası</span>
             </button>
           </div>
         </div>
 
         <div id="leaderboard-current-user-banner" class="lb-user-banner mc-panel-inset"></div>
 
-        <!-- Top 3 Podium (1st, 2nd, 3rd) -->
+        <!-- İlk 3 Podyum (1., 2., 3.) -->
         <div id="leaderboard-podium" class="lb-podium-grid"></div>
 
-        <!-- Filter, Sort & Search Controls -->
+        <!-- Filtre, Sıralama & Arama Kontrolleri -->
         <div class="lb-controls-bar">
-          <div class="lb-limit-tabs" role="group" aria-label="Leaderboard Limit">
-            <button type="button" class="lb-limit-btn active" data-lb-limit="10">Top 10</button>
-            <button type="button" class="lb-limit-btn" data-lb-limit="25">Top 25</button>
-            <button type="button" class="lb-limit-btn" data-lb-limit="50">Top 50</button>
+          <div class="lb-limit-tabs" role="group" aria-label="Liderlik Sınırı">
+            <button type="button" class="lb-limit-btn active" data-lb-limit="10">İlk 10</button>
+            <button type="button" class="lb-limit-btn" data-lb-limit="25">İlk 25</button>
+            <button type="button" class="lb-limit-btn" data-lb-limit="50">İlk 50</button>
           </div>
 
-          <div class="lb-limit-tabs" role="group" aria-label="Sort Leaderboard By">
-            <button type="button" class="lb-sort-btn active" data-lb-sort="POINTS">🏆 Points</button>
-            <button type="button" class="lb-sort-btn" data-lb-sort="WINS">⚔️ Wins</button>
-            <button type="button" class="lb-sort-btn" data-lb-sort="EMERALDS">💚 Emeralds</button>
-            <button type="button" class="lb-sort-btn" data-lb-sort="GAMES">🎮 Games Played</button>
+          <div class="lb-limit-tabs" role="group" aria-label="Sıralama Ölçütü">
+            <button type="button" class="lb-sort-btn active" data-lb-sort="POINTS">🏆 Puan</button>
+            <button type="button" class="lb-sort-btn" data-lb-sort="WINS">⚔️ Kazanma</button>
+            <button type="button" class="lb-sort-btn" data-lb-sort="EMERALDS">💚 Zümrüt</button>
+            <button type="button" class="lb-sort-btn" data-lb-sort="GAMES">🎮 Oynanan Oyun</button>
           </div>
 
           <div class="lb-search-wrap">
@@ -746,7 +842,7 @@
               type="text"
               id="input-leaderboard-search"
               class="mc-input mc-input-sm"
-              placeholder="🔍 Search Minecraft username..."
+              placeholder="🔍 Minecraft kullanıcı adı ara..."
             />
           </div>
         </div>
@@ -755,15 +851,15 @@
           <table class="lb-table">
             <thead>
               <tr>
-                <th>Rank</th>
-                <th>Minecraft Username</th>
-                <th>Rank Badge</th>
-                <th>⭐ Points</th>
-                <th>💚 Emeralds</th>
-                <th>🏆 Wins</th>
-                <th>🎮 Games</th>
-                <th>📈 Win Rate</th>
-                <th>❤️ Extra Lives Used</th>
+                <th>Sıra</th>
+                <th>Minecraft Oyuncusu</th>
+                <th>Rütbe Rozeti</th>
+                <th>⭐ Puan</th>
+                <th>💚 Zümrüt</th>
+                <th>🏆 Kazanma</th>
+                <th>🎮 Oyun</th>
+                <th>📈 Kazanma Oranı</th>
+                <th>❤️ Kullanılan Ekstra Can</th>
               </tr>
             </thead>
             <tbody id="leaderboard-table-body"></tbody>
@@ -773,50 +869,50 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 7: EMERALD SHOP, RANK SHOP & COSMETICS (SECTIONS 14, 15, 18, 33)
+         EKRAN 7: ZÜMRÜT MAĞAZASI, RÜTBE MAĞAZASI & KOZMETİKLER
          ========================================== -->
-    <section id="screen-shop" class="screen" aria-label="Emerald Shop">
+    <section id="screen-shop" class="screen" aria-label="Zümrüt Mağazası">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
-            <h2 class="hub-page-title">💚 Emerald Shop</h2>
-            <p class="hub-page-sub">Buy <strong>💚 Emeralds</strong> (5 💚 = 1 TL, Min 500 💚) via Stripe or spend Emeralds on Gameplay, Ranks, Cosmetics &amp; Special items!</p>
+            <h2 class="hub-page-title">💚 Zümrüt Mağazası</h2>
+            <p class="hub-page-sub">Stripe güvencesiyle <strong>💚 Zümrüt</strong> satın alın (5 💚 = 1 TL, Min. 500 💚) veya Zümrütlerinizle Oyun İçi Güçlendirmeler, Rütbeler ve Kozmetikler alın!</p>
           </div>
           <div class="shop-balance-banner">
             <div class="shop-wallet-box">
-              <span class="wallet-label">Emerald Balance:</span>
-              <strong class="wallet-amount emerald-text" id="shop-emerald-balance">💚 0 Emerald Coins</strong>
+              <span class="wallet-label">Zümrüt Bakiyesi:</span>
+              <strong class="wallet-amount emerald-text" id="shop-emerald-balance">💚 0 Zümrüt</strong>
             </div>
             <button type="button" class="mc-btn mc-btn-gold mc-btn-small" data-nav-screen="screen-vip-shop">
-              <span class="btn-inner">👑 VIP Shop</span>
+              <span class="btn-inner">👑 VIP Mağazası</span>
             </button>
             <button type="button" class="mc-btn mc-btn-stone mc-btn-small" data-nav-screen="screen-history">
-              <span class="btn-inner">📜 Transactions</span>
+              <span class="btn-inner">📜 İşlem Geçmişi</span>
             </button>
           </div>
         </div>
 
-        <!-- Shop Category Tabs (Section 18 & 33) -->
-        <div class="shop-category-tabs" role="group" aria-label="Shop Categories">
-          <button type="button" class="shop-cat-btn active" data-shop-cat="ALL">💚 All Items</button>
-          <button type="button" class="shop-cat-btn" data-shop-cat="Emeralds">💚 Emeralds (TL)</button>
-          <button type="button" class="shop-cat-btn" data-shop-cat="Gameplay">❤️ Gameplay</button>
-          <button type="button" class="shop-cat-btn" data-shop-cat="Ranks">👑 Ranks</button>
-          <button type="button" class="shop-cat-btn" data-shop-cat="Cosmetics">🎨 Cosmetics</button>
-          <button type="button" class="shop-cat-btn" data-shop-cat="VIP">🔥 VIP</button>
-          <button type="button" class="shop-cat-btn" data-shop-cat="Special">⭐ Special</button>
+        <!-- Mağaza Kategori Sekmeleri -->
+        <div class="shop-category-tabs" role="group" aria-label="Mağaza Kategorileri">
+          <button type="button" class="shop-cat-btn active" data-shop-cat="ALL">💚 Tüm Ürünler</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Emeralds">💚 Zümrüt Paketleri (TL)</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Gameplay">❤️ Oyun İçi</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Ranks">👑 Rütbe Mağazası</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Cosmetics">🎨 Kozmetikler</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="VIP">🔥 VIP Özel</button>
+          <button type="button" class="shop-cat-btn" data-shop-cat="Special">⭐ Özel Eşyalar</button>
         </div>
 
-        <!-- Player Current Inventory Bar -->
+        <!-- Oyuncu Mevcut Envanter Çubuğu -->
         <div class="shop-inventory-bar mc-panel-inset">
-          <span class="inv-bar-title">🎒 YOUR INVENTORY:</span>
+          <span class="inv-bar-title">🎒 ENVANTERİNİZ:</span>
           <div class="inv-pills-wrap">
-            <span class="inv-pill">❤️ Extra Life: <strong id="shop-inv-extralife">0</strong></span>
-            <span class="inv-pill">🔥 Second Chance: <strong id="shop-inv-secondchance">0</strong></span>
-            <span class="inv-pill">⭐ Score Booster: <strong id="shop-inv-scorebooster">0</strong></span>
-            <span class="inv-pill">💎 Emerald Booster: <strong id="shop-inv-emeraldbooster">0</strong></span>
-            <span class="inv-pill">🎟️ Tournament Ticket: <strong id="shop-inv-ticket">0</strong></span>
-            <span class="inv-pill">🌈 RGB Name: <strong id="shop-inv-rgb">Locked</strong></span>
+            <span class="inv-pill">❤️ Ekstra Can: <strong id="shop-inv-extralife">0</strong></span>
+            <span class="inv-pill">🔥 İkinci Şans: <strong id="shop-inv-secondchance">0</strong></span>
+            <span class="inv-pill">⭐ Puan Çarpanı: <strong id="shop-inv-scorebooster">0</strong></span>
+            <span class="inv-pill">💎 Zümrüt Çarpanı: <strong id="shop-inv-emeraldbooster">0</strong></span>
+            <span class="inv-pill">🎟️ Turnuva Bileti: <strong id="shop-inv-ticket">0</strong></span>
+            <span class="inv-pill">🌈 RGB İsim: <strong id="shop-inv-rgb">Kilitli</strong></span>
           </div>
         </div>
 
@@ -825,87 +921,87 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 7B: SEPARATE VIP SHOP (SECTION 9 & 10)
+         EKRAN 7B: VIP & RÜTBE MAĞAZASI
          ========================================== -->
-    <section id="screen-vip-shop" class="screen" aria-label="VIP Shop">
+    <section id="screen-vip-shop" class="screen" aria-label="VIP Mağazası">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
-            <h2 class="hub-page-title">👑 VIP Shop</h2>
-            <p class="hub-page-sub">Unlock Party Creation, Player Invitations, Priority Support, VIP Emerald Bonuses &amp; RGB Cosmetics</p>
+            <h2 class="hub-page-title">👑 VIP ve Rütbe Mağazası</h2>
+            <p class="hub-page-sub">Parti Oluşturma, Oyuncu Davet Etme, Öncelikli Destek, Bonus Zümrüt Çarpanı ve RGB İsim Ayrıcalıklarını Açın</p>
           </div>
           <div class="hub-header-actions">
-            <span id="vip-shop-user-status" class="role-badge role-player">PLAYER</span>
+            <span id="vip-shop-user-status" class="role-badge role-player">OYUNCU</span>
             <button type="button" class="mc-btn mc-btn-emerald mc-btn-small" data-nav-screen="screen-shop">
-              <span class="btn-inner">💚 Emerald Shop &amp; Ranks</span>
+              <span class="btn-inner">💚 Zümrüt &amp; Rütbe Mağazası</span>
             </button>
           </div>
         </div>
 
         <div class="vip-showcase-grid">
-          <!-- Main 200 TL VIP Package Card -->
+          <!-- Ana 200 TL VIP Paket Kartı -->
           <div class="vip-package-card mc-panel-inset">
             <div class="vip-pkg-divider">━━━━━━━━━━━━━━━━━━━━</div>
             <div class="vip-pkg-header">
               <span class="vip-pkg-crown">👑</span>
-              <h3 class="vip-pkg-title">VIP</h3>
-              <div class="vip-pkg-price">200 TL</div>
+              <h3 class="vip-pkg-title">VIP ÜYELİK</h3>
+              <div class="vip-pkg-price">200 TL <span class="meta-muted" style="font-size:0.8rem;">(veya 1.000 💚)</span></div>
             </div>
             <div class="vip-pkg-divider">━━━━━━━━━━━━━━━━━━━━</div>
 
             <ul class="vip-feature-checklist">
-              <li><span>✓</span> <strong>Create Parties</strong> — Host your own tournament lobbies</li>
-              <li><span>✓</span> <strong>Invite Players</strong> — Send direct party invitations &amp; codes</li>
-              <li><span>✓</span> <strong>VIP Badge</strong> — Exclusive 👑 VIP badge across the platform</li>
-              <li><span>✓</span> <strong>VIP Profile Styling</strong> — Golden frame &amp; VIP dashboard</li>
-              <li><span>✓</span> <strong>Priority Support</strong> — 🔥 VIP PRIORITY support tickets</li>
-              <li><span>✓</span> <strong>Priority Bug Reports</strong> — Automatic HIGH priority bug queue</li>
-              <li><span>✓</span> <strong>Priority Suggestions</strong> — Featured at the top for Admins</li>
-              <li><span>✓</span> <strong>VIP Emerald Bonus</strong> — +150 💚 per Win &amp; +50 💚 Daily Reward</li>
-              <li><span>✓</span> <strong>VIP-Only Shop Items</strong> — Access exclusive VIP bundles</li>
-              <li><span>✓</span> <strong>RGB Username</strong> — Smooth animated RGB gradient username</li>
-              <li><span>✓</span> <strong>Exclusive Cosmetics</strong> — Special tournament flair</li>
+              <li><span>✓</span> <strong>Parti Oluşturma</strong> — Kendi turnuva odalarınızı kurun</li>
+              <li><span>✓</span> <strong>Oyuncu Davet Etme</strong> — Doğrudan parti davet kodu gönderin</li>
+              <li><span>✓</span> <strong>VIP Rozeti</strong> — Tüm platformda özel 👑 VIP rozeti</li>
+              <li><span>✓</span> <strong>VIP Profil Çerçevesi</strong> — Altın çerçeve ve VIP kontrol paneli</li>
+              <li><span>✓</span> <strong>Öncelikli Destek</strong> — 🔥 YÜKSEK / ÇOK YÜKSEK öncelikli destek talepleri</li>
+              <li><span>✓</span> <strong>Öncelikli Hata Bildirimi</strong> — Hata kuyruğunda üst sırada inceleme</li>
+              <li><span>✓</span> <strong>Öncelikli Öneriler</strong> — Admin listesinde en üstte gösterim</li>
+              <li><span>✓</span> <strong>VIP Zümrüt Bonusu</strong> — Galibiyette +150 💚 ve Günlük +50 💚 ödül</li>
+              <li><span>✓</span> <strong>VIP Özel Mağaza</strong> — Sadece VIP'lere özel paketlere erişim</li>
+              <li><span>✓</span> <strong>RGB Kullanıcı Adı</strong> — Akıcı animasyonlu RGB gökkuşağı isim efekti</li>
+              <li><span>✓</span> <strong>Özel Kozmetikler</strong> — Turnuva profil efektleri</li>
             </ul>
 
             <button type="button" id="btn-buy-vip-package" class="mc-btn mc-btn-gold mc-btn-large" style="width:100%; margin-top:1rem;">
-              <span class="btn-inner">👑 BUY VIP (200 TL)</span>
+              <span class="btn-inner">👑 VIP SATIN AL (200 TL)</span>
             </button>
           </div>
 
-          <!-- VIP Bonus Comparison & Emerald Rank Alternative -->
+          <!-- VIP Bonus Karşılaştırması & Zümrüt ile Rütbe Açma -->
           <div class="vip-comparison-col">
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">💚 VIP Emerald Bonus Comparison (Section 10)</h3>
+              <h3 class="panel-sec-title">💚 VIP Zümrüt Bonus Karşılaştırması</h3>
               <div class="vip-bonus-compare-grid">
                 <div class="vip-cmp-box">
-                  <span class="meta-muted">Normal Game Win</span>
+                  <span class="meta-muted">Normal Oyun Kazanma</span>
                   <strong id="cmp-normal-win">+100 💚</strong>
                 </div>
                 <div class="vip-cmp-box vip-highlight">
-                  <span class="gold-text">👑 VIP Game Win</span>
+                  <span class="gold-text">👑 VIP Oyun Kazanma</span>
                   <strong class="emerald-text" id="cmp-vip-win">+150 💚</strong>
                 </div>
                 <div class="vip-cmp-box">
-                  <span class="meta-muted">Normal Daily Reward</span>
+                  <span class="meta-muted">Normal Günlük Ödül</span>
                   <strong id="cmp-normal-daily">+25 💚</strong>
                 </div>
                 <div class="vip-cmp-box vip-highlight">
-                  <span class="gold-text">👑 VIP Daily Reward</span>
+                  <span class="gold-text">👑 VIP Günlük Ödül</span>
                   <strong class="emerald-text" id="cmp-vip-daily">+50 💚</strong>
                 </div>
               </div>
             </div>
 
             <div class="mc-panel-inset dash-box" style="margin-top:1rem;">
-              <h3 class="panel-sec-title">💎 Unlock VIP with Emerald Coins</h3>
-              <p class="panel-sec-desc">Earned enough Emerald Coins from playing quizzes? You can also unlock <strong>👑 VIP Rank (2,000 💚)</strong>, <strong>🌟 MVP+</strong>, <strong>🔱 LEGEND</strong>, or <strong>💎 MILLIONAIRE</strong> directly in the Rank Shop!</p>
+              <h3 class="panel-sec-title">💎 Zümrüt ile Rütbe Yükselt</h3>
+              <p class="panel-sec-desc">Yarışmalardan kazandığınız Zümrütlerle <strong>👑 VIP (1.000 💚)</strong>, <strong>👑 VIP+ (1.750 💚)</strong>, <strong>⚔️ MVP (2.500 💚)</strong>, <strong>🌟 MVP+ (3.750 💚)</strong>, <strong>🔱 LEGEND (3.000 💚)</strong> veya <strong>💎 MILLIONAIRE (5.000 💚)</strong> rütbelerini açabilirsiniz!</p>
               <button type="button" id="btn-goto-rank-shop" class="mc-btn mc-btn-emerald mc-btn-small" style="margin-top:0.65rem;">
-                <span class="btn-inner">👑 Open Rank Shop</span>
+                <span class="btn-inner">👑 Rütbe Mağazasını Aç</span>
               </button>
             </div>
 
             <div id="payment-service-status-box" class="mc-panel-inset dash-box hidden" style="margin-top:1rem; border-color:var(--gold-main);">
-              <h4 class="gold-text">💳 Payment Service Abstraction Notice</h4>
+              <h4 class="gold-text">💳 Ödeme Sistemi Bildirimi</h4>
               <p id="payment-service-status-msg" class="panel-sec-desc" style="margin-top:0.35rem;"></p>
             </div>
           </div>
@@ -914,102 +1010,170 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 8: PLAYER PROFILE, COSMETICS & ACHIEVEMENTS (SECTIONS 13, 25, 33)
+         EKRAN 8: OYUNCU PROFİLİ, PROFİL FOTOĞRAFI, KOZMETİKLER & BAŞARIMLAR (BÖLÜM 9, 10, 11, 29)
          ========================================== -->
-    <section id="screen-profile" class="screen" aria-label="Player Profile">
+    <section id="screen-profile" class="screen" aria-label="Oyuncu Profili">
       <div class="hub-page-wrapper mc-panel">
-        <div class="hub-page-header mc-panel-inset">
+        <!-- Profil Kartı Başlığı (Arka plan teması uygulanır) -->
+        <div id="profile-hero-banner" class="hub-page-header mc-panel-inset profile-bg-overworld">
           <div class="profile-hero-left">
-            <div class="profile-big-avatar">⛏️</div>
+            <div class="profile-avatar-wrapper">
+              <img id="profile-avatar-img" class="mc-avatar-img mc-avatar-xl avatar-border-stone" src="" alt="Profil Fotoğrafı" />
+              <div class="profile-big-avatar hidden" id="profile-fallback-emoji">⛏️</div>
+            </div>
             <div>
               <div class="profile-name-row">
                 <h2 class="hub-page-title" id="profile-username">Steve</h2>
-                <span id="profile-role-badge" class="role-badge role-player">PLAYER</span>
-                <span class="profile-rank-pill" id="profile-rank-badge">Rank #1</span>
+                <span id="profile-role-badge" class="role-badge role-player">OYUNCU</span>
+                <span class="profile-rank-pill" id="profile-rank-badge">Sıra #1</span>
               </div>
-              <p class="hub-page-sub" id="profile-immutable-id">Account ID: USR-1001</p>
+              <p class="hub-page-sub" id="profile-immutable-id">Hesap ID: USR-1001</p>
+              <div id="profile-showcase-badges" class="profile-showcase-row" style="margin-top:0.35rem; display:flex; gap:0.4rem; flex-wrap:wrap;"></div>
             </div>
           </div>
           <div class="hub-header-actions">
             <button type="button" class="mc-btn mc-btn-stone mc-btn-small" data-nav-screen="screen-account-settings">
-              <span class="btn-inner">⚙️ Account Settings</span>
+              <span class="btn-inner">⚙️ Hesap Ayarları</span>
             </button>
             <button type="button" class="mc-btn mc-btn-emerald mc-btn-small" data-nav-screen="screen-shop">
-              <span class="btn-inner">💚 Emerald Shop</span>
+              <span class="btn-inner">💚 Zümrüt Mağazası</span>
             </button>
           </div>
         </div>
 
-        <!-- Section 13: RGB Username Cosmetic Quick Control -->
-        <div class="mc-panel-inset dash-box" style="margin-bottom:0.85rem;">
-          <div class="panel-header-row">
-            <div>
-              <h3 class="panel-sec-title">🌈 Cosmetics — RGB Username</h3>
-              <p class="panel-sec-desc">Preview: <strong id="profile-rgb-preview" class="rgb-username-text">Mashallah</strong> — Smooth animated RGB gradient username (respects reduced-motion).</p>
+        <!-- Bölüm 9, 10, 11, 29: Profil Fotoğrafı Yükleme & Özelleştirme Merkezi -->
+        <div class="party-hub-grid" style="margin-bottom:0.9rem;">
+          <!-- Sol: Profil Fotoğrafı Yükleme, Kırpma & Önizleme -->
+          <div class="mc-panel-inset dash-box">
+            <h3 class="panel-sec-title">📷 Profil Fotoğrafı &amp; Minecraft Avatarı</h3>
+            <p class="panel-sec-desc">Kendi profil fotoğrafınızı yükleyin (PNG, JPG, WEBP — Maks. 2 MB). Fotoğrafınız otomatik olarak kare (160×160) boyutuna optimize edilir. Fotoğraf yüklenmezse Minecraft piksel avatarınız kullanılır.</p>
+
+            <div class="avatar-upload-controls" style="display:flex; align-items:center; gap:0.9rem; margin-top:0.65rem; flex-wrap:wrap;">
+              <img id="profile-avatar-preview-img" class="mc-avatar-img mc-avatar-lg avatar-border-stone" src="" alt="Önizleme" />
+              <div style="display:flex; flex-direction:column; gap:0.45rem; flex:1; min-width:200px;">
+                <input type="file" id="inp-profile-avatar-file" accept="image/png,image/jpeg,image/webp" class="mc-input mc-input-sm" />
+                <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">
+                  <button type="button" id="btn-save-profile-avatar" class="act-btn emerald" disabled>💾 Fotoğrafı Kaydet</button>
+                  <button type="button" id="btn-remove-profile-avatar" class="act-btn danger">🗑️ Fotoğrafı Kaldır (Varsayılan Avatar)</button>
+                </div>
+                <span id="profile-avatar-status-msg" class="meta-muted" style="font-size:0.78rem;">Aktif: Minecraft Piksel Avatarı</span>
+              </div>
             </div>
-            <div style="display:flex; gap:0.5rem; align-items:center;">
-              <span id="profile-rgb-status-pill" class="status-pill status-DISABLED">LOCKED</span>
-              <button type="button" id="btn-profile-rgb-enable" class="act-btn emerald">Enable</button>
-              <button type="button" id="btn-profile-rgb-disable" class="act-btn danger">Disable</button>
+          </div>
+
+          <!-- Sağ: Profil Çerçevesi, Arka Plan, Tema & RGB İsim Özelleştirme -->
+          <div class="mc-panel-inset dash-box">
+            <h3 class="panel-sec-title">🎨 Profil Özelleştirme &amp; Kozmetikler</h3>
+            <div class="stack-form" style="margin-top:0.45rem;">
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.55rem;">
+                <div>
+                  <label for="sel-profile-border" style="font-size:0.78rem; color:var(--text-muted);">🖼️ Profil Çerçevesi</label>
+                  <select id="sel-profile-border" class="mc-select mc-select-xs" style="width:100%;">
+                    <option value="stone">🪨 Taş Çerçeve (Varsayılan)</option>
+                    <option value="emerald">💚 Zümrüt Çerçeve</option>
+                    <option value="gold">👑 Altın VIP Çerçeve</option>
+                    <option value="diamond">💎 Elmas MVP Çerçeve</option>
+                    <option value="obsidian">🟣 Obsidyen Çerçeve</option>
+                    <option value="nether">🔥 Nether Kızıl Çerçeve</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="sel-profile-bg" style="font-size:0.78rem; color:var(--text-muted);">🌌 Profil Arka Planı</label>
+                  <select id="sel-profile-bg" class="mc-select mc-select-xs" style="width:100%;">
+                    <option value="overworld">🌲 Overworld Gece (Varsayılan)</option>
+                    <option value="emerald_temple">💚 Zümrüt Tapınağı</option>
+                    <option value="nether_fortress">🔥 Nether Kalesi</option>
+                    <option value="end_dimension">🔮 End Boyutu</option>
+                    <option value="diamond_vault">💎 Elmas Hazinesi</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="sel-profile-theme" style="font-size:0.78rem; color:var(--text-muted);">🌓 Arayüz Teması</label>
+                  <select id="sel-profile-theme" class="mc-select mc-select-xs" style="width:100%;">
+                    <option value="dark">🌙 Minecraft Koyu Tema</option>
+                    <option value="light">☀️ Minecraft Açık Tema</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="sel-profile-privacy" style="font-size:0.78rem; color:var(--text-muted);">🔒 Profil Gizliliği</label>
+                  <select id="sel-profile-privacy" class="mc-select mc-select-xs" style="width:100%;">
+                    <option value="PUBLIC">🌍 Herkese Açık</option>
+                    <option value="PARTY_ONLY">🎉 Sadece Parti Üyeleri</option>
+                    <option value="PRIVATE">🔒 Gizli</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid rgba(255,255,255,0.08);">
+                <div>
+                  <span style="font-size:0.84rem;">🌈 RGB Kullanıcı Adı: <strong id="profile-rgb-preview" class="rgb-username-text">Mashallah</strong></span>
+                  <span id="profile-rgb-status-pill" class="status-pill status-DISABLED" style="margin-left:0.4rem;">KİLİTLİ</span>
+                </div>
+                <div style="display:flex; gap:0.4rem;">
+                  <button type="button" id="btn-profile-rgb-enable" class="act-btn emerald">RGB Aç</button>
+                  <button type="button" id="btn-profile-rgb-disable" class="act-btn danger">RGB Kapat</button>
+                  <button type="button" id="btn-save-profile-customization" class="act-btn emerald">💾 Görünümü Kaydet</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="profile-stats-grid">
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">🏆 Leaderboard Rank</span>
+            <span class="stat-box-label">🏆 Liderlik Sırası</span>
             <strong class="stat-box-value gold-text" id="prof-stat-rank">#1</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">⭐ Total Points</span>
+            <span class="stat-box-label">⭐ Toplam Puan</span>
             <strong class="stat-box-value diamond-text" id="prof-stat-points">0</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">💚 Emerald Balance</span>
-            <strong class="stat-box-value emerald-text" id="prof-stat-emeralds">0 Emerald Coins</strong>
+            <span class="stat-box-label">💚 Zümrüt Bakiyesi</span>
+            <strong class="stat-box-value emerald-text" id="prof-stat-emeralds">0 Zümrüt</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">🎮 Games Played</span>
+            <span class="stat-box-label">🎮 Oynanan Oyun</span>
             <strong class="stat-box-value" id="prof-stat-games">0</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">🏆 Wins / 💀 Losses</span>
-            <strong class="stat-box-value" id="prof-stat-winloss">0 W / 0 L</strong>
+            <span class="stat-box-label">🏆 Kazanılan / 💀 Kaybedilen</span>
+            <strong class="stat-box-value" id="prof-stat-winloss">0 G / 0 M</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">📈 Win Rate</span>
+            <span class="stat-box-label">📈 Kazanma Oranı</span>
             <strong class="stat-box-value emerald-text" id="prof-stat-winrate">%0</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">❤️ Extra Lives Owned / Used</span>
-            <strong class="stat-box-value wrong-text" id="prof-stat-extralives">0 Owned / 0 Used</strong>
+            <span class="stat-box-label">❤️ Ekstra Can (Sahip / Kullanılan)</span>
+            <strong class="stat-box-value wrong-text" id="prof-stat-extralives">0 Sahip / 0 Kullanılan</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">🎯 Average Score</span>
+            <span class="stat-box-label">🎯 Ortalama Puan</span>
             <strong class="stat-box-value" id="prof-stat-avgscore">0</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">👑 Best Score</span>
+            <span class="stat-box-label">👑 En Yüksek Ödül</span>
             <strong class="stat-box-value gold-text" id="prof-stat-bestscore">0</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">🟩 Total Emeralds Earned</span>
-            <strong class="stat-box-value emerald-text" id="prof-stat-earned">+0 Emeralds</strong>
+            <span class="stat-box-label">🟩 Toplam Kazanılan Zümrüt</span>
+            <strong class="stat-box-value emerald-text" id="prof-stat-earned">+0 Zümrüt</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">🛒 Total Emeralds Spent</span>
-            <strong class="stat-box-value wrong-text" id="prof-stat-spent">-0 Emeralds</strong>
+            <span class="stat-box-label">🛒 Toplam Harcanan Zümrüt</span>
+            <strong class="stat-box-value wrong-text" id="prof-stat-spent">-0 Zümrüt</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">🔥 Daily Login Streak</span>
-            <strong class="stat-box-value gold-text" id="prof-stat-streak">0 Days</strong>
+            <span class="stat-box-label">🔥 Günlük Giriş Serisi</span>
+            <strong class="stat-box-value gold-text" id="prof-stat-streak">0 Gün</strong>
           </div>
         </div>
 
         <div class="profile-achievements-sec mc-panel-inset">
           <div class="panel-header-row">
-            <h3 class="panel-sec-title">🎖️ Achievements &amp; Badges</h3>
-            <span class="meta-muted" id="prof-achievements-counter">0 / 6 Unlocked</span>
+            <h3 class="panel-sec-title">🎖️ Başarımlar &amp; Rozet Vitrini</h3>
+            <span class="meta-muted" id="prof-achievements-counter">0 / 6 Açıldı</span>
           </div>
           <div id="profile-achievements-grid" class="achievements-grid"></div>
         </div>
@@ -1017,19 +1181,19 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 9: EMERALD TRANSACTION HISTORY
+         EKRAN 9: ZÜMRÜT İŞLEM GEÇMİŞİ
          ========================================== -->
-    <section id="screen-history" class="screen" aria-label="Emerald History">
+    <section id="screen-history" class="screen" aria-label="Zümrüt İşlem Geçmişi">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
-            <h2 class="hub-page-title">📜 Emerald Transactions</h2>
-            <p class="hub-page-sub">Complete ledger of your Emerald Coin earnings, shop purchases, and Extra Life usage</p>
+            <h2 class="hub-page-title">📜 Zümrüt İşlem Geçmişi</h2>
+            <p class="hub-page-sub">Zümrüt kazançlarınızın, mağaza alışverişlerinizin ve Ekstra Can kullanımlarınızın tam kaydı</p>
           </div>
           <div class="hub-header-actions">
-            <span class="wallet-amount emerald-text" id="history-emerald-balance">💚 0 Emerald Coins</span>
+            <span class="wallet-amount emerald-text" id="history-emerald-balance">💚 0 Zümrüt</span>
             <button type="button" class="mc-btn mc-btn-emerald mc-btn-small" data-nav-screen="screen-shop">
-              <span class="btn-inner">💚 Emerald Shop</span>
+              <span class="btn-inner">💚 Zümrüt Mağazası</span>
             </button>
           </div>
         </div>
@@ -1039,146 +1203,146 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 10: SUPPORT, BUG REPORTS & SUGGESTIONS (SECTIONS 14, 15, 16, 17)
+         EKRAN 10: DESTEK, HATA BİLDİRİMİ & ÖNERİ SİSTEMİ (BÖLÜM 22, 23, 24)
          ========================================== -->
-    <section id="screen-support" class="screen" aria-label="Support, Bugs & Suggestions">
+    <section id="screen-support" class="screen" aria-label="Destek, Hata Bildirimi ve Öneriler">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
-            <h2 class="hub-page-title">🎧 Support, Bug Reports &amp; Suggestions</h2>
-            <p class="hub-page-sub">Need help, found a bug, or have an idea? VIP members automatically receive <strong>🔥 VIP PRIORITY</strong>!</p>
+            <h2 class="hub-page-title">🎧 Destek, Hata Bildirimi &amp; Öneriler</h2>
+            <p class="hub-page-sub">Yardıma mı ihtiyacınız var, bir hata mı buldunuz yoksa yeni bir fikriniz mi var? VIP ve MVP üyeler otomatik olarak <strong>🔥 YÜKSEK / ÇOK YÜKSEK ÖNCELİK</strong> alır!</p>
           </div>
           <div class="hub-header-actions">
-            <span id="support-priority-indicator" class="status-pill status-ACTIVE">STANDARD PRIORITY</span>
+            <span id="support-priority-indicator" class="status-pill status-ACTIVE">NORMAL ÖNCELİK</span>
           </div>
         </div>
 
         <div class="shop-category-tabs" role="tablist">
-          <button type="button" class="support-tab-btn active" data-support-pane="support">🎧 Support</button>
-          <button type="button" class="support-tab-btn" data-support-pane="bug">🐛 Report Bug</button>
-          <button type="button" class="support-tab-btn" data-support-pane="suggestion">💡 Suggestion</button>
+          <button type="button" class="support-tab-btn active" data-support-pane="support">🎧 Destek Talebi</button>
+          <button type="button" class="support-tab-btn" data-support-pane="bug">🐛 Hata Bildir</button>
+          <button type="button" class="support-tab-btn" data-support-pane="suggestion">💡 Öneri Gönder</button>
         </div>
 
-        <!-- PANE 1: SUPPORT (Section 14) -->
+        <!-- SEKME 1: DESTEK -->
         <div id="support-pane-support" class="support-pane active">
           <div class="party-hub-grid">
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">🎧 Create Support Request</h3>
+              <h3 class="panel-sec-title">🎧 Yeni Destek Talebi Oluştur</h3>
               <form id="form-submit-support" class="stack-form" autocomplete="off">
                 <div class="form-row">
-                  <label for="sup-category">Category</label>
+                  <label for="sup-category">Kategori</label>
                   <select id="sup-category" class="mc-select">
-                    <option value="Technical Problem">Technical Problem</option>
-                    <option value="Account Problem">Account Problem</option>
-                    <option value="Party Problem">Party Problem</option>
-                    <option value="Payment Problem">Payment Problem</option>
-                    <option value="Other">Other</option>
+                    <option value="Teknik Sorun">Teknik Sorun</option>
+                    <option value="Hesap Sorunu">Hesap Sorunu</option>
+                    <option value="Parti Sorunu">Parti Sorunu</option>
+                    <option value="Ödeme / Zümrüt Sorunu">Ödeme / Zümrüt Sorunu</option>
+                    <option value="Diğer">Diğer</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label for="sup-title">Subject / Title</label>
-                  <input type="text" id="sup-title" class="mc-input mc-input-sm" placeholder="Brief summary of your issue..." required />
+                  <label for="sup-title">Konu / Başlık</label>
+                  <input type="text" id="sup-title" class="mc-input mc-input-sm" placeholder="Sorununuzun kısa özeti..." required />
                 </div>
                 <div class="form-row">
-                  <label for="sup-desc">Description</label>
-                  <textarea id="sup-desc" class="mc-input mc-input-sm" rows="4" placeholder="Describe your problem in detail..." required></textarea>
+                  <label for="sup-desc">Açıklama</label>
+                  <textarea id="sup-desc" class="mc-input mc-input-sm" rows="4" placeholder="Sorununuzu detaylıca açıklayın..." required></textarea>
                 </div>
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">📨 Submit Support Ticket</span>
+                  <span class="btn-inner">📨 Destek Talebi Gönder</span>
                 </button>
               </form>
             </div>
 
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">📋 Your Support Tickets</h3>
+              <h3 class="panel-sec-title">📋 Destek Talepleriniz</h3>
               <div id="user-support-tickets-list" class="tx-history-list"></div>
             </div>
           </div>
         </div>
 
-        <!-- PANE 2: BUG REPORT (Section 15) -->
+        <!-- SEKME 2: HATA BİLDİRİMİ -->
         <div id="support-pane-bug" class="support-pane hidden">
           <div class="party-hub-grid">
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">🐛 Submit Bug Report</h3>
+              <h3 class="panel-sec-title">🐛 Hata Bildirimi Gönder</h3>
               <form id="form-submit-bug" class="stack-form" autocomplete="off">
                 <div class="form-row">
-                  <label for="bug-title">Title</label>
-                  <input type="text" id="bug-title" class="mc-input mc-input-sm" placeholder="e.g. Party code button alignment on mobile..." required />
+                  <label for="bug-title">Hata Başlığı</label>
+                  <input type="text" id="bug-title" class="mc-input mc-input-sm" placeholder="Örn: Mobilde parti kodu butonu..." required />
                 </div>
                 <div class="form-row">
-                  <label for="bug-category">Category</label>
+                  <label for="bug-category">Kategori</label>
                   <select id="bug-category" class="mc-select">
-                    <option value="Gameplay">Gameplay</option>
-                    <option value="Party System">Party System</option>
-                    <option value="Economy / Shop">Economy / Shop</option>
-                    <option value="UI / Mobile">UI / Mobile</option>
-                    <option value="Audio">Audio</option>
+                    <option value="Oyun Mekanikleri">Oyun Mekanikleri</option>
+                    <option value="Parti Sistemi">Parti Sistemi</option>
+                    <option value="Ekonomi / Mağaza">Ekonomi / Mağaza</option>
+                    <option value="Arayüz / Mobil">Arayüz / Mobil</option>
+                    <option value="Ses Sistemi">Ses Sistemi</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label for="bug-party">Related Party ID (Optional)</label>
-                  <input type="text" id="bug-party" class="mc-input mc-input-sm" placeholder="e.g. PRT-1001" />
+                  <label for="bug-party">İlgili Parti ID (İsteğe Bağlı)</label>
+                  <input type="text" id="bug-party" class="mc-input mc-input-sm" placeholder="Örn: PRT-1001" />
                 </div>
                 <div class="form-row">
-                  <label for="bug-attachment">Screenshot / Attachment Link (Optional)</label>
+                  <label for="bug-attachment">Ekran Görüntüsü Bağlantısı (İsteğe Bağlı)</label>
                   <input type="text" id="bug-attachment" class="mc-input mc-input-sm" placeholder="https://..." />
                 </div>
                 <div class="form-row">
-                  <label for="bug-desc">Description</label>
-                  <textarea id="bug-desc" class="mc-input mc-input-sm" rows="3" placeholder="Steps to reproduce the bug..." required></textarea>
+                  <label for="bug-desc">Hata Açıklaması</label>
+                  <textarea id="bug-desc" class="mc-input mc-input-sm" rows="3" placeholder="Hatayı tekrar oluşturma adımlarını yazın..." required></textarea>
                 </div>
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">🐛 Submit Bug Report</span>
+                  <span class="btn-inner">🐛 Hata Bildirimini Gönder</span>
                 </button>
               </form>
             </div>
 
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">📋 Reported Bugs</h3>
+              <h3 class="panel-sec-title">📋 Bildirilen Hatalar</h3>
               <div id="user-bug-reports-list" class="tx-history-list"></div>
             </div>
           </div>
         </div>
 
-        <!-- PANE 3: SUGGESTIONS (Section 16) -->
+        <!-- SEKME 3: ÖNERİLER -->
         <div id="support-pane-suggestion" class="support-pane hidden">
           <div class="party-hub-grid">
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">💡 Submit Suggestion</h3>
+              <h3 class="panel-sec-title">💡 Yeni Öneri Gönder</h3>
               <form id="form-submit-suggestion" class="stack-form" autocomplete="off">
                 <div class="form-row">
-                  <label for="sug-title">Title</label>
-                  <input type="text" id="sug-title" class="mc-input mc-input-sm" placeholder="Your feature idea..." required />
+                  <label for="sug-title">Öneri Başlığı</label>
+                  <input type="text" id="sug-title" class="mc-input mc-input-sm" placeholder="Özellik veya geliştirme fikriniz..." required />
                 </div>
                 <div class="form-row">
-                  <label for="sug-category">Category</label>
+                  <label for="sug-category">Kategori</label>
                   <select id="sug-category" class="mc-select">
-                    <option value="Game Modes">Game Modes</option>
-                    <option value="Questions">Questions</option>
-                    <option value="Emerald Shop">Emerald Shop</option>
-                    <option value="Cosmetics">Cosmetics</option>
-                    <option value="Tournaments">Tournaments</option>
+                    <option value="Oyun Modları">Oyun Modları</option>
+                    <option value="Sorular">Sorular</option>
+                    <option value="Zümrüt Mağazası">Zümrüt Mağazası</option>
+                    <option value="Kozmetikler">Kozmetikler</option>
+                    <option value="Turnuvalar">Turnuvalar</option>
                   </select>
                 </div>
                 <div class="form-row">
-                  <label for="sug-desc">Description</label>
-                  <textarea id="sug-desc" class="mc-input mc-input-sm" rows="4" placeholder="Explain how this feature would improve Minecraft Milyoner..." required></textarea>
+                  <label for="sug-desc">Açıklama</label>
+                  <textarea id="sug-desc" class="mc-input mc-input-sm" rows="4" placeholder="Bu özelliğin Minecraft Milyoner'i nasıl geliştireceğini anlatın..." required></textarea>
                 </div>
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">💡 Submit Suggestion</span>
+                  <span class="btn-inner">💡 Öneriyi Gönder</span>
                 </button>
               </form>
             </div>
 
             <div class="mc-panel-inset dash-box">
               <div class="panel-header-row">
-                <h3 class="panel-sec-title">🌟 Community Suggestions</h3>
+                <h3 class="panel-sec-title">🌟 Topluluk Önerileri</h3>
                 <select id="filter-user-suggestions-sort" class="mc-select mc-select-xs">
-                  <option value="PRIORITY">Sort: Priority (VIP First)</option>
-                  <option value="MOST_VOTES">Sort: Most Votes</option>
-                  <option value="NEWEST">Sort: Newest</option>
-                  <option value="OLDEST">Sort: Oldest</option>
+                  <option value="PRIORITY">Sırala: Öncelik (VIP Önce)</option>
+                  <option value="MOST_VOTES">Sırala: En Çok Oy Alan</option>
+                  <option value="NEWEST">Sırala: En Yeni</option>
+                  <option value="OLDEST">Sırala: En Eski</option>
                 </select>
               </div>
               <div id="user-suggestions-list" class="tx-history-list"></div>
@@ -1189,89 +1353,91 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 11: ACCOUNT SETTINGS (SECTION 27)
-         Username, Password, License, Security, Notifications, Cosmetics
+         EKRAN 11: HESAP VE UYGULAMA AYARLARI (BÖLÜM 30)
          ========================================== -->
-    <section id="screen-account-settings" class="screen" aria-label="Account Settings">
+    <section id="screen-account-settings" class="screen" aria-label="Hesap ve Uygulama Ayarları">
       <div class="hub-page-wrapper mc-panel">
         <div class="hub-page-header mc-panel-inset">
           <div>
-            <h2 class="hub-page-title">⚙️ Account Settings</h2>
-            <p class="hub-page-sub">Manage your Minecraft Username, Password Hash Security, License Association, Notifications &amp; RGB Cosmetics</p>
+            <h2 class="hub-page-title">⚙️ Hesap ve Uygulama Ayarları</h2>
+            <p class="hub-page-sub">Minecraft Kullanıcı Adı, Profil Fotoğrafı, Şifre Güvenliği, Lisans Bilgisi, Ses ve Bildirim Ayarlarınızı Yönetin</p>
           </div>
           <div class="hub-header-actions">
+            <button type="button" id="btn-acc-open-audio" class="mc-btn mc-btn-stone mc-btn-small">
+              <span class="btn-inner">🔊 Ses Ayarları</span>
+            </button>
             <button type="button" id="btn-acc-logout" class="mc-btn mc-btn-danger mc-btn-small">
-              <span class="btn-inner">🚪 Logout / Switch Account</span>
+              <span class="btn-inner">🚪 Çıkış Yap / Hesap Değiştir</span>
             </button>
           </div>
         </div>
 
         <div class="party-hub-grid">
           <div class="party-left-col">
-            <!-- 1. Change Username (Immutable Account ID preserved) -->
+            <!-- 1. Minecraft Kullanıcı Adı Değiştir (Sabit Hesap ID korunur) -->
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">⛏️ Change Minecraft Username</h3>
-              <p class="panel-sec-desc">Changing your username updates your display name while preserving your immutable User ID, License, Emeralds, VIP status, and Leaderboard points.</p>
+              <h3 class="panel-sec-title">⛏️ Minecraft Kullanıcı Adını Değiştir</h3>
+              <p class="panel-sec-desc">Kullanıcı adınızı değiştirdiğinizde sabit Hesap ID'niz, Lisansınız, Zümrüt Bakiyeniz, Rütbeniz ve Liderlik Puanlarınız eksiksiz korunur.</p>
               <form id="form-acc-username" class="inline-join-form" style="margin-top:0.6rem;" autocomplete="off">
-                <input type="text" id="inp-acc-new-username" class="mc-input mc-input-sm" placeholder="New Minecraft Username" maxlength="24" required />
+                <input type="text" id="inp-acc-new-username" class="mc-input mc-input-sm" placeholder="Yeni Minecraft Kullanıcı Adı" maxlength="24" required />
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">Save Username</span>
+                  <span class="btn-inner">Kullanıcı Adını Kaydet</span>
                 </button>
               </form>
             </div>
 
-            <!-- 2. Password & Security (Salted SHA-256 Hash Only) -->
+            <!-- 2. Şifre ve Güvenlik (Tuzlanmış SHA-256 Hash) -->
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">🔒 Password &amp; Security</h3>
-              <p class="panel-sec-desc">Passwords are never stored in plaintext. Only an irreversible salted SHA-256 hash is stored.</p>
+              <h3 class="panel-sec-title">🔒 Şifre ve Güvenlik</h3>
+              <p class="panel-sec-desc">Şifreler asla düz metin olarak saklanmaz. Yalnızca geri döndürülemez SHA-256 özet (hash) değeri kaydedilir.</p>
               <form id="form-acc-password" class="stack-form" style="margin-top:0.6rem;" autocomplete="off">
                 <div class="form-row">
-                  <label for="inp-acc-curr-pwd">Current Password (leave blank if setting for the first time)</label>
-                  <input type="password" id="inp-acc-curr-pwd" class="mc-input mc-input-sm" placeholder="Current password..." />
+                  <label for="inp-acc-curr-pwd">Mevcut Şifre (İlk kez belirliyorsanız boş bırakın)</label>
+                  <input type="password" id="inp-acc-curr-pwd" class="mc-input mc-input-sm" placeholder="Mevcut şifreniz..." />
                 </div>
                 <div class="form-row">
-                  <label for="inp-acc-new-pwd">New Password</label>
-                  <input type="password" id="inp-acc-new-pwd" class="mc-input mc-input-sm" placeholder="At least 4 characters..." required />
+                  <label for="inp-acc-new-pwd">Yeni Şifre</label>
+                  <input type="password" id="inp-acc-new-pwd" class="mc-input mc-input-sm" placeholder="En az 4 karakter..." required />
                 </div>
                 <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">🔐 Update Password Hash</span>
+                  <span class="btn-inner">🔐 Şifreyi Güncelle</span>
                 </button>
               </form>
             </div>
           </div>
 
           <div class="party-right-col">
-            <!-- 3. License & Account Identity -->
+            <!-- 3. Lisans ve Hesap Kimliği -->
             <div class="mc-panel-inset dash-box">
-              <h3 class="panel-sec-title">🔑 License &amp; Account Identity</h3>
+              <h3 class="panel-sec-title">🔑 Lisans ve Hesap Kimliği</h3>
               <ul class="sys-status-list" style="margin-top:0.5rem;">
-                <li><span>Immutable User ID:</span> <strong id="acc-info-userid">USR-1001</strong></li>
-                <li><span>Minecraft Username:</span> <strong id="acc-info-username" class="emerald-text">Steve</strong></li>
-                <li><span>Role &amp; Rank:</span> <strong id="acc-info-role" class="gold-text">PLAYER</strong></li>
-                <li><span>VIP Membership:</span> <strong id="acc-info-vip">Inactive</strong></li>
-                <li><span>Bound License ID:</span> <strong id="acc-info-license">LIC-COMMUNITY-XXQ</strong></li>
-                <li><span>Password Protection:</span> <strong id="acc-info-pwd-status" class="emerald-text">SHA-256 Ready</strong></li>
+                <li><span>Sabit Kullanıcı ID:</span> <strong id="acc-info-userid">USR-1001</strong></li>
+                <li><span>Minecraft Kullanıcı Adı:</span> <strong id="acc-info-username" class="emerald-text">Steve</strong></li>
+                <li><span>Rol ve Rütbe:</span> <strong id="acc-info-role" class="gold-text">OYUNCU</strong></li>
+                <li><span>VIP Üyeliği:</span> <strong id="acc-info-vip">Pasif</strong></li>
+                <li><span>Bağlı Lisans ID:</span> <strong id="acc-info-license">LIC-COMMUNITY-XXQ</strong></li>
+                <li><span>Şifre Koruması:</span> <strong id="acc-info-pwd-status" class="emerald-text">SHA-256 Hazır</strong></li>
               </ul>
             </div>
 
-            <!-- 4. Cosmetics & Accessibility Notifications -->
+            <!-- 4. Kozmetikler ve Bildirim Tercihleri -->
             <div class="mc-panel-inset dash-box" style="margin-top:0.85rem;">
-              <h3 class="panel-sec-title">🌈 Cosmetics &amp; Preferences</h3>
+              <h3 class="panel-sec-title">🌈 Kozmetikler, Tema ve Bildirimler</h3>
               <div class="sys-status-list" style="margin-top:0.5rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.07);">
                   <div>
-                    <strong>🌈 RGB Username Effect</strong>
-                    <div class="meta-muted">Smooth RGB gradient animation on your username</div>
+                    <strong>🌈 RGB Kullanıcı Adı Efekti</strong>
+                    <div class="meta-muted">Kullanıcı adınızda akıcı RGB gökkuşağı animasyonu</div>
                   </div>
                   <div style="display:flex; gap:0.4rem;">
-                    <button type="button" id="btn-acc-rgb-enable" class="act-btn emerald">Enable</button>
-                    <button type="button" id="btn-acc-rgb-disable" class="act-btn danger">Disable</button>
+                    <button type="button" id="btn-acc-rgb-enable" class="act-btn emerald">Aç</button>
+                    <button type="button" id="btn-acc-rgb-disable" class="act-btn danger">Kapat</button>
                   </div>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:0.45rem 0;">
                   <div>
-                    <strong>🔔 Platform Notifications</strong>
-                    <div class="meta-muted">Show toast notifications for rewards &amp; party invites</div>
+                    <strong>🔔 Platform Bildirimleri</strong>
+                    <div class="meta-muted">Ödüller ve parti davetleri için bildirim göster</div>
                   </div>
                   <input type="checkbox" id="chk-acc-notifications" checked style="width:20px; height:20px;" />
                 </div>
@@ -1283,21 +1449,27 @@
     </section>
 
     <!-- ==========================================
-         SCREEN 12: ADMIN PANEL — 100% ENGLISH ONLY (SECTIONS 31-37)
-         Sidebar with 18 dedicated pages:
-         Dashboard, Users, Ranks, Licenses, Parties, Leaderboard, Economy,
-         Emerald Shop, Rank Shop, Payments, Support, Bug Reports, Suggestions,
-         Transactions, Achievements, Backups, Activity Logs, Settings
+         EKRAN 12: ADMİN PANELİ — %100 TÜRKÇE (BÖLÜM 26 & 27)
+         18 Özel Yönetim Sayfası:
+         Gösterge Paneli, Oyuncular, Rütbeler, Lisanslar, Partiler, Liderlik Tablosu,
+         Ekonomi, Mağaza, VIP, Ödemeler, Destek, Hata Bildirimleri, Öneriler,
+         İşlemler, Başarımlar, Yedekler, Aktivite Günlüğü, Ayarlar
          ========================================== -->
-    <section id="screen-admin" class="screen" aria-label="Admin Panel">
+    <section id="screen-admin" class="screen" aria-label="Admin Paneli">
       <div class="admin-shell mc-panel">
-        <!-- Admin Top Bar -->
+        <!-- Admin Üst Çubuğu -->
         <div class="admin-topbar mc-panel-inset">
-          <div class="admin-brand">
-            <span class="admin-shield-icon">🛡️</span>
-            <div>
-              <div class="admin-brand-title">Minecraft Milyoner</div>
-              <div class="admin-brand-sub">Admin Panel</div>
+          <div style="display:flex; align-items:center; gap:0.6rem;">
+            <!-- Mobil Admin Menü Çekmecesi Butonu (Bölüm 27) -->
+            <button type="button" id="btn-open-admin-drawer" class="mc-btn mc-btn-gold mc-btn-small admin-drawer-toggle">
+              <span class="btn-inner">☰ Admin Menüsü</span>
+            </button>
+            <div class="admin-brand">
+              <span class="admin-shield-icon">🛡️</span>
+              <div>
+                <div class="admin-brand-title">Minecraft Milyoner</div>
+                <div class="admin-brand-sub">Yönetim Paneli (Admin Panel)</div>
+              </div>
             </div>
           </div>
 
@@ -1310,127 +1482,127 @@
               </div>
             </div>
             <button type="button" id="btn-admin-go-game" class="mc-btn mc-btn-emerald mc-btn-small">
-              <span class="btn-inner">🏠 Return to Platform</span>
+              <span class="btn-inner">🏠 Platforma Dön</span>
             </button>
           </div>
         </div>
 
         <div class="admin-body">
-          <!-- Admin Sidebar Navigation (18 English Sections) -->
-          <aside class="admin-sidebar mc-panel-inset" aria-label="Admin Navigation" id="admin-sidebar-nav">
+          <!-- Admin Sol Menü Navigasyonu (18 Türkçe Sayfa) -->
+          <aside class="admin-sidebar mc-panel-inset" aria-label="Admin Navigasyonu" id="admin-sidebar-nav">
             <button type="button" class="admin-nav-btn active" data-admin-tab="dashboard">
-              <span>📊</span> <span>Dashboard</span>
+              <span>📊</span> <span>Gösterge Paneli</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="users">
-              <span>👥</span> <span>Users</span>
+              <span>👥</span> <span>Oyuncular</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="ranks">
-              <span>🎖️</span> <span>Ranks</span>
+              <span>🎖️</span> <span>Rütbeler</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="licenses">
-              <span>🔑</span> <span>Licenses</span>
+              <span>🔑</span> <span>Lisanslar</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="parties">
-              <span>🎉</span> <span>Parties</span>
+              <span>🎉</span> <span>Partiler</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="leaderboard">
-              <span>🏆</span> <span>Leaderboard</span>
+              <span>🏆</span> <span>Liderlik Tablosu</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="economy">
-              <span>💚</span> <span>Economy</span>
+              <span>💚</span> <span>Ekonomi</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="shop">
-              <span>🛒</span> <span>Emerald Shop</span>
+              <span>🛒</span> <span>Mağaza</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="vip">
-              <span>👑</span> <span>Rank Shop</span>
+              <span>👑</span> <span>VIP</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="payments">
-              <span>💳</span> <span>Payments</span>
+              <span>💳</span> <span>Ödemeler</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="support">
-              <span>🎧</span> <span>Support</span>
+              <span>🎧</span> <span>Destek</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="bugs">
-              <span>🐛</span> <span>Bug Reports</span>
+              <span>🐛</span> <span>Hata Bildirimleri</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="suggestions">
-              <span>💡</span> <span>Suggestions</span>
+              <span>💡</span> <span>Öneriler</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="transactions">
-              <span>📒</span> <span>Transactions</span>
+              <span>📒</span> <span>İşlemler</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="achievements">
-              <span>🏅</span> <span>Achievements</span>
+              <span>🏅</span> <span>Başarımlar</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="backups">
-              <span>💾</span> <span>Backups</span>
+              <span>💾</span> <span>Yedekler</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="activity">
-              <span>📜</span> <span>Activity Logs</span>
+              <span>📜</span> <span>Aktivite Günlüğü</span>
             </button>
             <button type="button" class="admin-nav-btn" data-admin-tab="settings">
-              <span>⚙️</span> <span>Settings</span>
+              <span>⚙️</span> <span>Ayarlar</span>
             </button>
           </aside>
 
-          <!-- Admin Content Views (100% English) -->
+          <!-- Admin İçerik Alanı (%100 Türkçe) -->
           <div class="admin-content">
 
-            <!-- 1. DASHBOARD (Section 32: 12 Cards) -->
+            <!-- 1. GÖSTERGE PANELİ (12 İstatistik Kartı) -->
             <div id="admin-tab-dashboard" class="admin-tab-pane active">
               <div class="admin-section-header">
-                <h3>📊 Admin Dashboard Overview</h3>
-                <span class="system-status-pill">● SYSTEM ONLINE — PROTECTED</span>
+                <h3>📊 Gösterge Paneli Genel Bakış</h3>
+                <span class="system-status-pill">● SİSTEM ÇEVRİMİÇİ — KORUMALI</span>
               </div>
 
               <div class="admin-metrics-grid">
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Total Users</span>
+                  <span class="m-label">Toplam Oyuncu</span>
                   <strong class="m-value" id="adm-card-total-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Online Users</span>
+                  <span class="m-label">Aktif Oyuncular</span>
                   <strong class="m-value emerald-text" id="adm-card-active-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">VIP Users</span>
+                  <span class="m-label">VIP Üyeler</span>
                   <strong class="m-value gold-text" id="adm-card-vip-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">MVP Users</span>
+                  <span class="m-label">MVP Üyeler</span>
                   <strong class="m-value diamond-text" id="adm-card-mvp-users">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Active Parties</span>
+                  <span class="m-label">Aktif Partiler</span>
                   <strong class="m-value emerald-text" id="adm-card-active-parties">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Total Parties</span>
+                  <span class="m-label">Toplam Parti</span>
                   <strong class="m-value" id="adm-card-total-parties">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Total Emeralds</span>
+                  <span class="m-label">Toplam Zümrüt</span>
                   <strong class="m-value emerald-text" id="adm-card-total-emeralds">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Emeralds Sold</span>
+                  <span class="m-label">Satılan Zümrüt</span>
                   <strong class="m-value emerald-text" id="adm-card-emeralds-sold">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Revenue</span>
+                  <span class="m-label">Toplam Gelir</span>
                   <strong class="m-value gold-text" id="adm-card-revenue">0 TL</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Open Tickets</span>
+                  <span class="m-label">Açık Destek Talepleri</span>
                   <strong class="m-value gold-text" id="adm-card-open-tickets">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Open Bug Reports</span>
+                  <span class="m-label">Açık Hata Bildirimleri</span>
                   <strong class="m-value wrong-text" id="adm-card-open-bugs">0</strong>
                 </div>
                 <div class="metric-card mc-panel-inset">
-                  <span class="m-label">Open Suggestions</span>
+                  <span class="m-label">Açık Öneriler</span>
                   <strong class="m-value diamond-text" id="adm-card-open-suggestions">0</strong>
                 </div>
               </div>
@@ -1438,37 +1610,37 @@
               <div class="admin-dash-split">
                 <div class="mc-panel-inset dash-box">
                   <div class="panel-header-row">
-                    <h4>📜 Recent System Activity</h4>
+                    <h4>📜 Son Sistem Aktiviteleri</h4>
                     <button type="button" class="mc-btn mc-btn-stone mc-btn-small" id="btn-dash-view-all-logs">
-                      <span class="btn-inner">View All Logs</span>
+                      <span class="btn-inner">Tüm Kayıtları Gör</span>
                     </button>
                   </div>
                   <div id="adm-dash-recent-activity" class="activity-feed-list"></div>
                 </div>
 
                 <div class="mc-panel-inset dash-box">
-                  <h4>🛡️ Platform Security &amp; Architecture Status</h4>
+                  <h4>🛡️ Platform Güvenlik ve Mimari Durumu</h4>
                   <ul class="sys-status-list">
-                    <li><span>Data-Driven Rank Hierarchy (PLAYER → MILLIONAIRE / ADMIN):</span> <strong class="emerald-text">ACTIVE</strong></li>
-                    <li><span>Stripe Webhook Verification &amp; Idempotency:</span> <strong class="emerald-text">ENFORCED</strong></li>
-                    <li><span>License Signature Verification:</span> <strong class="emerald-text">SHA-256 VERIFIED</strong></li>
-                    <li><span>Password Storage Policy:</span> <strong class="emerald-text">SALTED HASH ONLY</strong></li>
-                    <li><span>Extra Life Revive Engine:</span> <strong class="emerald-text" id="adm-status-extralife">ENABLED</strong></li>
-                    <li><span>Support Queue Sorting:</span> <strong class="gold-text">CRITICAL / VERY HIGH / HIGH / NORMAL</strong></li>
+                    <li><span>Veri Odaklı Rütbe Hiyerarşisi (PLAYER → MILLIONAIRE / ADMIN):</span> <strong class="emerald-text">AKTİF</strong></li>
+                    <li><span>Stripe Webhook Doğrulaması ve Tekillik Koruması:</span> <strong class="emerald-text">ZORUNLU</strong></li>
+                    <li><span>Lisans İmza Doğrulaması:</span> <strong class="emerald-text">SHA-256 DOĞRULANDI</strong></li>
+                    <li><span>Şifre Saklama Politikası:</span> <strong class="emerald-text">YALNIZCA TUZLANMIŞ HASH</strong></li>
+                    <li><span>Ekstra Can Diriltme Motoru:</span> <strong class="emerald-text" id="adm-status-extralife">AKTİF</strong></li>
+                    <li><span>Destek Kuyruğu Sıralaması:</span> <strong class="gold-text">KRİTİK / ÇOK YÜKSEK / YÜKSEK / NORMAL</strong></li>
                   </ul>
                 </div>
               </div>
             </div>
 
-            <!-- 2. USERS (Section 33) -->
+            <!-- 2. OYUNCULAR -->
             <div id="admin-tab-users" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>👥 Users Management</h3>
+                <h3>👥 Oyuncu Yönetimi</h3>
               </div>
               <div class="admin-filter-bar">
-                <input type="text" id="search-adm-users" class="mc-input mc-input-sm" placeholder="🔍 Search username, rank, role, or ID..." />
+                <input type="text" id="search-adm-users" class="mc-input mc-input-sm" placeholder="🔍 Kullanıcı adı, rütbe, rol veya ID ara..." />
                 <select id="filter-adm-users-role" class="mc-select">
-                  <option value="ALL">All Ranks &amp; Roles</option>
+                  <option value="ALL">Tüm Rütbeler ve Roller</option>
                   <option value="ADMIN">ADMIN</option>
                   <option value="MILLIONAIRE">MILLIONAIRE</option>
                   <option value="CHAMPION">CHAMPION</option>
@@ -1484,65 +1656,65 @@
               <div id="adm-users-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 3. RANKS (Section 6, 7, 34) -->
+            <!-- 3. RÜTBELER -->
             <div id="admin-tab-ranks" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🎖️ Rank &amp; Permission System Management</h3>
+                <h3>🎖️ Rütbe ve Yetki Sistemi Yönetimi</h3>
               </div>
               <div class="mc-panel-inset admin-create-bar">
-                <h4 class="panel-sec-title">➕ Create or Edit Rank</h4>
+                <h4 class="panel-sec-title">➕ Rütbe Oluştur veya Düzenle</h4>
                 <form id="form-admin-save-rank" class="create-grid" autocomplete="off">
                   <div>
-                    <label>Rank ID (e.g. VIP, MVP_PLUS, TITAN)</label>
-                    <input type="text" id="adm-rank-id" class="mc-input mc-input-sm" placeholder="e.g. TITAN" required />
+                    <label>Rütbe ID (Örn: VIP, MVP_PLUS, TITAN)</label>
+                    <input type="text" id="adm-rank-id" class="mc-input mc-input-sm" placeholder="Örn: TITAN" required />
                   </div>
                   <div>
-                    <label>Display Name</label>
-                    <input type="text" id="adm-rank-name" class="mc-input mc-input-sm" placeholder="e.g. TITAN" required />
+                    <label>Görünen Ad</label>
+                    <input type="text" id="adm-rank-name" class="mc-input mc-input-sm" placeholder="Örn: TITAN" required />
                   </div>
                   <div>
-                    <label>Badge Icon</label>
+                    <label>Rozet İkonu</label>
                     <input type="text" id="adm-rank-icon" class="mc-input mc-input-sm" value="⚡" maxlength="4" required />
                   </div>
                   <div>
-                    <label>Badge Color (Hex)</label>
+                    <label>Rozet Rengi (Hex)</label>
                     <input type="text" id="adm-rank-color" class="mc-input mc-input-sm" value="#fbbf24" required />
                   </div>
                   <div>
-                    <label>Emerald Price (💚)</label>
+                    <label>Zümrüt Fiyatı (💚)</label>
                     <input type="number" id="adm-rank-emerald-price" class="mc-input mc-input-sm" min="0" value="1500" required />
                   </div>
                   <div>
-                    <label>TL Price (TRY)</label>
+                    <label>TL Fiyatı (TRY)</label>
                     <input type="number" id="adm-rank-tl-price" class="mc-input mc-input-sm" min="0" value="300" required />
                   </div>
                   <div>
-                    <label>Max Party Size</label>
+                    <label>Maks. Parti Kapasitesi</label>
                     <input type="number" id="adm-rank-party-limit" class="mc-input mc-input-sm" min="0" max="999" value="6" required />
                   </div>
                   <div>
-                    <label>Emerald Multiplier</label>
+                    <label>Zümrüt Çarpanı</label>
                     <input type="number" id="adm-rank-multiplier" class="mc-input mc-input-sm" step="0.05" min="1" max="5" value="1.25" required />
                   </div>
                   <div>
-                    <label>Support Priority</label>
+                    <label>Destek Önceliği</label>
                     <select id="adm-rank-priority" class="mc-select">
                       <option value="NORMAL">NORMAL</option>
-                      <option value="HIGH">HIGH</option>
-                      <option value="VERY HIGH">VERY HIGH</option>
-                      <option value="CRITICAL">CRITICAL</option>
+                      <option value="HIGH">YÜKSEK (HIGH)</option>
+                      <option value="VERY HIGH">ÇOK YÜKSEK (VERY HIGH)</option>
+                      <option value="CRITICAL">KRİTİK (CRITICAL)</option>
                     </select>
                   </div>
                   <div>
-                    <label>Can Create Party</label>
+                    <label>Parti Oluşturma Yetkisi</label>
                     <select id="adm-rank-can-party" class="mc-select">
-                      <option value="true">YES</option>
-                      <option value="false">NO</option>
+                      <option value="true">EVET</option>
+                      <option value="false">HAYIR</option>
                     </select>
                   </div>
                   <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
                     <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                      <span class="btn-inner">💾 Save Rank Definition</span>
+                      <span class="btn-inner">💾 Rütbe Tanımını Kaydet</span>
                     </button>
                   </div>
                 </form>
@@ -1550,257 +1722,257 @@
               <div id="adm-ranks-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 4. LICENSES -->
+            <!-- 4. LİSANSLAR -->
             <div id="admin-tab-licenses" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🔑 License Management</h3>
+                <h3>🔑 Lisans Yönetimi</h3>
               </div>
 
               <form id="form-admin-create-license" class="mc-panel-inset admin-create-bar" autocomplete="off">
                 <div class="create-grid">
                   <div>
-                    <label>License Name</label>
-                    <input type="text" id="adm-lic-name" class="mc-input mc-input-sm" placeholder="e.g. VIP Tournament Pass" required />
+                    <label>Lisans Adı</label>
+                    <input type="text" id="adm-lic-name" class="mc-input mc-input-sm" placeholder="Örn: VIP Turnuva Lisansı" required />
                   </div>
                   <div>
-                    <label>License Code</label>
+                    <label>Lisans Kodu</label>
                     <div class="input-with-btn">
                       <input type="text" id="adm-lic-code" class="mc-input mc-input-sm" placeholder="MCVP-XXXX-XXXX" required />
-                      <button type="button" id="btn-adm-gen-code" class="mc-icon-btn" title="Generate Random Code">🎲</button>
+                      <button type="button" id="btn-adm-gen-code" class="mc-icon-btn" title="Rastgele Kod Üret">🎲</button>
                     </div>
                   </div>
                   <div>
-                    <label>Assign Role</label>
+                    <label>Atanacak Rol</label>
                     <select id="adm-lic-role" class="mc-select">
-                      <option value="PLAYER">PLAYER</option>
+                      <option value="PLAYER">PLAYER (Oyuncu)</option>
                       <option value="VIP">VIP</option>
                       <option value="ADMIN">ADMIN</option>
                     </select>
                   </div>
                   <div>
-                    <label>Expiration Date</label>
+                    <label>Bitiş Tarihi</label>
                     <input type="date" id="adm-lic-expires" class="mc-input mc-input-sm" />
                   </div>
                   <div>
-                    <label>Assigned Username (Optional)</label>
-                    <input type="text" id="adm-lic-user" class="mc-input mc-input-sm" placeholder="e.g. Steve" />
+                    <label>Atanan Kullanıcı Adı (İsteğe Bağlı)</label>
+                    <input type="text" id="adm-lic-user" class="mc-input mc-input-sm" placeholder="Örn: Steve" />
                   </div>
                 </div>
                 <div class="create-bar-actions">
                   <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                    <span class="btn-inner">➕ Create License</span>
+                    <span class="btn-inner">➕ Lisans Oluştur</span>
                   </button>
                 </div>
               </form>
 
               <div class="admin-filter-bar">
-                <input type="text" id="search-adm-licenses" class="mc-input mc-input-sm" placeholder="🔍 Search license code, name, or user..." />
+                <input type="text" id="search-adm-licenses" class="mc-input mc-input-sm" placeholder="🔍 Lisans kodu, adı veya kullanıcı ara..." />
                 <select id="filter-adm-licenses" class="mc-select">
-                  <option value="ALL">All Statuses</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="DISABLED">DISABLED</option>
-                  <option value="EXPIRED">EXPIRED</option>
-                  <option value="REVOKED">REVOKED</option>
+                  <option value="ALL">Tüm Durumlar</option>
+                  <option value="ACTIVE">AKTİF</option>
+                  <option value="DISABLED">DEVRE DIŞI</option>
+                  <option value="EXPIRED">SÜRESİ DOLMUŞ</option>
+                  <option value="REVOKED">İPTAL EDİLMİŞ</option>
                 </select>
               </div>
 
               <div id="adm-licenses-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 5. PARTIES -->
+            <!-- 5. PARTİLER -->
             <div id="admin-tab-parties" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🎉 Party Management &amp; Admin Override</h3>
+                <h3>🎉 Parti Yönetimi ve Admin Kontrolü</h3>
                 <button type="button" id="btn-adm-quick-party" class="mc-btn mc-btn-emerald mc-btn-small">
-                  <span class="btn-inner">➕ Open Party Lobby</span>
+                  <span class="btn-inner">➕ Parti Lobisini Aç</span>
                 </button>
               </div>
 
               <div class="admin-filter-bar">
-                <input type="text" id="search-adm-parties" class="mc-input mc-input-sm" placeholder="🔍 Search party name, owner, or invite code..." />
+                <input type="text" id="search-adm-parties" class="mc-input mc-input-sm" placeholder="🔍 Parti adı, kurucu veya davet kodu ara..." />
                 <select id="filter-adm-parties" class="mc-select">
-                  <option value="ALL">All Statuses</option>
-                  <option value="WAITING">WAITING</option>
-                  <option value="READY">READY</option>
-                  <option value="STARTING">STARTING</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="FINISHED">FINISHED</option>
-                  <option value="CANCELLED">CANCELLED</option>
+                  <option value="ALL">Tüm Durumlar</option>
+                  <option value="WAITING">BEKLİYOR</option>
+                  <option value="READY">HAZIR</option>
+                  <option value="STARTING">BAŞLIYOR</option>
+                  <option value="ACTIVE">AKTİF</option>
+                  <option value="FINISHED">BİTTİ</option>
+                  <option value="CANCELLED">İPTAL EDİLDİ</option>
                 </select>
               </div>
 
               <div id="adm-parties-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 6. LEADERBOARD (Admin View) -->
+            <!-- 6. LİDERLİK TABLOSU (Admin Görünümü) -->
             <div id="admin-tab-leaderboard" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🏆 Leaderboard Management</h3>
+                <h3>🏆 Liderlik Tablosu Yönetimi</h3>
                 <select id="adm-lb-sort" class="mc-select mc-select-xs">
-                  <option value="POINTS">Sort by: Points</option>
-                  <option value="WINS">Sort by: Wins</option>
-                  <option value="EMERALDS">Sort by: Emeralds</option>
-                  <option value="GAMES">Sort by: Games Played</option>
+                  <option value="POINTS">Sırala: Puan</option>
+                  <option value="WINS">Sırala: Kazanma</option>
+                  <option value="EMERALDS">Sırala: Zümrüt</option>
+                  <option value="GAMES">Sırala: Oynanan Oyun</option>
                 </select>
               </div>
               <div id="adm-leaderboard-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 7. ECONOMY (Section 35) -->
+            <!-- 7. EKONOMİ -->
             <div id="admin-tab-economy" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>💚 Economy, Conversion Rate &amp; Reward Configuration</h3>
+                <h3>💚 Ekonomi, Dönüşüm Kuru ve Ödül Yapılandırması</h3>
               </div>
 
               <div class="mc-panel-inset admin-create-bar">
-                <h4 class="panel-sec-title">💰 Player Emerald Balance Controls</h4>
-                <p class="panel-sec-desc">Give Emeralds, Remove Emeralds, Set Balance, or Reset Balance. All changes are logged in Transactions.</p>
+                <h4 class="panel-sec-title">💰 Oyuncu Zümrüt Bakiyesi Kontrolleri</h4>
+                <p class="panel-sec-desc">Zümrüt Ekle, Zümrüt Sil, Bakiye Belirle veya Bakiyeyi Sıfırla. Tüm işlemler İşlem Geçmişine kaydedilir.</p>
                 <div class="create-grid">
                   <div>
-                    <label>Player Username</label>
-                    <input type="text" id="adm-econ-username" list="adm-econ-players-datalist" class="mc-input mc-input-sm" placeholder="e.g. Steve, Mashallah..." />
+                    <label>Oyuncu Kullanıcı Adı</label>
+                    <input type="text" id="adm-econ-username" list="adm-econ-players-datalist" class="mc-input mc-input-sm" placeholder="Örn: Steve, Mashallah..." />
                     <datalist id="adm-econ-players-datalist"></datalist>
                   </div>
                   <div>
-                    <label>Emerald Amount</label>
+                    <label>Zümrüt Miktarı</label>
                     <input type="number" id="adm-econ-amount" class="mc-input mc-input-sm" min="0" value="250" />
                   </div>
                   <div>
-                    <label>Reason / Audit Note</label>
-                    <input type="text" id="adm-econ-reason" class="mc-input mc-input-sm" placeholder="e.g. Tournament Prize" />
+                    <label>Sebep / Denetim Notu</label>
+                    <input type="text" id="adm-econ-reason" class="mc-input mc-input-sm" placeholder="Örn: Turnuva Ödülü" />
                   </div>
                 </div>
                 <div class="adm-row-actions" style="justify-content: flex-end; margin-top: 0.4rem;">
                   <button type="button" class="mc-btn mc-btn-emerald mc-btn-small" data-adm-econ-op="GIVE">
-                    <span class="btn-inner">+ Give Emeralds</span>
+                    <span class="btn-inner">+ Zümrüt Ver</span>
                   </button>
                   <button type="button" class="mc-btn mc-btn-gold mc-btn-small" data-adm-econ-op="REMOVE">
-                    <span class="btn-inner">- Remove Emeralds</span>
+                    <span class="btn-inner">- Zümrüt Düş</span>
                   </button>
                   <button type="button" class="mc-btn mc-btn-stone mc-btn-small" data-adm-econ-op="SET">
-                    <span class="btn-inner">Set Balance</span>
+                    <span class="btn-inner">Bakiye Ayarla</span>
                   </button>
                   <button type="button" class="mc-btn mc-btn-danger mc-btn-small" data-adm-econ-op="RESET">
-                    <span class="btn-inner">Reset Balance (0)</span>
+                    <span class="btn-inner">Bakiyeyi Sıfırla (0)</span>
                   </button>
                 </div>
               </div>
 
               <form id="form-admin-economy-config" class="mc-panel-inset admin-create-bar" autocomplete="off">
-                <h4 class="panel-sec-title">⚙️ Configure Conversion Rate (5 💚 = 1 TL), Rewards &amp; Extra Life Rules</h4>
+                <h4 class="panel-sec-title">⚙️ Dönüşüm Kuru (5 💚 = 1 TL), Ödüller ve Ekstra Can Kuralları</h4>
                 <div class="create-grid">
                   <div>
-                    <label>Normal Game Completed (+💚)</label>
+                    <label>Normal Oyun Tamamlama (+💚)</label>
                     <input type="number" id="cfg-reward-completed" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Normal Game Win (+💚)</label>
+                    <label>Normal Oyun Kazanma (+💚)</label>
                     <input type="number" id="cfg-reward-won" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>👑 VIP Game Win (+💚)</label>
+                    <label>👑 VIP Oyun Kazanma (+💚)</label>
                     <input type="number" id="cfg-reward-vip-won" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Normal Daily Login (+💚)</label>
+                    <label>Normal Günlük Giriş (+💚)</label>
                     <input type="number" id="cfg-reward-daily" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>👑 VIP Daily Login (+💚)</label>
+                    <label>👑 VIP Günlük Giriş (+💚)</label>
                     <input type="number" id="cfg-reward-vip-daily" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Top 3 Finish (+💚)</label>
+                    <label>İlk 3 Derecesi (+💚)</label>
                     <input type="number" id="cfg-reward-top3" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Tournament Winner (+💚)</label>
+                    <label>Turnuva Şampiyonu (+💚)</label>
                     <input type="number" id="cfg-reward-tournament" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Extra Life Price (💚)</label>
+                    <label>Ekstra Can Fiyatı (💚)</label>
                     <input type="number" id="cfg-extralife-price" class="mc-input mc-input-sm" min="0" required />
                   </div>
                   <div>
-                    <label>Max Extra Lives Per Game</label>
+                    <label>Oyun Başına Maks. Ekstra Can</label>
                     <input type="number" id="cfg-extralife-max" class="mc-input mc-input-sm" min="1" max="5" required />
                   </div>
                   <div>
-                    <label>Extra Life Status</label>
+                    <label>Ekstra Can Durumu</label>
                     <select id="cfg-extralife-enabled" class="mc-select">
-                      <option value="true">ENABLED</option>
-                      <option value="false">DISABLED</option>
+                      <option value="true">AKTİF</option>
+                      <option value="false">DEVRE DIŞI</option>
                     </select>
                   </div>
                 </div>
                 <div class="create-bar-actions">
                   <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                    <span class="btn-inner">💾 Save Economy Configuration</span>
+                    <span class="btn-inner">💾 Ekonomi Ayarlarını Kaydet</span>
                   </button>
                 </div>
               </form>
 
               <div class="mc-panel-inset dash-box">
-                <h4 class="panel-sec-title">💚 Emerald Purchase Packages (5 Emeralds = 1 TL, Min 500 💚)</h4>
+                <h4 class="panel-sec-title">💚 Zümrüt Satın Alma Paketleri (5 Zümrüt = 1 TL, Min. 500 💚)</h4>
                 <div id="adm-emerald-packages-list" class="admin-table-wrap"></div>
               </div>
             </div>
 
-            <!-- 8. EMERALD SHOP -->
+            <!-- 8. MAĞAZA -->
             <div id="admin-tab-shop" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🛒 Emerald Shop Items Management</h3>
+                <h3>🛒 Zümrüt Mağazası Ürün Yönetimi</h3>
               </div>
               <div class="mc-panel-inset admin-create-bar">
-                <h4 class="panel-sec-title">➕ Create New Shop Item</h4>
+                <h4 class="panel-sec-title">➕ Yeni Mağaza Ürünü Ekle</h4>
                 <form id="form-admin-create-shop-item" class="create-grid" autocomplete="off">
                   <div>
-                    <label>Item Name</label>
-                    <input type="text" id="adm-shop-name" class="mc-input mc-input-sm" placeholder="e.g. Totem of Undying" required />
+                    <label>Ürün Adı</label>
+                    <input type="text" id="adm-shop-name" class="mc-input mc-input-sm" placeholder="Örn: Ölümsüzlük Totemi" required />
                   </div>
                   <div>
-                    <label>Icon</label>
+                    <label>İkon</label>
                     <input type="text" id="adm-shop-icon" class="mc-input mc-input-sm" value="💎" maxlength="4" required />
                   </div>
                   <div>
-                    <label>Price (Emeralds)</label>
+                    <label>Fiyat (Zümrüt)</label>
                     <input type="number" id="adm-shop-price" class="mc-input mc-input-sm" min="1" value="600" required />
                   </div>
                   <div>
-                    <label>Category</label>
+                    <label>Kategori</label>
                     <select id="adm-shop-category" class="mc-select">
-                      <option value="Gameplay">Gameplay</option>
-                      <option value="Ranks">Ranks</option>
-                      <option value="Cosmetics">Cosmetics</option>
+                      <option value="Gameplay">Oyun İçi (Gameplay)</option>
+                      <option value="Ranks">Rütbeler (Ranks)</option>
+                      <option value="Cosmetics">Kozmetikler (Cosmetics)</option>
                       <option value="VIP">VIP</option>
-                      <option value="Special">Special</option>
+                      <option value="Special">Özel (Special)</option>
                     </select>
                   </div>
                   <div>
-                    <label>Required Role</label>
+                    <label>Gereken Rol</label>
                     <select id="adm-shop-req-role" class="mc-select">
-                      <option value="ANY">ANY (All Players)</option>
-                      <option value="VIP">VIP Only</option>
+                      <option value="ANY">HERKES (Tüm Oyuncular)</option>
+                      <option value="VIP">Sadece VIP</option>
                     </select>
                   </div>
                   <div>
-                    <label>Effect Type</label>
+                    <label>Etki Türü</label>
                     <select id="adm-shop-effect" class="mc-select">
-                      <option value="EXTRA_LIFE">Extra Life (+1 Revive)</option>
-                      <option value="SECOND_CHANCE">Second Chance Protection</option>
-                      <option value="SCORE_BOOSTER">Score Booster (+50% Score)</option>
-                      <option value="EMERALD_BOOSTER">Emerald Booster (+50% 💚)</option>
-                      <option value="RGB_NAME">RGB Username Cosmetic</option>
-                      <option value="ANIMATED_NAME">Animated Name Cosmetic</option>
+                      <option value="EXTRA_LIFE">Ekstra Can (+1 Diriltme)</option>
+                      <option value="SECOND_CHANCE">İkinci Şans Koruması</option>
+                      <option value="SCORE_BOOSTER">Puan Çarpanı (+%50 Puan)</option>
+                      <option value="EMERALD_BOOSTER">Zümrüt Çarpanı (+%50 💚)</option>
+                      <option value="RGB_NAME">RGB Kullanıcı Adı</option>
+                      <option value="ANIMATED_NAME">Animasyonlu İsim Efekti</option>
                     </select>
                   </div>
                   <div style="grid-column: 1 / -1;">
-                    <label>Description</label>
-                    <input type="text" id="adm-shop-desc" class="mc-input mc-input-sm" placeholder="Item description shown in Emerald Shop..." required />
+                    <label>Açıklama</label>
+                    <input type="text" id="adm-shop-desc" class="mc-input mc-input-sm" placeholder="Zümrüt Mağazasında görünecek ürün açıklaması..." required />
                   </div>
                   <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
                     <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                      <span class="btn-inner">➕ Create Shop Item</span>
+                      <span class="btn-inner">➕ Mağaza Ürünü Oluştur</span>
                     </button>
                   </div>
                 </form>
@@ -1808,163 +1980,163 @@
               <div id="adm-shop-items-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 9. RANK SHOP & VIP MANAGEMENT (Section 34) -->
+            <!-- 9. VIP VE RÜTBE ATAMA -->
             <div id="admin-tab-vip" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>👑 Rank Shop &amp; VIP / MVP Assignment</h3>
+                <h3>👑 VIP ve Rütbe Atama Yönetimi</h3>
               </div>
 
               <div class="mc-panel-inset admin-create-bar">
-                <h4 class="panel-sec-title">👑 Assign Rank / Grant or Revoke VIP Status</h4>
+                <h4 class="panel-sec-title">👑 Oyuncuya Rütbe Ver / VIP Durumunu Güncelle</h4>
                 <form id="form-admin-grant-vip" class="create-grid" autocomplete="off">
                   <div>
-                    <label>Minecraft Username</label>
-                    <input type="text" id="adm-vip-username" list="adm-econ-players-datalist" class="mc-input mc-input-sm" placeholder="e.g. Steve" required />
+                    <label>Minecraft Kullanıcı Adı</label>
+                    <input type="text" id="adm-vip-username" list="adm-econ-players-datalist" class="mc-input mc-input-sm" placeholder="Örn: Steve" required />
                   </div>
                   <div>
-                    <label>Select Rank</label>
+                    <label>Rütbe Seçin</label>
                     <select id="adm-vip-rank-select" class="mc-select">
-                      <option value="VIP">VIP (Max Party: 4)</option>
-                      <option value="VIP_PLUS">VIP+ (Max Party: 6)</option>
-                      <option value="MVP">MVP (Max Party: 8)</option>
-                      <option value="MVP_PLUS">MVP+ (Max Party: 10)</option>
-                      <option value="ELITE">ELITE (Max Party: 12)</option>
-                      <option value="LEGEND">LEGEND (Max Party: 14)</option>
-                      <option value="CHAMPION">CHAMPION (Max Party: 16)</option>
-                      <option value="MILLIONAIRE">MILLIONAIRE (Max Party: 20)</option>
-                      <option value="PLAYER">PLAYER (Demote)</option>
+                      <option value="VIP">VIP (Maks. Parti: 4)</option>
+                      <option value="VIP_PLUS">VIP+ (Maks. Parti: 6)</option>
+                      <option value="MVP">MVP (Maks. Parti: 8)</option>
+                      <option value="MVP_PLUS">MVP+ (Maks. Parti: 10)</option>
+                      <option value="ELITE">ELITE (Maks. Parti: 12)</option>
+                      <option value="LEGEND">LEGEND (Maks. Parti: 14)</option>
+                      <option value="CHAMPION">CHAMPION (Maks. Parti: 16)</option>
+                      <option value="MILLIONAIRE">MILLIONAIRE (Maks. Parti: 20)</option>
+                      <option value="PLAYER">PLAYER (Oyuncu Rütbesine Düşür)</option>
                     </select>
                   </div>
                   <div>
-                    <label>Rank Expiration (Leave blank for Lifetime)</label>
+                    <label>Bitiş Tarihi (Sınırsız için boş bırakın)</label>
                     <input type="date" id="adm-vip-expires" class="mc-input mc-input-sm" />
                   </div>
                   <div style="display:flex; gap:0.5rem; align-items:flex-end;">
                     <button type="submit" class="mc-btn mc-btn-emerald mc-btn-small">
-                      <span class="btn-inner">👑 Grant / Update Rank</span>
+                      <span class="btn-inner">👑 Rütbe Ver / Güncelle</span>
                     </button>
                     <button type="button" id="btn-adm-revoke-vip" class="mc-btn mc-btn-danger mc-btn-small">
-                      <span class="btn-inner">✖ Reset to PLAYER</span>
+                      <span class="btn-inner">✖ PLAYER Yap</span>
                     </button>
                   </div>
                 </form>
               </div>
 
               <div class="mc-panel-inset dash-box" style="margin-bottom:0.85rem;">
-                <h4 class="panel-sec-title">👑 Active Ranked &amp; Admin Members</h4>
+                <h4 class="panel-sec-title">👑 Aktif VIP, Özel Rütbeli ve Admin Üyeler</h4>
                 <div id="adm-vip-users-list" class="admin-table-wrap"></div>
               </div>
             </div>
 
-            <!-- 10. PAYMENTS (Section 25, 36) -->
+            <!-- 10. ÖDEMELER -->
             <div id="admin-tab-payments" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>💳 Stripe Payment History &amp; Webhook Audit</h3>
+                <h3>💳 Stripe Ödeme Geçmişi ve Webhook Denetimi</h3>
                 <select id="filter-adm-payments-status" class="mc-select mc-select-xs">
-                  <option value="ALL">All Statuses</option>
-                  <option value="PAID">PAID</option>
-                  <option value="PENDING">PENDING</option>
-                  <option value="FAILED">FAILED</option>
-                  <option value="REFUNDED">REFUNDED</option>
+                  <option value="ALL">Tüm Durumlar</option>
+                  <option value="PAID">ÖDENDİ (PAID)</option>
+                  <option value="PENDING">BEKLEMEDE (PENDING)</option>
+                  <option value="FAILED">BAŞARISIZ (FAILED)</option>
+                  <option value="REFUNDED">İADE EDİLDİ (REFUNDED)</option>
                 </select>
               </div>
               <p class="panel-sec-desc" style="margin-bottom:0.75rem;">
-                Every Stripe Checkout Session is created in <code>PENDING</code> status and only transitions to <code>PAID</code> after a verified, idempotent <code>checkout.session.completed</code> webhook event.
+                Her Stripe ödeme oturumu <code>PENDING</code> (Beklemede) olarak oluşturulur ve yalnızca doğrulanmış <code>checkout.session.completed</code> webhook olayı sonrasında <code>PAID</code> (Ödendi) durumuna geçer.
               </p>
               <div id="adm-vip-payments-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 11. SUPPORT TICKETS (Section 28 & 30) -->
+            <!-- 11. DESTEK TALEPLERİ -->
             <div id="admin-tab-support" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🎧 Support Tickets (4-Tier Priority Sorted)</h3>
+                <h3>🎧 Destek Talepleri (4 Kademeli Öncelik Sıralamalı)</h3>
               </div>
               <div id="adm-support-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 12. BUG REPORTS (Section 28 & 30) -->
+            <!-- 12. HATA BİLDİRİMLERİ -->
             <div id="admin-tab-bugs" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🐛 Bug Reports (4-Tier Priority Sorted)</h3>
+                <h3>🐛 Hata Bildirimleri (4 Kademeli Öncelik Sıralamalı)</h3>
               </div>
               <div id="adm-bugs-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 13. SUGGESTIONS (Section 29 & 30) -->
+            <!-- 13. ÖNERİLER -->
             <div id="admin-tab-suggestions" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>💡 Player Suggestions</h3>
+                <h3>💡 Oyuncu Önerileri</h3>
                 <select id="adm-suggestions-sort" class="mc-select mc-select-xs">
-                  <option value="PRIORITY">Sort: Priority (CRITICAL/VERY HIGH/HIGH First)</option>
-                  <option value="MOST_VOTES">Sort: Most Votes</option>
-                  <option value="NEWEST">Sort: Newest</option>
-                  <option value="OLDEST">Sort: Oldest</option>
+                  <option value="PRIORITY">Sırala: Öncelik (KRİTİK / ÇOK YÜKSEK / YÜKSEK Önce)</option>
+                  <option value="MOST_VOTES">Sırala: En Çok Oy Alan</option>
+                  <option value="NEWEST">Sırala: En Yeni</option>
+                  <option value="OLDEST">Sırala: En Eski</option>
                 </select>
               </div>
               <div id="adm-suggestions-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 14. TRANSACTIONS -->
+            <!-- 14. İŞLEMLER -->
             <div id="admin-tab-transactions" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>📒 Emerald Transaction Ledger</h3>
-                <input type="text" id="search-adm-tx-history" class="mc-input mc-input-sm" style="max-width:260px;" placeholder="🔍 Search user, ID, or reason..." />
+                <h3>📒 Zümrüt İşlem Defteri</h3>
+                <input type="text" id="search-adm-tx-history" class="mc-input mc-input-sm" style="max-width:260px;" placeholder="🔍 Kullanıcı, ID veya açıklama ara..." />
               </div>
               <div id="adm-tx-history-list" class="tx-history-list"></div>
             </div>
 
-            <!-- 15. ACHIEVEMENTS -->
+            <!-- 15. BAŞARIMLAR -->
             <div id="admin-tab-achievements" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>🏅 Platform Achievements Catalog</h3>
+                <h3>🏅 Platform Başarımları Kataloğu</h3>
               </div>
               <div id="adm-achievements-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 16. BACKUPS (Section 37) -->
+            <!-- 16. YEDEKLER -->
             <div id="admin-tab-backups" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>💾 Versioned Backup System (backup/)</h3>
+                <h3>💾 Sürümlü Yedekleme Sistemi (backup/)</h3>
                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                   <button type="button" id="btn-adm-create-backup" class="mc-btn mc-btn-emerald mc-btn-small">
-                    <span class="btn-inner">➕ Create Backup</span>
+                    <span class="btn-inner">➕ Yedek Oluştur</span>
                   </button>
                   <button type="button" id="btn-adm-download-latest-backup" class="mc-btn mc-btn-gold mc-btn-small">
-                    <span class="btn-inner">⬇️ Download Backup JSON</span>
+                    <span class="btn-inner">⬇️ Yedeği JSON İndir</span>
                   </button>
                 </div>
               </div>
               <p class="panel-sec-desc" style="margin-bottom:0.75rem;">
-                Structured backup namespaces: <code>backup/users/</code>, <code>backup/parties/</code>, <code>backup/licenses/</code>, <code>backup/transactions/</code>, <code>backup/payments/</code>, <code>backup/settings/</code>. Plaintext passwords are never stored.
+                Yapılandırılmış yedekleme dizinleri: <code>backup/users/</code>, <code>backup/parties/</code>, <code>backup/licenses/</code>, <code>backup/transactions/</code>, <code>backup/payments/</code>, <code>backup/settings/</code>. Şifreler asla düz metin olarak saklanmaz.
               </p>
               <div id="adm-backups-list" class="admin-table-wrap"></div>
             </div>
 
-            <!-- 17. ACTIVITY LOGS -->
+            <!-- 17. AKTİVİTE GÜNLÜĞÜ -->
             <div id="admin-tab-activity" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>📜 System Activity Logs</h3>
+                <h3>📜 Sistem Aktivite Günlüğü</h3>
                 <button type="button" id="btn-adm-clear-logs" class="mc-btn mc-btn-danger mc-btn-small">
-                  <span class="btn-inner">🗑️ Clear Activity Logs</span>
+                  <span class="btn-inner">🗑️ Aktivite Kayıtlarını Temizle</span>
                 </button>
               </div>
               <div id="adm-full-activity-list" class="activity-feed-list full-log"></div>
             </div>
 
-            <!-- 18. SETTINGS -->
+            <!-- 18. AYARLAR -->
             <div id="admin-tab-settings" class="admin-tab-pane">
               <div class="admin-section-header">
-                <h3>⚙️ System Settings &amp; Session Security</h3>
+                <h3>⚙️ Sistem Ayarları ve Oturum Güvenliği</h3>
               </div>
               <div class="mc-panel-inset dash-box">
-                <h4>Active Administrator Session</h4>
-                <p class="panel-sec-desc">You are signed in with full <strong>ADMIN</strong> privileges. You can configure audio settings, create a system backup, or sign out below.</p>
+                <h4>Aktif Yönetici (Admin) Oturumu</h4>
+                <p class="panel-sec-desc">Tam <strong>ADMIN</strong> yetkisiyle giriş yaptınız. Aşağıdan ses ayarlarını yapılandırabilir, sistem yedeği alabilir veya oturumu kapatabilirsiniz.</p>
                 <div class="settings-action-row" style="margin-top:0.75rem;">
                   <button type="button" id="btn-adm-open-audio" class="mc-btn mc-btn-stone mc-btn-small">
-                    <span class="btn-inner">🔊 Audio Settings</span>
+                    <span class="btn-inner">🔊 Ses Ayarları</span>
                   </button>
                   <button type="button" id="btn-adm-logout" class="mc-btn mc-btn-danger mc-btn-small">
-                    <span class="btn-inner">🚪 Logout Administrator Session</span>
+                    <span class="btn-inner">🚪 Yönetici Oturumunu Kapat</span>
                   </button>
                 </div>
               </div>
@@ -1973,27 +2145,27 @@
           </div>
         </div>
 
-        <!-- Mobile Admin Bottom Navigation (Section 38) -->
-        <nav class="admin-mobile-nav mc-panel-inset" aria-label="Mobile Admin Navigation">
+        <!-- Mobil Admin Alt Navigasyonu -->
+        <nav class="admin-mobile-nav mc-panel-inset" aria-label="Mobil Admin Navigasyonu">
           <button type="button" class="admin-mob-btn active" data-admin-tab="dashboard">
             <span>📊</span>
-            <small>Dashboard</small>
+            <small>Panel</small>
           </button>
           <button type="button" class="admin-mob-btn" data-admin-tab="users">
             <span>👥</span>
-            <small>Users</small>
+            <small>Oyuncular</small>
           </button>
           <button type="button" class="admin-mob-btn" data-admin-tab="shop">
             <span>🛒</span>
-            <small>Shop</small>
+            <small>Mağaza</small>
           </button>
           <button type="button" class="admin-mob-btn" data-admin-tab="support">
             <span>🎧</span>
-            <small>Tickets</small>
+            <small>Destek</small>
           </button>
           <button type="button" class="admin-mob-btn" id="btn-admin-mob-more">
             <span>☰</span>
-            <small>More</small>
+            <small>Diğer</small>
           </button>
         </nav>
       </div>
@@ -2002,131 +2174,131 @@
   </main>
 
   <!-- ==========================================
-       MODAL: STRIPE CHECKOUT & WEBHOOK VERIFICATION (SECTIONS 23-27)
+       MODAL: STRIPE GÜVENLİ ÖDEME & WEBHOOK DOĞRULAMA
        ========================================== -->
   <div id="modal-stripe-checkout" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="stripe-modal-title">
     <div class="modal-box mc-panel">
       <div class="modal-header">
-        <h3 id="stripe-modal-title">💳 Stripe Secure Checkout (Test Mode)</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-stripe-checkout" aria-label="Close">✖</button>
+        <h3 id="stripe-modal-title">💳 Stripe Güvenli Ödeme (Test Modu)</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-stripe-checkout" aria-label="Kapat">✖</button>
       </div>
       <div class="modal-body">
         <div class="mc-panel-inset" style="padding:0.95rem; margin-bottom:0.85rem;">
           <div class="ticket-row">
-            <span>Checkout Session ID:</span>
+            <span>Ödeme Oturum ID:</span>
             <code id="stripe-chk-session-id" class="emerald-text">cs_test_...</code>
           </div>
           <div class="ticket-row">
-            <span>Order Item:</span>
-            <strong id="stripe-chk-item-label" class="gold-text">500 Emeralds</strong>
+            <span>Sipariş Ürünü:</span>
+            <strong id="stripe-chk-item-label" class="gold-text">500 Zümrüt</strong>
           </div>
           <div class="ticket-row">
-            <span>Amount Due:</span>
+            <span>Ödenecek Tutar:</span>
             <strong id="stripe-chk-amount-tl" class="emerald-text">100 TL</strong>
           </div>
           <div class="ticket-row">
-            <span>Payment Status:</span>
-            <span id="stripe-chk-status-badge" class="status-pill status-waiting">PENDING</span>
+            <span>Ödeme Durumu:</span>
+            <span id="stripe-chk-status-badge" class="status-pill status-waiting">BEKLEMEDE</span>
           </div>
         </div>
         <p class="panel-sec-desc" style="font-size:0.86rem; line-height:1.45;">
-          🔒 <strong>Webhook Security Architecture:</strong> Emeralds or Ranks are <em>never</em> granted from a client redirect alone. Clicking <strong>Complete Stripe Test Payment</strong> dispatches a signed <code>checkout.session.completed</code> webhook event to <code>paymentService.processStripeWebhook()</code> with strict idempotency protection.
+          🔒 <strong>Webhook Güvenlik Mimarisi:</strong> Zümrütler veya Rütbeler asla yalnızca istemci yönlendirmesiyle tanımlanmaz. <strong>Stripe Test Ödemesini Tamamla</strong> butonuna tıklandığında imzalı bir <code>checkout.session.completed</code> webhook olayı tekillik (idempotency) korumasıyla <code>paymentService.processStripeWebhook()</code> servisine iletilir.
         </p>
       </div>
       <div class="modal-footer modal-footer-split" style="flex-wrap:wrap; gap:0.5rem;">
         <button type="button" id="btn-stripe-simulate-fail" class="mc-btn mc-btn-danger mc-btn-small">
-          <span class="btn-inner">✖ Simulate Failed Payment</span>
+          <span class="btn-inner">✖ Başarısız Ödeme Simüle Et</span>
         </button>
         <button type="button" id="btn-stripe-complete-pay" class="mc-btn mc-btn-emerald">
-          <span class="btn-inner">💳 Complete Stripe Test Payment</span>
+          <span class="btn-inner">💳 Stripe Test Ödemesini Tamamla</span>
         </button>
       </div>
     </div>
   </div>
 
   <!-- ==========================================
-       MODAL: EXTRA LIFE REVIVE PROMPT (SECTION 26)
+       MODAL: EKSTRA CAN İLE DİRİLME ПЕНCERESİ
        ========================================== -->
   <div id="modal-extralife" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="extralife-modal-title">
     <div class="modal-box mc-panel extralife-modal-box">
       <div class="modal-header extralife-modal-header">
-        <h3 id="extralife-modal-title">💀 YOU LOST!</h3>
+        <h3 id="extralife-modal-title">💀 YANLIŞ CEVAP!</h3>
       </div>
       <div class="modal-body extralife-modal-body">
         <div class="extralife-heart-showcase">❤️</div>
-        <p class="extralife-prompt-title">❤️ Extra Life Available</p>
-        <p class="extralife-prompt-sub">Would you like to consume 1 Extra Life and continue from <strong id="extralife-question-label">Question 1</strong>?</p>
+        <p class="extralife-prompt-title">❤️ Ekstra Can Kullanılabilir</p>
+        <p class="extralife-prompt-sub">1 Ekstra Can kullanarak <strong id="extralife-question-label">Soru 1</strong> aşamasından oyuna devam etmek ister misiniz?</p>
         <div class="extralife-available-pill mc-panel-inset">
-          <span>Available Extra Lives:</span>
+          <span>Mevcut Ekstra Can:</span>
           <strong class="emerald-text" id="extralife-modal-count">❤️ 1</strong>
         </div>
       </div>
       <div class="modal-footer modal-footer-split">
         <button type="button" id="btn-skip-extralife" class="mc-btn mc-btn-danger mc-btn-small">
-          <span class="btn-inner">🚪 Leave Game</span>
+          <span class="btn-inner">🚪 Oyundan Ayrıl</span>
         </button>
         <button type="button" id="btn-use-extralife" class="mc-btn mc-btn-emerald">
-          <span class="btn-inner">❤️ Use Extra Life</span>
+          <span class="btn-inner">❤️ Ekstra Can Kullan</span>
         </button>
       </div>
     </div>
   </div>
 
   <!-- ==========================================
-       MODAL: INVITATION CARD
+       MODAL: PARTİ DAVET KARTI
        ========================================== -->
   <div id="modal-invite" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
     <div class="modal-box mc-panel">
       <div class="modal-header">
-        <h3 id="invite-modal-title">✉️ Minecraft Milyoner Party Invitation</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-invite" aria-label="Close">✖</button>
+        <h3 id="invite-modal-title">✉️ Minecraft Milyoner Parti Daveti</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-invite" aria-label="Kapat">✖</button>
       </div>
       <div class="modal-body">
         <div class="invitation-ticket mc-panel-inset">
-          <div class="ticket-title">MINECRAFT MILYONER PARTY INVITATION</div>
+          <div class="ticket-title">MINECRAFT MİLYONER PARTİ DAVETİ</div>
           <div class="ticket-row">
-            <span>Party:</span>
-            <strong id="inv-party-name" class="gold-text">Minecraft Championship #1</strong>
+            <span>Parti:</span>
+            <strong id="inv-party-name" class="gold-text">Minecraft Şampiyonası #1</strong>
           </div>
           <div class="ticket-row">
-            <span>Owner:</span>
+            <span>Kurucu:</span>
             <strong id="inv-party-organizer">Mashallah</strong>
           </div>
           <div class="ticket-row">
-            <span>Invite Code:</span>
+            <span>Davet Kodu:</span>
             <strong id="inv-party-code" class="emerald-text ticket-code">MCM-8K2P</strong>
           </div>
         </div>
       </div>
       <div class="modal-footer modal-footer-split">
         <button type="button" class="mc-btn mc-btn-stone mc-btn-small" data-close="modal-invite">
-          <span class="btn-inner">Close</span>
+          <span class="btn-inner">Kapat</span>
         </button>
         <button type="button" id="btn-copy-invitation" class="mc-btn mc-btn-emerald">
-          <span class="btn-inner">📋 Copy Invitation</span>
+          <span class="btn-inner">📋 Daveti Kopyala</span>
         </button>
       </div>
     </div>
   </div>
 
   <!-- ==========================================
-       MODAL: CONFIRMATION DIALOG
+       MODAL: ONAY İLETİŞİM KUTUSU
        ========================================== -->
   <div id="modal-confirm" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
     <div class="modal-box mc-panel confirm-modal-box">
       <div class="modal-header">
-        <h3 id="confirm-modal-title">⚠️ Confirm Action</h3>
-        <button type="button" class="modal-close-btn" id="btn-confirm-close" aria-label="Close">✖</button>
+        <h3 id="confirm-modal-title">⚠️ İşlemi Onayla</h3>
+        <button type="button" class="modal-close-btn" id="btn-confirm-close" aria-label="Kapat">✖</button>
       </div>
       <div class="modal-body">
-        <p id="confirm-modal-message" class="confirm-message">Are you sure you want to proceed?</p>
+        <p id="confirm-modal-message" class="confirm-message">Devam etmek istediğinize emin misiniz?</p>
       </div>
       <div class="modal-footer modal-footer-split">
         <button type="button" id="btn-confirm-cancel" class="mc-btn mc-btn-stone mc-btn-small">
-          <span class="btn-inner">Cancel</span>
+          <span class="btn-inner">İptal</span>
         </button>
         <button type="button" id="btn-confirm-accept" class="mc-btn mc-btn-danger mc-btn-small">
-          <span class="btn-inner" id="btn-confirm-accept-text">Confirm</span>
+          <span class="btn-inner" id="btn-confirm-accept-text">Onayla</span>
         </button>
       </div>
     </div>
@@ -2139,14 +2311,14 @@
     <div class="modal-box mc-panel">
       <div class="modal-header">
         <h3 id="rules-modal-title">📖 NASIL OYNANIR?</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-rules" aria-label="Close">✖</button>
+        <button type="button" class="modal-close-btn" data-close="modal-rules" aria-label="Kapat">✖</button>
       </div>
       <div class="modal-body">
         <ul class="rules-list">
-          <li><strong>🎯 Amaç:</strong> Toplam 15 Minecraft sorusuna doğru cevap vererek <strong>5.000.000 Emerald</strong> ödülüne ulaşmak!</li>
-          <li><strong>💚 Emerald Coin &amp; VIP Bonus:</strong> Oyunlardan ve günlük girişlerden Emerald Coins kazanırsınız. VIP oyuncular oyun kazanmada <strong>+150 💚</strong> ve günlük girişte <strong>+50 💚</strong> kazanır.</li>
-          <li><strong>❤️ Extra Life:</strong> Envanterinizde Extra Life varsa yanlış cevap verdiğinizde elenmezsiniz ve kaldığınız sorudan devam edersiniz.</li>
-          <li><strong>🎉 Party System:</strong> Normal oyuncular davet kodu ile partilere katılabilir. VIP ve Admin kullanıcılar yeni parti oluşturabilir ve oyuncu davet edebilir.</li>
+          <li><strong>🎯 Amaç:</strong> Toplam 15 Minecraft sorusuna doğru cevap vererek <strong>5.000.000 Zümrüt</strong> büyük ödülüne ulaşmak!</li>
+          <li><strong>💚 Zümrüt Ekonomisi &amp; VIP Bonus:</strong> Oyunlardan ve günlük girişlerden Zümrüt kazanırsınız. VIP oyuncular oyun kazanmada <strong>+150 💚</strong> ve günlük girişte <strong>+50 💚</strong> kazanır.</li>
+          <li><strong>❤️ Ekstra Can (Extra Life):</strong> Envanterinizde Ekstra Can varsa yanlış cevap verdiğinizde elenmezsiniz ve kaldığınız sorudan devam edersiniz.</li>
+          <li><strong>🎮 Parti Sistemi:</strong> Normal oyuncular davet kodu ile partilere katılabilir. VIP, MVP ve Admin kullanıcılar yeni parti oluşturabilir ve oyuncu davet edebilir.</li>
         </ul>
       </div>
       <div class="modal-footer">
@@ -2158,13 +2330,13 @@
   </div>
 
   <!-- ==========================================
-       MODAL 2: SES AYARLARI
+       MODAL 2: SES AYARLARI (BÖLÜM 4 & 30)
        ========================================== -->
   <div id="modal-audio" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="audio-modal-title">
     <div class="modal-box mc-panel">
       <div class="modal-header">
         <h3 id="audio-modal-title">🔊 SES AYARLARI</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-audio" aria-label="Close">✖</button>
+        <button type="button" class="modal-close-btn" data-close="modal-audio" aria-label="Kapat">✖</button>
       </div>
       <div class="modal-body">
         <div class="audio-setting-row">
@@ -2193,6 +2365,22 @@
           </div>
         </div>
 
+        <!-- Bölüm 30: Ayrıntılı Ses Kategorisi Kontrolleri -->
+        <div class="mc-panel-inset" style="padding:0.75rem; margin-bottom:0.85rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0; border-bottom:1px solid rgba(255,255,255,0.07);">
+            <span>📋 Ana Menü ve Buton Sesleri</span>
+            <input type="checkbox" id="chk-audio-menu-sound" checked style="width:18px; height:18px;" />
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0; border-bottom:1px solid rgba(255,255,255,0.07);">
+            <span>🔔 Bildirim ve Parti Sesleri</span>
+            <input type="checkbox" id="chk-audio-notif-sound" checked style="width:18px; height:18px;" />
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0;">
+            <span>🛒 Mağaza ve Zümrüt Sesleri</span>
+            <input type="checkbox" id="chk-audio-shop-sound" checked style="width:18px; height:18px;" />
+          </div>
+        </div>
+
         <div class="audio-test-bar">
           <button type="button" id="btn-test-villager" class="mc-btn mc-btn-stone mc-btn-small">
             <span class="btn-inner">🧑‍🌾 Köylü Sesini Test Et</span>
@@ -2217,13 +2405,13 @@
     <div class="modal-box mc-panel">
       <div class="modal-header">
         <h3 id="stats-modal-title">📊 İSTATİSTİKLER</h3>
-        <button type="button" class="modal-close-btn" data-close="modal-stats" aria-label="Close">✖</button>
+        <button type="button" class="modal-close-btn" data-close="modal-stats" aria-label="Kapat">✖</button>
       </div>
       <div class="modal-body">
         <div class="stats-cards-grid">
           <div class="stat-box mc-panel-inset">
             <span class="stat-box-label">En Yüksek Ödül</span>
-            <strong class="stat-box-value emerald-text" id="stat-highest-prize">0 Emerald</strong>
+            <strong class="stat-box-value emerald-text" id="stat-highest-prize">0 Zümrüt</strong>
           </div>
           <div class="stat-box mc-panel-inset">
             <span class="stat-box-label">En Yüksek Soru</span>
@@ -2242,8 +2430,8 @@
             <strong class="stat-box-value wrong-text" id="stat-wrong-answers">0</strong>
           </div>
           <div class="stat-box mc-panel-inset">
-            <span class="stat-box-label">Kazanılan Toplam Emerald</span>
-            <strong class="stat-box-value emerald-text" id="stat-total-emeralds">0 Emerald</strong>
+            <span class="stat-box-label">Kazanılan Toplam Zümrüt</span>
+            <strong class="stat-box-value emerald-text" id="stat-total-emeralds">0 Zümrüt</strong>
           </div>
         </div>
       </div>

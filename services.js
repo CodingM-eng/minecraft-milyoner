@@ -932,10 +932,108 @@
       if (!user) throw new Error('User account not found.');
 
       user.settings = {
+        notifications: true,
+        reducedMotion: false,
+        theme: 'dark',
+        privacy: 'PUBLIC',
         ...(user.settings || {}),
         ...newSettings
       };
       this._saveAllRaw(all);
+      return this._sanitizeUser(user);
+    },
+
+    // Section 9 & 10: Profile Photo Upload, Change & Remove (Safe MIME Types Only)
+    updateProfileAvatar(session, avatarDataUrl) {
+      authGuard.verifySession(session);
+      const all = this._getAllRaw();
+      const user =
+        all.find(u => u.id === session.userId) ||
+        all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
+      if (!user) throw new Error('Kullanıcı hesabı bulunamadı.');
+
+      if (avatarDataUrl === null || avatarDataUrl === '') {
+        user.avatarDataUrl = null;
+        this._saveAllRaw(all);
+        activityService.log(
+          'AVATAR_REMOVED',
+          user.minecraftUsername,
+          `${user.minecraftUsername} profil fotoğrafını kaldırdı (Minecraft avatarına dönüldü)`
+        );
+        return this._sanitizeUser(user);
+      }
+
+      const str = String(avatarDataUrl || '').trim();
+      const safeMimeRegex = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i;
+      if (!safeMimeRegex.test(str)) {
+        throw new Error(
+          'Güvenlik Hatası: Yalnızca PNG, JPG/JPEG ve WEBP formatındaki güvenli görseller yüklenebilir.'
+        );
+      }
+      // Max ~2MB decoded (~2.8M base64 chars)
+      if (str.length > 2850000) {
+        throw new Error('Dosya boyutu çok büyük! Maksimum 2 MB görsel yükleyebilirsiniz.');
+      }
+
+      user.avatarDataUrl = str;
+      this._saveAllRaw(all);
+      activityService.log(
+        'AVATAR_UPDATED',
+        user.minecraftUsername,
+        `${user.minecraftUsername} profil fotoğrafını güncelledi`
+      );
+      return this._sanitizeUser(user);
+    },
+
+    // Section 11 & 29: Profile Customization (Border, Background, Achievement Showcase, Theme, Privacy)
+    updateProfileCustomization(
+      session,
+      { profileBorder, profileBackground, showcaseAchievements, theme, privacy, profilePrivacy } = {}
+    ) {
+      authGuard.verifySession(session);
+      const all = this._getAllRaw();
+      const user =
+        all.find(u => u.id === session.userId) ||
+        all.find(u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase());
+      if (!user) throw new Error('Kullanıcı hesabı bulunamadı.');
+
+      user.cosmetics = user.cosmetics || {};
+      user.settings = user.settings || { notifications: true, reducedMotion: false, theme: 'dark', privacy: 'PUBLIC' };
+
+      const allowedBorders = ['stone', 'emerald', 'gold', 'diamond', 'obsidian', 'nether'];
+      if (profileBorder && allowedBorders.includes(profileBorder)) {
+        user.cosmetics.profileBorder = profileBorder;
+        user.profileBorder = profileBorder;
+      }
+
+      const allowedBgs = ['overworld', 'emerald_temple', 'nether_fortress', 'end_dimension', 'diamond_vault'];
+      if (profileBackground && allowedBgs.includes(profileBackground)) {
+        user.cosmetics.profileBackground = profileBackground;
+        user.profileBackground = profileBackground;
+      }
+
+      if (Array.isArray(showcaseAchievements)) {
+        user.cosmetics.showcaseAchievements = showcaseAchievements.slice(0, 3).map(String);
+        user.showcaseAchievements = user.cosmetics.showcaseAchievements;
+      }
+
+      if (theme === 'dark' || theme === 'light') {
+        user.settings.theme = theme;
+      }
+
+      const privVal = profilePrivacy || privacy;
+      const allowedPrivacy = ['PUBLIC', 'PARTY_ONLY', 'PRIVATE'];
+      if (privVal && allowedPrivacy.includes(privVal)) {
+        user.settings.privacy = privVal;
+        user.profilePrivacy = privVal;
+      }
+
+      this._saveAllRaw(all);
+      activityService.log(
+        'PROFILE_CUSTOMIZED',
+        user.minecraftUsername,
+        `${user.minecraftUsername} profil özelleştirmelerini güncelledi`
+      );
       return this._sanitizeUser(user);
     },
 
@@ -1990,25 +2088,39 @@
   };
 
   const supportService = {
-    // Automatically computes priority from User's Data-Driven Rank:
-    // PLAYER -> NORMAL | VIP / VIP+ -> HIGH | MVP / MVP+ / ELITE / LEGEND / CHAMPION / MILLIONAIRE -> VERY HIGH | ADMIN -> CRITICAL
+    // Section 23: PLAYER -> Normal | VIP -> Yüksek (HIGH) | VIP+ / MVP / MVP+ / ELITE / LEGEND / CHAMPION / MILLIONAIRE -> Çok Yüksek (VERY HIGH) | ADMIN -> Kritik (CRITICAL)
     computeUserPriority(session, kind = 'support') {
       const effRole = authGuard.getEffectiveRole(session);
       if (effRole === 'ADMIN') return 'CRITICAL';
+
+      const rankId = authGuard.getEffectiveRankId(session);
+      if (
+        ['VIP_PLUS', 'MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(
+          rankId
+        )
+      ) {
+        return 'VERY HIGH';
+      }
 
       const perms = authGuard.getUserPermissions(session);
       if (kind === 'bug' && perms.bugPriority) return perms.bugPriority;
       if (kind === 'suggestion' && perms.suggestionPriority) return perms.suggestionPriority;
       if (perms.supportPriority) return perms.supportPriority;
 
-      const rankId = authGuard.getEffectiveRankId(session);
-      if (['MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(rankId)) {
-        return 'VERY HIGH';
-      }
-      if (['VIP', 'VIP_PLUS'].includes(rankId) || effRole === 'VIP') {
+      if (rankId === 'VIP' || effRole === 'VIP') {
         return 'HIGH';
       }
       return 'NORMAL';
+    },
+
+    formatPriorityTR(priority) {
+      const map = {
+        CRITICAL: 'Kritik',
+        'VERY HIGH': 'Çok Yüksek',
+        HIGH: 'Yüksek',
+        NORMAL: 'Normal'
+      };
+      return map[String(priority || 'NORMAL').toUpperCase()] || 'Normal';
     },
 
     _sortByPriorityAndDate(list) {
@@ -2358,19 +2470,55 @@
       return all;
     },
 
+    formatSuggestionStatusTR(status) {
+      const map = {
+        REVIEWING: 'İnceleniyor',
+        UNDER_REVIEW: 'İnceleniyor',
+        'İNCELENİYOR': 'İnceleniyor',
+        PLANNED: 'Planlandı',
+        PLANLANDI: 'Planlandı',
+        'IN DEVELOPMENT': 'Geliştiriliyor',
+        IN_PROGRESS: 'Geliştiriliyor',
+        'GELİŞTİRİLİYOR': 'Geliştiriliyor',
+        COMPLETED: 'Tamamlandı',
+        APPROVED: 'Tamamlandı',
+        TAMAMLANDI: 'Tamamlandı',
+        DECLINED: 'Reddedildi',
+        REJECTED: 'Reddedildi',
+        'REDDEDİLDİ': 'Reddedildi'
+      };
+      return map[String(status || 'REVIEWING').toUpperCase()] || status || 'İnceleniyor';
+    },
+
     adminUpdateSuggestionStatus(session, suggestionId, newStatus) {
       authGuard.requireRole(session, ['ADMIN']);
-      const allowed = ['REVIEWING', 'PLANNED', 'IN DEVELOPMENT', 'COMPLETED', 'DECLINED'];
-      if (!allowed.includes(newStatus)) throw new Error('Invalid suggestion status.');
+      const statusMap = {
+        REVIEWING: 'REVIEWING',
+        UNDER_REVIEW: 'REVIEWING',
+        'İnceleniyor': 'REVIEWING',
+        PLANNED: 'PLANNED',
+        'Planlandı': 'PLANNED',
+        'IN DEVELOPMENT': 'IN DEVELOPMENT',
+        IN_PROGRESS: 'IN DEVELOPMENT',
+        'Geliştiriliyor': 'IN DEVELOPMENT',
+        COMPLETED: 'COMPLETED',
+        APPROVED: 'COMPLETED',
+        'Tamamlandı': 'COMPLETED',
+        DECLINED: 'DECLINED',
+        REJECTED: 'DECLINED',
+        'Reddedildi': 'DECLINED'
+      };
+      const normalized = statusMap[newStatus] || statusMap[String(newStatus || '').toUpperCase()];
+      if (!normalized) throw new Error('Geçersiz öneri durumu.');
       const all = this._ensureSeedSuggestions();
       const sug = all.find(s => s.id === suggestionId);
-      if (!sug) throw new Error('Suggestion not found.');
-      sug.status = newStatus;
+      if (!sug) throw new Error('Öneri bulunamadı.');
+      sug.status = normalized;
       storageAdapter.set(STORAGE_KEYS.SUGGESTIONS, all);
       activityService.log(
         'SUGGESTION_STATUS_UPDATED',
         session.username,
-        `Admin ${session.username} updated suggestion ${sug.id} status to ${newStatus}`
+        `Admin ${session.username} öneri (${sug.id}) durumunu ${this.formatSuggestionStatusTR(normalized)} olarak güncelledi`
       );
       return sug;
     }
@@ -3131,8 +3279,136 @@
     }
   };
 
-  // Export services to global namespace
+  // ==========================================
+  // 10. MINECRAFT AVATAR & PROFILE PHOTO SERVICE (Sections 9, 10, 11)
+  // ==========================================
+  const avatarService = {
+    ALLOWED_MIME_TYPES: ['image/png', 'image/jpeg', 'image/webp'],
+    MAX_FILE_SIZE_BYTES: 2 * 1024 * 1024, // 2 MB
+
+    validateImageFile(file) {
+      if (!file) {
+        return { ok: false, error: 'Lütfen bir görsel dosyası seçin.' };
+      }
+      if (!this.ALLOWED_MIME_TYPES.includes(file.type)) {
+        return {
+          ok: false,
+          error: 'Desteklenmeyen dosya türü! Yalnızca PNG, JPG/JPEG ve WEBP görselleri kabul edilir.'
+        };
+      }
+      if (file.size > this.MAX_FILE_SIZE_BYTES) {
+        return {
+          ok: false,
+          error: 'Dosya boyutu çok büyük! Maksimum 2 MB görsel yükleyebilirsiniz.'
+        };
+      }
+      return { ok: true };
+    },
+
+    // Deterministic 8x8 Pixel-Art Minecraft Skin Head SVG Data URL Generator
+    generateMinecraftAvatar(username = 'Steve') {
+      const clean = String(username || 'Steve').trim();
+      const lower = clean.toLowerCase();
+
+      // Preset skin palettes for iconic players
+      const presets = {
+        steve: { skin: '#b9855c', hair: '#4a3121', eyeW: '#ffffff', eyeP: '#493c7b', mouth: '#71442c', crown: false },
+        alex: { skin: '#f2ccb7', hair: '#d87f33', eyeW: '#ffffff', eyeP: '#3b6e2f', mouth: '#c9856e', crown: false },
+        mashallah: { skin: '#d8a076', hair: '#1d2436', eyeW: '#e8fff2', eyeP: '#17dd62', mouth: '#8a5536', crown: true },
+        dragonslayer99: { skin: '#c89269', hair: '#23172e', eyeW: '#ffffff', eyeP: '#a855f7', mouth: '#7c4c31', crown: true },
+        netherking_tr: { skin: '#a86752', hair: '#2c1010', eyeW: '#ffe4b5', eyeP: '#ff5252', mouth: '#5a2a1e', crown: true }
+      };
+
+      let pal = presets[lower];
+      if (!pal) {
+        let hash = 2166136261;
+        for (let i = 0; i < lower.length; i++) {
+          hash ^= lower.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        const h = Math.abs(hash);
+        const skins = ['#d8a076', '#b9855c', '#f2ccb7', '#8d5524', '#e0ac69', '#c68642'];
+        const hairs = ['#3b2314', '#1c1f2b', '#d87f33', '#273c2c', '#4a1c40', '#6b4423', '#162447'];
+        const eyes = ['#17dd62', '#3de0ff', '#493c7b', '#ffbe1a', '#ff5252', '#a855f7'];
+        pal = {
+          skin: skins[h % skins.length],
+          hair: hairs[(h >> 3) % hairs.length],
+          eyeW: '#ffffff',
+          eyeP: eyes[(h >> 6) % eyes.length],
+          mouth: '#7a492f',
+          crown: false
+        };
+      }
+
+      const crownPixels = pal.crown
+        ? `<rect x="0" y="0" width="8" height="2" fill="#ffbe1a"/>
+           <rect x="1" y="0" width="1" height="1" fill="#17dd62"/>
+           <rect x="4" y="0" width="1" height="1" fill="#3de0ff"/>
+           <rect x="6" y="0" width="1" height="1" fill="#ff3b3b"/>`
+        : '';
+
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges">
+        <rect width="8" height="8" fill="${pal.skin}"/>
+        <rect x="0" y="0" width="8" height="2" fill="${pal.hair}"/>
+        <rect x="0" y="2" width="1" height="2" fill="${pal.hair}"/>
+        <rect x="7" y="2" width="1" height="2" fill="${pal.hair}"/>
+        <rect x="2" y="2" width="4" height="1" fill="${pal.hair}"/>
+        ${crownPixels}
+        <rect x="1" y="4" width="2" height="1" fill="${pal.eyeW}"/>
+        <rect x="2" y="4" width="1" height="1" fill="${pal.eyeP}"/>
+        <rect x="5" y="4" width="2" height="1" fill="${pal.eyeW}"/>
+        <rect x="5" y="4" width="1" height="1" fill="${pal.eyeP}"/>
+        <rect x="3" y="5" width="2" height="1" fill="${pal.mouth}" opacity="0.55"/>
+        <rect x="2" y="6" width="4" height="1" fill="${pal.mouth}"/>
+      </svg>`;
+
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    },
+
+    getUserAvatarUrl(userOrUsername) {
+      if (!userOrUsername) return this.generateMinecraftAvatar('Steve');
+      if (typeof userOrUsername === 'object') {
+        if (userOrUsername.avatarDataUrl) return userOrUsername.avatarDataUrl;
+        const u = userService.getUserByUsername(
+          userOrUsername.minecraftUsername || userOrUsername.username
+        );
+        if (u && u.avatarDataUrl) return u.avatarDataUrl;
+        return this.generateMinecraftAvatar(
+          userOrUsername.minecraftUsername || userOrUsername.username || 'Steve'
+        );
+      }
+      const u = userService.getUserByUsername(String(userOrUsername));
+      if (u && u.avatarDataUrl) return u.avatarDataUrl;
+      return this.generateMinecraftAvatar(String(userOrUsername));
+    }
+  };
+
+  // ==========================================
+  // 11. DEDICATED BUG & SUGGESTION SERVICE FACADES (Section 37)
+  // ==========================================
+  const bugService = {
+    createBugReport: (session, payload) => supportService.createBugReport(session, payload),
+    listBugReports: (session, onlyMine) => supportService.listBugReports(session, onlyMine),
+    adminUpdateBugStatus: (session, bugId, status) =>
+      supportService.adminUpdateBugStatus(session, bugId, status),
+    computeUserPriority: session => supportService.computeUserPriority(session, 'bug'),
+    formatPriorityTR: p => supportService.formatPriorityTR(p)
+  };
+
+  const suggestionService = {
+    createSuggestion: (session, payload) => supportService.createSuggestion(session, payload),
+    listSuggestions: (session, sortBy) => supportService.listSuggestions(session, sortBy),
+    voteSuggestion: (session, id) => supportService.voteSuggestion(session, id),
+    adminUpdateSuggestionStatus: (session, id, status) =>
+      supportService.adminUpdateSuggestionStatus(session, id, status),
+    formatSuggestionStatusTR: s => supportService.formatSuggestionStatusTR(s),
+    computeUserPriority: session => supportService.computeUserPriority(session, 'suggestion'),
+    formatPriorityTR: p => supportService.formatPriorityTR(p)
+  };
+
+  // Export services to global namespace (Section 37: 15 Modular Services)
   window.MCMServices = {
+    ...(window.MCMServices || {}),
     authGuard,
     authService: licenseService,
     userService,
@@ -3140,9 +3416,13 @@
     partyService,
     playerService,
     supportService,
+    bugService,
+    suggestionService,
     paymentService,
     backupService,
     activityService,
+    avatarService,
+    soundService: window.soundManager || null,
     PARTY_STATUSES
   };
 })();

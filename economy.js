@@ -278,23 +278,23 @@
         canInvitePlayers: true,
         maxPartySize: 6,
         emeraldMultiplier: 1.5,
-        supportPriority: 'HIGH',
-        bugPriority: 'HIGH',
-        suggestionPriority: 'HIGH',
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
         maxExtraLives: 6,
         cosmetics: true,
         rgbName: true,
         profileEffects: true
       },
       benefits: [
-        'Everything in VIP',
-        'Create Parties (Up to 6 Players)',
-        '1.50x Emerald Bonus Multiplier',
-        'Up to 6 Extra Lives Capacity',
-        'VIP+ Golden Badge & Profile Effects'
+        'VIP paketindeki tüm avantajlar',
+        'Parti Oluşturma (6 Oyuncuya Kadar)',
+        '1.50x Zümrüt Çarpanı',
+        'Çok Yüksek Öncelikli Destek, Hata & Öneri',
+        '6 Ekstra Can Kapasitesi & VIP+ Altın Rozet'
       ],
       emeraldBonus: 1.5,
-      priorityLevel: 'HIGH',
+      priorityLevel: 'VERY HIGH',
       price: 350,
       emeraldPrice: 1750,
       currency: 'TRY',
@@ -559,6 +559,17 @@
       if (!saved || !Array.isArray(saved) || saved.length < 9) {
         store.set(ECON_KEYS.RANKS, DEFAULT_RANKS);
         saved = DEFAULT_RANKS;
+      } else {
+        const vp = saved.find(r => r.id === 'VIP_PLUS');
+        if (vp && vp.priorityLevel === 'HIGH') {
+          vp.priorityLevel = 'VERY HIGH';
+          if (vp.permissions) {
+            vp.permissions.supportPriority = 'VERY HIGH';
+            vp.permissions.bugPriority = 'VERY HIGH';
+            vp.permissions.suggestionPriority = 'VERY HIGH';
+          }
+          store.set(ECON_KEYS.RANKS, saved);
+        }
       }
       return includeDisabled ? saved : saved.filter(r => r.enabled !== false);
     },
@@ -1429,23 +1440,57 @@
   const shopService = {
     _ensureShopItems() {
       let items = store.get(ECON_KEYS.SHOP_ITEMS, null);
+      const cfg = configService.getConfig();
+      const now = new Date().toISOString();
+
       if (items && Array.isArray(items) && items.length > 0) {
+        if (!items.some(i => i.id === 'ITEM-BORDER-EMERALD')) {
+          items.push({
+            id: 'ITEM-BORDER-EMERALD',
+            name: 'Zümrüt Profil Çerçevesi',
+            icon: '🖼️',
+            price: 750,
+            currency: 'EMERALD',
+            category: 'Cosmetics',
+            requiredRole: 'ANY',
+            description: 'Profil avatarınız için parlayan Zümrüt çerçeve kozmetiği açar!',
+            enabled: true,
+            purchaseLimit: 1,
+            effect: 'PROFILE_BORDER_EMERALD',
+            createdAt: now
+          });
+        }
+        if (!items.some(i => i.id === 'ITEM-BG-NETHER')) {
+          items.push({
+            id: 'ITEM-BG-NETHER',
+            name: 'Nether Profil Arka Planı',
+            icon: '🌌',
+            price: 850,
+            currency: 'EMERALD',
+            category: 'Cosmetics',
+            requiredRole: 'ANY',
+            description: 'Profil kartınız için özel Nether Kalesi arka plan temasını açar!',
+            enabled: true,
+            purchaseLimit: 1,
+            effect: 'PROFILE_BG_NETHER',
+            createdAt: now
+          });
+        }
+        store.set(ECON_KEYS.SHOP_ITEMS, items);
         return items;
       }
 
-      const cfg = configService.getConfig();
-      const now = new Date().toISOString();
       items = [
         // ❤️ GAMEPLAY CATEGORY
         {
           id: 'ITEM-EXTRA-LIFE',
-          name: 'Extra Life',
+          name: 'Ekstra Can (Extra Life)',
           icon: '❤️',
           price: cfg.extraLifePrice,
           currency: 'EMERALD',
           category: 'Gameplay',
           requiredRole: 'ANY',
-          description: 'Use an Extra Life to return to the game after losing (500 Emeralds).',
+          description: 'Yanlış cevap verdiğinizde elenmek yerine oyuna kaldığınız yerden devam edin (500 💚).',
           enabled: true,
           purchaseLimit: cfg.extraLifeMaxPerPlayer,
           effect: 'EXTRA_LIFE',
@@ -1453,13 +1498,13 @@
         },
         {
           id: 'ITEM-SCORE-BOOSTER',
-          name: 'Score Booster',
+          name: 'Puan Çarpanı (Score Booster)',
           icon: '⭐',
           price: 750,
           currency: 'EMERALD',
           category: 'Gameplay',
           requiredRole: 'ANY',
-          description: 'Increase your leaderboard score reward by +50% on the next completed game.',
+          description: 'Bir sonraki tamamlanan oyunda Liderlik Tablosu puan ödülünüzü +%50 artırır.',
           enabled: true,
           purchaseLimit: 5,
           effect: 'SCORE_BOOSTER',
@@ -1467,13 +1512,13 @@
         },
         {
           id: 'ITEM-SECOND-CHANCE',
-          name: 'Second Chance',
+          name: 'İkinci Şans Paketi',
           icon: '🔥',
           price: 750,
           currency: 'EMERALD',
           category: 'Gameplay',
           requiredRole: 'ANY',
-          description: 'One-time protection against elimination (+1 Extra Life & +300 Bonus Points).',
+          description: 'Elenmeye karşı koruma (+1 Ekstra Can ve +300 Liderlik Puanı).',
           enabled: true,
           purchaseLimit: 3,
           effect: 'SECOND_CHANCE',
@@ -1482,14 +1527,14 @@
         // 🎨 COSMETICS CATEGORY (Section 18: RGB Username 1000 💚 & Animated Name 1500 💚)
         {
           id: 'ITEM-RGB-NAME',
-          name: 'RGB Username',
+          name: 'RGB Kullanıcı Adı',
           icon: '🌈',
           price: 1000,
           currency: 'EMERALD',
           category: 'Cosmetics',
           requiredRole: 'ANY',
           description:
-            'Unlock smooth animated RGB gradient username styling across Profile, Parties & Leaderboard!',
+            'Profil, Partiler ve Liderlik Tablosunda akıcı animasyonlu RGB gökkuşağı isim efektini açar!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RGB_NAME',
@@ -1497,29 +1542,57 @@
         },
         {
           id: 'ITEM-ANIMATED-NAME',
-          name: 'Animated Name',
+          name: 'Animasyonlu İsim & Efekt',
           icon: '🎨',
           price: 1500,
           currency: 'EMERALD',
           category: 'Cosmetics',
           requiredRole: 'ANY',
           description:
-            'Unlock sparkling Minecraft enchantment aura & animated name flair on your profile!',
+            'Profilinizde parıldayan Minecraft büyü (Enchantment) aurası ve animasyonlu isim efektini açar!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'ANIMATED_NAME',
           createdAt: now
         },
+        {
+          id: 'ITEM-BORDER-EMERALD',
+          name: 'Zümrüt Profil Çerçevesi',
+          icon: '🖼️',
+          price: 750,
+          currency: 'EMERALD',
+          category: 'Cosmetics',
+          requiredRole: 'ANY',
+          description: 'Profil avatarınız için parlayan Zümrüt çerçeve kozmetiği açar!',
+          enabled: true,
+          purchaseLimit: 1,
+          effect: 'PROFILE_BORDER_EMERALD',
+          createdAt: now
+        },
+        {
+          id: 'ITEM-BG-NETHER',
+          name: 'Nether Profil Arka Planı',
+          icon: '🌌',
+          price: 850,
+          currency: 'EMERALD',
+          category: 'Cosmetics',
+          requiredRole: 'ANY',
+          description: 'Profil kartınız için özel Nether Kalesi arka plan temasını açar!',
+          enabled: true,
+          purchaseLimit: 1,
+          effect: 'PROFILE_BG_NETHER',
+          createdAt: now
+        },
         // ⭐ SPECIAL & VIP CATEGORY
         {
           id: 'ITEM-EMERALD-BOOSTER',
-          name: 'Emerald Booster',
+          name: 'Zümrüt Çarpanı (Emerald Booster)',
           icon: '💎',
           price: 750,
           currency: 'EMERALD',
           category: 'Special',
           requiredRole: 'ANY',
-          description: 'Boosts your Emerald Coin reward by +50% on your next game.',
+          description: 'Bir sonraki oyunda kazandığınız Zümrüt ödülünü +%50 artırır.',
           enabled: true,
           purchaseLimit: 5,
           effect: 'EMERALD_BOOSTER',
@@ -1527,13 +1600,13 @@
         },
         {
           id: 'ITEM-TOURNAMENT-TICKET',
-          name: 'Tournament Ticket',
+          name: 'Turnuva Bileti',
           icon: '🎟️',
           price: 1000,
           currency: 'EMERALD',
           category: 'Special',
           requiredRole: 'ANY',
-          description: 'Entry ticket for Championship Party rooms (+500 Leaderboard Points).',
+          description: 'Şampiyona Parti odaları için özel giriş bileti (+500 Liderlik Puanı).',
           enabled: true,
           purchaseLimit: 10,
           effect: 'TOURNAMENT_TICKET',
@@ -1541,13 +1614,13 @@
         },
         {
           id: 'ITEM-VIP-CROWN-PACK',
-          name: 'VIP Emerald Pack',
+          name: 'VIP Zümrüt Paketi',
           icon: '👑',
           price: 600,
           currency: 'EMERALD',
           category: 'VIP',
           requiredRole: 'VIP',
-          description: 'Exclusive VIP-only bundle: +2 Extra Lives & +1 Score Booster.',
+          description: 'Sadece VIP üyelerine özel paket: +2 Ekstra Can ve +1 Puan Çarpanı.',
           enabled: true,
           purchaseLimit: 3,
           effect: 'VIP_PACK',
@@ -1556,7 +1629,7 @@
         // 👑 RANKS CATEGORY (Sections 5, 6, 7, 8, 9, 18)
         {
           id: 'ITEM-RANK-VIP',
-          name: 'VIP Rank',
+          name: 'VIP Rütbesi',
           icon: '👑',
           price: 1000,
           priceTL: 200,
@@ -1564,7 +1637,7 @@
           category: 'Ranks',
           requiredRole: 'ANY',
           description:
-            'Unlocks VIP: Create Parties (up to 4), Invite Players, HIGH Priority Support & 1.25x Emerald Bonus!',
+            'VIP ayrıcalıklarını açar: Parti Oluşturma (4 Kişi), Davet Gönderme, Yüksek Öncelikli Destek & 1.25x Zümrüt Çarpanı!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_VIP',
@@ -1573,7 +1646,7 @@
         },
         {
           id: 'ITEM-RANK-VIP-PLUS',
-          name: 'VIP+ Rank',
+          name: 'VIP+ Rütbesi',
           icon: '👑',
           price: 1750,
           priceTL: 350,
@@ -1581,7 +1654,7 @@
           category: 'Ranks',
           requiredRole: 'ANY',
           description:
-            'Everything in VIP + 6-Player Parties, 1.50x Emerald Multiplier, 6 Extra Lives capacity & VIP+ Badge!',
+            'VIP özelliklerine ek olarak 6 Kişilik Parti, 1.50x Zümrüt Çarpanı, Çok Yüksek Öncelik & 6 Ekstra Can kapasitesi!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_VIP_PLUS',
@@ -1590,7 +1663,7 @@
         },
         {
           id: 'ITEM-RANK-MVP',
-          name: 'MVP Rank',
+          name: 'MVP Rütbesi',
           icon: '⚔️',
           price: 2500,
           priceTL: 500,
@@ -1598,7 +1671,7 @@
           category: 'Ranks',
           requiredRole: 'ANY',
           description:
-            'Everything in VIP+ + 8-Player Parties, 1.75x Emerald Multiplier & VERY HIGH Support/Bug Priority!',
+            'VIP+ özelliklerine ek olarak 8 Kişilik Parti, 1.75x Zümrüt Çarpanı & Çok Yüksek Öncelikli Destek/Hata/Öneri!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_MVP',
@@ -1607,7 +1680,7 @@
         },
         {
           id: 'ITEM-RANK-MVP-PLUS',
-          name: 'MVP+ Rank',
+          name: 'MVP+ Rütbesi',
           icon: '🌟',
           price: 3750,
           priceTL: 750,
@@ -1615,7 +1688,7 @@
           category: 'Ranks',
           requiredRole: 'ANY',
           description:
-            'Everything in MVP + 10-Player Parties, 2.00x Emerald Multiplier, Animated Profile & 🌟 MVP+ Badge!',
+            'MVP özelliklerine ek olarak 10 Kişilik Parti, 2.00x Zümrüt Çarpanı, Animasyonlu Profil & 🌟 MVP+ Rozeti!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_MVP_PLUS',
@@ -1624,7 +1697,7 @@
         },
         {
           id: 'ITEM-RANK-ELITE',
-          name: 'ELITE Rank',
+          name: 'ELITE Rütbesi',
           icon: '⚡',
           price: 4500,
           priceTL: 900,
@@ -1632,7 +1705,7 @@
           category: 'Ranks',
           requiredRole: 'ANY',
           description:
-            '12-Player Parties, 2.25x Emerald Multiplier, VERY HIGH Priority & Amethyst ⚡ ELITE Badge!',
+            '12 Kişilik Parti, 2.25x Zümrüt Çarpanı, Çok Yüksek Öncelik & Ametist ⚡ ELITE Rozeti!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_ELITE',
@@ -1641,7 +1714,7 @@
         },
         {
           id: 'ITEM-RANK-LEGEND',
-          name: 'LEGEND Rank',
+          name: 'LEGEND Rütbesi',
           icon: '🔱',
           price: 3000,
           priceTL: 1200,
@@ -1649,7 +1722,7 @@
           category: 'Ranks',
           requiredRole: 'ANY',
           description:
-            '14-Player Parties, 2.50x Emerald Multiplier, VERY HIGH Priority & Crimson 🔱 LEGEND Badge!',
+            '14 Kişilik Parti, 2.50x Zümrüt Çarpanı, Çok Yüksek Öncelik & Kızıl 🔱 LEGEND Rozeti!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_LEGEND',
@@ -1658,7 +1731,7 @@
         },
         {
           id: 'ITEM-RANK-CHAMPION',
-          name: 'CHAMPION Rank',
+          name: 'CHAMPION Rütbesi',
           icon: '🏆',
           price: 4000,
           priceTL: 1600,
@@ -1666,7 +1739,7 @@
           category: 'Ranks',
           requiredRole: 'ANY',
           description:
-            '16-Player Parties, 2.75x Emerald Multiplier, VERY HIGH Priority & Golden 🏆 CHAMPION Badge!',
+            '16 Kişilik Parti, 2.75x Zümrüt Çarpanı, Çok Yüksek Öncelik & Altın 🏆 CHAMPION Rozeti!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_CHAMPION',
@@ -1675,7 +1748,7 @@
         },
         {
           id: 'ITEM-RANK-MILLIONAIRE',
-          name: 'MILLIONAIRE Rank',
+          name: 'MILLIONAIRE Rütbesi',
           icon: '💎',
           price: 5000,
           priceTL: 2000,
@@ -1683,7 +1756,7 @@
           category: 'Ranks',
           requiredRole: 'ANY',
           description:
-            'Ultimate 💎 MILLIONAIRE Rank! 20-Player Parties, 3.00x Emerald Multiplier + Automatic RGB Username!',
+            'Efsanevi 💎 MILLIONAIRE Rütbesi! 20 Kişilik Parti, 3.00x Zümrüt Çarpanı + Otomatik RGB Kullanıcı Adı!',
           enabled: true,
           purchaseLimit: 1,
           effect: 'RANK_MILLIONAIRE',
@@ -1717,7 +1790,7 @@
           currency: 'TRY',
           category: 'Emeralds',
           requiredRole: 'ANY',
-          description: `Buy ${pkg.emeralds.toLocaleString('en-US')} 💚 Emerald Coins via Stripe Checkout (Rate: 5 💚 = 1 TL).`,
+          description: `Stripe Güvencesiyle ${pkg.emeralds.toLocaleString('tr-TR')} 💚 Zümrüt satın alın (Kur: 5 💚 = 1 TL).`,
           enabled: pkg.enabled !== false,
           purchaseLimit: 99,
           effect: 'EMERALD_PACKAGE'
@@ -1744,10 +1817,10 @@
     // Section 33: Evaluate Purchase Eligibility & Explain Why Disabled
     evaluateEligibility(session, item) {
       if (!session) {
-        return { canBuy: false, reason: 'Please log in', buttonLabel: 'Login Required' };
+        return { canBuy: false, reason: 'Lütfen giriş yapın', buttonLabel: 'Giriş Gerekli' };
       }
       if (!item.enabled) {
-        return { canBuy: false, reason: 'Disabled by Admin', buttonLabel: 'Unavailable' };
+        return { canBuy: false, reason: 'Admin tarafından devre dışı', buttonLabel: 'Devre Dışı' };
       }
 
       const profile = economyService.getPlayerEconomyProfile(session.username);
@@ -1755,30 +1828,30 @@
       const perms = authGuard.getUserPermissions(session);
 
       if (item.requiredRole === 'VIP' && !isVip) {
-        return { canBuy: false, reason: 'Requires VIP', buttonLabel: '🔒 Requires VIP' };
+        return { canBuy: false, reason: 'VIP Rütbesi Gerektirir', buttonLabel: '🔒 VIP Gerekli' };
       }
 
       if (item.effect === 'RGB_NAME' && profile.rgbOwned) {
         return {
           canBuy: false,
-          reason: 'Already Owned (Enable in Profile / Cosmetics)',
-          buttonLabel: '✅ Owned'
+          reason: 'Zaten Sahipsiniz (Profil / Kozmetikler bölümünden aktif edin)',
+          buttonLabel: '✅ Sahipsiniz'
         };
       }
 
       if (item.effect === 'ANIMATED_NAME' && profile.animatedNameOwned) {
         return {
           canBuy: false,
-          reason: 'Already Owned',
-          buttonLabel: '✅ Owned'
+          reason: 'Zaten Sahipsiniz',
+          buttonLabel: '✅ Sahipsiniz'
         };
       }
 
       if (item.rankId && (profile.ownedRanks || []).includes(item.rankId)) {
         return {
           canBuy: false,
-          reason: 'Rank Already Unlocked',
-          buttonLabel: '✅ Rank Owned'
+          reason: 'Bu Rütbe Zaten Açık',
+          buttonLabel: '✅ Rütbe Açık'
         };
       }
 
@@ -1786,31 +1859,31 @@
       if (item.effect === 'EXTRA_LIFE' && profile.extraLives >= maxLivesAllowed) {
         return {
           canBuy: false,
-          reason: `Max Extra Lives (${maxLivesAllowed}) reached`,
-          buttonLabel: 'Max Owned'
+          reason: `Maksimum Ekstra Can (${maxLivesAllowed}) sınırına ulaşıldı`,
+          buttonLabel: 'Maks. Kapasite'
         };
       }
 
       if (item.currency === 'TRY' || item.effect === 'EMERALD_PACKAGE') {
         return {
           canBuy: true,
-          reason: 'Secure Stripe Checkout (5 💚 = 1 TL)',
-          buttonLabel: `💳 Buy (${item.price} TL)`
+          reason: 'Güvenli Stripe Ödemesi (5 💚 = 1 TL)',
+          buttonLabel: `💳 Satın Al (${item.price} TL)`
         };
       }
 
       if (profile.emeraldCoins < item.price) {
         return {
           canBuy: false,
-          reason: 'Not enough Emeralds',
-          buttonLabel: 'Not enough Emeralds'
+          reason: 'Yetersiz Zümrüt Bakiyesi',
+          buttonLabel: 'Yetersiz Zümrüt'
         };
       }
 
       return {
         canBuy: true,
-        reason: 'Available for purchase',
-        buttonLabel: `🛒 BUY (${item.price.toLocaleString('en-US')} 💚)`
+        reason: 'Satın alınabilir',
+        buttonLabel: `🛒 SATIN AL (${item.price.toLocaleString('tr-TR')} 💚)`
       };
     },
 
@@ -1823,7 +1896,7 @@
         .find(p => p.id.toUpperCase() === String(itemId || '').toUpperCase());
       if (pkg) {
         if (pkg.enabled === false) {
-          throw new Error(`"${pkg.name}" is currently disabled.`);
+          throw new Error(`"${pkg.name}" şu anda devre dışı.`);
         }
         return paymentService.createCheckoutSession(session, {
           productType: 'EMERALD_PACKAGE',
@@ -1848,15 +1921,15 @@
       const item = matched || items.find(i => i.id === itemId);
 
       if (!item) {
-        throw new Error('Item not found in the Emerald Shop.');
+        throw new Error('Ürün Zümrüt Mağazasında bulunamadı.');
       }
 
       if (!item.enabled) {
-        throw new Error(`"${item.name}" is currently disabled.`);
+        throw new Error(`"${item.name}" şu anda devre dışı.`);
       }
 
       if (item.requiredRole === 'VIP' && !authGuard.isVipOrAdmin(session)) {
-        throw new Error('Requires VIP: Only VIP and higher rank members can purchase this item.');
+        throw new Error('VIP Gerekli: Bu ürünü yalnızca VIP ve üzeri rütbeli oyuncular satın alabilir.');
       }
 
       if (item.currency === 'TRY') {
@@ -1895,22 +1968,22 @@
 
         if (item.effect === 'EXTRA_LIFE' && acc.extraLives >= limit) {
           throw new Error(
-            `Maximum Extra Life limit (${limit}) reached! Use one before buying more.`
+            `Maksimum Ekstra Can sınırına (${limit}) ulaştınız! Yenisini almadan önce mevcut canlarınızı kullanın.`
           );
         }
         if (item.effect === 'RGB_NAME' && acc.rgbOwned) {
-          throw new Error('You already own the RGB Username cosmetic!');
+          throw new Error('RGB Kullanıcı Adı kozmetiğine zaten sahipsiniz!');
         }
         if (item.effect === 'ANIMATED_NAME' && acc.animatedNameOwned) {
-          throw new Error('You already own the Animated Name cosmetic!');
+          throw new Error('Animasyonlu İsim kozmetiğine zaten sahipsiniz!');
         }
         if (item.rankId && (acc.ownedRanks || []).includes(item.rankId)) {
-          throw new Error(`You already own the ${item.name}!`);
+          throw new Error(`${item.name} rütbesine zaten sahipsiniz!`);
         }
 
         if (acc.balance < price) {
           throw new Error(
-            `Not enough Emeralds! Required: ${price} 💚, Balance: ${acc.balance} 💚`
+            `Yetersiz Zümrüt! Gereken: ${price} 💚, Mevcut Bakiye: ${acc.balance} 💚`
           );
         }
 
@@ -1938,6 +2011,14 @@
           } else if (eff === 'VIP_PACK') {
             acc.extraLives = (acc.extraLives || 0) + 2;
             acc.scoreBoosterOwned = (acc.scoreBoosterOwned || 0) + 1;
+          } else if (eff === 'PROFILE_BORDER_EMERALD') {
+            if (userService) {
+              userService.updateProfileCustomization(session, { profileBorder: 'emerald' });
+            }
+          } else if (eff === 'PROFILE_BG_NETHER') {
+            if (userService) {
+              userService.updateProfileCustomization(session, { profileBackground: 'nether_fortress' });
+            }
           } else if (eff === 'RGB_NAME') {
             acc.rgbOwned = true;
             acc.rgbEnabled = true;
@@ -2375,43 +2456,43 @@
     {
       id: 'ACH_FIRST_WIN',
       icon: '🏆',
-      title: 'First Victory',
-      description: 'Win your first Minecraft Milyoner game (15/15).',
+      title: 'İlk Zafer',
+      description: 'İlk Minecraft Milyoner oyununuzu kazanın (15/15).',
       bonusEmeralds: 50
     },
     {
       id: 'ACH_EMERALD_HUNTER',
       icon: '💚',
-      title: 'Emerald Hunter',
-      description: 'Accumulate 1,000+ Emerald Coins in your wallet.',
+      title: 'Zümrüt Avcısı',
+      description: 'Cüzdanınızda 1.000+ Zümrüt biriktirin.',
       bonusEmeralds: 75
     },
     {
       id: 'ACH_QUIZ_MASTER',
       icon: '🧠',
-      title: 'Quiz Master',
-      description: 'Play at least 10 Minecraft Milyoner games.',
+      title: 'Bilgi Ustası',
+      description: 'En az 10 Minecraft Milyoner oyunu oynayın.',
       bonusEmeralds: 50
     },
     {
       id: 'ACH_SECOND_CHANCE',
       icon: '❤️',
-      title: 'Second Chance',
-      description: 'Use an Extra Life to revive and continue a game.',
+      title: 'İkinci Şans',
+      description: 'Bir oyunda Ekstra Can kullanarak oyuna geri dönün.',
       bonusEmeralds: 40
     },
     {
       id: 'ACH_MILLIONAIRE',
       icon: '💎',
-      title: 'Millionaire',
-      description: 'Reach 10,000+ total Leaderboard Points.',
+      title: 'Milyoner',
+      description: 'Toplam 10.000+ Liderlik Tablosu Puanına ulaşın.',
       bonusEmeralds: 100
     },
     {
       id: 'ACH_CHAMPION',
       icon: '👑',
-      title: 'Leaderboard Champion',
-      description: 'Reach Rank #1 on the Minecraft Milyoner Leaderboard.',
+      title: 'Liderlik Şampiyonu',
+      description: 'Minecraft Milyoner Liderlik Tablosunda 1. sıraya yükselin.',
       bonusEmeralds: 150
     }
   ];
