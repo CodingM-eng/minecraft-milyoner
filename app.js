@@ -339,31 +339,98 @@
   }
 
   function getCombinedQuestionPool(difficulty) {
-    const base = QUESTION_POOL.filter(q => q.difficulty === difficulty);
-    if (window.QUESTIONS_DB && Array.isArray(window.QUESTIONS_DB[difficulty])) {
-      const extra = window.QUESTIONS_DB[difficulty].map(item => ({
-        difficulty,
-        q: item.question || item.q,
-        options: Array.isArray(item.options) ? [...item.options] : [],
-        answer: typeof item.correct === 'number' ? item.correct : item.answer,
-        explanation: item.explanation || ''
-      }));
-      const seen = new Set(base.map(b => b.q));
-      extra.forEach(item => {
-        if (item.q && !seen.has(item.q)) {
-          seen.add(item.q);
-          base.push(item);
+    const combined = [];
+    const seen = new Set();
+
+    // 1. Öncelik: Yönetici Gemini API Anahtarı ile üretilen AI Soru Havuzu
+    const aiService = svc().aiQuestionService;
+    if (aiService && typeof aiService.getAiQuestionsByDifficulty === 'function') {
+      const aiList = aiService.getAiQuestionsByDifficulty(difficulty) || [];
+      aiList.forEach(item => {
+        const qText = String(item.q || item.question || '').trim();
+        if (qText && !seen.has(qText) && Array.isArray(item.options) && item.options.length === 4) {
+          seen.add(qText);
+          combined.push({
+            id: item.id || `AI_${difficulty}_${combined.length}`,
+            difficulty,
+            q: qText,
+            options: [...item.options],
+            answer: Number(item.answer ?? item.correct ?? 0),
+            explanation: item.explanation || '',
+            isAi: true
+          });
         }
       });
     }
-    return base;
+
+    // 2. Yerleşik Soru Havuzu
+    QUESTION_POOL.filter(q => q.difficulty === difficulty).forEach(item => {
+      if (item.q && !seen.has(item.q)) {
+        seen.add(item.q);
+        combined.push(item);
+      }
+    });
+
+    // 3. Genişletilmiş QUESTIONS_DB Havuzu
+    if (window.QUESTIONS_DB && Array.isArray(window.QUESTIONS_DB[difficulty])) {
+      window.QUESTIONS_DB[difficulty].forEach(item => {
+        const qText = item.question || item.q;
+        if (qText && !seen.has(qText)) {
+          seen.add(qText);
+          combined.push({
+            difficulty,
+            q: qText,
+            options: Array.isArray(item.options) ? [...item.options] : [],
+            answer: typeof item.correct === 'number' ? item.correct : item.answer,
+            explanation: item.explanation || ''
+          });
+        }
+      });
+    }
+
+    return combined;
+  }
+
+  function pickNonRepeatingDifficultyQuestions(difficulty, count = 5) {
+    const pool = getCombinedQuestionPool(difficulty);
+    const aiService = svc().aiQuestionService;
+    const seenKeys = aiService?.getSeenQuestionKeys ? aiService.getSeenQuestionKeys() : new Set();
+
+    const norm = str =>
+      String(str || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9çğıöşü]/gi, '');
+
+    const unseenAi = [];
+    const unseenStandard = [];
+    const seenPool = [];
+
+    pool.forEach(q => {
+      const key = norm(q.q);
+      if (!seenKeys.has(key)) {
+        if (q.isAi) unseenAi.push(q);
+        else unseenStandard.push(q);
+      } else {
+        seenPool.push(q);
+      }
+    });
+
+    const orderedCandidates = [
+      ...shuffle(unseenAi),
+      ...shuffle(unseenStandard),
+      ...shuffle(seenPool)
+    ];
+
+    return orderedCandidates.slice(0, count);
   }
 
   function buildMatchQuestions() {
-    const easy = shuffle(getCombinedQuestionPool('easy')).slice(0, 5);
-    const medium = shuffle(getCombinedQuestionPool('medium')).slice(0, 5);
-    const hard = shuffle(getCombinedQuestionPool('hard')).slice(0, 5);
+    const easy = pickNonRepeatingDifficultyQuestions('easy', 5);
+    const medium = pickNonRepeatingDifficultyQuestions('medium', 5);
+    const hard = pickNonRepeatingDifficultyQuestions('hard', 5);
     const combined = [...easy, ...medium, ...hard];
+
+    svc().aiQuestionService?.markQuestionsSeen?.(combined);
 
     return combined.map(item => {
       const indexed = item.options.map((text, idx) => ({
@@ -431,6 +498,9 @@
       audience: true,
       villager: true
     };
+
+    // Yöneticinin tanımladığı Gemini API Anahtarı varsa arka planda yeni sorular üret ve maça enjekte et
+    svc().aiQuestionService?.ensureFreshQuestionsForMatch?.(gameState);
 
     ['lifeline-5050', 'lifeline-audience', 'lifeline-villager'].forEach(id => {
       const btn = document.getElementById(id);

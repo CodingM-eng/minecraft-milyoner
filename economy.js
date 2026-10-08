@@ -20,11 +20,11 @@
   'use strict';
 
   const STORAGE_KEYS = {
-    RANKS: 'mc_millionaire_tr_ranks_v8',
+    RANKS: 'mc_millionaire_tr_ranks_v9',
     ECONOMY_SETTINGS: 'mc_millionaire_tr_economy_settings_v8',
     TRANSACTIONS: 'mc_millionaire_tr_emerald_tx_v6',
     NETHERITE_TX: 'mc_millionaire_tr_netherite_tx_v6',
-    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v8',
+    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v9',
     PURCHASES: 'mc_millionaire_tr_purchases_v6',
     GIFT_HISTORY: 'mc_millionaire_tr_rank_gifts_v6',
     ACHIEVEMENTS: 'mc_millionaire_tr_achievements_v6',
@@ -46,6 +46,16 @@
   function safeWrite(key, data) {
     try {
       localStorage.setItem(key, JSON.stringify(data));
+      if (
+        key === STORAGE_KEYS.RANKS ||
+        key === STORAGE_KEYS.SHOP_ITEMS ||
+        key === STORAGE_KEYS.LEADERBOARD_META
+      ) {
+        const cloud = window.MCMServices?.cloudSyncService;
+        if (cloud && typeof cloud.schedulePush === 'function') {
+          cloud.schedulePush(250);
+        }
+      }
       return true;
     } catch (e) {
       return false;
@@ -62,21 +72,25 @@
     return window.MCMServices || {};
   }
 
+  const SYSTEM_RANK_IDS = ['MEMBER', 'VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'MODERATOR', 'ADMIN'];
+
   function normalizeRankId(rankId) {
     const raw = String(rankId || 'MEMBER').trim().toUpperCase();
+    if (!raw) return 'MEMBER';
     if (raw === 'PLAYER' || raw === 'ÜYE' || raw === 'UYE') return 'MEMBER';
     if (raw === 'VIP+') return 'VIP_PLUS';
     if (raw === 'MVIP+') return 'MVIP_PLUS';
     if (raw === 'ULTRA_VIP') return 'MVIP';
     if (raw === 'ELITE_VIP' || raw === 'LEGEND_VIP') return 'MVIP_PLUS';
-    if (['MEMBER', 'VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'MODERATOR', 'ADMIN'].includes(raw)) {
+    if (SYSTEM_RANK_IDS.includes(raw)) {
       return raw;
     }
-    return 'MEMBER';
+    return raw.replace(/\s+/g, '_');
   }
 
   // ==========================================
-  // 1. 7 RÜTBE HİYERARŞİSİ (#3: Üye, VIP, VIP+, MVIP, MVIP+, Moderator, ADMIN)
+  // 1. RÜTBE HİYERARŞİSİ (#3: Üye, VIP, VIP+, MVIP, MVIP+, Moderator, ADMIN + Özel Rütbeler)
+  // Rütbeler YALNIZCA Netherite ile satın alınabilir (En az 500 Netherite).
   // ==========================================
   const DEFAULT_RANKS = [
     {
@@ -121,10 +135,10 @@
       order: 2,
       badge: '💎',
       color: '#38bdf8',
-      priceTry: 79.9,
+      priceTry: 89.9,
       priceUsd: 2.99,
-      emeraldPrice: 1200,
-      netheritePrice: 200,
+      emeraldPrice: 0,
+      netheritePrice: 500,
       purchasable: true,
       dailyEmerald: 100,
       dailyNetherite: 0,
@@ -159,10 +173,10 @@
       order: 3,
       badge: '🌟',
       color: '#a855f7',
-      priceTry: 149.9,
+      priceTry: 159.9,
       priceUsd: 4.99,
-      emeraldPrice: 2500,
-      netheritePrice: 400,
+      emeraldPrice: 0,
+      netheritePrice: 1000,
       purchasable: true,
       dailyEmerald: 200,
       dailyNetherite: 25,
@@ -197,10 +211,10 @@
       order: 4,
       badge: '🔥',
       color: '#f59e0b',
-      priceTry: 249.9,
+      priceTry: 299.9,
       priceUsd: 7.99,
-      emeraldPrice: 4500,
-      netheritePrice: 700,
+      emeraldPrice: 0,
+      netheritePrice: 2000,
       purchasable: true,
       dailyEmerald: 350,
       dailyNetherite: 50,
@@ -236,10 +250,10 @@
       order: 5,
       badge: '👑',
       color: '#ef4444',
-      priceTry: 399.9,
+      priceTry: 449.9,
       priceUsd: 12.99,
-      emeraldPrice: 8000,
-      netheritePrice: 1200,
+      emeraldPrice: 0,
+      netheritePrice: 3500,
       purchasable: true,
       dailyEmerald: 500,
       dailyNetherite: 100,
@@ -395,9 +409,88 @@
 
   // ==========================================
   // 3. BİRLEŞİK # MAĞAZA VARSAYILAN ÜRÜNLERİ (#8, #9, #10, #20)
-  // Kategoriler: Emeralds (Zümrüt), Ranks (Rütbeler), Cosmetics (Kozmetikler), Special (Özel Ürünler)
+  // Kategoriler:
+  // - Netherite (⬛ Netherite Bakiye Yükle - Kart ile En Az 500 Netherite Bakiye)
+  // - Ranks (👑 Rütbeler - Yalnızca Netherite ile Satın Alınır, En Az 500 Netherite)
+  // - Emeralds (🟢 Zümrüt Paketleri - Netherite Takası & Kart ile Zümrüt Bakiye)
+  // - Special (❤️ Özel Ürünler & Ekstra Can & Güçlendirmeler)
+  // - Cosmetics (🎨 Kozmetikler - Çerçeveler, İsim Renkleri, Rozetler, Profil Efektleri)
   // ==========================================
   const DEFAULT_SHOP_ITEMS = [
+    // --- NETHERITE BAKİYE YÜKLE (Netherite) KATEGORİSİ (Kart ile Sadece Bakiye Satın Alımı - En Az 500 Netherite) ---
+    {
+      id: 'STRIPE_NETHERITE_500',
+      name: '500 Netherite Bakiye Paketi (Kart ile Bakiye Yükle)',
+      category: 'Netherite',
+      icon: '⬛',
+      currency: 'STRIPE',
+      price: 89.9,
+      emeraldPrice: 0,
+      netheritePrice: 0,
+      netheriteGrant: 500,
+      priceTry: 89.9,
+      stripePriceId: 'price_mcm_netherite_500',
+      stock: -1,
+      maxPerUser: 999,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: 'Kart ile hesabınıza anında 500 Netherite bakiye yükleyin! (VIP rütbesi satın almak için yeterlidir).'
+    },
+    {
+      id: 'STRIPE_NETHERITE_1000',
+      name: '1.100 Netherite Bakiye Paketi (1.000 + 100 Bonus)',
+      category: 'Netherite',
+      icon: '⬛',
+      currency: 'STRIPE',
+      price: 159.9,
+      emeraldPrice: 0,
+      netheritePrice: 0,
+      netheriteGrant: 1100,
+      priceTry: 159.9,
+      stripePriceId: 'price_mcm_netherite_1000',
+      stock: -1,
+      maxPerUser: 999,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: 'Kart ile 1.000 + 100 Bonus = 1.100 Netherite bakiye yükleyin! (VIP+ rütbesi ve özel ürünler için ideal).'
+    },
+    {
+      id: 'STRIPE_NETHERITE_2500',
+      name: '2.850 Netherite Asil Külçe Sandığı (2.500 + 350 Bonus)',
+      category: 'Netherite',
+      icon: '🔥',
+      currency: 'STRIPE',
+      price: 349.9,
+      emeraldPrice: 0,
+      netheritePrice: 0,
+      netheriteGrant: 2850,
+      priceTry: 349.9,
+      stripePriceId: 'price_mcm_netherite_2500',
+      stock: -1,
+      maxPerUser: 999,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: 'Kart ile 2.500 + 350 Bonus = 2.850 Netherite bakiye yükleyin! (MVIP rütbesi ve efsanevi kozmetikler için).'
+    },
+    {
+      id: 'STRIPE_NETHERITE_5000',
+      name: '6.000 Netherite Hükümdar Hazinesi (5.000 + 1.000 Bonus)',
+      category: 'Netherite',
+      icon: '👑',
+      currency: 'STRIPE',
+      price: 599.9,
+      emeraldPrice: 0,
+      netheritePrice: 0,
+      netheriteGrant: 6000,
+      priceTry: 599.9,
+      stripePriceId: 'price_mcm_netherite_5000',
+      stock: -1,
+      maxPerUser: 999,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: 'Kart ile 5.000 + 1.000 Bonus = 6.000 Netherite bakiye! (MVIP+ rütbesi, arkadaşa rütbe hediyesi ve tüm mağaza için).'
+    },
+
     // --- ZÜMRÜT (Emeralds) KATEGORİSİ ---
     {
       id: 'EMERALD_PACK_NETHERITE_SMALL',
@@ -454,8 +547,26 @@
       description: '250 Netherite külçesi karşılığında devasa +3.500 Zümrüt hazinesi!'
     },
     {
+      id: 'EMERALD_PACK_NETHERITE_ROYAL',
+      name: '10.000 Zümrüt Kraliyet Kasası (Netherite Takası)',
+      category: 'Emeralds',
+      icon: '🟢',
+      currency: 'NETHERITE',
+      price: 600,
+      emeraldPrice: 0,
+      netheritePrice: 600,
+      emeraldGrant: 10000,
+      priceTry: 0,
+      stripePriceId: null,
+      stock: -1,
+      maxPerUser: 999,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: '600 Netherite karşılığında tam +10.000 Zümrüt (%40 Dev Bonuslu) bakiye!'
+    },
+    {
       id: 'STRIPE_EMERALD_1000',
-      name: '1.000 Zümrüt Paketi (Kart ile Satın Al)',
+      name: '1.000 Zümrüt Bakiye Paketi (Kart ile Satın Al)',
       category: 'Emeralds',
       icon: '💳',
       currency: 'STRIPE',
@@ -469,13 +580,13 @@
       maxPerUser: 999,
       requiredRank: 'MEMBER',
       active: true,
-      description: 'Stripe güvencesiyle 1.000 Zümrüt satın alın (Stripe entegrasyonu hazırlanıyor).'
+      description: 'Kart ile 1.000 Zümrüt bakiye yükleyin (Stripe entegrasyonu hazırlanıyor).'
     },
     {
       id: 'STRIPE_EMERALD_5000',
-      name: '5.000 Zümrüt Sandığı (Kart ile Satın Al)',
+      name: '5.000 Zümrüt Bakiye Sandığı (Kart ile Satın Al)',
       category: 'Emeralds',
-      icon: '🏦',
+      icon: '💳',
       currency: 'STRIPE',
       price: 179.9,
       emeraldPrice: 0,
@@ -487,13 +598,13 @@
       maxPerUser: 999,
       requiredRank: 'MEMBER',
       active: true,
-      description: 'Stripe güvencesiyle 5.000 Zümrüt satın alın (Stripe entegrasyonu hazırlanıyor).'
+      description: 'Kart ile 5.000 Zümrüt bakiye yükleyin (Stripe entegrasyonu hazırlanıyor).'
     },
 
-    // --- ÖZEL ÜRÜNLER (Special) KATEGORİSİ ---
+    // --- ÖZEL ÜRÜNLER & GÜÇLENDİRMELER (Special) KATEGORİSİ ---
     {
       id: 'ITEM_EXTRA_LIFE',
-      name: '+1 Ekstra Can',
+      name: '+1 Ekstra Can (Ölümsüzlük Totemi)',
       category: 'Special',
       icon: '❤️',
       currency: 'EMERALD',
@@ -523,8 +634,24 @@
       description: 'Netherite veya Zümrüt ile indirimli 3 adet Ekstra Can birden alın!'
     },
     {
+      id: 'ITEM_EXTRA_LIFE_BUNDLE_5',
+      name: '5x Tam Kalp Sandığı (Maksimum Can Seti)',
+      category: 'Special',
+      icon: '💖',
+      currency: 'NETHERITE',
+      price: 140,
+      emeraldPrice: 1050,
+      netheritePrice: 140,
+      extraLifeCount: 5,
+      stock: -1,
+      maxPerUser: 5,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: 'Envanterinizi tek seferde 5/5 maksimum Ekstra Can kapasitesine doldurur!'
+    },
+    {
       id: 'ITEM_TOURNAMENT_BOOST',
-      name: 'Turnuva Zümrüt Takviyesi (+250 Zümrüt Hediyeli)',
+      name: 'Turnuva Zümrüt Takviyesi (+250 Zümrüt + 1 Can)',
       category: 'Special',
       icon: '🚀',
       currency: 'NETHERITE',
@@ -538,6 +665,57 @@
       requiredRank: 'MEMBER',
       active: true,
       description: '1x Ekstra Can + 250 Zümrüt içeren özel başlangıç destek paketi.'
+    },
+    {
+      id: 'ITEM_VILLAGER_TREASURE',
+      name: 'Usta Köylü Ticaret Sandığı (+750 Zümrüt + 1 Can)',
+      category: 'Special',
+      icon: '🟢',
+      currency: 'NETHERITE',
+      price: 95,
+      emeraldPrice: 0,
+      netheritePrice: 95,
+      emeraldGrant: 750,
+      extraLifeCount: 1,
+      stock: -1,
+      maxPerUser: 20,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: 'Köylü loncasının özel hazinesi: Anında +750 Zümrüt ve +1 Ekstra Can verir.'
+    },
+    {
+      id: 'ITEM_NETHER_STAR_PACK',
+      name: 'Nether Yıldızı Prestij Paketi (+1.250 Zümrüt + 2 Can)',
+      category: 'Special',
+      icon: '🌟',
+      currency: 'NETHERITE',
+      price: 150,
+      emeraldPrice: 0,
+      netheritePrice: 150,
+      emeraldGrant: 1250,
+      extraLifeCount: 2,
+      stock: -1,
+      maxPerUser: 20,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: 'Wither zaferinden gelen güç: +1.250 Zümrüt ve +2 Ekstra Can hesabınıza tanımlanır!'
+    },
+    {
+      id: 'ITEM_DRAGON_EGG_RELIC',
+      name: 'Ejderha Yumurtası Efsanevi Sandığı (+3.000 Zümrüt + 3 Can)',
+      category: 'Special',
+      icon: '🐉',
+      currency: 'NETHERITE',
+      price: 280,
+      emeraldPrice: 0,
+      netheritePrice: 280,
+      emeraldGrant: 3000,
+      extraLifeCount: 3,
+      stock: -1,
+      maxPerUser: 20,
+      requiredRank: 'MEMBER',
+      active: true,
+      description: 'End boyutunun en nadir hazinesi: Anında +3.000 Zümrüt ve +3 Ekstra Can kazandırır!'
     },
 
     // --- KOZMETİKLER (Cosmetics) KATEGORİSİ ---
@@ -576,6 +754,40 @@
       description: 'Profilinize canlı zümrüt yeşili neon çerçeve kazandırır.'
     },
     {
+      id: 'FRAME_GOLD_ROYAL',
+      name: 'Altın Kraliyet Çerçevesi',
+      category: 'Cosmetics',
+      subCategory: 'Avatar Frames',
+      icon: '👑',
+      currency: 'EMERALD',
+      price: 550,
+      emeraldPrice: 550,
+      netheritePrice: 75,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'MEMBER',
+      active: true,
+      cssValue: 'frame-gold-royal',
+      description: 'Profil avatarınızı saf altın blok ışıltısıyla çevreler.'
+    },
+    {
+      id: 'FRAME_REDSTONE_PULSE',
+      name: 'Kızıltaş Enerji Çerçevesi',
+      category: 'Cosmetics',
+      subCategory: 'Avatar Frames',
+      icon: '⚡',
+      currency: 'EMERALD',
+      price: 750,
+      emeraldPrice: 750,
+      netheritePrice: 95,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'MEMBER',
+      active: true,
+      cssValue: 'frame-redstone-pulse',
+      description: 'Kızıltaş enerjisiyle parlayan dinamik kırmızı devre çerçevesi.'
+    },
+    {
       id: 'FRAME_NETHERITE_FLAME',
       name: 'Netherite Alev Çerçevesi',
       category: 'Cosmetics',
@@ -608,6 +820,57 @@
       active: true,
       cssValue: '#fbbf24',
       description: 'Liderlik tablosu, profil ve partilerde isminiz altın sarısı görünür.'
+    },
+    {
+      id: 'NAME_COLOR_DIAMOND',
+      name: 'Elmas Mavisi İsim Rengi',
+      category: 'Cosmetics',
+      subCategory: 'Name Colors',
+      icon: '💎',
+      currency: 'EMERALD',
+      price: 500,
+      emeraldPrice: 500,
+      netheritePrice: 65,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'MEMBER',
+      active: true,
+      cssValue: '#38bdf8',
+      description: 'İsminize parlak Minecraft Elmas mavisi görünümü kazandırır.'
+    },
+    {
+      id: 'NAME_COLOR_EMERALD',
+      name: 'Zümrüt Yeşili İsim Rengi',
+      category: 'Cosmetics',
+      subCategory: 'Name Colors',
+      icon: '🟢',
+      currency: 'EMERALD',
+      price: 550,
+      emeraldPrice: 550,
+      netheritePrice: 70,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'MEMBER',
+      active: true,
+      cssValue: '#17dd62',
+      description: 'İsminizi canlı Zümrüt yeşili tonuyla öne çıkarır.'
+    },
+    {
+      id: 'NAME_COLOR_CRIMSON',
+      name: 'Kızıl Nether İsim Rengi',
+      category: 'Cosmetics',
+      subCategory: 'Name Colors',
+      icon: '🔥',
+      currency: 'EMERALD',
+      price: 700,
+      emeraldPrice: 700,
+      netheritePrice: 90,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'MEMBER',
+      active: true,
+      cssValue: '#f43f5e',
+      description: 'İsminize ateşli Kızıl Nether (Crimson) rengi verir.'
     },
     {
       id: 'NAME_COLOR_RGB',
@@ -659,6 +922,91 @@
       active: true,
       cssValue: '⚡ Kızıltaş Ustası',
       description: 'Redstone mühendislerine özel prestijli profil rozeti.'
+    },
+    {
+      id: 'BADGE_WITHER_SLAYER',
+      name: 'Wither Avcısı Rozeti',
+      category: 'Cosmetics',
+      subCategory: 'Badges',
+      icon: '⚔️',
+      currency: 'EMERALD',
+      price: 750,
+      emeraldPrice: 750,
+      netheritePrice: 95,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'MEMBER',
+      active: true,
+      cssValue: '⚔️ Wither Avcısı',
+      description: 'Nether bosslarını dize getiren cesur oyuncular için özel unvan rozeti.'
+    },
+    {
+      id: 'BADGE_WARDEN_CONQUEROR',
+      name: 'Antik Şehir Muhafızı Rozeti',
+      category: 'Cosmetics',
+      subCategory: 'Badges',
+      icon: '🛡️',
+      currency: 'EMERALD',
+      price: 900,
+      emeraldPrice: 900,
+      netheritePrice: 115,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'MEMBER',
+      active: true,
+      cssValue: '🛡️ Antik Muhafız',
+      description: 'Derin Karanlık (Deep Dark) ve Warden fatihlerine özel prestij rozeti.'
+    },
+    {
+      id: 'BADGE_MILLIONAIRE_KING',
+      name: 'Milyoner Hükümdarı Rozeti',
+      category: 'Cosmetics',
+      subCategory: 'Badges',
+      icon: '👑',
+      currency: 'NETHERITE',
+      price: 150,
+      emeraldPrice: 1200,
+      netheritePrice: 150,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'VIP',
+      active: true,
+      cssValue: '👑 Milyoner Hükümdarı',
+      description: 'Bilgi yarışmasının zirvesini temsil eden kraliyet unvan rozeti.'
+    },
+    {
+      id: 'EFFECT_EMERALD_GLOW',
+      name: 'Zümrüt Işıltısı Profil Efekti',
+      category: 'Cosmetics',
+      subCategory: 'Profile Effects',
+      icon: '🟢',
+      currency: 'EMERALD',
+      price: 800,
+      emeraldPrice: 800,
+      netheritePrice: 100,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'MEMBER',
+      active: true,
+      cssValue: 'effect-emerald-glow',
+      description: 'Profil kartınızın arka planına parlak zümrüt enerjisi aurası ekler.'
+    },
+    {
+      id: 'EFFECT_NETHER_STORM',
+      name: 'Nether Alev Fırtınası Efekti',
+      category: 'Cosmetics',
+      subCategory: 'Profile Effects',
+      icon: '🔥',
+      currency: 'NETHERITE',
+      price: 125,
+      emeraldPrice: 950,
+      netheritePrice: 125,
+      stock: -1,
+      maxPerUser: 1,
+      requiredRank: 'VIP',
+      active: true,
+      cssValue: 'effect-nether-storm',
+      description: 'Profil kartınızı kızıl Nether lav ve alev parıltısıyla kuşatır.'
     },
     {
       id: 'EFFECT_ENDER_AURA',
@@ -721,7 +1069,7 @@
   ];
 
   // ==========================================
-  // RÜTBE SERVİSİ (rankService — 7 Rütbe Hiyerarşisi)
+  // RÜTBE SERVİSİ (rankService — 7 Ana Rütbe + Admin Özel Rütbe Ekleme Sistemi)
   // ==========================================
   const rankService = {
     normalizeRankId,
@@ -731,15 +1079,18 @@
       if (!existing || !Array.isArray(existing) || existing.length < 7) {
         safeWrite(STORAGE_KEYS.RANKS, DEFAULT_RANKS);
       } else {
-        // Ensure all 7 canonical ranks exist in order with updated dailyEmerald & dailyNetherite defaults
+        // 7 varsayılan rütbeyi koru + Admin tarafından eklenen özel rütbeleri (custom ranks) muhafaza et
         const merged = DEFAULT_RANKS.map(def => {
           const found = existing.find(r => r.id === def.id);
           if (!found) return def;
+          const minNeth = def.purchasable ? Math.max(500, Number(found.netheritePrice || def.netheritePrice || 500)) : 0;
           return {
             ...def,
             ...found,
             id: def.id,
             order: def.order,
+            emeraldPrice: 0, // Rütbeler yalnızca Netherite ile alınır
+            netheritePrice: minNeth,
             dailyEmerald:
               found.dailyEmerald !== undefined && found.dailyEmerald > 0
                 ? found.dailyEmerald
@@ -748,7 +1099,7 @@
               def.id === 'MODERATOR'
                 ? 0
                 : Math.max(Number(found.dailyNetherite || 0), Number(def.dailyNetherite || 0)),
-            features: def.features,
+            features: Array.isArray(found.features) && found.features.length > 0 ? found.features : def.features,
             permissions: {
               ...def.permissions,
               ...(found.permissions || {}),
@@ -763,13 +1114,31 @@
             }
           };
         });
+
+        // Özel (custom) rütbeleri ekle
+        existing.forEach(customRank => {
+          if (customRank && customRank.id && !SYSTEM_RANK_IDS.includes(customRank.id)) {
+            merged.push({
+              ...customRank,
+              isCustom: true,
+              emeraldPrice: 0,
+              netheritePrice: customRank.purchasable
+                ? Math.max(500, Number(customRank.netheritePrice || 500))
+                : 0
+            });
+          }
+        });
+
+        merged.sort((a, b) => Number(a.order || 1) - Number(b.order || 1));
         safeWrite(STORAGE_KEYS.RANKS, merged);
       }
     },
 
     getAllRanks() {
       this.init();
-      return safeRead(STORAGE_KEYS.RANKS, DEFAULT_RANKS).sort((a, b) => a.order - b.order);
+      return safeRead(STORAGE_KEYS.RANKS, DEFAULT_RANKS).sort(
+        (a, b) => Number(a.order || 1) - Number(b.order || 1)
+      );
     },
 
     getPurchasableRanks() {
@@ -820,18 +1189,24 @@
       if (idx === -1) throw new Error('Rütbe bulunamadı.');
 
       const current = ranks[idx];
+      const nextPurchasable =
+        updates.purchasable !== undefined ? Boolean(updates.purchasable) : current.purchasable;
+      const rawNethPrice =
+        updates.netheritePrice !== undefined
+          ? Number(updates.netheritePrice)
+          : current.netheritePrice;
+      const finalNethPrice = nextPurchasable ? Math.max(500, rawNethPrice || 500) : 0;
+
       ranks[idx] = {
         ...current,
         name: updates.name !== undefined ? String(updates.name).trim() : current.name,
         badge: updates.badge !== undefined ? String(updates.badge).trim() : current.badge,
         color: updates.color !== undefined ? String(updates.color).trim() : current.color,
+        order: updates.order !== undefined ? Number(updates.order) : current.order,
+        purchasable: nextPurchasable,
         priceTry: updates.priceTry !== undefined ? Number(updates.priceTry) : current.priceTry,
-        emeraldPrice:
-          updates.emeraldPrice !== undefined ? Number(updates.emeraldPrice) : current.emeraldPrice,
-        netheritePrice:
-          updates.netheritePrice !== undefined
-            ? Number(updates.netheritePrice)
-            : current.netheritePrice,
+        emeraldPrice: 0, // Rütbeler yalnızca Netherite ile alınır
+        netheritePrice: finalNethPrice,
         dailyEmerald:
           updates.dailyEmerald !== undefined
             ? Number(updates.dailyEmerald)
@@ -840,6 +1215,7 @@
           updates.dailyNetherite !== undefined
             ? Number(updates.dailyNetherite)
             : current.dailyNetherite,
+        updatedAt: new Date().toISOString(),
         permissions: {
           ...current.permissions,
           ...(updates.permissions || {}),
@@ -866,6 +1242,155 @@
         );
       }
       return ranks[idx];
+    },
+
+    /**
+     * YÖNETİCİ PANELİ: Yeni Özel Rütbe Ekleme Sistemi ("Yeni Rütbe Ekle")
+     */
+    adminCreateRank(session, rankData = {}) {
+      const { authGuard, activityService, cloudSyncService } = getServices();
+      if (authGuard) authGuard.requireRole(session, ['ADMIN']);
+
+      const cleanName = String(rankData.name || '').trim();
+      if (!cleanName || cleanName.length < 2) {
+        throw new Error('Lütfen geçerli bir rütbe adı girin (Örn: EFSANE, TITAN, ELITE).');
+      }
+
+      const rawId = String(rankData.id || cleanName)
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_]/g, '_')
+        .replace(/_+/g, '_');
+      const rankId = rawId || `RANK_${Date.now().toString(36).toUpperCase()}`;
+
+      const ranks = this.getAllRanks();
+      if (ranks.some(r => r.id === rankId)) {
+        throw new Error(`"${rankId}" koduna sahip bir rütbe zaten mevcut!`);
+      }
+
+      const purchasable = rankData.purchasable !== false;
+      const netheritePrice = purchasable
+        ? Math.max(500, Math.round(Number(rankData.netheritePrice || 500)))
+        : 0;
+      const dailyEmerald = Math.max(0, Math.round(Number(rankData.dailyEmerald ?? 250)));
+      const dailyNetherite = Math.max(0, Math.round(Number(rankData.dailyNetherite ?? 40)));
+      const maxPartySize = Math.max(0, Math.round(Number(rankData.maxPartySize ?? 8)));
+      const emeraldMultiplier = Math.max(1, Number(rankData.emeraldMultiplier ?? 1.75));
+      const order = Math.max(2, Number(rankData.order ?? 5.5));
+      const color = String(rankData.color || '#ec4899').trim();
+      const badge = String(rankData.badge || '👑').trim();
+
+      const customFeatures = Array.isArray(rankData.features)
+        ? rankData.features.map(f => String(f).trim()).filter(Boolean)
+        : String(rankData.features || '')
+            .split('\n')
+            .map(f => f.trim())
+            .filter(Boolean);
+
+      const defaultFeatures = [
+        ...(dailyNetherite > 0
+          ? [
+              'İlk Alımda Tek Seferlik +250 Netherite Hoş Geldin Ödülü!',
+              `Her 24 Saatte +${dailyNetherite} Günlük Netherite + ${dailyEmerald} Günlük Zümrüt Ödülü`
+            ]
+          : [`Her 24 Saatte +${dailyEmerald} Günlük Zümrüt Ödülü`]),
+        `Özel ${badge} ${cleanName} Rozeti ve Renkli İsim Görünümü`,
+        maxPartySize > 0
+          ? `${maxPartySize} Kişilik Parti Odası Kurabilme`
+          : 'Parti Odalarına Katılabilme',
+        `${emeraldMultiplier}x Zümrüt Kazanım Çarpanı`
+      ];
+
+      const newRank = {
+        id: rankId,
+        name: cleanName,
+        order,
+        badge,
+        color,
+        priceTry: 0,
+        priceUsd: 0,
+        emeraldPrice: 0,
+        netheritePrice,
+        purchasable,
+        isCustom: true,
+        dailyEmerald,
+        dailyNetherite,
+        stripePriceId: null,
+        updatedAt: new Date().toISOString(),
+        permissions: {
+          canCreateParty: maxPartySize > 0,
+          canInvitePlayers: maxPartySize > 0,
+          maxPartySize,
+          emeraldMultiplier,
+          dailyEmerald,
+          dailyNetherite,
+          supportPriority: 'HIGH',
+          bugPriority: 'HIGH',
+          suggestionPriority: 'HIGH',
+          maxExtraLives: 5,
+          cosmetics: true,
+          rgbName: true,
+          profileEffects: true
+        },
+        features: customFeatures.length > 0 ? customFeatures : defaultFeatures
+      };
+
+      if (cloudSyncService && typeof cloudSyncService.clearTombstone === 'function') {
+        cloudSyncService.clearTombstone('deletedRanks', rankId);
+      }
+
+      ranks.push(newRank);
+      ranks.sort((a, b) => Number(a.order || 1) - Number(b.order || 1));
+      safeWrite(STORAGE_KEYS.RANKS, ranks);
+
+      if (activityService) {
+        activityService.log(
+          'ADMIN_ACTION',
+          session.username,
+          `Yönetici ${session.username} yeni özel rütbe oluşturdu: ${newRank.badge} ${newRank.name} (${newRank.netheritePrice} Netherite).`
+        );
+      }
+
+      return newRank;
+    },
+
+    adminDeleteRank(session, rankId) {
+      const { authGuard, userService, activityService, cloudSyncService } = getServices();
+      if (authGuard) authGuard.requireRole(session, ['ADMIN']);
+
+      const norm = normalizeRankId(rankId);
+      if (SYSTEM_RANK_IDS.includes(norm)) {
+        throw new Error('7 temel sistem rütbesi silinemez; yalnızca özellikleri düzenlenebilir.');
+      }
+
+      const ranks = this.getAllRanks();
+      const target = ranks.find(r => r.id === norm);
+      if (!target) throw new Error('Silinecek rütbe bulunamadı.');
+
+      const filtered = ranks.filter(r => r.id !== norm);
+      safeWrite(STORAGE_KEYS.RANKS, filtered);
+
+      if (cloudSyncService && typeof cloudSyncService.recordTombstone === 'function') {
+        cloudSyncService.recordTombstone('deletedRanks', norm);
+      }
+
+      // Bu rütbeye sahip kullanıcıları Üye rütbesine döndür
+      if (userService) {
+        userService.getAllUsers().forEach(u => {
+          if (normalizeRankId(u.rank) === norm) {
+            userService.syncUserFields(u.username, { rank: 'MEMBER', role: 'MEMBER' });
+          }
+        });
+      }
+
+      if (activityService) {
+        activityService.log(
+          'ADMIN_ACTION',
+          session.username,
+          `Yönetici ${session.username} "${target.name}" (${norm}) özel rütbesini sildi.`
+        );
+      }
+      return true;
     },
 
     assignRankToUser(session, targetUsername, rankId, durationDays = null) {
@@ -977,7 +1502,10 @@
       }
 
       const rank = rankService.getUserRank(user.username);
-      if (!['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rank.id)) {
+      const qualifiesForInitialBonus =
+        ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rank.id) ||
+        (rank.id !== 'MODERATOR' && (Number(rank.order || 0) >= 3 || Number(rank.dailyNetherite || 0) > 0));
+      if (!qualifiesForInitialBonus) {
         return false;
       }
 
@@ -1018,12 +1546,15 @@
 
     getDailyRewardForRank(rankId) {
       const norm = normalizeRankId(rankId);
-      if (!['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(norm)) {
+      if (norm === 'MODERATOR' || norm === 'MEMBER' || norm === 'VIP') {
         return 0;
       }
       const rank = rankService.getRankById(norm);
       if (rank && typeof rank.dailyNetherite === 'number' && rank.dailyNetherite > 0) {
         return rank.dailyNetherite;
+      }
+      if (!['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(norm)) {
+        return 0;
       }
       const settings = economyService.getSettings();
       return Number(settings.dailyNetheriteRewards?.[norm] || 25);
@@ -1032,7 +1563,7 @@
     /**
      * Günlük Ödül Durumu:
      * - Tüm rütbeler (Üye dahil) her 24 saatte rütbesine göre artan Günlük Zümrüt alır.
-     * - VIP+ ve üzeri rütbeler (VIP+: 25, MVIP: 50, MVIP+: 100) ek olarak Günlük Netherite alır.
+     * - VIP+ ve üzeri rütbeler (VIP+: 25, MVIP: 50, MVIP+: 100 ve özel rütbeler) ek olarak Günlük Netherite alır.
      */
     getDailyNetheriteStatus(username) {
       const { userService } = getServices();
@@ -1066,8 +1597,8 @@
       }
 
       const rank = rankService.getUserRank(user.username);
-      const netheriteEligible = ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rank.id);
-      const dailyAmount = netheriteEligible ? this.getDailyRewardForRank(rank.id) : 0;
+      const dailyAmount = this.getDailyRewardForRank(rank.id);
+      const netheriteEligible = dailyAmount > 0;
       const dailyEmerald = this.getDailyEmeraldRewardForRank(rank.id);
 
       const lastClaimIso = user.lastNetheriteClaimAt || user.lastDailyEmeraldClaimAt;
@@ -1806,7 +2337,7 @@
         throw new Error(`Bu ürünü satın almak için en az [${reqRank.name}] rütbesi gereklidir!`);
       }
 
-      // Stripe ürünü ise: Sahte ödeme yapma, Stripe hazırlık oturumu oluştur (#9, #12, #27)
+      // Kart (Stripe) ile YALNIZCA Bakiye Paketleri (Netherite Bakiye en az 500 veya Zümrüt Bakiye) satın alınabilir
       const chosenCurrency = String(preferredCurrency || item.currency || 'EMERALD').toUpperCase();
       if (chosenCurrency === 'STRIPE' || item.currency === 'STRIPE') {
         if (!paymentService) {
@@ -1814,11 +2345,16 @@
             'Ödeme sistemi yakında aktif olacaktır (Stripe entegrasyonu hazırlanıyor)'
           );
         }
+        const isNetheriteBalancePack =
+          item.category === 'Netherite' || Number(item.netheriteGrant || 0) > 0;
+        if (isNetheriteBalancePack && Number(item.netheriteGrant || 0) < 500) {
+          throw new Error('Kart ile satın alınabilecek en düşük Netherite paketi 500 Netherite olmalıdır.');
+        }
         const stripeRes = paymentService.createPreparedStripeSession(session, {
-          productType: 'EMERALD_PACKAGE',
+          productType: isNetheriteBalancePack ? 'NETHERITE_BALANCE' : 'EMERALD_PACKAGE',
           productId: item.id,
           productName: item.name,
-          amountTry: item.priceTry || item.price || 49.9,
+          amountTry: item.priceTry || item.price || 89.9,
           currency: 'TRY'
         });
         return {
@@ -1880,6 +2416,14 @@
           `${item.name} Paket İçeriği`,
           false,
           true
+        );
+      }
+
+      if (item.netheriteGrant && Number(item.netheriteGrant) > 0) {
+        netheriteService.addNetherite(
+          user.username,
+          Number(item.netheriteGrant),
+          `${item.name} Bakiye Yüklemesi`
         );
       }
 
@@ -1961,11 +2505,11 @@
     },
 
     /**
-     * #10: Kendisi için Rütbe Satın Alma (VIP, VIP+, MVIP, MVIP+)
-     * Ödeme yöntemleri: 'NETHERITE' | 'EMERALD' | 'STRIPE'
+     * #10: Kendisi için Rütbe Satın Alma (VIP, VIP+, MVIP, MVIP+ ve Özel Rütbeler)
+     * KURAL: Rütbeler Zümrüt veya doğrudan Kart ile ALINAMAZ; YALNIZCA Netherite bakiyesi ile (en az 500 Netherite) satın alınır!
      */
     purchaseRankForSelf(session, rankId, paymentMethod = 'NETHERITE') {
-      const { authGuard, userService, paymentService, notificationService, activityService } =
+      const { authGuard, userService, notificationService, activityService } =
         getServices();
       if (authGuard) authGuard.verifySession(session);
 
@@ -1983,38 +2527,18 @@
       }
 
       const method = String(paymentMethod || 'NETHERITE').toUpperCase();
-
-      // Stripe Hazırlık Modu (#9, #12, #27)
-      if (method === 'STRIPE') {
-        const stripeRes = paymentService.createPreparedStripeSession(session, {
-          productType: 'RANK_UPGRADE',
-          productId: rank.id,
-          productName: `${rank.name} Rütbesi`,
-          amountTry: rank.priceTry,
-          currency: 'TRY'
-        });
-        return {
-          stripePrepared: true,
-          message: stripeRes.userNotice,
-          sessionRecord: stripeRes.sessionRecord
-        };
+      if (method !== 'NETHERITE') {
+        throw new Error(
+          'Rütbeler Zümrüt veya doğrudan Kart ile satın alınamaz! Rütbeleri yalnızca Netherite bakiyeniz ile satın alabilirsiniz. (Netherite Bakiye Yükle sekmesinden kart ile Netherite bakiyesi alabilirsiniz).'
+        );
       }
 
-      if (method === 'NETHERITE') {
-        netheriteService.spendNetherite(
-          user.username,
-          rank.netheritePrice,
-          `${rank.name} Rütbe Yükseltmesi`
-        );
-      } else if (method === 'EMERALD') {
-        economyService.spendEmeralds(
-          user.username,
-          rank.emeraldPrice,
-          `${rank.name} Rütbe Yükseltmesi`
-        );
-      } else {
-        throw new Error('Geçersiz ödeme yöntemi.');
-      }
+      const requiredNetherite = Math.max(500, Number(rank.netheritePrice || 500));
+      netheriteService.spendNetherite(
+        user.username,
+        requiredNetherite,
+        `${rank.name} Rütbe Yükseltmesi`
+      );
 
       userService.syncUserFields(user.username, {
         rank: rank.id,
@@ -2036,14 +2560,14 @@
         activityService.log(
           'RANK_UPGRADE',
           user.username,
-          `${user.username} mağazadan ${rank.name} rütbesini satın aldı (${method}).`
+          `${user.username} mağazadan ${rank.name} rütbesini ${requiredNetherite} Netherite ile satın aldı.`
         );
       }
 
       return {
         stripePrepared: false,
         rank,
-        firstVipPlusBonusGranted: Boolean(firstVipPlusBonus?.granted),
+        firstVipPlusBonusGranted: Boolean(firstVipPlusBonus),
         balance: economyService.getBalance(user.username),
         netheriteBalance: netheriteService.getBalance(user.username)
       };
@@ -2051,12 +2575,10 @@
 
     /**
      * #11: "🎁 Arkadaşına Hediye Et" Rütbe Hediye Sistemi
-     * Akış:
-     * 1. Hediye Et tıkla -> 2. Arkadaşının kullanıcı adını gir -> 3. Devam Et -> 4. Ödeme / Bakiye ile tamamla
-     * Alıcıya bildirim: "🎁 [Gifter] sana [Rank] rütbesi hediye etti!"
+     * KURAL: Rütbe hediyesi de YALNIZCA Netherite bakiyesi ile (en az 500 Netherite) yapılır!
      */
     giftRankToFriend(session, { friendUsername, rankId, paymentMethod = 'NETHERITE' }) {
-      const { authGuard, userService, paymentService, notificationService, activityService } =
+      const { authGuard, userService, notificationService, activityService } =
         getServices();
       if (authGuard) authGuard.verifySession(session);
 
@@ -2090,39 +2612,18 @@
       }
 
       const method = String(paymentMethod || 'NETHERITE').toUpperCase();
-
-      // Stripe Hazırlık Modu (#9, #12, #27)
-      if (method === 'STRIPE') {
-        const stripeRes = paymentService.createPreparedStripeSession(session, {
-          productType: 'RANK_GIFT',
-          productId: rank.id,
-          productName: `${rank.name} Rütbe Hediyesi (Alıcı: ${recipient.username})`,
-          recipientUsername: recipient.username,
-          amountTry: rank.priceTry,
-          currency: 'TRY'
-        });
-        return {
-          stripePrepared: true,
-          message: stripeRes.userNotice,
-          sessionRecord: stripeRes.sessionRecord
-        };
+      if (method !== 'NETHERITE') {
+        throw new Error(
+          'Rütbe hediyesi yalnızca Netherite bakiyesi ile gönderilebilir! (Netherite Bakiye Yükle sekmesinden kart ile Netherite bakiyesi alabilirsiniz).'
+        );
       }
 
-      if (method === 'NETHERITE') {
-        netheriteService.spendNetherite(
-          gifter.username,
-          rank.netheritePrice,
-          `🎁 ${recipient.username} için ${rank.name} Rütbe Hediyesi`
-        );
-      } else if (method === 'EMERALD') {
-        economyService.spendEmeralds(
-          gifter.username,
-          rank.emeraldPrice,
-          `🎁 ${recipient.username} için ${rank.name} Rütbe Hediyesi`
-        );
-      } else {
-        throw new Error('Geçersiz ödeme yöntemi.');
-      }
+      const requiredNetherite = Math.max(500, Number(rank.netheritePrice || 500));
+      netheriteService.spendNetherite(
+        gifter.username,
+        requiredNetherite,
+        `🎁 ${recipient.username} için ${rank.name} Rütbe Hediyesi`
+      );
 
       // Alıcının rütbesini yükselt
       userService.syncUserFields(recipient.username, {
@@ -2142,8 +2643,8 @@
         toUsername: recipient.username,
         rankId: rank.id,
         rankName: rank.name,
-        paymentMethod: method,
-        cost: method === 'NETHERITE' ? rank.netheritePrice : rank.emeraldPrice,
+        paymentMethod: 'NETHERITE',
+        cost: requiredNetherite,
         createdAt: new Date().toISOString()
       };
       gifts.unshift(giftRecord);
@@ -2173,7 +2674,7 @@
         activityService.log(
           'RANK_GIFT',
           gifter.username,
-          `🎁 ${gifter.username}, ${recipient.username} oyuncusuna ${rank.name} rütbesi hediye etti.`
+          `🎁 ${gifter.username}, ${recipient.username} oyuncusuna ${rank.name} rütbesi hediye etti (${requiredNetherite} Netherite).`
         );
       }
 

@@ -12,7 +12,9 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=8.3" />
+  <link rel="icon" type="image/svg+xml"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%2310b981'/%3E%3Cpath d='M3 3h10v10H3z' fill='%23059669'/%3E%3Ctext x='8' y='12' text-anchor='middle' font-family='monospace' font-weight='bold' font-size='11' fill='%23ffffff'%3E%3F%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css?v=8.4" />
 </head>
 
 <body>
@@ -191,7 +193,7 @@
         <!-- Aktif Kullanıcı Rozeti -->
         <div id="user-account-chip" class="user-account-chip hidden" data-nav-screen="profile" role="button"
           tabindex="0" title="Profilimi Aç">
-          <img id="header-user-avatar" class="header-avatar" src="" alt="Avatar" />
+          <img id="header-user-avatar" class="header-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231e293b'/%3E%3C/svg%3E" alt="Avatar" />
           <span id="header-user-name" class="user-chip-name">Oyuncu</span>
           <span id="header-user-role" class="role-badge role-member">🌱 Üye</span>
         </div>
@@ -223,7 +225,7 @@
     <aside id="main-menu-drawer" class="main-menu-drawer hidden" aria-label="Ana Navigasyon Menüsü">
       <div class="drawer-header">
         <div class="drawer-user-summary">
-          <img id="drawer-user-avatar" class="drawer-avatar" src="" alt="Profil" />
+          <img id="drawer-user-avatar" class="drawer-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231e293b'/%3E%3C/svg%3E" alt="Profil" />
           <div class="drawer-user-meta">
             <div class="drawer-user-name-row">
               <strong id="drawer-user-name">Misafir</strong>
@@ -558,7 +560,7 @@
           <div class="platform-card profile-hero-card" id="profile-hero-card">
             <div class="profile-avatar-section">
               <div id="profile-avatar-frame" class="profile-avatar-wrapper">
-                <img id="profile-avatar-img" src="" alt="Profil Fotoğrafı" />
+                <img id="profile-avatar-img" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231e293b'/%3E%3C/svg%3E" alt="Profil Fotoğrafı" />
               </div>
               <div class="profile-avatar-actions">
                 <label for="profile-avatar-input" class="mc-btn mc-btn-sm mc-btn-secondary">
@@ -684,7 +686,7 @@
 
     <!-- ========================================================
          6. EKRAN: BİRLEŞİK # MAĞAZA (screen-shop — #8, #9, #10, #11, #12, #20, #27)
-         Kategoriler: Zümrüt | Rütbeler | Kozmetikler | Özel Ürünler
+         Kategoriler: Rütbeler | Netherite Bakiye | Zümrüt Bakiye | Özel Ürünler | Kozmetikler
          ======================================================== -->
     <main id="screen-shop" class="screen platform-screen hidden">
       <div class="platform-container">
@@ -726,16 +728,19 @@
           </button>
         </div>
 
-        <!-- Birleşik Mağaza Kategori Sekmeleri (#8: Zümrüt, Rütbeler, Kozmetikler, Özel Ürünler) -->
+        <!-- Birleşik Mağaza Kategori Sekmeleri (#8: Rütbeler, Netherite Bakiye, Zümrüt Bakiye, Özel Ürünler, Kozmetikler) -->
         <div class="shop-category-tabs" id="unified-shop-tabs">
           <button type="button" class="shop-tab active" data-shop-cat="Ranks">
-            👑 Rütbeler (VIP / MVIP &amp; Hediye)
+            👑 Rütbeler (Sadece Netherite)
+          </button>
+          <button type="button" class="shop-tab" data-shop-cat="Netherite">
+            ⬛ Netherite Bakiye Yükle
           </button>
           <button type="button" class="shop-tab" data-shop-cat="Emeralds">
-            🟢 Zümrüt Paketleri
+            🟢 Zümrüt Bakiye Yükle
           </button>
           <button type="button" class="shop-tab" data-shop-cat="Special">
-            ❤️ Özel Ürünler &amp; Ekstra Can
+            ❤️ Özel Ürünler &amp; Paketler
           </button>
           <button type="button" class="shop-tab" data-shop-cat="Cosmetics">
             🎨 Kozmetikler
@@ -745,7 +750,7 @@
         <!-- Rütbeler Kategorisi İçeriği (#10 & #11: VIP, VIP+, MVIP, MVIP+ + Arkadaşına Hediye Et) -->
         <div id="shop-ranks-section" class="shop-section-block">
           <div class="ranks-intro-note">
-            <span>💡 <strong>Rütbe Ayrıcalıkları:</strong> Rütbeleri kendi hesabınız için satın alabilir veya <strong>"🎁 Arkadaşına Hediye Et"</strong> butonuyla arkadaşınıza anında hediye edebilirsiniz!</span>
+            <span>💡 <strong>Rütbe Satın Alma Kuralları:</strong> Tüm rütbeler (en az <strong>500 Netherite</strong>) yalnızca <strong>⬛ Netherite Bakiyesi</strong> ile satın alınabilir veya <strong>"🎁 Arkadaşına Hediye Et"</strong> ile gönderilebilir. Kart ile bakiye yüklemek için <strong>"⬛ Netherite Bakiye Yükle"</strong> sekmesini kullanabilirsiniz!</span>
           </div>
           <div id="ranks-grid-container" class="ranks-comparison-grid"></div>
         </div>
@@ -1267,20 +1272,17 @@
           </div>
         </div>
 
-        <!-- Adım 2: Ödeme / Bakiye Yöntemi Seçimi -->
+        <!-- Adım 2: Netherite Bakiye ile Hediye Onayı -->
         <div id="gift-step-2" class="hidden">
           <p class="gift-recipient-confirm">
             Alıcı Oyuncu: <strong id="gift-confirmed-recipient">-</strong>
           </p>
           <div class="gift-payment-options">
             <button type="button" id="btn-gift-pay-netherite" class="mc-btn mc-btn-gold mc-btn-block">
-              ⬛ Netherite ile Hediye Et (<span id="gift-cost-netherite">0</span> Netherite)
+              ⬛ Netherite ile Hediye Et (<span id="gift-cost-netherite">500</span> Netherite)
             </button>
-            <button type="button" id="btn-gift-pay-emerald" class="mc-btn mc-btn-primary mc-btn-block">
-              🟢 Zümrüt ile Hediye Et (<span id="gift-cost-emerald">0</span> Zümrüt)
-            </button>
-            <button type="button" id="btn-gift-pay-stripe" class="mc-btn mc-btn-secondary mc-btn-block">
-              💳 Kart ile Hediye Et (<span id="gift-cost-try">0</span> ₺ — Stripe Hazırlanıyor)
+            <button type="button" id="btn-gift-open-netherite-store" class="mc-btn mc-btn-secondary mc-btn-block">
+              💳 Netherite Bakiye Yükle (En Az 500 Netherite)
             </button>
           </div>
           <div id="gift-step2-error" class="gate-error hidden"></div>
@@ -1339,12 +1341,12 @@
   </div>
 
   <!-- Servis Katmanları ve Uygulama Kodları -->
-  <script src="questions.js?v=8.3"></script>
-  <script src="audio.js?v=8.3"></script>
-  <script src="services.js?v=8.3"></script>
-  <script src="economy.js?v=8.3"></script>
-  <script src="platform.js?v=8.3"></script>
-  <script src="app.js?v=8.3"></script>
+  <script src="questions.js?v=8.4"></script>
+  <script src="audio.js?v=8.4"></script>
+  <script src="services.js?v=8.4"></script>
+  <script src="economy.js?v=8.4"></script>
+  <script src="platform.js?v=8.4"></script>
+  <script src="app.js?v=8.4"></script>
 </body>
 
 </html>

@@ -29,8 +29,29 @@
     BACKUPS: 'mc_millionaire_tr_backups_v6',
     PLATFORM_SETTINGS: 'mc_millionaire_tr_platform_settings_v6',
     ACTIVITY: 'mc_millionaire_tr_activity_v6',
-    FIRST_PREMIUM_NETHERITE_GRANTED: 'mc_millionaire_tr_first_netherite_v6'
+    FIRST_PREMIUM_NETHERITE_GRANTED: 'mc_millionaire_tr_first_netherite_v6',
+    AI_CONFIG: 'mc_millionaire_tr_ai_cfg_v6',
+    AI_QUESTIONS: 'mc_millionaire_tr_ai_questions_v6',
+    SEEN_QUESTIONS: 'mc_millionaire_tr_seen_questions_v6',
+    CLOUD_SYNC_META: 'mc_millionaire_tr_cloud_sync_meta_v6',
+    TOMBSTONES: 'mc_millionaire_tr_tombstones_v6'
   };
+
+  let cloudSyncInternalWrite = false;
+  const CLOUD_SYNCED_STORAGE_KEYS = new Set([
+    STORAGE_KEYS.USERS,
+    STORAGE_KEYS.PARTIES,
+    STORAGE_KEYS.PARTY_INVITATIONS,
+    STORAGE_KEYS.NOTIFICATIONS,
+    STORAGE_KEYS.SUPPORT_TICKETS,
+    STORAGE_KEYS.BUG_REPORTS,
+    STORAGE_KEYS.SUGGESTIONS,
+    STORAGE_KEYS.MOD_PERMISSIONS,
+    STORAGE_KEYS.PLATFORM_SETTINGS,
+    STORAGE_KEYS.AI_CONFIG,
+    STORAGE_KEYS.AI_QUESTIONS,
+    STORAGE_KEYS.TOMBSTONES
+  ]);
 
   // ==========================================
   // KRİPTOGRAFİK YARDIMCILAR (Ayrı Admin Girişi #8)
@@ -158,6 +179,11 @@
     set(key, value) {
       try {
         localStorage.setItem(key, JSON.stringify(value));
+        if (!cloudSyncInternalWrite && CLOUD_SYNCED_STORAGE_KEYS.has(key)) {
+          if (typeof cloudSyncService !== 'undefined' && cloudSyncService.schedulePush) {
+            cloudSyncService.schedulePush(250);
+          }
+        }
         return true;
       } catch (err) {
         return false;
@@ -271,6 +297,9 @@
         key === '🟢' ||
         upper === 'EMERALD' ||
         upper === 'FRAME_EMERALD' ||
+        upper === 'EFFECT_EMERALD_GLOW' ||
+        upper === 'NAME_COLOR_EMERALD' ||
+        upper === 'ITEM_VILLAGER_TREASURE' ||
         upper === 'EMERALD_COLLECTOR' ||
         upper.startsWith('EMERALD_PACK_') ||
         upper.startsWith('PACK_EMERALD_') ||
@@ -278,34 +307,79 @@
       ) {
         return this.getEmeraldSvg(size);
       }
-      if (key === '⬛' || upper === 'NETHERITE') {
+      if (
+        key === '⬛' ||
+        upper === 'NETHERITE' ||
+        upper.startsWith('STRIPE_NETHERITE_') ||
+        upper.startsWith('NETHERITE_PACK_')
+      ) {
         return this.getNetheriteSvg(size);
       }
-      if (key === '💎' || key === '💠' || upper === 'DIAMOND' || upper === 'VIP' || upper === 'FRAME_DIAMOND') {
+      if (
+        key === '💎' ||
+        key === '💠' ||
+        upper === 'DIAMOND' ||
+        upper === 'VIP' ||
+        upper === 'FRAME_DIAMOND' ||
+        upper === 'NAME_COLOR_DIAMOND'
+      ) {
         return this.getDiamondSvg(size);
       }
       if (key === '❤️' || upper === 'HEART' || upper === 'ITEM_EXTRA_LIFE') {
         return this.getHeartSvg(size);
       }
-      if (key === '💖' || upper === 'HEART_BUNDLE' || upper === 'ITEM_EXTRA_LIFE_BUNDLE_3') {
+      if (
+        key === '💖' ||
+        upper === 'HEART_BUNDLE' ||
+        upper === 'ITEM_EXTRA_LIFE_BUNDLE_3' ||
+        upper === 'ITEM_EXTRA_LIFE_BUNDLE_5'
+      ) {
         return this.getHeartBundleSvg(size);
       }
-      if (key === '🔥' || upper === 'FLAME' || upper === 'MVIP' || upper === 'FRAME_NETHERITE_FLAME' || upper === 'STREAK_10') {
+      if (
+        key === '🔥' ||
+        upper === 'FLAME' ||
+        upper === 'MVIP' ||
+        upper === 'FRAME_NETHERITE_FLAME' ||
+        upper === 'EFFECT_NETHER_STORM' ||
+        upper === 'NAME_COLOR_CRIMSON' ||
+        upper === 'STREAK_10'
+      ) {
         return this.getFlameSvg(size);
       }
       if (key === '🧨' || upper === 'CREEPER' || upper === 'BADGE_CREEPER_HUNTER') {
         return this.getCreeperSvg(size);
       }
-      if (key === '⚡' || upper === 'REDSTONE' || upper === 'BADGE_REDSTONE_MASTER') {
+      if (
+        key === '⚡' ||
+        upper === 'REDSTONE' ||
+        upper === 'BADGE_REDSTONE_MASTER' ||
+        upper === 'FRAME_REDSTONE_PULSE'
+      ) {
         return this.getRedstoneSvg(size);
       }
-      if (key === '🐉' || upper === 'ENDER' || upper === 'EFFECT_ENDER_AURA') {
+      if (
+        key === '🐉' ||
+        upper === 'ENDER' ||
+        upper === 'EFFECT_ENDER_AURA' ||
+        upper === 'ITEM_DRAGON_EGG_RELIC'
+      ) {
         return this.getEnderSvg(size);
       }
-      if (key === '⚔️' || upper === 'SWORD' || upper === 'MODERATOR') {
+      if (
+        key === '⚔️' ||
+        upper === 'SWORD' ||
+        upper === 'MODERATOR' ||
+        upper === 'BADGE_WITHER_SLAYER'
+      ) {
         return this.getSwordSvg(size);
       }
-      if (key === '🛡️' || upper === 'SHIELD' || upper === 'ADMIN') {
+      if (
+        key === '🛡️' ||
+        upper === 'SHIELD' ||
+        upper === 'ADMIN' ||
+        upper === 'BADGE_WARDEN_CONQUEROR'
+      ) {
         return this.getShieldSvg(size);
       }
       if (key === '🌱' || upper === 'GRASS' || upper === 'MEMBER') {
@@ -319,10 +393,17 @@
       }
 
       // Minecraft'ta doğrudan eşya karşılığı olmayan genel kavramlar -> Temiz standart ikon
-      if (upper === 'CROWN' || upper === 'MVIP_PLUS') return '👑';
+      if (
+        upper === 'CROWN' ||
+        upper === 'MVIP_PLUS' ||
+        upper === 'FRAME_GOLD_ROYAL' ||
+        upper === 'BADGE_MILLIONAIRE_KING'
+      ) {
+        return '👑';
+      }
       if (upper === 'NAME_COLOR_GOLD') return '✨';
       if (upper === 'NAME_COLOR_RGB') return '🌈';
-      if (upper === 'STAR' || upper === 'VIP_PLUS') return '🌟';
+      if (upper === 'STAR' || upper === 'VIP_PLUS' || upper === 'ITEM_NETHER_STAR_PACK') return '🌟';
       if (upper === 'TROPHY' || upper === 'FIRST_WIN') return '🏆';
       if (upper === 'ROCKET' || upper === 'ITEM_TOURNAMENT_BOOST') return '🚀';
       if (upper === 'PARTY_CHAMPION') return '🎉';
@@ -421,7 +502,9 @@
     const key = String(rawRank || 'MEMBER')
       .trim()
       .toUpperCase();
-    return RANK_ALIASES[key] || 'MEMBER';
+    if (!key) return 'MEMBER';
+    if (RANK_ALIASES[key]) return RANK_ALIASES[key];
+    return key.replace(/\s+/g, '_');
   }
 
   const DEFAULT_MOD_PERMS = {
@@ -963,6 +1046,10 @@
         throw new Error('Kendi yönetici hesabınızı silemezsiniz!');
       }
 
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.recordTombstone) {
+        cloudSyncService.recordTombstone('deletedUsers', clean);
+      }
+
       const users = this.getAllUsers();
       const filtered = users.filter(u => u.username.toLowerCase() !== clean);
       this._saveAllUsers(filtered);
@@ -972,6 +1059,9 @@
         session.username,
         `Yönetici ${session.username}, "${targetUsername}" hesabını sildi.`
       );
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
       return true;
     },
 
@@ -986,13 +1076,17 @@
       const nextPoints = Number(user.points || 0) + earned;
       const nextBest = Math.max(Number(user.bestScore || 0), earned);
 
-      return this.syncUserFields(user.username, {
+      const updated = this.syncUserFields(user.username, {
         gamesPlayed: nextPlayed,
         gamesWon: nextWon,
         gamesLost: nextLost,
         points: nextPoints,
         bestScore: nextBest
       });
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.schedulePush) {
+        cloudSyncService.schedulePush(150);
+      }
+      return updated;
     }
   };
 
@@ -1044,6 +1138,10 @@
         throw new Error('Bu kullanıcı adı sistem yöneticisi için ayrılmıştır.');
       }
 
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
+        await cloudSyncService.syncNow().catch(() => {});
+      }
+
       if (userService.getUserByUsername(cleanUser)) {
         throw new Error('Bu kullanıcı adı zaten alınmış. Lütfen başka bir ad seçin.');
       }
@@ -1065,6 +1163,10 @@
         `${AUTH_SALT}::PWD::${cleanUser.toLowerCase()}::${rawPass}`
       );
       const nowIso = new Date().toISOString();
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.clearTombstone) {
+        cloudSyncService.clearTombstone('deletedUsers', cleanUser.toLowerCase());
+      }
 
       const newUser = {
         userId: generateId('USR'),
@@ -1124,6 +1226,11 @@
 
       const session = buildSessionPayload(newUser, false);
       storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        await cloudSyncService.pushNow().catch(() => {});
+      }
+
       return session;
     },
 
@@ -1133,6 +1240,10 @@
 
       if (!cleanUser || !rawPass) {
         throw new Error('Lütfen kullanıcı adınızı ve şifrenizi girin.');
+      }
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
+        await cloudSyncService.syncNow().catch(() => {});
       }
 
       const user = userService.getUserByUsername(cleanUser);
@@ -1164,6 +1275,11 @@
       storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
 
       activityService.log('USER_LOGIN', finalUser.username, `${finalUser.username} giriş yaptı.`);
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
+
       return session;
     },
 
@@ -1180,6 +1296,10 @@
 
       if (uHash !== ADMIN_USER_HASH || pHash !== ADMIN_PASS_HASH) {
         throw new Error('Yönetici kullanıcı adı veya şifresi geçersiz!');
+      }
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
+        await cloudSyncService.syncNow().catch(() => {});
       }
 
       let adminUser = userService.getUserByUsername(cleanUser);
@@ -1234,6 +1354,11 @@
         adminUser.username,
         `Yönetici ${adminUser.username} Yönetici Paneline giriş yaptı.`
       );
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
+
       return session;
     },
 
@@ -2324,6 +2449,1026 @@
     }
   };
 
+  // ==========================================
+  // ÇOKLU BİLGİSAYAR / BULUT SENKRONİZASYON SERVİSİ (cloudSyncService)
+  // Farklı bilgisayarlardan veya tarayıcılardan açılan hesapları, liderlik tablosunu,
+  // rütbeleri, partileri ve Gemini AI soru havuzunu gerçek zamanlı senkronize eder.
+  // ==========================================
+  const DEFAULT_CLOUD_ENDPOINT =
+    'https://api.restful-api.dev/objects/ff808181a09d98f701a11d14ce6a249f';
+  const ECONOMY_STORAGE_KEYS = {
+    RANKS: 'mc_millionaire_tr_ranks_v9',
+    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v9',
+    LEADERBOARD_META: 'mc_millionaire_tr_leaderboard_meta_v6'
+  };
+
+  const cloudSyncService = {
+    _pushTimer: null,
+    _isSyncing: false,
+    _pollInterval: null,
+    _lastSyncAt: null,
+    _lastError: null,
+
+    getMeta() {
+      return storage.get(STORAGE_KEYS.CLOUD_SYNC_META, {
+        endpoint: DEFAULT_CLOUD_ENDPOINT,
+        enabled: true,
+        lastSyncAt: null
+      });
+    },
+
+    getEndpoint() {
+      const meta = this.getMeta();
+      return String(meta?.endpoint || DEFAULT_CLOUD_ENDPOINT).trim() || DEFAULT_CLOUD_ENDPOINT;
+    },
+
+    updateEndpoint(session, newEndpoint, enabled = true) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const cleanUrl = String(newEndpoint || '').trim() || DEFAULT_CLOUD_ENDPOINT;
+      const next = {
+        ...this.getMeta(),
+        endpoint: cleanUrl,
+        enabled: Boolean(enabled),
+        updatedAt: new Date().toISOString()
+      };
+      storage.set(STORAGE_KEYS.CLOUD_SYNC_META, next);
+      this.pushNow().catch(() => {});
+      return next;
+    },
+
+    getTombstones() {
+      const raw = storage.get(STORAGE_KEYS.TOMBSTONES, null);
+      return {
+        deletedUsers: Array.isArray(raw?.deletedUsers) ? raw.deletedUsers : [],
+        deletedRanks: Array.isArray(raw?.deletedRanks) ? raw.deletedRanks : [],
+        deletedItems: Array.isArray(raw?.deletedItems) ? raw.deletedItems : [],
+        deletedParties: Array.isArray(raw?.deletedParties) ? raw.deletedParties : []
+      };
+    },
+
+    recordTombstone(category, id) {
+      const cleanId = String(id || '').trim().toLowerCase();
+      if (!cleanId) return;
+      const tombs = this.getTombstones();
+      if (!Array.isArray(tombs[category])) tombs[category] = [];
+      if (!tombs[category].includes(cleanId)) {
+        tombs[category].push(cleanId);
+        storage.set(STORAGE_KEYS.TOMBSTONES, tombs);
+      }
+    },
+
+    clearTombstone(category, id) {
+      const cleanId = String(id || '').trim().toLowerCase();
+      if (!cleanId) return;
+      const tombs = this.getTombstones();
+      if (!Array.isArray(tombs[category])) return;
+      const next = tombs[category].filter(x => x !== cleanId);
+      if (next.length !== tombs[category].length) {
+        tombs[category] = next;
+        storage.set(STORAGE_KEYS.TOMBSTONES, tombs);
+      }
+    },
+
+    _sanitizeUsersForCloud(users) {
+      if (!Array.isArray(users)) return [];
+      return users.map(u => {
+        const copy = { ...u };
+        // Eğer avatar büyük bir data:image base64 ise bulut boyutunu şişirmemek için kısalt
+        if (typeof copy.avatarUrl === 'string' && copy.avatarUrl.startsWith('data:') && copy.avatarUrl.length > 4096) {
+          copy.avatarUrl = '';
+        }
+        return copy;
+      });
+    },
+
+    _sanitizeBugsForCloud(bugs) {
+      if (!Array.isArray(bugs)) return [];
+      return bugs.slice(0, 60).map(b => {
+        const copy = { ...b };
+        if (typeof copy.screenshotData === 'string' && copy.screenshotData.length > 8192) {
+          copy.screenshotData = '';
+        }
+        return copy;
+      });
+    },
+
+    _buildLocalPayload() {
+      return {
+        schemaVersion: '8.4',
+        updatedAt: new Date().toISOString(),
+        tombstones: this.getTombstones(),
+        users: this._sanitizeUsersForCloud(storage.get(STORAGE_KEYS.USERS, [])),
+        ranks: storage.get(ECONOMY_STORAGE_KEYS.RANKS, []),
+        shopItems: storage.get(ECONOMY_STORAGE_KEYS.SHOP_ITEMS, []),
+        leaderboardMeta: storage.get(ECONOMY_STORAGE_KEYS.LEADERBOARD_META, null),
+        parties: storage.get(STORAGE_KEYS.PARTIES, []).slice(0, 80),
+        partyInvitations: storage.get(STORAGE_KEYS.PARTY_INVITATIONS, []).slice(0, 120),
+        notifications: storage.get(STORAGE_KEYS.NOTIFICATIONS, {}),
+        support: storage.get(STORAGE_KEYS.SUPPORT_TICKETS, []).slice(0, 80),
+        bugs: this._sanitizeBugsForCloud(storage.get(STORAGE_KEYS.BUG_REPORTS, [])),
+        suggestions: storage.get(STORAGE_KEYS.SUGGESTIONS, []).slice(0, 80),
+        modPermissions: storage.get(STORAGE_KEYS.MOD_PERMISSIONS, null),
+        platformSettings: storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, null),
+        aiConfig: storage.get(STORAGE_KEYS.AI_CONFIG, null),
+        aiQuestions: storage.get(STORAGE_KEYS.AI_QUESTIONS, []).slice(0, 250)
+      };
+    },
+
+    _parseTime(isoStr) {
+      if (!isoStr) return 0;
+      const t = Date.parse(isoStr);
+      return Number.isNaN(t) ? 0 : t;
+    },
+
+    _mergeArraysById(localArr, remoteArr, idField, deletedSet = new Set(), normalizeIdFn = null) {
+      const map = new Map();
+      let changedLocal = false;
+      let localHasUnpushed = false;
+
+      const norm = val => {
+        const s = String(val || '').trim();
+        return normalizeIdFn ? normalizeIdFn(s) : s.toLowerCase();
+      };
+
+      const safeLocal = Array.isArray(localArr) ? localArr : [];
+      const safeRemote = Array.isArray(remoteArr) ? remoteArr : [];
+
+      safeLocal.forEach(item => {
+        if (!item || !item[idField]) return;
+        const key = norm(item[idField]);
+        if (deletedSet.has(key)) {
+          changedLocal = true;
+          return;
+        }
+        map.set(key, item);
+      });
+
+      const remoteKeys = new Set();
+      safeRemote.forEach(rItem => {
+        if (!rItem || !rItem[idField]) return;
+        const key = norm(rItem[idField]);
+        remoteKeys.add(key);
+        if (deletedSet.has(key)) return;
+
+        const lItem = map.get(key);
+        if (!lItem) {
+          map.set(key, rItem);
+          changedLocal = true;
+        } else {
+          const rTime = this._parseTime(rItem.updatedAt || rItem.lastLoginAt || rItem.createdAt);
+          const lTime = this._parseTime(lItem.updatedAt || lItem.lastLoginAt || lItem.createdAt);
+          if (rTime > lTime) {
+            // Avatar data URI yerel olarak varsa koru
+            const merged = { ...lItem, ...rItem };
+            if (!merged.avatarUrl && lItem.avatarUrl) merged.avatarUrl = lItem.avatarUrl;
+            map.set(key, merged);
+            changedLocal = true;
+          } else if (lTime > rTime) {
+            localHasUnpushed = true;
+          } else if (idField === 'username') {
+            // Zaman damgası aynıysa daha yüksek oyun/puan verisini koru
+            const rGames = Number(rItem.gamesPlayed || 0);
+            const lGames = Number(lItem.gamesPlayed || 0);
+            const rPoints = Number(rItem.points || 0);
+            const lPoints = Number(lItem.points || 0);
+            if (rGames > lGames || rPoints > lPoints) {
+              map.set(key, { ...lItem, ...rItem });
+              changedLocal = true;
+            } else if (lGames > rGames || lPoints > rPoints) {
+              localHasUnpushed = true;
+            }
+          }
+        }
+      });
+
+      map.forEach((_, key) => {
+        if (!remoteKeys.has(key)) {
+          localHasUnpushed = true;
+        }
+      });
+
+      return {
+        merged: Array.from(map.values()),
+        changedLocal,
+        localHasUnpushed
+      };
+    },
+
+    _mergeAndSave(remoteData) {
+      if (!remoteData || typeof remoteData !== 'object') {
+        return { changedLocal: false, needsPush: true };
+      }
+
+      let anyLocalChanged = false;
+      let anyNeedsPush = false;
+
+      cloudSyncInternalWrite = true;
+      try {
+        // 1. Tombstones birleştir
+        const lTombs = this.getTombstones();
+        const rTombs = remoteData.tombstones || {};
+        const mergedTombs = {
+          deletedUsers: Array.from(new Set([...(lTombs.deletedUsers || []), ...(rTombs.deletedUsers || [])])),
+          deletedRanks: Array.from(new Set([...(lTombs.deletedRanks || []), ...(rTombs.deletedRanks || [])])),
+          deletedItems: Array.from(new Set([...(lTombs.deletedItems || []), ...(rTombs.deletedItems || [])])),
+          deletedParties: Array.from(new Set([...(lTombs.deletedParties || []), ...(rTombs.deletedParties || [])]))
+        };
+        storage.set(STORAGE_KEYS.TOMBSTONES, mergedTombs);
+
+        const delUsersSet = new Set(mergedTombs.deletedUsers.map(x => String(x).toLowerCase()));
+        const delRanksSet = new Set(mergedTombs.deletedRanks.map(x => String(x).toLowerCase()));
+        const delItemsSet = new Set(mergedTombs.deletedItems.map(x => String(x).toLowerCase()));
+        const delPartiesSet = new Set(mergedTombs.deletedParties.map(x => String(x).toLowerCase()));
+
+        // 2. Kullanıcıları birleştir
+        const userMerge = this._mergeArraysById(
+          storage.get(STORAGE_KEYS.USERS, []),
+          remoteData.users,
+          'username',
+          delUsersSet
+        );
+        if (userMerge.changedLocal) {
+          storage.set(STORAGE_KEYS.USERS, userMerge.merged);
+          anyLocalChanged = true;
+        }
+        if (userMerge.localHasUnpushed) anyNeedsPush = true;
+
+        // Aktif oturum varsa güncel kullanıcı verisiyle senkronize et
+        const activeSession = storage.get(STORAGE_KEYS.ACTIVE_SESSION, null);
+        if (activeSession && activeSession.username) {
+          const activeClean = activeSession.username.toLowerCase();
+          const matchedUser = userMerge.merged.find(
+            u => u && u.username && u.username.toLowerCase() === activeClean
+          );
+          if (matchedUser) {
+            const nextSession = {
+              ...activeSession,
+              userId: matchedUser.userId || activeSession.userId,
+              rank: activeSession.isAdminSession ? 'ADMIN' : normalizeRankId(matchedUser.rank || 'MEMBER'),
+              role: activeSession.isAdminSession ? 'ADMIN' : matchedUser.role || 'MEMBER',
+              isModerator: Boolean(matchedUser.isModerator),
+              minecraftPlayerName: matchedUser.minecraftPlayerName || '',
+              avatarUrl: matchedUser.avatarUrl || activeSession.avatarUrl || '',
+              emeraldBalance: Number(matchedUser.emeraldBalance || 0),
+              netheriteBalance: Number(matchedUser.netheriteBalance || 0),
+              extraLives: Number(matchedUser.extraLives || 0),
+              points: Number(matchedUser.points || 0)
+            };
+            nextSession.signature = computeTokenSignature(nextSession);
+            storage.set(STORAGE_KEYS.ACTIVE_SESSION, nextSession);
+          }
+        }
+
+        // 3. Rütbeleri birleştir
+        if (Array.isArray(remoteData.ranks) && remoteData.ranks.length > 0) {
+          const rankMerge = this._mergeArraysById(
+            storage.get(ECONOMY_STORAGE_KEYS.RANKS, []),
+            remoteData.ranks,
+            'id',
+            delRanksSet
+          );
+          rankMerge.merged.sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
+          if (rankMerge.changedLocal) {
+            storage.set(ECONOMY_STORAGE_KEYS.RANKS, rankMerge.merged);
+            anyLocalChanged = true;
+          }
+          if (rankMerge.localHasUnpushed) anyNeedsPush = true;
+        }
+
+        // 4. Mağaza ürünlerini birleştir
+        if (Array.isArray(remoteData.shopItems) && remoteData.shopItems.length > 0) {
+          const itemMerge = this._mergeArraysById(
+            storage.get(ECONOMY_STORAGE_KEYS.SHOP_ITEMS, []),
+            remoteData.shopItems,
+            'id',
+            delItemsSet
+          );
+          if (itemMerge.changedLocal) {
+            storage.set(ECONOMY_STORAGE_KEYS.SHOP_ITEMS, itemMerge.merged);
+            anyLocalChanged = true;
+          }
+          if (itemMerge.localHasUnpushed) anyNeedsPush = true;
+        }
+
+        // 5. Partileri ve Davetleri birleştir
+        if (Array.isArray(remoteData.parties)) {
+          const partyMerge = this._mergeArraysById(
+            storage.get(STORAGE_KEYS.PARTIES, []),
+            remoteData.parties,
+            'partyId',
+            delPartiesSet
+          );
+          if (partyMerge.changedLocal) {
+            storage.set(STORAGE_KEYS.PARTIES, partyMerge.merged);
+            anyLocalChanged = true;
+          }
+          if (partyMerge.localHasUnpushed) anyNeedsPush = true;
+        }
+
+        if (Array.isArray(remoteData.partyInvitations)) {
+          const invMerge = this._mergeArraysById(
+            storage.get(STORAGE_KEYS.PARTY_INVITATIONS, []),
+            remoteData.partyInvitations,
+            'id'
+          );
+          if (invMerge.changedLocal) {
+            storage.set(STORAGE_KEYS.PARTY_INVITATIONS, invMerge.merged);
+            anyLocalChanged = true;
+          }
+          if (invMerge.localHasUnpushed) anyNeedsPush = true;
+        }
+
+        // 6. Bildirimleri birleştir
+        if (remoteData.notifications && typeof remoteData.notifications === 'object') {
+          const localNotifs = storage.get(STORAGE_KEYS.NOTIFICATIONS, {});
+          let notifChanged = false;
+          const allUserKeys = new Set([
+            ...Object.keys(localNotifs || {}),
+            ...Object.keys(remoteData.notifications || {})
+          ]);
+          const mergedNotifs = {};
+          allUserKeys.forEach(uKey => {
+            const lList = Array.isArray(localNotifs[uKey]) ? localNotifs[uKey] : [];
+            const rList = Array.isArray(remoteData.notifications[uKey]) ? remoteData.notifications[uKey] : [];
+            const byId = new Map();
+            lList.forEach(n => {
+              if (n && n.id) byId.set(n.id, n);
+            });
+            rList.forEach(rn => {
+              if (!rn || !rn.id) return;
+              const ln = byId.get(rn.id);
+              if (!ln) {
+                byId.set(rn.id, rn);
+                notifChanged = true;
+              } else if (rn.read && !ln.read) {
+                byId.set(rn.id, { ...ln, read: true });
+                notifChanged = true;
+              }
+            });
+            mergedNotifs[uKey] = Array.from(byId.values())
+              .sort((a, b) => this._parseTime(b.createdAt) - this._parseTime(a.createdAt))
+              .slice(0, 60);
+          });
+          if (notifChanged) {
+            storage.set(STORAGE_KEYS.NOTIFICATIONS, mergedNotifs);
+            anyLocalChanged = true;
+          }
+        }
+
+        // 7. Destek, Hata ve Önerileri birleştir
+        ['support', 'bugs', 'suggestions'].forEach(col => {
+          const storageKey =
+            col === 'support'
+              ? STORAGE_KEYS.SUPPORT_TICKETS
+              : col === 'bugs'
+              ? STORAGE_KEYS.BUG_REPORTS
+              : STORAGE_KEYS.SUGGESTIONS;
+          if (Array.isArray(remoteData[col])) {
+            const colMerge = this._mergeArraysById(
+              storage.get(storageKey, []),
+              remoteData[col],
+              'id'
+            );
+            if (colMerge.changedLocal) {
+              storage.set(storageKey, colMerge.merged);
+              anyLocalChanged = true;
+            }
+            if (colMerge.localHasUnpushed) anyNeedsPush = true;
+          }
+        });
+
+        // 8. Gemini AI Config birleştir
+        if (remoteData.aiConfig && typeof remoteData.aiConfig === 'object') {
+          const localAi = storage.get(STORAGE_KEYS.AI_CONFIG, null);
+          const rAiTime = this._parseTime(remoteData.aiConfig.updatedAt);
+          const lAiTime = this._parseTime(localAi?.updatedAt);
+          if (
+            !localAi ||
+            rAiTime > lAiTime ||
+            (remoteData.aiConfig.encryptedApiKey && !localAi.encryptedApiKey)
+          ) {
+            storage.set(STORAGE_KEYS.AI_CONFIG, remoteData.aiConfig);
+            anyLocalChanged = true;
+          } else if (lAiTime > rAiTime) {
+            anyNeedsPush = true;
+          }
+        } else if (storage.get(STORAGE_KEYS.AI_CONFIG, null)?.encryptedApiKey) {
+          anyNeedsPush = true;
+        }
+
+        // 9. Gemini AI Soru Havuzunu birleştir
+        if (Array.isArray(remoteData.aiQuestions)) {
+          const localQs = storage.get(STORAGE_KEYS.AI_QUESTIONS, []);
+          const qMap = new Map();
+          let qChanged = false;
+          localQs.forEach(q => {
+            if (q && q.q) qMap.set(String(q.q).trim().toLowerCase(), q);
+          });
+          remoteData.aiQuestions.forEach(rq => {
+            if (!rq || !rq.q) return;
+            const key = String(rq.q).trim().toLowerCase();
+            if (!qMap.has(key)) {
+              qMap.set(key, rq);
+              qChanged = true;
+            }
+          });
+          if (qChanged) {
+            const mergedQs = Array.from(qMap.values()).slice(0, 250);
+            storage.set(STORAGE_KEYS.AI_QUESTIONS, mergedQs);
+            anyLocalChanged = true;
+          }
+          if (qMap.size > remoteData.aiQuestions.length) {
+            anyNeedsPush = true;
+          }
+        }
+      } finally {
+        cloudSyncInternalWrite = false;
+      }
+
+      return { changedLocal: anyLocalChanged, needsPush: anyNeedsPush };
+    },
+
+    async pullFromCloud() {
+      const meta = this.getMeta();
+      if (meta && meta.enabled === false) return null;
+      const endpoint = this.getEndpoint();
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 7000) : null;
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          cache: 'no-store',
+          signal: controller ? controller.signal : undefined
+        });
+        if (timeoutId) clearTimeout(timeoutId);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        // Hem restful-api.dev ({ id, name, data: {...} }) hem de Firebase ({ ... }) yapılarını destekler
+        if (json && typeof json === 'object' && json.data && typeof json.data === 'object') {
+          return json.data;
+        }
+        return json;
+      } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        this._lastError = err.message;
+        return null;
+      }
+    },
+
+    async pushToCloud(payloadOverride = null) {
+      const meta = this.getMeta();
+      if (meta && meta.enabled === false) return false;
+      const endpoint = this.getEndpoint();
+      const payload = payloadOverride || this._buildLocalPayload();
+      const isRestfulApiDev = endpoint.includes('restful-api.dev/objects/');
+      const bodyObj = isRestfulApiDev
+        ? { name: 'MCM_CLOUD_DB_V8', data: payload }
+        : payload;
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : null;
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+          },
+          body: JSON.stringify(bodyObj),
+          signal: controller ? controller.signal : undefined
+        });
+        if (timeoutId) clearTimeout(timeoutId);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        this._lastSyncAt = new Date().toISOString();
+        this._lastError = null;
+        return true;
+      } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        this._lastError = err.message;
+        return false;
+      }
+    },
+
+    async syncNow() {
+      if (this._isSyncing) return false;
+      this._isSyncing = true;
+      try {
+        const remoteData = await this.pullFromCloud();
+        if (remoteData) {
+          const { changedLocal, needsPush } = this._mergeAndSave(remoteData);
+          this._lastSyncAt = new Date().toISOString();
+          if (needsPush) {
+            await this.pushToCloud();
+          }
+          if (changedLocal && typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('mcm:cloud-synced', {
+                detail: { syncedAt: this._lastSyncAt }
+              })
+            );
+          }
+          return true;
+        } else {
+          // Uzak sunucu henüz boşsa yerel veriyi gönder
+          await this.pushToCloud();
+          return true;
+        }
+      } finally {
+        this._isSyncing = false;
+      }
+    },
+
+    async pushNow() {
+      if (this._pushTimer) {
+        clearTimeout(this._pushTimer);
+        this._pushTimer = null;
+      }
+      if (this._isSyncing) return false;
+      this._isSyncing = true;
+      try {
+        const remoteData = await this.pullFromCloud();
+        if (remoteData) {
+          const { changedLocal } = this._mergeAndSave(remoteData);
+          if (changedLocal && typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('mcm:cloud-synced', {
+                detail: { syncedAt: new Date().toISOString() }
+              })
+            );
+          }
+        }
+        return await this.pushToCloud();
+      } finally {
+        this._isSyncing = false;
+      }
+    },
+
+    schedulePush(delayMs = 300) {
+      if (this._pushTimer) clearTimeout(this._pushTimer);
+      this._pushTimer = setTimeout(() => {
+        this._pushTimer = null;
+        this.pushNow().catch(() => {});
+      }, delayMs);
+    },
+
+    getStatus() {
+      const meta = this.getMeta();
+      return {
+        enabled: meta?.enabled !== false,
+        endpoint: this.getEndpoint(),
+        lastSyncAt: this._lastSyncAt || meta?.lastSyncAt || null,
+        lastError: this._lastError,
+        isSyncing: this._isSyncing
+      };
+    },
+
+    init() {
+      if (typeof window === 'undefined') return;
+      // Başlangıçta hemen buluttan çek ve eşitle
+      setTimeout(() => {
+        this.syncNow().catch(() => {});
+      }, 60);
+
+      // Her 8 saniyede bir arka planda senkronize et
+      if (!this._pollInterval) {
+        this._pollInterval = setInterval(() => {
+          this.syncNow().catch(() => {});
+        }, 8000);
+      }
+
+      // Sekmeye geri dönüldüğünde anında senkronize et
+      window.addEventListener('focus', () => {
+        this.syncNow().catch(() => {});
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.syncNow().catch(() => {});
+        }
+      });
+    }
+  };
+
+  // ==========================================
+  // GEMINI YAPAY ZEKA SORU ÜRETİCİ SERVİSİ (aiQuestionService)
+  // Yalnızca Yönetici Panelinden girilen Gemini API anahtarını kullanır.
+  // Normal oyuncuların API anahtarı girmesine gerek yoktur; üretilen sorular
+  // bulut havuzuna kaydedilir ve tüm oyunculara farklı sorular sunulur.
+  // ==========================================
+  const DEFAULT_AI_CONFIG = {
+    encryptedApiKey: '',
+    model: 'gemini-3.8-flash',
+    enabled: true,
+    autoGenerateOnGameStart: true,
+    lastGeneratedAt: null,
+    updatedAt: null
+  };
+
+  function encodeObfuscatedKey(plainKey) {
+    const raw = String(plainKey || '').trim();
+    if (!raw) return '';
+    const salt = `${AUTH_SALT}_GEMINI_KEY_SHIELD`;
+    const bytes = [];
+    for (let i = 0; i < raw.length; i++) {
+      bytes.push(raw.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
+    }
+    try {
+      return btoa(String.fromCharCode(...bytes));
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function decodeObfuscatedKey(encodedKey) {
+    const raw = String(encodedKey || '').trim();
+    if (!raw) return '';
+    const salt = `${AUTH_SALT}_GEMINI_KEY_SHIELD`;
+    try {
+      const bin = atob(raw);
+      let out = '';
+      for (let i = 0; i < bin.length; i++) {
+        out += String.fromCharCode(bin.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
+      }
+      return out;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  const aiQuestionService = {
+    _isGenerating: false,
+
+    getConfig() {
+      const saved = storage.get(STORAGE_KEYS.AI_CONFIG, null);
+      return {
+        ...DEFAULT_AI_CONFIG,
+        ...(saved || {})
+      };
+    },
+
+    _getDecryptedApiKey() {
+      const cfg = this.getConfig();
+      return decodeObfuscatedKey(cfg.encryptedApiKey);
+    },
+
+    isConfigured() {
+      const key = this._getDecryptedApiKey();
+      return Boolean(key && key.length >= 16);
+    },
+
+    getPublicStatus() {
+      const cfg = this.getConfig();
+      const key = this._getDecryptedApiKey();
+      const hasKey = Boolean(key && key.length >= 16);
+      const maskedKey = hasKey
+        ? `${key.slice(0, 6)}••••••••••••••••••••${key.slice(-4)}`
+        : '';
+      const pool = this.getAllAiQuestions();
+      return {
+        configured: hasKey,
+        maskedKey,
+        model: cfg.model || 'gemini-3.8-flash',
+        enabled: cfg.enabled !== false,
+        autoGenerateOnGameStart: cfg.autoGenerateOnGameStart !== false,
+        lastGeneratedAt: cfg.lastGeneratedAt || null,
+        updatedAt: cfg.updatedAt || null,
+        totalPoolCount: pool.length,
+        easyCount: pool.filter(q => q.difficulty === 'easy').length,
+        mediumCount: pool.filter(q => q.difficulty === 'medium').length,
+        hardCount: pool.filter(q => q.difficulty === 'hard').length,
+        isGenerating: this._isGenerating
+      };
+    },
+
+    updateConfig(session, { apiKey, model, enabled, autoGenerateOnGameStart } = {}) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const current = this.getConfig();
+      let nextEncryptedKey = current.encryptedApiKey;
+
+      if (apiKey === '__CLEAR__') {
+        nextEncryptedKey = '';
+      } else if (typeof apiKey === 'string' && apiKey.trim() && !apiKey.includes('•')) {
+        nextEncryptedKey = encodeObfuscatedKey(apiKey.trim());
+      }
+
+      const next = {
+        ...current,
+        encryptedApiKey: nextEncryptedKey,
+        model: String(model || current.model || 'gemini-3.8-flash').trim(),
+        enabled: enabled !== undefined ? Boolean(enabled) : current.enabled !== false,
+        autoGenerateOnGameStart:
+          autoGenerateOnGameStart !== undefined
+            ? Boolean(autoGenerateOnGameStart)
+            : current.autoGenerateOnGameStart !== false,
+        updatedAt: new Date().toISOString()
+      };
+
+      storage.set(STORAGE_KEYS.AI_CONFIG, next);
+      activityService.log(
+        'ADMIN_ACTION',
+        session.username,
+        `Yönetici ${session.username} Gemini AI Soru Üretici yapılandırmasını güncelledi.`
+      );
+      cloudSyncService.pushNow().catch(() => {});
+      return this.getPublicStatus();
+    },
+
+    getAllAiQuestions() {
+      const list = storage.get(STORAGE_KEYS.AI_QUESTIONS, []);
+      return Array.isArray(list) ? list : [];
+    },
+
+    getQuestionsByDifficulty(difficulty) {
+      return this.getAllAiQuestions().filter(q => q && q.difficulty === difficulty);
+    },
+
+    getSeenQuestions() {
+      const list = storage.get(STORAGE_KEYS.SEEN_QUESTIONS, []);
+      return new Set(Array.isArray(list) ? list : []);
+    },
+
+    markQuestionsSeen(questions = []) {
+      if (!Array.isArray(questions) || questions.length === 0) return;
+      const seenList = storage.get(STORAGE_KEYS.SEEN_QUESTIONS, []);
+      const safeList = Array.isArray(seenList) ? [...seenList] : [];
+      questions.forEach(q => {
+        const text = String(q?.q || q || '').trim();
+        if (text && !safeList.includes(text)) {
+          safeList.push(text);
+        }
+      });
+      // Son 180 görülen soruyu tut, taşarsa eskileri sil ki döngü tazelensin
+      while (safeList.length > 180) {
+        safeList.shift();
+      }
+      storage.set(STORAGE_KEYS.SEEN_QUESTIONS, safeList);
+    },
+
+    clearAiQuestionPool(session) {
+      authGuard.requireRole(session, ['ADMIN']);
+      storage.set(STORAGE_KEYS.AI_QUESTIONS, []);
+      cloudSyncService.pushNow().catch(() => {});
+      return true;
+    },
+
+    async _callGeminiRaw(apiKey, preferredModel, promptText) {
+      const modelsToTry = Array.from(
+        new Set([
+          preferredModel || 'gemini-3.8-flash',
+          'gemini-3.8-flash',
+          'gemini-2.5-flash',
+          'gemini-2.0-flash'
+        ])
+      );
+
+      let lastErr = null;
+
+      // 1. Önce Interactions API uç noktasını dene (gemini-3.8-flash için önerilen)
+      try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+          },
+          body: JSON.stringify({
+            model: modelsToTry[0],
+            input: promptText,
+            generation_config: {
+              temperature: 0.85
+            }
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const outputs = Array.isArray(data?.outputs) ? data.outputs : [];
+          const textOut = outputs.find(o => o.type === 'text' && o.text)?.text;
+          if (textOut) return textOut;
+        }
+      } catch (e) {
+        lastErr = e;
+      }
+
+      // 2. Standart generateContent REST uç noktası (tüm Google AI Studio anahtarlarıyla %100 uyumlu)
+      for (const mdl of modelsToTry) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+            mdl
+          )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }],
+              generationConfig: {
+                temperature: 0.9,
+                responseMimeType: 'application/json'
+              }
+            })
+          });
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            lastErr = new Error(
+              errJson?.error?.message || `Gemini API Hatası (${mdl}: HTTP ${res.status})`
+            );
+            continue;
+          }
+          const data = await res.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) return text;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+
+      throw lastErr || new Error('Gemini API yanıt vermedi. Lütfen API anahtarınızı kontrol edin.');
+    },
+
+    _parseQuestionsJson(rawText) {
+      const cleaned = String(rawText || '')
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+
+      let parsed = null;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch (e) {
+        const match = cleaned.match(/\[[\s\S]*\]/);
+        if (match) {
+          parsed = JSON.parse(match[0]);
+        }
+      }
+
+      const arr = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.questions)
+        ? parsed.questions
+        : [];
+
+      const valid = [];
+      arr.forEach(item => {
+        if (!item || typeof item !== 'object') return;
+        const diff = ['easy', 'medium', 'hard'].includes(String(item.difficulty || '').toLowerCase())
+          ? String(item.difficulty).toLowerCase()
+          : 'medium';
+        const q = String(item.q || item.question || '').trim();
+        const options = Array.isArray(item.options)
+          ? item.options.map(o => String(o || '').trim()).filter(Boolean)
+          : [];
+        const answer = Number(item.answer ?? item.correct);
+        const explanation = String(item.explanation || '').trim();
+
+        if (
+          q.length >= 10 &&
+          options.length === 4 &&
+          Number.isInteger(answer) &&
+          answer >= 0 &&
+          answer <= 3
+        ) {
+          valid.push({
+            id: generateId('AIQ'),
+            difficulty: diff,
+            q,
+            options,
+            answer,
+            explanation: explanation || 'Minecraft bilgi yarışması özel sorusu.',
+            createdAt: new Date().toISOString()
+          });
+        }
+      });
+
+      return valid;
+    },
+
+    async generateQuestionsBatch({ count = 9, excludeQuestions = [] } = {}) {
+      const cfg = this.getConfig();
+      const apiKey = this._getDecryptedApiKey();
+      if (!apiKey || apiKey.length < 16) {
+        throw new Error('Yönetici Panelinde kayıtlı geçerli bir Gemini API anahtarı bulunamadı.');
+      }
+      if (this._isGenerating) {
+        return [];
+      }
+
+      this._isGenerating = true;
+      try {
+        const existingPool = this.getAllAiQuestions();
+        const recentSample = [
+          ...excludeQuestions.slice(0, 15),
+          ...existingPool.slice(0, 20).map(x => x.q)
+        ].filter(Boolean);
+
+        const perTier = Math.max(1, Math.floor(count / 3));
+        const prompt = `Sen profesyonel bir "Minecraft Kim Milyoner Olmak İster" yarışması soru yazarısın.
+Bana tamamen Türkçe, özgün, doğru ve daha önce sorulmamış ${perTier * 3} adet Minecraft bilgi yarışması sorusu üret:
+- ${perTier} adet "easy" (kolay: temel bloklar, yaratıklar, çalışma masası, madenler, hayatta kalma)
+- ${perTier} adet "medium" (orta: iksirler, büyüler, Nether, End, köylü meslekleri, yapılar, biyomlar)
+- ${perTier} adet "hard" (zor: teknik mekanikler, Redstone, nadir olasılıklar, güncelleme detayları, hız koşusu ve derin oyun mekanikleri)
+
+Şu sorulardan tamamen FARKLI konular seç:
+${recentSample.map(s => `- ${s}`).join('\n')}
+
+Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman şu şemada olmalı:
+[
+  {
+    "difficulty": "easy" | "medium" | "hard",
+    "q": "Soru metni?",
+    "options": ["A şıkkı", "B şıkkı", "C şıkkı", "D şıkkı"],
+    "answer": 0,
+    "explanation": "Kısa ve net Türkçe açıklama"
+  }
+]`;
+
+        const rawResponse = await this._callGeminiRaw(apiKey, cfg.model, prompt);
+        const generated = this._parseQuestionsJson(rawResponse);
+        if (generated.length === 0) {
+          throw new Error('Gemini API yanıtından geçerli soru ayrıştırılamadı.');
+        }
+
+        const currentPool = this.getAllAiQuestions();
+        const existingSet = new Set(currentPool.map(item => String(item.q).trim().toLowerCase()));
+        const added = [];
+
+        generated.forEach(item => {
+          const key = item.q.toLowerCase();
+          if (!existingSet.has(key)) {
+            existingSet.add(key);
+            currentPool.unshift(item);
+            added.push(item);
+          }
+        });
+
+        if (currentPool.length > 250) currentPool.length = 250;
+        storage.set(STORAGE_KEYS.AI_QUESTIONS, currentPool);
+
+        const nextCfg = {
+          ...this.getConfig(),
+          lastGeneratedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        storage.set(STORAGE_KEYS.AI_CONFIG, nextCfg);
+
+        cloudSyncService.schedulePush(200);
+        return added;
+      } finally {
+        this._isGenerating = false;
+      }
+    },
+
+    async ensureFreshQuestionsForMatch(gameState) {
+      const cfg = this.getConfig();
+      if (!cfg.enabled || !cfg.autoGenerateOnGameStart || !this.isConfigured()) {
+        return;
+      }
+      try {
+        const currentQs = Array.isArray(gameState?.questions)
+          ? gameState.questions.map(q => q.q)
+          : [];
+        const newQuestions = await this.generateQuestionsBatch({
+          count: 6,
+          excludeQuestions: currentQs
+        });
+        if (!gameState || !gameState.active || !Array.isArray(gameState.questions)) return;
+
+        // Henüz oyuncuya gösterilmemiş ileriki sorulara yeni üretilen Gemini sorularını canlı enjekte et
+        newQuestions.forEach(nq => {
+          const tierStart =
+            nq.difficulty === 'easy' ? 0 : nq.difficulty === 'medium' ? 5 : 10;
+          const tierEnd = tierStart + 4;
+          for (let idx = tierEnd; idx >= tierStart; idx--) {
+            if (idx > gameState.currentIndex + 1 && gameState.questions[idx] && !gameState.questions[idx]._liveInjected) {
+              // Şıkları karıştırarak yerleştir
+              const indexed = nq.options.map((text, i) => ({
+                text,
+                correct: i === nq.answer
+              }));
+              for (let i = indexed.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+              }
+              gameState.questions[idx] = {
+                ...nq,
+                options: indexed.map(m => m.text),
+                answer: indexed.findIndex(m => m.correct),
+                _liveInjected: true
+              };
+              break;
+            }
+          }
+        });
+      } catch (err) {
+        // Arka plan üretim hatası oyunu kesintiye uğratmaz
+      }
+    }
+  };
+
+  // Bulut senkronizasyonunu başlat
+  cloudSyncService.init();
+
   window.MCMServices = Object.assign(window.MCMServices || {}, {
     mcIconService,
     activityService,
@@ -2337,6 +3482,9 @@
     bugService,
     suggestionService,
     paymentService,
-    backupService
+    backupService,
+    cloudSyncService,
+    aiQuestionService
   });
 })(window);
+

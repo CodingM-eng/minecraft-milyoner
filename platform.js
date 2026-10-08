@@ -1009,11 +1009,12 @@
     const container = document.getElementById('ranks-grid-container');
     if (!container) return;
 
-    const purchasableRanks = svc().rankService.getPurchasableRanks(); // VIP, VIP+, MVIP, MVIP+
+    const purchasableRanks = svc().rankService.getPurchasableRanks(); // VIP, VIP+, MVIP, MVIP+ ve özel rütbeler
     container.innerHTML = purchasableRanks
       .map(rank => {
         const isOwnedOrHigher = userRank.order >= rank.order;
         const isCurrent = userRank.id === rank.id;
+        const nPrice = Math.max(500, Number(rank.netheritePrice || 500));
         const dailyNetheriteText =
           rank.dailyNetherite > 0
             ? `<div class="rank-daily-netherite-pill">${mcIcon('NETHERITE', 14)} İlk Alımda +250 ${mcIcon('NETHERITE', 14)} • Günlük +${rank.dailyNetherite} ${mcIcon('NETHERITE', 14)} &amp; +${rank.dailyEmerald || 200} ${mcIcon('EMERALD', 14)}</div>`
@@ -1023,7 +1024,7 @@
           <div class="rank-card" style="border-top: 4px solid ${escapeHtml(rank.color)};">
             <div class="rank-card-header">
               <span class="rank-card-badge" style="color: ${escapeHtml(rank.color)}">${mcIcon(
-          rank.badge,
+          rank.badge || rank.id,
           18
         )} ${escapeHtml(rank.name)}</span>
               ${isCurrent ? `<span class="rank-current-tag">MEVCUT RÜTBENİZ</span>` : ''}
@@ -1032,10 +1033,8 @@
             ${dailyNetheriteText}
 
             <div class="rank-pricing-box">
-              <div class="rank-price-main">${rank.netheritePrice} ${mcIcon('NETHERITE', 18)} Netherite</div>
-              <div class="rank-price-sub">veya ${rank.emeraldPrice.toLocaleString(
-                'tr-TR'
-              )} ${mcIcon('EMERALD', 14)} Zümrüt • ${rank.priceTry.toLocaleString('tr-TR')} ₺</div>
+              <div class="rank-price-main">${nPrice.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 18)} Netherite</div>
+              <div class="rank-price-sub">Yalnızca Netherite Bakiyesi ile satın alınır (En az 500 ${mcIcon('NETHERITE', 13)})</div>
             </div>
 
             <ul class="rank-features-list">
@@ -1050,25 +1049,18 @@
                     <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-rank="${escapeHtml(
                       rank.id
                     )}" data-pay-method="NETHERITE">
-                      ${mcIcon('NETHERITE', 15)} ${rank.netheritePrice} Netherite ile Satın Al
+                      ${mcIcon('NETHERITE', 15)} ${nPrice.toLocaleString('tr-TR')} Netherite ile Satın Al
                     </button>
-                    <button type="button" class="mc-btn mc-btn-primary mc-btn-block" data-buy-rank="${escapeHtml(
-                      rank.id
-                    )}" data-pay-method="EMERALD">
-                      ${mcIcon('EMERALD', 15)} ${rank.emeraldPrice.toLocaleString('tr-TR')} Zümrüt ile Satın Al
-                    </button>
-                    <button type="button" class="mc-btn mc-btn-secondary mc-btn-block" data-buy-rank="${escapeHtml(
-                      rank.id
-                    )}" data-pay-method="STRIPE">
-                      💳 Kart ile Al (${rank.priceTry.toLocaleString('tr-TR')} ₺)
+                    <button type="button" class="mc-btn mc-btn-secondary mc-btn-block" data-shop-cat="Netherite">
+                      💳 Netherite Bakiye Yükle
                     </button>
                   `
               }
-              <!-- #11: Arkadaşına Hediye Et Butonu -->
+              <!-- #11: Arkadaşına Hediye Et Butonu (Sadece Netherite ile) -->
               <button type="button" class="mc-btn mc-btn-gift mc-btn-block" data-gift-rank="${escapeHtml(
                 rank.id
               )}">
-                🎁 Arkadaşına Hediye Et
+                🎁 Arkadaşına Hediye Et (${nPrice.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 13)})
               </button>
             </div>
           </div>
@@ -1101,7 +1093,10 @@
       'Profile Effects': 'Profil Efekti',
       'Profil Efekti': 'Profil Efekti',
       'Special': 'Özel Ürün',
-      'Emeralds': 'Zümrüt Paketi',
+      'Netherite': 'Netherite Bakiye Paketi',
+      'Netherite Bakiye': 'Netherite Bakiye Paketi',
+      'Emeralds': 'Zümrüt Bakiye Paketi',
+      'Zümrüt Bakiye': 'Zümrüt Bakiye Paketi',
       'Cosmetics': 'Kozmetik'
     };
 
@@ -1120,7 +1115,23 @@
           ownedCosmetics.includes(item.id);
         const isEquipped = Object.values(equipped).includes(item.id);
         const rawSub = String(item.subCategory || item.category || '').trim();
-        const displayCatTag = catTagMap[rawSub] || rawSub;
+        const displayCatTag = catTagMap[rawSub] || catTagMap[item.category] || rawSub;
+
+        // Bakiye Paketleri Önizleme Etiketi (Kart ile Bakiye Satın Alma)
+        let balanceGrantPillHtml = '';
+        if (Number(item.grantNetherite || 0) > 0) {
+          balanceGrantPillHtml = `
+            <div class="rank-daily-netherite-pill" style="margin-bottom:10px;">
+              ${mcIcon('NETHERITE', 16)} <strong>+${Number(item.grantNetherite).toLocaleString('tr-TR')} Netherite Bakiye</strong> (Kart ile Bakiye Yükleme)
+            </div>
+          `;
+        } else if (Number(item.grantEmerald || 0) > 0 && item.currency === 'STRIPE') {
+          balanceGrantPillHtml = `
+            <div class="rank-daily-netherite-pill muted" style="margin-bottom:10px;">
+              ${mcIcon('EMERALD', 16)} <strong>+${Number(item.grantEmerald).toLocaleString('tr-TR')} Zümrüt Bakiye</strong> (Kart ile Bakiye Yükleme)
+            </div>
+          `;
+        }
 
         // Kozmetik Canlı Önizleme Kutusu
         let previewHtml = '';
@@ -1152,8 +1163,8 @@
           const previewInlineColor =
             isColor && cssVal && cssVal !== 'rgb-rainbow' ? `color:${escapeHtml(cssVal)};` : '';
           const previewBadgeHtml = isBadge
-            ? `<span class="custom-cosmetic-badge-pill">${replaceEmojis(
-                escapeHtml(cssVal || item.name),
+            ? `<span class="custom-cosmetic-badge-pill">${mcIcon(item.id || item.icon, 13)} ${replaceEmojis(
+                escapeHtml(String(cssVal || item.name).replace(/^[🧨⚡💎👑🔥🌟🐉🌱⛏️🏆🛡️]\s*/u, '')),
                 12
               )}</span>`
             : '';
@@ -1193,7 +1204,7 @@
             <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
               item.id
             )}" data-item-currency="STRIPE">
-              💳 ${Number(item.priceTry || item.price).toLocaleString('tr-TR')} ₺ — Satın Al (Stripe)
+              💳 Kart ile Bakiye Satın Al (${Number(item.priceTry || item.price).toLocaleString('tr-TR')} ₺)
             </button>
           `;
         } else if (item.currency === 'NETHERITE') {
@@ -1203,7 +1214,7 @@
             <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
               item.id
             )}" data-item-currency="NETHERITE">
-              ${mcIcon('NETHERITE', 15)} ${nPrice} Netherite ile Satın Al
+              ${mcIcon('NETHERITE', 15)} ${nPrice.toLocaleString('tr-TR')} Netherite ile Satın Al
             </button>
             ${
               ePrice > 0
@@ -1229,7 +1240,7 @@
                 ? `<button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-item="${escapeHtml(
                     item.id
                   )}" data-item-currency="NETHERITE">
-                    ${mcIcon('NETHERITE', 15)} ${nPrice} Netherite ile Satın Al
+                    ${mcIcon('NETHERITE', 15)} ${nPrice.toLocaleString('tr-TR')} Netherite ile Satın Al
                   </button>`
                 : ''
             }
@@ -1244,6 +1255,7 @@
             </div>
             <h4 class="shop-item-title">${escapeHtml(item.name)}</h4>
             <p class="shop-item-desc">${escapeHtml(item.description)}</p>
+            ${balanceGrantPillHtml}
             ${previewHtml}
             <div class="shop-item-actions">
               ${actionButtonsHtml}
@@ -1255,7 +1267,7 @@
   }
 
   // ==========================================
-  // #11: "🎁 ARKADAŞINA HEDİYE ET" MODAL AKIŞI
+  // #11: "🎁 ARKADAŞINA HEDİYE ET" MODAL AKIŞI (Sadece Netherite ile)
   // ==========================================
   function openGiftRankModal(rankId) {
     const { rankService } = svc();
@@ -1272,14 +1284,13 @@
     const step2 = document.getElementById('gift-step-2');
     const err1 = document.getElementById('gift-step1-error');
     const err2 = document.getElementById('gift-step2-error');
+    const nPrice = Math.max(500, Number(rank.netheritePrice || 500));
 
     if (summaryBox) {
       summaryBox.innerHTML = `
         <div class="gift-rank-pill" style="border-left: 4px solid ${escapeHtml(rank.color)}">
-          <strong>${mcIcon(rank.badge, 16)} ${escapeHtml(rank.name)} Rütbesi Hediye Paketi</strong>
-          <span>${rank.netheritePrice} ${mcIcon('NETHERITE', 14)} Netherite veya ${rank.emeraldPrice.toLocaleString(
-        'tr-TR'
-      )} ${mcIcon('EMERALD', 14)} Zümrüt</span>
+          <strong>${mcIcon(rank.badge || rank.id, 16)} ${escapeHtml(rank.name)} Rütbesi Hediye Paketi</strong>
+          <span>Yalnızca ${nPrice.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 14)} Netherite ile hediye edilir</span>
         </div>
       `;
     }
@@ -1343,20 +1354,15 @@
     const recEl = document.getElementById('gift-confirmed-recipient');
     if (recEl) recEl.textContent = recipient.username;
 
+    const nPrice = Math.max(500, Number(rank.netheritePrice || 500));
     const cNe = document.getElementById('gift-cost-netherite');
-    if (cNe) cNe.textContent = String(rank.netheritePrice);
-
-    const cEm = document.getElementById('gift-cost-emerald');
-    if (cEm) cEm.textContent = rank.emeraldPrice.toLocaleString('tr-TR');
-
-    const cTry = document.getElementById('gift-cost-try');
-    if (cTry) cTry.textContent = rank.priceTry.toLocaleString('tr-TR');
+    if (cNe) cNe.textContent = nPrice.toLocaleString('tr-TR');
 
     document.getElementById('gift-step-1')?.classList.add('hidden');
     document.getElementById('gift-step-2')?.classList.remove('hidden');
   }
 
-  function executeGiftRankPayment(paymentMethod) {
+  function executeGiftRankPayment(paymentMethod = 'NETHERITE') {
     const session = getSession();
     if (!session) return;
     const err2 = document.getElementById('gift-step2-error');
@@ -1366,18 +1372,14 @@
       const res = svc().shopService.giftRankToFriend(session, {
         friendUsername: state.giftModal.friendUsername,
         rankId: state.giftModal.rankId,
-        paymentMethod
+        paymentMethod: 'NETHERITE'
       });
 
       closeGiftRankModal();
-      if (res.stripePrepared) {
-        showToast(res.message, 'info');
-      } else {
-        showToast(
-          `${res.recipientUsername} adlı arkadaşınıza ${res.rank.name} rütbesi başarıyla hediye edildi!`,
-          'success'
-        );
-      }
+      showToast(
+        `${res.recipientUsername} adlı arkadaşınıza ${res.rank.name} rütbesi başarıyla hediye edildi!`,
+        'success'
+      );
       syncHeaderAndDrawer();
       renderShop();
     } catch (err) {
@@ -2015,7 +2017,9 @@
       bugService,
       suggestionService,
       backupService,
-      activityService
+      activityService,
+      aiQuestionService,
+      cloudSyncService
     } = svc();
 
     // 1. GÖSTERGE PANELİ (dashboard)
@@ -2027,12 +2031,27 @@
       const suggestions = suggestionService.getAllSuggestions();
       const totalEmeralds = users.reduce((sum, u) => sum + Number(u.emeraldBalance || 0), 0);
       const totalNetherites = users.reduce((sum, u) => sum + Number(u.netheriteBalance || 0), 0);
+      const aiPoolCount = aiQuestionService ? aiQuestionService.getAiQuestionPool().length : 0;
+      const hasAiKey = aiQuestionService ? aiQuestionService.hasConfiguredApiKey() : false;
 
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>📊 Gösterge Paneli</h3>
+          <div class="card-title-row">
+            <h3>📊 Gösterge Paneli</h3>
+            <div class="header-bar-actions">
+              <button type="button" id="btn-admin-cloud-sync-now" class="mc-btn mc-btn-sm mc-btn-primary">
+                ☁️ Şimdi Bulut İle Senkronize Et
+              </button>
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-admin-tab="settings">
+                🤖 Gemini API &amp; Soru Üretici (${aiPoolCount} AI Soru)
+              </button>
+              <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-admin-tab="ranks">
+                ➕ Rütbe Ekle / Yönet
+              </button>
+            </div>
+          </div>
           <div class="stats-kpi-grid">
-            <div class="stat-kpi-card"><span class="kpi-label">TOPLAM OYUNCU</span><strong class="kpi-val">${
+            <div class="stat-kpi-card"><span class="kpi-label">TOPLAM OYUNCU (BULUT)</span><strong class="kpi-val">${
               users.length
             }</strong></div>
             <div class="stat-kpi-card"><span class="kpi-label">AKTİF PARTİLER</span><strong class="kpi-val">${
@@ -2044,19 +2063,19 @@
             <div class="stat-kpi-card"><span class="kpi-label">TOPLAM NETHERITE</span><strong class="kpi-val netherite-text">${totalNetherites.toLocaleString(
               'tr-TR'
             )} ${mcIcon('NETHERITE', 16)}</strong></div>
-            <div class="stat-kpi-card"><span class="kpi-label">AÇIK DESTEK / HATA</span><strong class="kpi-val">${
+            <div class="stat-kpi-card"><span class="kpi-label">GEMINI AI SORU HAVUZU</span><strong class="kpi-val gold-text">${aiPoolCount} Soru (${
+        hasAiKey ? 'API Aktif' : 'API Yok'
+      })</strong></div>
+            <div class="stat-kpi-card"><span class="kpi-label">AÇIK DESTEK / HATA / ÖNERİ</span><strong class="kpi-val">${
               tickets.length
-            } / ${bugs.length}</strong></div>
-            <div class="stat-kpi-card"><span class="kpi-label">TOPLULUK ÖNERİLERİ</span><strong class="kpi-val">${
-              suggestions.length
-            }</strong></div>
+            } / ${bugs.length} / ${suggestions.length}</strong></div>
           </div>
         </div>
       `;
       return;
     }
 
-    // 2. OYUNCULAR (players — Arama + Detaylar + 7 Rütbe + Moderator Verme/Kaldırma + Zümrüt & Netherite Yönetimi)
+    // 2. OYUNCULAR (players — Arama + Detaylar + Rütbeler + Moderator Verme/Kaldırma + Zümrüt & Netherite Yönetimi)
     if (state.adminTab === 'players') {
       const allUsers = userService.getAllUsers();
       const q = String(state.adminPlayerSearch || '').trim().toLowerCase();
@@ -2073,11 +2092,16 @@
       container.innerHTML = `
         <div class="admin-panel-section">
           <div class="card-title-row">
-            <h3>👥 Oyuncu Yönetimi (${users.length} / ${allUsers.length} Hesap)</h3>
-            <div class="leaderboard-search-box">
-              <input type="text" id="admin-player-search" placeholder="Kullanıcı adı veya MC adı ara..." value="${escapeHtml(
-                state.adminPlayerSearch
-              )}" />
+            <h3>👥 Oyuncu Yönetimi (${users.length} / ${allUsers.length} Hesap — Bulut Senkronize)</h3>
+            <div class="header-bar-actions" style="display:flex;gap:8px;align-items:center;">
+              <button type="button" id="btn-admin-cloud-sync-now" class="mc-btn mc-btn-sm mc-btn-secondary">
+                🔄 Buluttan Yenile
+              </button>
+              <div class="leaderboard-search-box">
+                <input type="text" id="admin-player-search" placeholder="Kullanıcı adı veya MC adı ara..." value="${escapeHtml(
+                  state.adminPlayerSearch
+                )}" />
+              </div>
             </div>
           </div>
           <div class="table-responsive">
@@ -2165,56 +2189,142 @@
       return;
     }
 
-    // 3. RÜTBELER (ranks — 7 Rütbe Yapılandırması & Moderator Yetkileri)
+    // 3. RÜTBELER (ranks — Yeni Rütbe Ekleme Sistemi + Rütbe Yapılandırması & Moderator Yetkileri)
     if (state.adminTab === 'ranks') {
       const ranks = rankService.getAllRanks();
       const modPerms = authGuard.getModeratorPermissions();
+      const builtInIds = ['MEMBER', 'VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'MODERATOR', 'ADMIN'];
 
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>${mcIcon('CROWN', 18)} 7 Rütbe Hiyerarşisi (Üye, VIP, VIP+, MVIP, MVIP+, Moderator, ADMIN)</h3>
+          <h3>➕ Yeni Rütbe Ekle (Özel Rütbe Oluşturma Sistemi)</h3>
+          <p class="card-sub">
+            Mağazada yalnızca <strong>Netherite (en az 500 ⬛)</strong> ile satılacak veya özel olarak atanacak yeni bir rütbe oluşturun. Oluşturulan rütbeler tüm bilgisayarlarda anında görünür.
+          </p>
+          <form id="admin-create-rank-form" class="platform-form" style="margin-bottom:28px;">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>RÜTBE KODU (ID)</label>
+                <input type="text" id="adm-new-rank-id" placeholder="Örn: UVIP veya EFSANE" maxlength="20" required />
+              </div>
+              <div class="input-group">
+                <label>RÜTBE GÖRÜNEN ADI</label>
+                <input type="text" id="adm-new-rank-name" placeholder="Örn: Ultra VIP" maxlength="28" required />
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>NETHERITE FİYATI (EN AZ 500 ⬛)</label>
+                <input type="number" id="adm-new-rank-netherite" value="5000" min="500" required />
+              </div>
+              <div class="input-group">
+                <label>RÜTBE SIRASI (ORDER — MVIP+=5, MOD=6)</label>
+                <input type="number" id="adm-new-rank-order" value="5" min="2" max="90" required />
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>GÜNLÜK ZÜMRÜT ÖDÜLÜ</label>
+                <input type="number" id="adm-new-rank-daily-em" value="650" min="0" required />
+              </div>
+              <div class="input-group">
+                <label>GÜNLÜK NETHERITE ÖDÜLÜ</label>
+                <input type="number" id="adm-new-rank-daily-ne" value="150" min="0" required />
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>RENK (HEX) &amp; ROZET İKONU</label>
+                <div class="inline-form-row">
+                  <input type="color" id="adm-new-rank-color" value="#f43f5e" style="width:56px;height:40px;padding:2px;" />
+                  <select id="adm-new-rank-badge" style="flex:1;">
+                    <option value="👑">👑 Kral Tacı</option>
+                    <option value="🐉">🐉 Ejderha</option>
+                    <option value="💎">💎 Elmas</option>
+                    <option value="🌟">🌟 Parlayan Yıldız</option>
+                    <option value="🔥">🔥 Alev</option>
+                    <option value="⚡">⚡ Yıldırım</option>
+                  </select>
+                </div>
+              </div>
+              <div class="input-group">
+                <label>PARTİ KAPASİTESİ &amp; ZÜMRÜT ÇARPANI</label>
+                <div class="inline-form-row">
+                  <input type="number" id="adm-new-rank-party-size" value="10" min="4" max="24" placeholder="Parti Kişi" title="Maksimum Parti Üyesi" />
+                  <input type="number" step="0.05" id="adm-new-rank-multiplier" value="1.75" min="1" max="5" placeholder="Çarpan" title="Zümrüt Çarpanı" />
+                </div>
+              </div>
+            </div>
+            <div class="input-group">
+              <label>RÜTBE ÖZELLİKLERİ (VİRGÜL İLE AYIRIN)</label>
+              <input type="text" id="adm-new-rank-features" placeholder="Örn: Özel Parti Odası (10 Kişi), +650 Günlük Zümrüt, +150 Günlük Netherite, %75 Zümrüt Bonusu" />
+            </div>
+            <label class="setting-row" style="margin-bottom:12px;">
+              <span>🛒 Mağazada Oyuncular Tarafından Netherite İle Satın Alınabilsin</span>
+              <input type="checkbox" id="adm-new-rank-purchasable" checked />
+            </label>
+            <button type="submit" class="mc-btn mc-btn-gold">➕ Yeni Rütbeyi Oluştur ve Kaydet</button>
+          </form>
+
+          <h3>${mcIcon('CROWN', 18)} Mevcut Rütbe Hiyerarşisi (${ranks.length} Rütbe — Sadece Netherite İle Alım)</h3>
           <div class="table-responsive">
             <table class="mc-table">
               <thead>
                 <tr>
                   <th>Sıra</th>
                   <th>Rütbe</th>
-                  <th>Fiyat (₺)</th>
-                  <th>Zümrüt Fiyatı</th>
-                  <th>Netherite Fiyatı</th>
+                  <th>Netherite Fiyatı (Min 500)</th>
+                  <th>Günlük Zümrüt</th>
                   <th>Günlük Netherite</th>
-                  <th>Kaydet</th>
+                  <th>İşlem</th>
                 </tr>
               </thead>
               <tbody>
                 ${ranks
-                  .map(
-                    r => `
+                  .map(r => {
+                    const isCustom = !builtInIds.includes(r.id);
+                    return `
                     <tr>
                       <td>#${r.order}</td>
-                      <td><strong>${mcIcon(r.badge, 15)} ${escapeHtml(r.name)}</strong> (<code>${escapeHtml(
-                      r.id
-                    )}</code>)</td>
-                      <td><input type="number" step="0.1" id="adm-rk-try-${r.id}" value="${
-                      r.priceTry
-                    }" style="width:85px;" /></td>
-                      <td><input type="number" id="adm-rk-em-${r.id}" value="${
-                      r.emeraldPrice
-                    }" style="width:95px;" /></td>
-                      <td><input type="number" id="adm-rk-ne-${r.id}" value="${
-                      r.netheritePrice
-                    }" style="width:95px;" /></td>
-                      <td><input type="number" id="adm-rk-daily-${r.id}" value="${
-                      r.dailyNetherite
-                    }" style="width:85px;" /></td>
                       <td>
-                        <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-save-rank="${escapeHtml(
-                          r.id
-                        )}">Kaydet</button>
+                        <strong style="color:${escapeHtml(r.color || '#fff')}">${mcIcon(
+                      r.badge || r.id,
+                      15
+                    )} ${escapeHtml(r.name)}</strong>
+                        (<code>${escapeHtml(r.id)}</code>)
+                      </td>
+                      <td>
+                        <input type="number" id="adm-rk-ne-${escapeHtml(r.id)}" value="${
+                      r.netheritePrice
+                    }" min="${r.purchasable ? 500 : 0}" style="width:105px;" />
+                      </td>
+                      <td>
+                        <input type="number" id="adm-rk-daily-em-${escapeHtml(r.id)}" value="${
+                      r.dailyEmerald ?? 50
+                    }" min="0" style="width:95px;" />
+                      </td>
+                      <td>
+                        <input type="number" id="adm-rk-daily-${escapeHtml(r.id)}" value="${
+                      r.dailyNetherite
+                    }" min="0" style="width:95px;" />
+                      </td>
+                      <td>
+                        <div class="admin-action-btns">
+                          <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-save-rank="${escapeHtml(
+                            r.id
+                          )}">Kaydet</button>
+                          ${
+                            isCustom
+                              ? `<button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-admin-delete-rank="${escapeHtml(
+                                  r.id
+                                )}">Sil</button>`
+                              : ''
+                          }
+                        </div>
                       </td>
                     </tr>
-                  `
-                  )
+                  `;
+                  })
                   .join('')}
               </tbody>
             </table>
@@ -2881,11 +2991,81 @@
       return;
     }
 
-    // 15. AYARLAR (settings)
+    // 15. AYARLAR (settings — Gemini API Key & Otomatik Soru Üretici + Bulut Senkronizasyonu + Genel Ayarlar)
     if (state.adminTab === 'settings') {
       const pSettings = backupService.getPlatformSettings();
+      const aiCfg = aiQuestionService
+        ? aiQuestionService.getAdminViewConfig(session)
+        : { apiKey: '', enabled: true, autoGenerateBeforeMatch: true, model: 'gemini-2.5-flash', batchSize: 15, poolCount: 0 };
+
       container.innerHTML = `
         <div class="admin-panel-section">
+          <h3>🤖 Yapay Zeka (Gemini API) &amp; Otomatik Soru Üretici</h3>
+          <p class="card-sub">
+            Buraya <strong>yalnızca kendi Gemini API Anahtarınızı</strong> girmeniz yeterlidir. Normal oyuncuların hiçbir API anahtarı girmesine gerek yoktur; sistem sizin anahtarınızla her maçta farklı ve tekrarsız Minecraft soruları üretip ortak bulut havuzuna kaydeder.
+          </p>
+          <form id="admin-ai-config-form" class="platform-form" style="margin-bottom: 24px;">
+            <div class="input-group">
+              <label>YÖNETİCİ GEMINI API KEY (SADECE YÖNETİCİ GÖRÜR, OYUNCULAR GİRMEZ)</label>
+              <input type="password" id="adm-ai-api-key" value="${escapeHtml(
+                aiCfg.apiKey || ''
+              )}" placeholder="AIzaSy..." autocomplete="off" />
+              <span class="input-hint">Durum: <strong>${
+                aiCfg.hasKey ? '✓ API Anahtarı Kayıtlı ve Aktif' : '⚠️ Henüz API Anahtarı Girilmedi'
+              }</strong> • Havuzdaki AI Soru Sayısı: <strong>${aiCfg.poolCount || 0}</strong></span>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>GEMINI MODELİ</label>
+                <select id="adm-ai-model">
+                  <option value="gemini-2.5-flash" ${
+                    aiCfg.model === 'gemini-2.5-flash' ? 'selected' : ''
+                  }>gemini-2.5-flash (Önerilen Hızlı &amp; Akıllı)</option>
+                  <option value="gemini-2.0-flash" ${
+                    aiCfg.model === 'gemini-2.0-flash' ? 'selected' : ''
+                  }>gemini-2.0-flash</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>TEK SEFERDE ÜRETİLECEK SORU SAYISI</label>
+                <input type="number" id="adm-ai-batch-size" value="${
+                  aiCfg.batchSize || 15
+                }" min="5" max="30" />
+              </div>
+            </div>
+            <div class="settings-toggle-list" style="margin-bottom: 14px;">
+              <label class="setting-row">
+                <span>🤖 Gemini AI Soru Havuzunu Yarışmalarda Aktif Kullan</span>
+                <input type="checkbox" id="adm-ai-enabled" ${aiCfg.enabled !== false ? 'checked' : ''} />
+              </label>
+              <label class="setting-row">
+                <span>⚡ Oyuncular Yarışmaya Başladığında Otomatik Yeni Soru Üret</span>
+                <input type="checkbox" id="adm-ai-auto-match" ${
+                  aiCfg.autoGenerateBeforeMatch !== false ? 'checked' : ''
+                } />
+              </label>
+            </div>
+            <div class="header-bar-actions" style="display:flex;flex-wrap:wrap;gap:10px;">
+              <button type="submit" class="mc-btn mc-btn-primary">💾 Gemini API Ayarlarını Kaydet</button>
+              <button type="button" id="btn-admin-generate-ai-questions" class="mc-btn mc-btn-gold">
+                ⚡ Şimdi Yapay Zeka İle Yeni Sorular Üret
+              </button>
+              <button type="button" id="btn-admin-clear-ai-questions" class="mc-btn mc-btn-danger">
+                🗑️ AI Soru Havuzunu Temizle (${aiCfg.poolCount || 0})
+              </button>
+            </div>
+          </form>
+
+          <h3>☁️ Çoklu Bilgisayar Bulut Senkronizasyonu</h3>
+          <p class="card-sub">
+            Farklı bilgisayarlardan veya tarayıcılardan açılan hesaplar, liderlik tablosu, rütbeler ve AI soruları otomatik olarak ortak bulut veritabanı ile senkronize edilir.
+          </p>
+          <div class="header-bar-actions" style="margin-bottom: 24px;">
+            <button type="button" id="btn-admin-cloud-sync-now" class="mc-btn mc-btn-primary">
+              🔄 Şimdi Bulut İle Senkronize Et
+            </button>
+          </div>
+
           <h3>⚙️ Platform Genel Ayarları</h3>
           <form id="admin-platform-settings-form" class="platform-form">
             <div class="input-group">
@@ -2961,7 +3141,7 @@
       renderNotifications();
     });
 
-    // Hediye Modalı (#11)
+    // Hediye Modalı (#11 — Sadece Netherite ile Hediye)
     document.getElementById('btn-close-gift-modal')?.addEventListener('click', closeGiftRankModal);
     document.getElementById('btn-gift-cancel-1')?.addEventListener('click', closeGiftRankModal);
     document.getElementById('btn-gift-continue')?.addEventListener('click', proceedGiftRankStep2);
@@ -2973,11 +3153,13 @@
       .getElementById('btn-gift-pay-netherite')
       ?.addEventListener('click', () => executeGiftRankPayment('NETHERITE'));
     document
-      .getElementById('btn-gift-pay-emerald')
-      ?.addEventListener('click', () => executeGiftRankPayment('EMERALD'));
-    document
-      .getElementById('btn-gift-pay-stripe')
-      ?.addEventListener('click', () => executeGiftRankPayment('STRIPE'));
+      .getElementById('btn-gift-open-netherite-store')
+      ?.addEventListener('click', () => {
+        closeGiftRankModal();
+        state.shopCategory = 'Netherite';
+        navigateToScreen('shop');
+        renderShop();
+      });
 
     // Leaderboard Sıfırlama Modalı (#18)
     document
@@ -3219,7 +3401,7 @@
     });
 
     // Genel Tıklama Delegasyonu (Navigasyon, Mağaza, Bildirimler, Parti Daveti, Admin İşlemleri)
-    document.addEventListener('click', e => {
+    document.addEventListener('click', async e => {
       // 1. Ekran Navigasyonu ([data-nav-screen])
       const navTrigger = e.target.closest('[data-nav-screen]');
       if (navTrigger) {
@@ -3251,18 +3433,15 @@
         return;
       }
 
-      // 4. Rütbe Satın Alma ([data-buy-rank])
+      // 4. Rütbe Satın Alma ([data-buy-rank] — Sadece Netherite)
       const buyRankBtn = e.target.closest('[data-buy-rank]');
       if (buyRankBtn) {
         const session = getSession();
         if (!session) return;
         const rankId = buyRankBtn.getAttribute('data-buy-rank');
-        const payMethod = buyRankBtn.getAttribute('data-pay-method') || 'NETHERITE';
         try {
-          const res = svc().shopService.purchaseRankForSelf(session, rankId, payMethod);
-          if (res.stripePrepared) {
-            showToast(res.message, 'info');
-          } else if (res.firstVipPlusBonusGranted) {
+          const res = svc().shopService.purchaseRankForSelf(session, rankId, 'NETHERITE');
+          if (res.firstVipPlusBonusGranted) {
             showToast(
               `🎉 Tebrikler! ${res.rank.name} rütbesine yükseldiniz ve ilk VIP+ ve üzeri alımınıza özel +250 Netherite kazandınız!`,
               'success'
@@ -3486,6 +3665,61 @@
         return;
       }
 
+      if (e.target.closest('#btn-admin-cloud-sync-now')) {
+        showToast('☁️ Bulut veritabanı ile senkronize ediliyor...', 'info');
+        try {
+          await svc().cloudSyncService?.pushNow();
+          await svc().cloudSyncService?.pullAndMerge(true);
+          showToast('✓ Tüm hesaplar, liderlik tablosu ve rütbeler bulutla senkronize edildi!', 'success');
+          syncHeaderAndDrawer();
+          renderAdmin();
+        } catch (err) {
+          showToast('Bulut senkronizasyonu sırasında hata oluştu.', 'error');
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-admin-generate-ai-questions')) {
+        const genBtn = e.target.closest('#btn-admin-generate-ai-questions');
+        try {
+          const keyInput = document.getElementById('adm-ai-api-key');
+          if (keyInput && keyInput.value.trim()) {
+            svc().aiQuestionService.updateConfig(session, {
+              apiKey: keyInput.value.trim(),
+              model: document.getElementById('adm-ai-model')?.value || 'gemini-2.5-flash',
+              batchSize: Number(document.getElementById('adm-ai-batch-size')?.value || 15),
+              enabled: document.getElementById('adm-ai-enabled')?.checked !== false,
+              autoGenerateBeforeMatch: document.getElementById('adm-ai-auto-match')?.checked !== false
+            });
+          }
+          if (genBtn) genBtn.disabled = true;
+          showToast('🤖 Gemini AI ile yeni ve benzersiz Minecraft soruları üretiliyor...', 'info');
+          const batchCount = Number(document.getElementById('adm-ai-batch-size')?.value || 15);
+          const res = await svc().aiQuestionService.generateQuestionsBatch({ count: batchCount });
+          showToast(
+            `🎉 ${res.addedCount} yeni AI sorusu üretildi! (Toplam AI Havuzu: ${res.totalPool})`,
+            'success'
+          );
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message || 'AI soru üretimi başarısız oldu.', 'error');
+        } finally {
+          if (genBtn) genBtn.disabled = false;
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-admin-clear-ai-questions')) {
+        try {
+          svc().aiQuestionService.clearAiQuestions(session);
+          showToast('AI soru havuzu temizlendi.', 'info');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
       const modToggleBtn = e.target.closest('[data-admin-toggle-mod]');
       if (modToggleBtn) {
         const targetUser = modToggleBtn.getAttribute('data-admin-toggle-mod');
@@ -3592,12 +3826,24 @@
         const rId = saveRankBtn.getAttribute('data-admin-save-rank');
         try {
           svc().rankService.updateRankConfig(session, rId, {
-            priceTry: Number(document.getElementById(`adm-rk-try-${rId}`)?.value || 0),
-            emeraldPrice: Number(document.getElementById(`adm-rk-em-${rId}`)?.value || 0),
-            netheritePrice: Number(document.getElementById(`adm-rk-ne-${rId}`)?.value || 0),
+            netheritePrice: Number(document.getElementById(`adm-rk-ne-${rId}`)?.value || 500),
+            dailyEmerald: Number(document.getElementById(`adm-rk-daily-em-${rId}`)?.value || 50),
             dailyNetherite: Number(document.getElementById(`adm-rk-daily-${rId}`)?.value || 0)
           });
           showToast('Rütbe yapılandırması kaydedildi.', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const delRankBtn = e.target.closest('[data-admin-delete-rank]');
+      if (delRankBtn) {
+        const rId = delRankBtn.getAttribute('data-admin-delete-rank');
+        try {
+          svc().rankService.adminDeleteRank(session, rId);
+          showToast(`${rId} rütbesi silindi.`, 'info');
           renderAdmin();
         } catch (err) {
           showToast(err.message, 'error');
@@ -3792,12 +4038,54 @@
       }
     });
 
-    // Admin Form Gönderimleri (Özel Bakiye, Mağaza Ürünü, Ekonomi, Stripe, Bildirim, Genel Ayarlar)
+    // Admin Form Gönderimleri (Yeni Rütbe, Gemini AI, Özel Bakiye, Mağaza Ürünü, Ekonomi, Stripe, Bildirim, Genel Ayarlar)
     document.addEventListener('submit', e => {
       const session = getSession();
       if (!session) return;
 
-      if (e.target.id === 'admin-custom-currency-form') {
+      if (e.target.id === 'admin-create-rank-form') {
+        e.preventDefault();
+        try {
+          const featuresRaw = document.getElementById('adm-new-rank-features')?.value || '';
+          const features = featuresRaw
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+          const created = svc().rankService.adminCreateRank(session, {
+            id: document.getElementById('adm-new-rank-id')?.value || '',
+            name: document.getElementById('adm-new-rank-name')?.value || '',
+            netheritePrice: Number(document.getElementById('adm-new-rank-netherite')?.value || 500),
+            order: Number(document.getElementById('adm-new-rank-order')?.value || 5),
+            dailyEmerald: Number(document.getElementById('adm-new-rank-daily-em')?.value || 250),
+            dailyNetherite: Number(document.getElementById('adm-new-rank-daily-ne')?.value || 50),
+            color: document.getElementById('adm-new-rank-color')?.value || '#f43f5e',
+            badge: document.getElementById('adm-new-rank-badge')?.value || '👑',
+            maxPartySize: Number(document.getElementById('adm-new-rank-party-size')?.value || 8),
+            emeraldMultiplier: Number(document.getElementById('adm-new-rank-multiplier')?.value || 1.5),
+            purchasable: document.getElementById('adm-new-rank-purchasable')?.checked !== false,
+            features
+          });
+          showToast(`👑 "${created.name}" (${created.id}) rütbesi başarıyla oluşturuldu!`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-ai-config-form') {
+        e.preventDefault();
+        try {
+          svc().aiQuestionService.updateConfig(session, {
+            apiKey: document.getElementById('adm-ai-api-key')?.value || '',
+            model: document.getElementById('adm-ai-model')?.value || 'gemini-2.5-flash',
+            batchSize: Number(document.getElementById('adm-ai-batch-size')?.value || 15),
+            enabled: document.getElementById('adm-ai-enabled')?.checked !== false,
+            autoGenerateBeforeMatch: document.getElementById('adm-ai-auto-match')?.checked !== false
+          });
+          showToast('🤖 Gemini API Anahtarı ve Soru Üretici ayarları kaydedildi!', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-custom-currency-form') {
         e.preventDefault();
         try {
           const targetUser = document.getElementById('adm-cur-username')?.value || '';
@@ -3897,6 +4185,21 @@
           showToast('Platform ayarları güncellendi.', 'success');
         } catch (err) {
           showToast(err.message, 'error');
+        }
+      }
+    });
+
+    // Çoklu Bilgisayar Bulut Senkronizasyonu geldiğinde ekranı canlı yenile
+    window.addEventListener('mcm:cloud-synced', () => {
+      syncHeaderAndDrawer();
+      if (state.currentScreen === 'leaderboard') renderLeaderboard();
+      else if (state.currentScreen === 'shop') renderShop();
+      else if (state.currentScreen === 'profile') renderProfile();
+      else if (state.currentScreen === 'party') renderParty();
+      else if (state.currentScreen === 'admin') {
+        const activeTag = document.activeElement?.tagName;
+        if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && activeTag !== 'SELECT') {
+          renderAdmin();
         }
       }
     });

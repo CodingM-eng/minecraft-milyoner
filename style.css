@@ -6579,3 +6579,30 @@ body.theme-mc-light {
   color: #fca5a5 !important;
 }
 
+/* Yeni Ek Mağaza Kozmetik Çerçeve ve Efekt Sınıfları */
+.frame-gold-royal,
+.frame-gold-royal img {
+  border: 3px solid #fbbf24 !important;
+  box-shadow: 0 0 14px rgba(251, 191, 36, 0.75), inset 0 0 8px rgba(251, 191, 36, 0.35) !important;
+}
+
+.frame-redstone-pulse,
+.frame-redstone-pulse img {
+  border: 3px solid #ef4444 !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.8), inset 0 0 8px rgba(239, 68, 68, 0.4) !important;
+  animation: pulseHeart 1.6s ease-in-out infinite;
+}
+
+.effect-emerald-glow {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24), rgba(5, 150, 105, 0.1), rgba(15, 23, 42, 0.92)) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.32), inset 0 0 18px rgba(16, 185, 129, 0.15) !important;
+}
+
+.effect-nether-storm {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), rgba(185, 28, 28, 0.18), rgba(15, 23, 42, 0.94)) !important;
+  border-color: #f97316 !important;
+  box-shadow: 0 0 26px rgba(249, 115, 22, 0.35), inset 0 0 20px rgba(239, 68, 68, 0.18) !important;
+}
+
+
