@@ -387,7 +387,8 @@
         canInvitePlayers: isRanked,
         maxPartySize: rankId === 'ADMIN' ? 999 : isRanked ? 8 : 0,
         emeraldMultiplier: rankId === 'ADMIN' ? 3.0 : isRanked ? 1.5 : 1.0,
-        dailyNetherite: ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rankId) ? 15 : 0
+        dailyEmerald: rankId === 'ADMIN' ? 1000 : isRanked ? 100 : 50,
+        dailyNetherite: ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rankId) ? 25 : 0
       };
     },
 
@@ -655,7 +656,24 @@
   const userService = {
     getAllUsers() {
       const list = storage.get(STORAGE_KEYS.USERS, []);
-      return Array.isArray(list) ? list.filter(u => !u.isDemo) : [];
+      if (!Array.isArray(list)) return [];
+      const cleanList = list.filter(u => !u.isDemo);
+      let mutated = false;
+      cleanList.forEach(u => {
+        if (!u.vipPlusBonusRuleMigrated) {
+          const rId = normalizeRankId(u.rank || u.role || 'MEMBER');
+          if (!['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rId) && u.initialNetheriteBonusClaimed) {
+            u.netheriteBalance = Math.max(0, Number(u.netheriteBalance || 0) - 250);
+            u.initialNetheriteBonusClaimed = false;
+          }
+          u.vipPlusBonusRuleMigrated = true;
+          mutated = true;
+        }
+      });
+      if (mutated) {
+        storage.set(STORAGE_KEYS.USERS, cleanList);
+      }
+      return cleanList;
     },
 
     _saveAllUsers(users) {
@@ -2017,7 +2035,7 @@
     getPlatformSettings() {
       return storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {
         siteTitle: 'MC Milyoner Olmak İster',
-        announcementText: 'Yeni Sezon Başladı! Ücretsiz kayıt ol ve +250 Netherite kazan!'
+        announcementText: 'Yeni Sezon Başladı! Her gün ücretsiz Günlük Zümrüt al, ilk VIP+ ve üzeri alımda +250 Netherite kazan!'
       });
     },
 

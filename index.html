@@ -12,7 +12,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=8.0" />
 </head>
 
 <body>
@@ -185,7 +185,7 @@
         <button type="button" id="header-netherite-pill" class="netherite-balance-pill hidden" data-nav-screen="shop"
           title="Mağazayı Aç (Netherite Bakiyesi)">
           <span class="currency-svg-wrap" data-mc-icon="netherite"></span>
-          <span id="header-netherite-count">250</span>
+          <span id="header-netherite-count">0</span>
         </button>
 
         <!-- Aktif Kullanıcı Rozeti -->
@@ -237,7 +237,7 @@
               </span>
               <span class="drawer-netherite-balance">
                 <span class="currency-svg-wrap" data-mc-icon="netherite"></span>
-                <strong id="drawer-netherite-count">250</strong> Netherite
+                <strong id="drawer-netherite-count">0</strong> Netherite
               </span>
             </div>
           </div>
@@ -341,13 +341,13 @@
           </button>
         </div>
 
-        <!-- Günlük Netherite Ödül Kutusu (#13: VIP+, MVIP, MVIP+ için) -->
+        <!-- Günlük Ödül Kutusu (Tüm üyeler için Zümrüt + VIP+, MVIP, MVIP+ için Netherite) -->
         <div id="welcome-daily-netherite-card" class="daily-netherite-banner">
           <div class="daily-netherite-left">
             <span class="currency-svg-wrap currency-svg-lg" data-mc-icon="netherite"></span>
             <div>
-              <strong id="welcome-netherite-title">Günlük Netherite Ödülü</strong>
-              <p id="welcome-netherite-desc">VIP+, MVIP ve MVIP+ üyeler her 24 saatte bir ücretsiz Netherite kazanır!</p>
+              <strong id="welcome-netherite-title">Günlük Rütbe Ödülü (Zümrüt &amp; Netherite)</strong>
+              <p id="welcome-netherite-desc">Tüm üyeler her gün rütbelerine göre ücretsiz Zümrüt, VIP+ ve üzeri üyeler ek olarak günlük Netherite (25 / 50 / 100 ⬛) ve ilk VIP+ alımında +250 ⬛ kazanır!</p>
             </div>
           </div>
           <div class="daily-netherite-right">
@@ -369,7 +369,7 @@
           </div>
           <div class="stat-pill">
             <span class="stat-label">NETHERITE</span>
-            <span class="stat-val netherite-text" id="stat-netherite-balance">250</span>
+            <span class="stat-val netherite-text" id="stat-netherite-balance">0</span>
           </div>
           <div class="stat-pill">
             <span class="stat-label">EKSTRA CAN</span>
@@ -599,7 +599,7 @@
               </div>
               <div class="metric-box">
                 <span class="metric-label">NETHERITE</span>
-                <strong class="metric-value netherite-text" id="profile-netherite-balance">250</strong>
+                <strong class="metric-value netherite-text" id="profile-netherite-balance">0</strong>
               </div>
               <div class="metric-box">
                 <span class="metric-label">TOPLAM PUAN</span>
@@ -611,10 +611,10 @@
               </div>
             </div>
 
-            <!-- Günlük Netherite Ödül Durumu (#13) -->
+            <!-- Günlük Rütbe Ödül Durumu (#13) -->
             <div class="profile-daily-netherite-box" id="profile-daily-netherite-box">
               <div class="pdn-info">
-                <strong>Günlük Netherite Ödülü</strong>
+                <strong>Günlük Rütbe Ödülü (Zümrüt &amp; Netherite)</strong>
                 <span id="profile-daily-netherite-status">Kontrol ediliyor...</span>
               </div>
               <button type="button" id="btn-profile-claim-netherite" class="mc-btn mc-btn-sm mc-btn-gold">
@@ -700,7 +700,7 @@
             </div>
             <div class="shop-currency-chip netherite-chip">
               <span class="currency-svg-wrap" data-mc-icon="netherite"></span>
-              <span>Netherite: <strong id="shop-netherite-balance">250</strong></span>
+              <span>Netherite: <strong id="shop-netherite-balance">0</strong></span>
             </div>
             <div class="shop-currency-chip life-chip">
               <span>❤️ Ekstra Can: <strong id="shop-extra-lives">0 / 5</strong></span>
@@ -711,17 +711,17 @@
           </div>
         </div>
 
-        <!-- Günlük Netherite Ödül Çubuğu (#13) -->
+        <!-- Günlük Rütbe Ödül Çubuğu (#13) -->
         <div class="shop-daily-netherite-bar" id="shop-daily-netherite-bar">
           <div class="sdn-left">
             <span class="currency-svg-wrap currency-svg-lg" data-mc-icon="netherite"></span>
             <div>
-              <strong>Günlük Netherite Ödülü (VIP+ / MVIP / MVIP+)</strong>
+              <strong>Günlük Rütbe Ödülü (Üye/VIP Zümrüt + VIP+/MVIP/MVIP+ Zümrüt &amp; Netherite)</strong>
               <p id="shop-daily-netherite-text">Durum kontrol ediliyor...</p>
             </div>
           </div>
           <button type="button" id="btn-shop-claim-netherite" class="mc-btn mc-btn-sm mc-btn-gold">
-            Günlük Netherite Al
+            Günlük Ödül Al
           </button>
         </div>
 
@@ -1338,12 +1338,12 @@
   </div>
 
   <!-- Servis Katmanları ve Uygulama Kodları -->
-  <script src="questions.js"></script>
-  <script src="audio.js"></script>
-  <script src="services.js"></script>
-  <script src="economy.js"></script>
-  <script src="platform.js"></script>
-  <script src="app.js"></script>
+  <script src="questions.js?v=8.0"></script>
+  <script src="audio.js?v=8.0"></script>
+  <script src="services.js?v=8.0"></script>
+  <script src="economy.js?v=8.0"></script>
+  <script src="platform.js?v=8.0"></script>
+  <script src="app.js?v=8.0"></script>
 </body>
 
 </html>

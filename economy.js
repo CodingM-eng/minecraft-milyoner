@@ -20,8 +20,8 @@
   'use strict';
 
   const STORAGE_KEYS = {
-    RANKS: 'mc_millionaire_tr_ranks_v6',
-    ECONOMY_SETTINGS: 'mc_millionaire_tr_economy_settings_v6',
+    RANKS: 'mc_millionaire_tr_ranks_v8',
+    ECONOMY_SETTINGS: 'mc_millionaire_tr_economy_settings_v8',
     TRANSACTIONS: 'mc_millionaire_tr_emerald_tx_v6',
     NETHERITE_TX: 'mc_millionaire_tr_netherite_tx_v6',
     SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v6',
@@ -1332,9 +1332,18 @@
 
     getSettings() {
       this.init();
+      const stored = safeRead(STORAGE_KEYS.ECONOMY_SETTINGS, DEFAULT_ECONOMY_SETTINGS) || {};
       return {
         ...DEFAULT_ECONOMY_SETTINGS,
-        ...safeRead(STORAGE_KEYS.ECONOMY_SETTINGS, DEFAULT_ECONOMY_SETTINGS)
+        ...stored,
+        dailyEmeraldRewards: {
+          ...DEFAULT_ECONOMY_SETTINGS.dailyEmeraldRewards,
+          ...(stored.dailyEmeraldRewards || {})
+        },
+        dailyNetheriteRewards: {
+          ...DEFAULT_ECONOMY_SETTINGS.dailyNetheriteRewards,
+          ...(stored.dailyNetheriteRewards || {})
+        }
       };
     },
 
