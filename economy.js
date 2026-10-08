@@ -18,15 +18,28 @@
   const { authGuard, activityService, userService, paymentService } = window.MCMServices;
 
   const ECON_KEYS = {
-    CONFIG: 'mcm_econ_config_v3',
-    ACCOUNTS: 'mcm_econ_accounts_v2',
-    TRANSACTIONS: 'mcm_econ_transactions_v2',
-    SHOP_ITEMS: 'mcm_econ_shop_items_v4',
-    RANKS: 'mcm_econ_ranks_v4',
-    PURCHASES: 'mcm_econ_purchases_v2',
-    EXTRA_LIVES: 'mcm_econ_extralives_v2',
-    ACHIEVEMENTS: 'mcm_econ_achievements_v2'
+    CONFIG: 'mcm_econ_config_v5_clean',
+    ACCOUNTS: 'mcm_econ_accounts_v5_clean',
+    TRANSACTIONS: 'mcm_econ_transactions_v5_clean',
+    SHOP_ITEMS: 'mcm_econ_shop_items_v5_clean',
+    RANKS: 'mcm_econ_ranks_v5_clean',
+    PURCHASES: 'mcm_econ_purchases_v5_clean',
+    EXTRA_LIVES: 'mcm_econ_extralives_v5_clean',
+    ACHIEVEMENTS: 'mcm_econ_achievements_v5_clean'
   };
+
+  // Purge legacy demo economy storage keys on startup
+  try {
+    [
+      'mcm_econ_accounts_v2',
+      'mcm_econ_transactions_v2',
+      'mcm_econ_shop_items_v4',
+      'mcm_econ_ranks_v4',
+      'mcm_econ_purchases_v2',
+      'mcm_econ_extralives_v2',
+      'mcm_econ_achievements_v2'
+    ].forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
 
   // In-memory transaction locks to prevent double-click / race conditions
   const activeLocks = new Set();
@@ -195,14 +208,14 @@
   // ==========================================
   // 2. DATA-DRIVEN RANK & PERMISSIONS SYSTEM (Sections 5, 6, 7, 8, 9, 10, 13, 26)
   // ==========================================
-  // Ranks: PLAYER, VIP, VIP+, MVP, MVP+, ELITE, LEGEND, CHAMPION, MILLIONAIRE (+ ADMIN)
+  // Ranks: PLAYER, VIP, VIP+, MVP, MVP+, MVIP, MVIP+, ELITE, LEGEND, CHAMPION, MILLIONAIRE (+ ADMIN)
   const DEFAULT_RANKS = [
     {
       id: 'PLAYER',
-      name: 'PLAYER',
-      displayName: 'Player',
-      badge: '⛏️ PLAYER',
-      prefix: '[PLAYER]',
+      name: 'OYUNCU',
+      displayName: 'Oyuncu',
+      badge: '⛏️ OYUNCU',
+      prefix: '[OYUNCU]',
       color: '#a6b4d0',
       gradient: 'linear-gradient(90deg, #94a3b8, #cbd5e1)',
       permissions: {
@@ -218,7 +231,7 @@
         rgbName: false,
         profileEffects: false
       },
-      benefits: ['Join Parties', 'Emerald Shop Access', 'Standard Leaderboard'],
+      benefits: ['Partilere Katılma', 'Zümrüt Mağazası Erişimi', 'Standart Liderlik Tablosu'],
       emeraldBonus: 1.0,
       priorityLevel: 'NORMAL',
       price: 0,
@@ -250,11 +263,11 @@
         profileEffects: true
       },
       benefits: [
-        'Create Parties (Up to 4 Players)',
-        'Invite Players',
-        '1.25x Emerald Bonus Multiplier',
-        'HIGH Priority Support, Bugs & Suggestions',
-        'RGB Username & VIP Badge'
+        'Parti Oluşturma (4 Oyuncuya Kadar)',
+        'Oyuncu Davet Etme',
+        '1.25x Zümrüt Çarpanı',
+        'Yüksek Öncelikli Destek, Hata & Öneri',
+        'RGB Kullanıcı Adı & VIP Rozeti'
       ],
       emeraldBonus: 1.25,
       priorityLevel: 'HIGH',
@@ -324,11 +337,11 @@
         profileEffects: true
       },
       benefits: [
-        'Everything in VIP+',
-        'Create Parties (Up to 8 Players)',
-        '1.75x Emerald Bonus Multiplier',
-        'VERY HIGH Priority Support, Bugs & Suggestions',
-        'Exclusive MVP Prefix & Diamond Border'
+        'VIP+ paketindeki tüm avantajlar',
+        'Parti Oluşturma (8 Oyuncuya Kadar)',
+        '1.75x Zümrüt Çarpanı',
+        'Çok Yüksek Öncelikli Destek, Hata & Öneri',
+        'Özel MVP Ön Eki & Elmas Çerçeve'
       ],
       emeraldBonus: 1.75,
       priorityLevel: 'VERY HIGH',
@@ -361,16 +374,90 @@
         profileEffects: true
       },
       benefits: [
-        'Everything in MVP',
-        'Create Parties (Up to 10 Players)',
-        '2.00x Emerald Bonus Multiplier',
-        'VERY HIGH Priority Queue',
-        'Animated Profile Effects & MVP+ Badge'
+        'MVP paketindeki tüm avantajlar',
+        'Parti Oluşturma (10 Oyuncuya Kadar)',
+        '2.00x Zümrüt Çarpanı',
+        'Çok Yüksek Öncelikli Kuyruk',
+        'Animasyonlu Profil Efektleri & 🌟 MVP+ Rozeti'
       ],
       emeraldBonus: 2.0,
       priorityLevel: 'VERY HIGH',
       price: 750,
       emeraldPrice: 3750,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
+      grantsVip: true,
+      enabled: true
+    },
+    {
+      id: 'MVIP',
+      name: 'MVIP',
+      displayName: 'MVIP',
+      badge: '💎 MVIP',
+      prefix: '[MVIP]',
+      color: '#17dd62',
+      gradient: 'linear-gradient(90deg, #17dd62, #00f5d4)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 12,
+        emeraldMultiplier: 2.25,
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
+        maxExtraLives: 9,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'MVP+ paketindeki tüm avantajlar',
+        'Parti Oluşturma (12 Oyuncuya Kadar)',
+        '2.25x Zümrüt Çarpanı',
+        'Çok Yüksek Öncelikli Destek, Hata & Öneri',
+        'Zümrüt Yeşili 💎 MVIP Rozeti & Kozmetikler'
+      ],
+      emeraldBonus: 2.25,
+      priorityLevel: 'VERY HIGH',
+      price: 900,
+      emeraldPrice: 4500,
+      currency: 'EMERALD',
+      duration: 'LIFETIME',
+      grantsVip: true,
+      enabled: true
+    },
+    {
+      id: 'MVIP_PLUS',
+      name: 'MVIP+',
+      displayName: 'MVIP+',
+      badge: '🔥 MVIP+',
+      prefix: '[MVIP+]',
+      color: '#f97316',
+      gradient: 'linear-gradient(90deg, #17dd62, #ffbe2e, #f97316)',
+      permissions: {
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 16,
+        emeraldMultiplier: 2.5,
+        supportPriority: 'VERY HIGH',
+        bugPriority: 'VERY HIGH',
+        suggestionPriority: 'VERY HIGH',
+        maxExtraLives: 10,
+        cosmetics: true,
+        rgbName: true,
+        profileEffects: true
+      },
+      benefits: [
+        'MVIP paketindeki tüm avantajlar',
+        'Parti Oluşturma (16 Oyuncuya Kadar)',
+        '2.50x Zümrüt Çarpanı',
+        'Çok Yüksek Öncelikli VIP+ Destek Hattı',
+        'Efsanevi 🔥 MVIP+ Rozeti & RGB İsim'
+      ],
+      emeraldBonus: 2.5,
+      priorityLevel: 'VERY HIGH',
+      price: 1100,
+      emeraldPrice: 5500,
       currency: 'EMERALD',
       duration: 'LIFETIME',
       grantsVip: true,
@@ -398,10 +485,10 @@
         profileEffects: true
       },
       benefits: [
-        'Create Parties (Up to 12 Players)',
-        '2.25x Emerald Bonus Multiplier',
-        'VERY HIGH Priority Queue',
-        'Amethyst ELITE Badge & RGB Cosmetics'
+        'Parti Oluşturma (12 Oyuncuya Kadar)',
+        '2.25x Zümrüt Çarpanı',
+        'Çok Yüksek Öncelikli Kuyruk',
+        'Ametist ⚡ ELITE Rozeti & RGB Kozmetikler'
       ],
       emeraldBonus: 2.25,
       priorityLevel: 'VERY HIGH',
@@ -434,10 +521,10 @@
         profileEffects: true
       },
       benefits: [
-        'Create Parties (Up to 14 Players)',
-        '2.50x Emerald Bonus Multiplier',
-        'VERY HIGH Priority Queue',
-        'Crimson 🔱 LEGEND Badge'
+        'Parti Oluşturma (14 Oyuncuya Kadar)',
+        '2.50x Zümrüt Çarpanı',
+        'Çok Yüksek Öncelikli Kuyruk',
+        'Kızıl 🔱 LEGEND Rozeti'
       ],
       emeraldBonus: 2.5,
       priorityLevel: 'VERY HIGH',
@@ -470,10 +557,10 @@
         profileEffects: true
       },
       benefits: [
-        'Create Parties (Up to 16 Players)',
-        '2.75x Emerald Bonus Multiplier',
-        'VERY HIGH Priority Queue',
-        'Golden 🏆 CHAMPION Tournament Badge'
+        'Parti Oluşturma (16 Oyuncuya Kadar)',
+        '2.75x Zümrüt Çarpanı',
+        'Çok Yüksek Öncelikli Kuyruk',
+        'Altın 🏆 CHAMPION Turnuva Rozeti'
       ],
       emeraldBonus: 2.75,
       priorityLevel: 'VERY HIGH',
@@ -506,10 +593,10 @@
         profileEffects: true
       },
       benefits: [
-        'Create Parties (Up to 20 Players)',
-        '3.00x Emerald Bonus Multiplier',
-        'Automatic RGB & Animated Username',
-        'Ultimate 💎 MILLIONAIRE Crown'
+        'Parti Oluşturma (20 Oyuncuya Kadar)',
+        '3.00x Zümrüt Çarpanı',
+        'Otomatik RGB & Animasyonlu Kullanıcı Adı',
+        'Efsanevi 💎 MILLIONAIRE Tacı'
       ],
       emeraldBonus: 3.0,
       priorityLevel: 'VERY HIGH',
@@ -541,7 +628,7 @@
         rgbName: true,
         profileEffects: true
       },
-      benefits: ['Full Platform Administration', 'Unlimited Party Capacity', 'CRITICAL Priority'],
+      benefits: ['Tam Platform Yönetimi', 'Sınırsız Parti Kapasitesi', 'KRİTİK Öncelik'],
       emeraldBonus: 3.0,
       priorityLevel: 'CRITICAL',
       price: 0,
@@ -556,20 +643,9 @@
   const rankService = {
     getRanks(includeDisabled = true) {
       let saved = store.get(ECON_KEYS.RANKS, null);
-      if (!saved || !Array.isArray(saved) || saved.length < 9) {
+      if (!saved || !Array.isArray(saved) || saved.length < 11) {
         store.set(ECON_KEYS.RANKS, DEFAULT_RANKS);
         saved = DEFAULT_RANKS;
-      } else {
-        const vp = saved.find(r => r.id === 'VIP_PLUS');
-        if (vp && vp.priorityLevel === 'HIGH') {
-          vp.priorityLevel = 'VERY HIGH';
-          if (vp.permissions) {
-            vp.permissions.supportPriority = 'VERY HIGH';
-            vp.permissions.bugPriority = 'VERY HIGH';
-            vp.permissions.suggestionPriority = 'VERY HIGH';
-          }
-          store.set(ECON_KEYS.RANKS, saved);
-        }
       }
       return includeDisabled ? saved : saved.filter(r => r.enabled !== false);
     },
@@ -824,225 +900,11 @@
   const economyService = {
     _ensureAccounts() {
       const existing = store.get(ECON_KEYS.ACCOUNTS, null);
-      if (existing && Array.isArray(existing) && existing.length > 0) {
+      if (existing && Array.isArray(existing)) {
         return existing;
       }
-
-      const now = new Date().toISOString();
-      const seeded = [
-        {
-          playerId: 'USR-1001',
-          username: 'Mashallah',
-          role: 'ADMIN',
-          isVip: true,
-          equippedRank: 'ADMIN',
-          ownedRanks: ['ADMIN', 'VIP', 'MILLIONAIRE'],
-          rgbOwned: true,
-          rgbEnabled: true,
-          animatedNameOwned: true,
-          balance: 2450,
-          points: 14850,
-          gamesPlayed: 18,
-          gamesWon: 12,
-          gamesLost: 6,
-          extraLives: 3,
-          extraLivesUsed: 2,
-          scoreBoosterOwned: 1,
-          emeraldBoosterOwned: 1,
-          secondChanceOwned: 1,
-          tournamentTickets: 2,
-          totalEarned: 3950,
-          totalSpent: 1500,
-          bestScore: 5000000,
-          lastDailyClaimAt: null,
-          dailyStreak: 4,
-          updatedAt: now
-        },
-        {
-          playerId: 'USR-1002',
-          username: 'DragonSlayer99',
-          role: 'VIP',
-          isVip: true,
-          equippedRank: 'VIP_PLUS',
-          ownedRanks: ['VIP', 'VIP_PLUS'],
-          rgbOwned: true,
-          rgbEnabled: true,
-          animatedNameOwned: false,
-          balance: 1820,
-          points: 12450,
-          gamesPlayed: 16,
-          gamesWon: 9,
-          gamesLost: 7,
-          extraLives: 2,
-          extraLivesUsed: 3,
-          scoreBoosterOwned: 0,
-          emeraldBoosterOwned: 0,
-          secondChanceOwned: 0,
-          tournamentTickets: 1,
-          totalEarned: 3320,
-          totalSpent: 1500,
-          bestScore: 5000000,
-          lastDailyClaimAt: null,
-          dailyStreak: 3,
-          updatedAt: now
-        },
-        {
-          playerId: 'USR-1003',
-          username: 'NetherKing_TR',
-          role: 'VIP',
-          isVip: true,
-          equippedRank: 'MVP_PLUS',
-          ownedRanks: ['VIP', 'MVP', 'MVP_PLUS'],
-          rgbOwned: true,
-          rgbEnabled: false,
-          animatedNameOwned: true,
-          balance: 1540,
-          points: 10820,
-          gamesPlayed: 15,
-          gamesWon: 8,
-          gamesLost: 7,
-          extraLives: 2,
-          extraLivesUsed: 2,
-          scoreBoosterOwned: 1,
-          emeraldBoosterOwned: 0,
-          secondChanceOwned: 0,
-          tournamentTickets: 1,
-          totalEarned: 2540,
-          totalSpent: 1000,
-          bestScore: 2500000,
-          lastDailyClaimAt: null,
-          dailyStreak: 2,
-          updatedAt: now
-        },
-        {
-          playerId: 'USR-1004',
-          username: 'OrganizerAlex',
-          role: 'VIP',
-          isVip: true,
-          equippedRank: 'VIP',
-          ownedRanks: ['VIP'],
-          rgbOwned: true,
-          rgbEnabled: false,
-          animatedNameOwned: false,
-          balance: 1290,
-          points: 9450,
-          gamesPlayed: 14,
-          gamesWon: 7,
-          gamesLost: 7,
-          extraLives: 1,
-          extraLivesUsed: 1,
-          scoreBoosterOwned: 0,
-          emeraldBoosterOwned: 0,
-          secondChanceOwned: 0,
-          tournamentTickets: 1,
-          totalEarned: 1790,
-          totalSpent: 500,
-          bestScore: 1000000,
-          lastDailyClaimAt: null,
-          dailyStreak: 2,
-          updatedAt: now
-        },
-        {
-          playerId: 'USR-1005',
-          username: 'DiamondHunter',
-          role: 'PLAYER',
-          isVip: false,
-          equippedRank: 'PLAYER',
-          ownedRanks: ['PLAYER'],
-          rgbOwned: false,
-          rgbEnabled: false,
-          animatedNameOwned: false,
-          balance: 980,
-          points: 8920,
-          gamesPlayed: 12,
-          gamesWon: 6,
-          gamesLost: 6,
-          extraLives: 1,
-          extraLivesUsed: 1,
-          scoreBoosterOwned: 0,
-          emeraldBoosterOwned: 0,
-          secondChanceOwned: 0,
-          tournamentTickets: 0,
-          totalEarned: 1480,
-          totalSpent: 500,
-          bestScore: 1000000,
-          lastDailyClaimAt: null,
-          dailyStreak: 1,
-          updatedAt: now
-        },
-        {
-          playerId: 'USR-1006',
-          username: 'Steve',
-          role: 'PLAYER',
-          isVip: false,
-          equippedRank: 'PLAYER',
-          ownedRanks: ['PLAYER'],
-          rgbOwned: false,
-          rgbEnabled: false,
-          animatedNameOwned: false,
-          balance: 650,
-          points: 6540,
-          gamesPlayed: 9,
-          gamesWon: 4,
-          gamesLost: 5,
-          extraLives: 0,
-          extraLivesUsed: 1,
-          scoreBoosterOwned: 0,
-          emeraldBoosterOwned: 0,
-          secondChanceOwned: 0,
-          tournamentTickets: 0,
-          totalEarned: 1150,
-          totalSpent: 500,
-          bestScore: 250000,
-          lastDailyClaimAt: null,
-          dailyStreak: 1,
-          updatedAt: now
-        }
-      ];
-
-      store.set(ECON_KEYS.ACCOUNTS, seeded);
-
-      const initialTx = [
-        {
-          id: 'TX-SEED-01',
-          playerId: 'USR-1001',
-          username: 'Mashallah',
-          amount: 500,
-          type: 'TOURNAMENT_WIN',
-          reason: 'Tournament Winner Reward',
-          previousBalance: 1950,
-          newBalance: 2450,
-          source: 'System',
-          timestamp: now
-        },
-        {
-          id: 'TX-SEED-02',
-          playerId: 'USR-1002',
-          username: 'DragonSlayer99',
-          amount: 150,
-          type: 'VIP_GAME_WIN',
-          reason: 'VIP+ Game Victory (+150 💚)',
-          previousBalance: 1670,
-          newBalance: 1820,
-          source: 'System',
-          timestamp: now
-        },
-        {
-          id: 'TX-SEED-03',
-          playerId: 'USR-1005',
-          username: 'DiamondHunter',
-          amount: -500,
-          type: 'SHOP_PURCHASE',
-          reason: 'Purchased ❤️ Extra Life',
-          previousBalance: 1480,
-          newBalance: 980,
-          source: 'Emerald Shop',
-          timestamp: now
-        }
-      ];
-      store.set(ECON_KEYS.TRANSACTIONS, initialTx);
-
-      return seeded;
+      store.set(ECON_KEYS.ACCOUNTS, []);
+      return [];
     },
 
     _saveAccounts(accounts) {
@@ -1068,7 +930,8 @@
     },
 
     getOrCreateAccount(username, role = 'PLAYER') {
-      const cleanName = String(username || 'Steve').trim();
+      const cleanName = String(username || '').trim();
+      if (!cleanName) return null;
       const accounts = this._ensureAccounts();
       let acc = accounts.find(a => a.username.toLowerCase() === cleanName.toLowerCase());
 
@@ -1076,6 +939,7 @@
         const now = new Date().toISOString();
         const u = userService ? userService.getUserByUsername(cleanName) : null;
         const initRank = u?.rank || u?.rankId || role;
+        const startBal = Math.max(0, Number(u?.emeraldBalance || 0));
         acc = {
           playerId: u?.id || 'USR-' + Date.now().toString(36).toUpperCase(),
           username: cleanName,
@@ -1086,18 +950,18 @@
           rgbOwned: Boolean(u?.cosmetics?.rgbOwned || role === 'ADMIN'),
           rgbEnabled: Boolean(u?.cosmetics?.rgbEnabled || role === 'ADMIN'),
           animatedNameOwned: Boolean(u?.cosmetics?.animatedNameOwned || role === 'ADMIN'),
-          balance: 250,
-          points: 0,
-          gamesPlayed: 0,
-          gamesWon: 0,
-          gamesLost: 0,
-          extraLives: 0,
+          balance: startBal,
+          points: Math.max(0, Number(u?.points || 0)),
+          gamesPlayed: Math.max(0, Number(u?.gamesPlayed || 0)),
+          gamesWon: Math.max(0, Number(u?.gamesWon || 0)),
+          gamesLost: Math.max(0, Number(u?.gamesLost || 0)),
+          extraLives: Math.max(0, Number(u?.extraLives || 0)),
           extraLivesUsed: 0,
           scoreBoosterOwned: 0,
           emeraldBoosterOwned: 0,
           secondChanceOwned: 0,
           tournamentTickets: 0,
-          totalEarned: 250,
+          totalEarned: startBal,
           totalSpent: 0,
           bestScore: 0,
           lastDailyClaimAt: null,
@@ -1106,17 +970,6 @@
         };
         accounts.push(acc);
         this._saveAccounts(accounts);
-
-        this._recordTransaction({
-          playerId: acc.playerId,
-          username: acc.username,
-          amount: 250,
-          type: 'WELCOME_BONUS',
-          reason: 'Welcome Starter Emerald Bonus',
-          previousBalance: 0,
-          newBalance: 250,
-          source: 'System'
-        });
       }
 
       if (userService) {
@@ -1696,6 +1549,40 @@
           createdAt: now
         },
         {
+          id: 'ITEM-RANK-MVIP',
+          name: 'MVIP Rütbesi',
+          icon: '💎',
+          price: 4500,
+          priceTL: 900,
+          currency: 'EMERALD',
+          category: 'Ranks',
+          requiredRole: 'ANY',
+          description:
+            'MVP+ özelliklerine ek olarak 12 Kişilik Parti, 2.25x Zümrüt Çarpanı, Çok Yüksek Öncelik & 💎 MVIP Rozeti!',
+          enabled: true,
+          purchaseLimit: 1,
+          effect: 'RANK_MVIP',
+          rankId: 'MVIP',
+          createdAt: now
+        },
+        {
+          id: 'ITEM-RANK-MVIP-PLUS',
+          name: 'MVIP+ Rütbesi',
+          icon: '🔥',
+          price: 5500,
+          priceTL: 1100,
+          currency: 'EMERALD',
+          category: 'Ranks',
+          requiredRole: 'ANY',
+          description:
+            'MVIP özelliklerine ek olarak 16 Kişilik Parti, 2.50x Zümrüt Çarpanı, Çok Yüksek Öncelik & 🔥 MVIP+ Rozeti!',
+          enabled: true,
+          purchaseLimit: 1,
+          effect: 'RANK_MVIP_PLUS',
+          rankId: 'MVIP_PLUS',
+          createdAt: now
+        },
+        {
           id: 'ITEM-RANK-ELITE',
           name: 'ELITE Rütbesi',
           icon: '⚡',
@@ -1784,13 +1671,16 @@
         .map(pkg => ({
           id: pkg.id,
           name: pkg.name,
-          icon: pkg.icon || '💚',
+          icon: pkg.icon || '⬛',
+          iconType: pkg.iconType || 'NETHERITE_INGOT',
+          ingotCount: pkg.ingotCount || 1,
+          badge: pkg.badge || '',
           price: pkg.priceTL,
           emeraldsGranted: pkg.emeralds,
           currency: 'TRY',
           category: 'Emeralds',
           requiredRole: 'ANY',
-          description: `Stripe Güvencesiyle ${pkg.emeralds.toLocaleString('tr-TR')} 💚 Zümrüt satın alın (Kur: 5 💚 = 1 TL).`,
+          description: `Netherite Külçesi Zümrüt Paketi — Stripe Güvencesiyle ${pkg.emeralds.toLocaleString('tr-TR')} 💚 Zümrüt satın alın (Kur: 5 💚 = 1 TL).`,
           enabled: pkg.enabled !== false,
           purchaseLimit: 99,
           effect: 'EMERALD_PACKAGE'
@@ -2503,38 +2393,7 @@
     },
 
     getUnlockedForPlayer(username) {
-      const map = store.get(ECON_KEYS.ACHIEVEMENTS, {
-        Mashallah: [
-          'ACH_FIRST_WIN',
-          'ACH_EMERALD_HUNTER',
-          'ACH_QUIZ_MASTER',
-          'ACH_SECOND_CHANCE',
-          'ACH_MILLIONAIRE',
-          'ACH_CHAMPION'
-        ],
-        DragonSlayer99: [
-          'ACH_FIRST_WIN',
-          'ACH_EMERALD_HUNTER',
-          'ACH_QUIZ_MASTER',
-          'ACH_SECOND_CHANCE',
-          'ACH_MILLIONAIRE'
-        ],
-        NetherKing_TR: [
-          'ACH_FIRST_WIN',
-          'ACH_EMERALD_HUNTER',
-          'ACH_QUIZ_MASTER',
-          'ACH_SECOND_CHANCE',
-          'ACH_MILLIONAIRE'
-        ],
-        OrganizerAlex: [
-          'ACH_FIRST_WIN',
-          'ACH_EMERALD_HUNTER',
-          'ACH_QUIZ_MASTER',
-          'ACH_SECOND_CHANCE'
-        ],
-        DiamondHunter: ['ACH_FIRST_WIN', 'ACH_QUIZ_MASTER', 'ACH_SECOND_CHANCE'],
-        Steve: ['ACH_FIRST_WIN', 'ACH_SECOND_CHANCE']
-      });
+      const map = store.get(ECON_KEYS.ACHIEVEMENTS, {});
       const key = Object.keys(map).find(
         k => k.toLowerCase() === String(username).toLowerCase()
       );

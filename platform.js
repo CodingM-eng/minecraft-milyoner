@@ -105,6 +105,12 @@
         }
       } catch (e) {}
 
+      // Tarayıcı Geri/İleri (popstate) navigasyon desteği
+      window.addEventListener('popstate', () => {
+        if (!this.session) return;
+        this.restoreRouteFromHash(true);
+      });
+
       // 1. Aktif oturumu kontrol et
       const existingSession = licenseService.getActiveSession();
       if (existingSession) {
@@ -239,14 +245,13 @@
     }
 
     // ==========================================
-    // BÖLÜM 5, 6 & 27: TAM BOYUTLU ANA MENÜ ÇEKMECESİ (☰ MENÜ)
+    // SAĞ TARAFTAN AÇILAN KOMPAKT ANA MENÜ ÇEKMECESİ (☰ MENÜ)
     // ==========================================
     bindMainMenuDrawer() {
       const openBtn = document.getElementById('btn-open-main-drawer');
       const closeBtn = document.getElementById('btn-close-main-drawer');
       const backdrop = document.getElementById('main-menu-backdrop');
       const drawer = document.getElementById('main-menu-drawer');
-      const drawerLogoutBtn = document.getElementById('btn-drawer-logout');
       const drawerUserCard = document.getElementById('drawer-user-card');
 
       const openDrawer = () => {
@@ -257,6 +262,7 @@
           drawer.setAttribute('aria-hidden', 'false');
           requestAnimationFrame(() => drawer.classList.add('open'));
         }
+        if (openBtn) openBtn.setAttribute('aria-expanded', 'true');
         if (backdrop) backdrop.classList.remove('hidden');
         if (window.soundManager) window.soundManager.playMenuOpen();
       };
@@ -269,6 +275,7 @@
             if (!drawer.classList.contains('open')) drawer.classList.add('hidden');
           }, 240);
         }
+        if (openBtn) openBtn.setAttribute('aria-expanded', 'false');
         if (backdrop) backdrop.classList.add('hidden');
         if (playSound && window.soundManager) window.soundManager.playMenuClose();
       };
@@ -277,7 +284,13 @@
       this.closeMainMenuDrawer = closeDrawer;
 
       if (openBtn) {
-        openBtn.addEventListener('click', () => openDrawer());
+        openBtn.addEventListener('click', () => {
+          if (drawer && drawer.classList.contains('open')) {
+            closeDrawer(true);
+          } else {
+            openDrawer();
+          }
+        });
       }
       if (closeBtn) {
         closeBtn.addEventListener('click', () => closeDrawer(true));
@@ -285,45 +298,218 @@
       if (backdrop) {
         backdrop.addEventListener('click', () => closeDrawer(true));
       }
-      if (drawerUserCard) {
-        drawerUserCard.addEventListener('click', () => {
-          closeDrawer(false);
-          this.navigateToScreen('screen-profile');
-        });
-      }
-      if (drawerLogoutBtn) {
-        drawerLogoutBtn.addEventListener('click', () => {
-          closeDrawer(false);
-          window.soundManager.playClick();
-          this.handleLogout(false);
-        });
-      }
 
-      document.querySelectorAll('[data-drawer-nav]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          const targetScreen = btn.getAttribute('data-drawer-nav');
-          const shopCat = btn.getAttribute('data-drawer-shop-cat');
-          const supportTab = btn.getAttribute('data-drawer-support-tab');
-
-          closeDrawer(false);
-
-          if (shopCat) {
-            this.selectedShopCategory = shopCat;
-            document.querySelectorAll('[data-shop-cat]').forEach(b => {
-              b.classList.toggle('active', b.getAttribute('data-shop-cat') === shopCat);
-            });
-          }
-
-          if (targetScreen) {
-            this.navigateToScreen(targetScreen);
-          }
-
-          if (supportTab) {
-            this.switchSupportTab(supportTab);
-          }
-        });
+      // ESC tuşu ile menüyü kapatma
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && drawer && drawer.classList.contains('open')) {
+          closeDrawer(true);
+        }
       });
+
+      if (drawerUserCard) {
+        const goProfile = () => {
+          closeDrawer(false);
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-profile');
+        };
+        drawerUserCard.addEventListener('click', goProfile);
+        drawerUserCard.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            goProfile();
+          }
+        });
+      }
+
+      // Tüm sağ menü butonlarını bağla (Profil, Destek, Hata Bildir, Öneri Gönder, Zümrüt Mağazası, Rütbe Mağazası, Partiler, İstatistikler, Liderlik Tablosu, Nasıl Oynanır?, Ayarlar, Admin, Çıkış Yap)
+      const drawerEl = document.getElementById('main-menu-drawer');
+      if (drawerEl) {
+        drawerEl.querySelectorAll('.drawer-nav-item').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.preventDefault();
+            window.soundManager.playClick();
+
+            const action = btn.getAttribute('data-drawer-action');
+            const supportTab = btn.getAttribute('data-drawer-support-tab');
+            const shopCat = btn.getAttribute('data-drawer-shop-cat');
+            const targetScreen =
+              btn.getAttribute('data-drawer-screen') || btn.getAttribute('data-drawer-nav');
+
+            closeDrawer(false);
+
+            // 1. Özel Aksiyonlar (İstatistikler Modalı, Nasıl Oynanır Modalı, Çıkış Yap)
+            if (action === 'logout') {
+              this.handleLogout(false);
+              return;
+            }
+            if (action === 'open-stats') {
+              if (window.mcQuizGame) {
+                window.mcQuizGame.renderMenuStats();
+                window.mcQuizGame.openModal('modal-stats');
+              }
+              this.updateActiveDrawerHighlight(null, { action: 'open-stats' });
+              this.pushRouteHash('#stats');
+              return;
+            }
+            if (action === 'open-rules') {
+              if (window.mcQuizGame) {
+                window.mcQuizGame.openModal('modal-rules');
+              }
+              this.updateActiveDrawerHighlight(null, { action: 'open-rules' });
+              this.pushRouteHash('#rules');
+              return;
+            }
+
+            // 2. Destek Sekmeleri (Destek, Hata Bildir, Öneri Gönder)
+            if (supportTab) {
+              this.navigateToScreen('screen-support', { supportTab });
+              return;
+            }
+
+            // 3. Mağaza Kategorisi (Zümrüt Mağazası / Rütbe Mağazası)
+            if (shopCat) {
+              this.selectedShopCategory = shopCat;
+              document.querySelectorAll('[data-shop-cat]').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-shop-cat') === shopCat);
+              });
+            }
+
+            // 4. Ekran Navigasyonu
+            if (targetScreen) {
+              this.navigateToScreen(targetScreen, { shopCat });
+            }
+          });
+        });
+      }
+    }
+
+    updateActiveDrawerHighlight(screenId, options = {}) {
+      const drawerEl = document.getElementById('main-menu-drawer');
+      if (!drawerEl) return;
+
+      drawerEl.querySelectorAll('.drawer-nav-item').forEach(btn => {
+        btn.classList.remove('active');
+        const btnAction = btn.getAttribute('data-drawer-action');
+        const btnSupport = btn.getAttribute('data-drawer-support-tab');
+        const btnScreen =
+          btn.getAttribute('data-drawer-screen') || btn.getAttribute('data-drawer-nav');
+        const btnShopCat = btn.getAttribute('data-drawer-shop-cat');
+
+        if (options.action && btnAction === options.action) {
+          btn.classList.add('active');
+          return;
+        }
+        if (screenId === 'screen-support' && options.supportTab && btnSupport === options.supportTab) {
+          btn.classList.add('active');
+          return;
+        }
+        if (screenId && btnScreen === screenId && !btnSupport) {
+          if (screenId === 'screen-shop' && options.shopCat && btnShopCat && btnShopCat !== options.shopCat) {
+            return;
+          }
+          btn.classList.add('active');
+        }
+      });
+    }
+
+    pushRouteHash(hash, replace = false) {
+      if (!hash) return;
+      try {
+        if (window.location.hash === hash) return;
+        const url = `${window.location.pathname}${window.location.search}${hash}`;
+        if (replace) {
+          window.history.replaceState({ hash }, '', url);
+        } else {
+          window.history.pushState({ hash }, '', url);
+        }
+      } catch (e) {}
+    }
+
+    restoreRouteFromHash(fromPopState = false) {
+      if (!this.session) return false;
+      const rawHash = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+      if (!rawHash || rawHash === 'home' || rawHash === 'menu') {
+        if (fromPopState) {
+          this.navigateToScreen('screen-menu', { skipHistory: true });
+        }
+        return false;
+      }
+
+      const closeOpenModals = () => {
+        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden'));
+      };
+      closeOpenModals();
+
+      switch (rawHash) {
+        case 'profile':
+        case 'profil':
+          this.navigateToScreen('screen-profile', { skipHistory: true });
+          return true;
+        case 'support':
+        case 'destek':
+          this.navigateToScreen('screen-support', { supportTab: 'support', skipHistory: true });
+          return true;
+        case 'bug':
+        case 'hata':
+          this.navigateToScreen('screen-support', { supportTab: 'bug', skipHistory: true });
+          return true;
+        case 'suggestion':
+        case 'oneri':
+          this.navigateToScreen('screen-support', { supportTab: 'suggestion', skipHistory: true });
+          return true;
+        case 'shop':
+        case 'magaza':
+          this.selectedShopCategory = 'ALL';
+          this.navigateToScreen('screen-shop', { shopCat: 'ALL', skipHistory: true });
+          return true;
+        case 'ranks':
+        case 'rutbe':
+        case 'vip':
+          this.navigateToScreen('screen-vip-shop', { skipHistory: true });
+          return true;
+        case 'party':
+        case 'partiler':
+          this.navigateToScreen('screen-party', { skipHistory: true });
+          return true;
+        case 'leaderboard':
+        case 'liderlik':
+          this.navigateToScreen('screen-leaderboard', { skipHistory: true });
+          return true;
+        case 'settings':
+        case 'ayarlar':
+          this.navigateToScreen('screen-account-settings', { skipHistory: true });
+          return true;
+        case 'history':
+        case 'gecmis':
+          this.navigateToScreen('screen-history', { skipHistory: true });
+          return true;
+        case 'admin':
+          if (authGuard.getEffectiveRole(this.session) === 'ADMIN') {
+            this.navigateToScreen('screen-admin', { skipHistory: true });
+            return true;
+          }
+          break;
+        case 'stats':
+        case 'istatistikler':
+          this.navigateToScreen('screen-menu', { skipHistory: true });
+          if (window.mcQuizGame) {
+            window.mcQuizGame.renderMenuStats();
+            window.mcQuizGame.openModal('modal-stats');
+          }
+          this.updateActiveDrawerHighlight(null, { action: 'open-stats' });
+          return true;
+        case 'rules':
+        case 'kurallar':
+          this.navigateToScreen('screen-menu', { skipHistory: true });
+          if (window.mcQuizGame) {
+            window.mcQuizGame.openModal('modal-rules');
+          }
+          this.updateActiveDrawerHighlight(null, { action: 'open-rules' });
+          return true;
+        default:
+          break;
+      }
+      return false;
     }
 
     syncMainMenuDrawerUI() {
@@ -336,7 +522,8 @@
 
       const dAvatar = document.getElementById('drawer-user-avatar');
       const dName = document.getElementById('drawer-user-name');
-      const dRole = document.getElementById('drawer-user-role');
+      const dRole =
+        document.getElementById('drawer-user-rank') || document.getElementById('drawer-user-role');
       const dEmeralds = document.getElementById('drawer-user-emeralds');
       const dAdminBtn = document.getElementById('btn-drawer-admin');
 
@@ -355,7 +542,7 @@
         dRole.className = `role-badge role-${effRole.toLowerCase()}`;
       }
       if (dEmeralds) {
-        dEmeralds.textContent = `💚 ${profile.emeraldCoins.toLocaleString('tr-TR')} Zümrüt`;
+        dEmeralds.textContent = profile.emeraldCoins.toLocaleString('tr-TR');
       }
       if (dAdminBtn) {
         dAdminBtn.classList.toggle('hidden', effRole !== 'ADMIN');
@@ -383,8 +570,27 @@
     }
 
     // ==========================================
-    // ADIM ADIM LİSANS GİRİŞİ & TEKRAR HOŞ GELDİN EKRANI
+    // KAYIT OL / GİRİŞ YAP / ŞİFREMİ UNUTTUM & TEKRAR HOŞ GELDİN EKRANI
     // ==========================================
+    switchAuthGateTab(tabName = 'login') {
+      const loginForm = document.getElementById('gate-form-login');
+      const regForm = document.getElementById('gate-form-register');
+      const forgotForm = document.getElementById('gate-form-forgot');
+
+      document.querySelectorAll('[data-auth-tab]').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-auth-tab') === tabName);
+      });
+
+      if (loginForm) loginForm.classList.toggle('hidden', tabName !== 'login');
+      if (regForm) regForm.classList.toggle('hidden', tabName !== 'register');
+      if (forgotForm) forgotForm.classList.toggle('hidden', tabName !== 'forgot');
+
+      ['gate-login-error', 'gate-register-error', 'gate-forgot-error'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+    }
+
     lockWithLicenseGate(showWelcomeBack = false) {
       this.session = null;
       this.pendingLicenseToken = null;
@@ -396,21 +602,21 @@
 
       const gateEl = document.getElementById('access-gate');
       const wbStep = document.getElementById('gate-step-welcome-back');
-      const licForm = document.getElementById('gate-form-license');
-      const userForm = document.getElementById('gate-form-username');
-      const errorEl = document.getElementById('access-gate-error');
-      const loadingEl = document.getElementById('access-gate-loading');
-      const inputEl = document.getElementById('access-code-input');
+      const authTabs = document.getElementById('gate-auth-tabs');
+      const loginForm = document.getElementById('gate-form-login');
+      const regForm = document.getElementById('gate-form-register');
+      const forgotForm = document.getElementById('gate-form-forgot');
 
       if (gateEl) gateEl.classList.remove('hidden');
-      if (errorEl) errorEl.classList.add('hidden');
-      if (loadingEl) loadingEl.classList.add('hidden');
-      if (userForm) userForm.classList.add('hidden');
 
       const remembered = licenseService.getRememberedUser();
       if (showWelcomeBack && remembered && remembered.username) {
         if (wbStep) wbStep.classList.remove('hidden');
-        if (licForm) licForm.classList.add('hidden');
+        if (authTabs) authTabs.classList.add('hidden');
+        if (loginForm) loginForm.classList.add('hidden');
+        if (regForm) regForm.classList.add('hidden');
+        if (forgotForm) forgotForm.classList.add('hidden');
+
         const wbName = document.getElementById('wb-username-display');
         const wbRole = document.getElementById('wb-role-badge');
         const wbLic = document.getElementById('wb-license-badge');
@@ -427,10 +633,11 @@
         }
       } else {
         if (wbStep) wbStep.classList.add('hidden');
-        if (licForm) licForm.classList.remove('hidden');
-        if (inputEl) {
-          inputEl.value = '';
-          setTimeout(() => inputEl.focus(), 60);
+        if (authTabs) authTabs.classList.remove('hidden');
+        this.switchAuthGateTab('login');
+        const loginUserInp = document.getElementById('login-username-input');
+        if (loginUserInp) {
+          setTimeout(() => loginUserInp.focus(), 60);
         }
       }
 
@@ -440,32 +647,38 @@
     bindLicenseGate() {
       const gateEl = document.getElementById('access-gate');
       const gateCard = gateEl ? gateEl.querySelector('.gate-card') : null;
-      const wbStep = document.getElementById('gate-step-welcome-back');
       const wbContinueBtn = document.getElementById('btn-wb-continue');
       const wbSwitchBtn = document.getElementById('btn-wb-switch-account');
 
-      const licForm = document.getElementById('gate-form-license');
-      const codeInput = document.getElementById('access-code-input');
-      const errorEl = document.getElementById('access-gate-error');
-      const loadingEl = document.getElementById('access-gate-loading');
-      const submitLicBtn = document.getElementById('btn-license-submit');
-      const visBtn = document.getElementById('btn-toggle-code-vis');
+      const loginForm = document.getElementById('gate-form-login');
+      const regForm = document.getElementById('gate-form-register');
+      const forgotForm = document.getElementById('gate-form-forgot');
+      const toggleLoginPwdBtn = document.getElementById('btn-toggle-login-pwd');
+      const loginPwdInp = document.getElementById('login-password-input');
 
-      const userForm = document.getElementById('gate-form-username');
-      const verifiedLicNameEl = document.getElementById('gate-verified-lic-name');
-      const userInput = document.getElementById('access-username-input');
-      const pwdInput = document.getElementById('access-password-input');
-      const userErrorEl = document.getElementById('access-username-error');
-      const backToLicBtn = document.getElementById('btn-gate-back-to-license');
-      const submitUserBtn = document.getElementById('btn-username-submit');
+      const shakeGate = () => {
+        if (!gateCard) return;
+        gateCard.classList.remove('shake');
+        void gateCard.offsetWidth;
+        gateCard.classList.add('shake');
+      };
 
-      if (visBtn && codeInput) {
-        visBtn.addEventListener('click', () => {
+      // Sekme geçişleri (Giriş Yap / Kayıt Ol / Şifremi Unuttum)
+      document.querySelectorAll('[data-auth-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
           window.soundManager.playClick();
-          const isPwd = codeInput.type === 'password';
-          codeInput.type = isPwd ? 'text' : 'password';
-          visBtn.textContent = isPwd ? '🙈' : '👁️';
-          codeInput.focus();
+          const tab = btn.getAttribute('data-auth-tab') || 'login';
+          this.switchAuthGateTab(tab);
+        });
+      });
+
+      if (toggleLoginPwdBtn && loginPwdInp) {
+        toggleLoginPwdBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          const isPwd = loginPwdInp.type === 'password';
+          loginPwdInp.type = isPwd ? 'text' : 'password';
+          toggleLoginPwdBtn.textContent = isPwd ? '🙈' : '👁️';
+          loginPwdInp.focus();
         });
       }
 
@@ -490,98 +703,119 @@
         });
       }
 
-      // Adım 1: Lisans Kodunu Doğrula
-      if (licForm && codeInput) {
-        licForm.addEventListener('submit', async e => {
+      // 1. GİRİŞ YAP FORMU
+      if (loginForm) {
+        loginForm.addEventListener('submit', async e => {
           e.preventDefault();
-          const rawCode = codeInput.value.trim();
+          const username = document.getElementById('login-username-input')?.value || '';
+          const password = document.getElementById('login-password-input')?.value || '';
+          const licenseCode = document.getElementById('login-license-input')?.value || '';
+          const errEl = document.getElementById('gate-login-error');
+          const submitBtn = document.getElementById('btn-login-submit');
 
-          if (errorEl) errorEl.classList.add('hidden');
-          if (loadingEl) loadingEl.classList.remove('hidden');
-          if (submitLicBtn) submitLicBtn.disabled = true;
+          if (errEl) errEl.classList.add('hidden');
+          if (submitBtn) submitBtn.disabled = true;
 
-          const res = await licenseService.validateLicenseStep(rawCode);
+          const res = await licenseService.loginWithCredentials({
+            username,
+            password,
+            licenseCode
+          });
 
-          if (loadingEl) loadingEl.classList.add('hidden');
-          if (submitLicBtn) submitLicBtn.disabled = false;
+          if (submitBtn) submitBtn.disabled = false;
 
           if (!res.ok) {
             window.soundManager.playError();
-            if (errorEl) {
-              errorEl.textContent = `❌ ${res.error}`;
-              errorEl.classList.remove('hidden');
+            if (errEl) {
+              errEl.textContent = `❌ ${res.error}`;
+              errEl.classList.remove('hidden');
             }
-            if (gateCard) {
-              gateCard.classList.remove('shake');
-              void gateCard.offsetWidth;
-              gateCard.classList.add('shake');
-            }
-            codeInput.select();
-            return;
-          }
-
-          // Lisans geçerli -> Adım 2 (Minecraft Kullanıcı Adı)
-          window.soundManager.playSuccess();
-          this.pendingLicenseToken = res.licenseToken;
-          if (wbStep) wbStep.classList.add('hidden');
-          licForm.classList.add('hidden');
-          if (userForm) userForm.classList.remove('hidden');
-          if (userErrorEl) userErrorEl.classList.add('hidden');
-
-          if (verifiedLicNameEl) {
-            verifiedLicNameEl.textContent = `${res.licenseToken.licenseName} (${res.licenseToken.role})`;
-          }
-          if (userInput) {
-            userInput.value = res.licenseToken.suggestedUsername || '';
-            setTimeout(() => userInput.focus(), 60);
-          }
-        });
-      }
-
-      // Adım 1'e Geri Dön
-      if (backToLicBtn) {
-        backToLicBtn.addEventListener('click', () => {
-          window.soundManager.playClick();
-          this.pendingLicenseToken = null;
-          if (userForm) userForm.classList.add('hidden');
-          if (licForm) licForm.classList.remove('hidden');
-        });
-      }
-
-      // Adım 2: Minecraft Kullanıcı Adı -> Hesap Oluştur/Yükle -> Ana Sayfa
-      if (userForm && userInput) {
-        userForm.addEventListener('submit', async e => {
-          e.preventDefault();
-          if (!this.pendingLicenseToken) {
-            this.lockWithLicenseGate(false);
-            return;
-          }
-
-          const usernameVal = userInput.value.trim();
-          const pwdVal = pwdInput ? pwdInput.value : '';
-          if (userErrorEl) userErrorEl.classList.add('hidden');
-          if (submitUserBtn) submitUserBtn.disabled = true;
-
-          const res = await licenseService.completeAccountStep(
-            this.pendingLicenseToken,
-            usernameVal,
-            pwdVal
-          );
-
-          if (submitUserBtn) submitUserBtn.disabled = false;
-
-          if (!res.ok) {
-            window.soundManager.playError();
-            if (userErrorEl) {
-              userErrorEl.textContent = `❌ ${res.error}`;
-              userErrorEl.classList.remove('hidden');
-            }
+            shakeGate();
             return;
           }
 
           window.soundManager.playSuccess();
-          if (pwdInput) pwdInput.value = '';
+          loginForm.reset();
           this.applyAuthenticatedSession(res.session, true);
+        });
+      }
+
+      // 2. KAYIT OL FORMU
+      if (regForm) {
+        regForm.addEventListener('submit', async e => {
+          e.preventDefault();
+          const username = document.getElementById('reg-username-input')?.value || '';
+          const password = document.getElementById('reg-password-input')?.value || '';
+          const confirmPassword = document.getElementById('reg-password-confirm-input')?.value || '';
+          const licenseCode = document.getElementById('reg-license-input')?.value || '';
+          const errEl = document.getElementById('gate-register-error');
+          const submitBtn = document.getElementById('btn-register-submit');
+
+          if (errEl) errEl.classList.add('hidden');
+          if (submitBtn) submitBtn.disabled = true;
+
+          const res = await licenseService.registerAccount({
+            username,
+            password,
+            confirmPassword,
+            licenseCode
+          });
+
+          if (submitBtn) submitBtn.disabled = false;
+
+          if (!res.ok) {
+            window.soundManager.playError();
+            if (errEl) {
+              errEl.textContent = `❌ ${res.error}`;
+              errEl.classList.remove('hidden');
+            }
+            shakeGate();
+            return;
+          }
+
+          window.soundManager.playSuccess();
+          regForm.reset();
+          this.applyAuthenticatedSession(res.session, true);
+        });
+      }
+
+      // 3. ŞİFREMİ UNUTTUM FORMU
+      if (forgotForm) {
+        forgotForm.addEventListener('submit', async e => {
+          e.preventDefault();
+          const username = document.getElementById('forgot-username-input')?.value || '';
+          const licenseCode = document.getElementById('forgot-license-input')?.value || '';
+          const newPassword = document.getElementById('forgot-new-password-input')?.value || '';
+          const errEl = document.getElementById('gate-forgot-error');
+          const submitBtn = document.getElementById('btn-forgot-submit');
+
+          if (errEl) errEl.classList.add('hidden');
+          if (submitBtn) submitBtn.disabled = true;
+
+          const res = await licenseService.resetPasswordWithLicenseOrRecovery({
+            username,
+            licenseCode,
+            newPassword
+          });
+
+          if (submitBtn) submitBtn.disabled = false;
+
+          if (!res.ok) {
+            window.soundManager.playError();
+            if (errEl) {
+              errEl.textContent = `❌ ${res.error}`;
+              errEl.classList.remove('hidden');
+            }
+            shakeGate();
+            return;
+          }
+
+          window.soundManager.playSuccess();
+          forgotForm.reset();
+          this.showToast(res.message || 'Şifreniz başarıyla sıfırlandı. Giriş yapabilirsiniz.', 'success');
+          this.switchAuthGateTab('login');
+          const loginUserInp = document.getElementById('login-username-input');
+          if (loginUserInp) loginUserInp.value = username.trim();
         });
       }
     }
@@ -597,7 +831,12 @@
       economyService.getOrCreateAccount(this.session.username, this.session.role);
       this.applyUserThemePreference();
 
+      // Oyuncu bazlı izole istatistikleri yükle
       if (window.mcQuizGame) {
+        if (window.mcQuizGame.statsManager && typeof window.mcQuizGame.statsManager.setUserId === 'function') {
+          window.mcQuizGame.statsManager.setUserId(this.session.userId || this.session.username);
+          window.mcQuizGame.renderMenuStats();
+        }
         window.mcQuizGame.isUnlocked = true;
         if (isFreshLogin) {
           window.mcQuizGame.particles.spawnBurst(
@@ -631,12 +870,18 @@
         }
       }
 
+      // Sayfa yenilendiğinde (F5) veya doğrudan #hash ile gelindiğinde ilgili ekranı geri yükle
+      const restored = this.restoreRouteFromHash(false);
+      if (!restored) {
+        this.updateActiveDrawerHighlight('screen-menu');
+      }
+
       if (isFreshLogin) {
         const effRole = authGuard.getEffectiveRole(this.session);
         if (effRole === 'ADMIN') {
           this.showToast(`Tekrar hoş geldin, ${this.session.username}! Admin Paneli aktif.`, 'info');
-        } else if (effRole === 'VIP') {
-          this.showToast(`Hoş geldin, 👑 VIP ${this.session.username}!`, 'success');
+        } else if (effRole !== 'PLAYER') {
+          this.showToast(`Hoş geldin, 👑 ${effRole} ${this.session.username}!`, 'success');
         } else {
           this.showToast(`Hoş geldin, ${this.session.username}!`, 'success');
         }
@@ -645,10 +890,11 @@
 
     handleLogout(clearRemembered = false) {
       licenseService.logout(clearRemembered);
-      this.showToast('Çıkış yapıldı. Kayıtlı hesabınızla devam edebilir veya lisans değiştirebilirsiniz.', 'info');
+      this.showToast('Çıkış yapıldı. Kayıtlı hesabınızla devam edebilir veya başka bir hesaba giriş yapabilirsiniz.', 'info');
       if (window.mcQuizGame) {
         window.mcQuizGame.showScreen('screen-menu');
       }
+      this.pushRouteHash('#home', true);
       this.lockWithLicenseGate(!clearRemembered);
     }
 
@@ -669,12 +915,10 @@
     }
 
     // ==========================================
-    // ÜST BAR, MENÜ ÇUBUĞU VE KULLANICI PANELİ
+    // ÜST BAR VE KOMPAKT SAĞ MENÜ KULLANICI PANELİ
     // ==========================================
     updateTopBarSessionUI() {
       const openDrawerBtn = document.getElementById('btn-open-main-drawer');
-      const navBar = document.getElementById('main-nav-bar');
-      const navAdminBtn = document.getElementById('btn-nav-admin');
       const emeraldPill = document.getElementById('top-emerald-pill');
       const dailyBtn = document.getElementById('btn-daily-reward');
       const badge = document.getElementById('top-session-badge');
@@ -686,7 +930,6 @@
 
       if (!this.session) {
         if (openDrawerBtn) openDrawerBtn.classList.add('hidden');
-        if (navBar) navBar.classList.add('hidden');
         if (emeraldPill) emeraldPill.classList.add('hidden');
         if (dailyBtn) dailyBtn.classList.add('hidden');
         if (badge) badge.classList.add('hidden');
@@ -702,8 +945,6 @@
       const borderKey = userObj?.profileBorder || 'stone';
 
       if (openDrawerBtn) openDrawerBtn.classList.remove('hidden');
-      if (navBar) navBar.classList.remove('hidden');
-      if (navAdminBtn) navAdminBtn.classList.toggle('hidden', effRole !== 'ADMIN');
       if (emeraldPill) emeraldPill.classList.remove('hidden');
       if (dailyBtn) dailyBtn.classList.remove('hidden');
       if (badge) badge.classList.remove('hidden');
@@ -776,7 +1017,7 @@
         dashRankBadge.textContent = profile.rankBadge || `⛏️ ${effRole}`;
       }
 
-      const isVipOrAdmin = effRole === 'VIP' || effRole === 'ADMIN' || profile.isVip;
+      const isVipOrAdmin = effRole !== 'PLAYER' || profile.isVip;
       if (vipDashPanel) {
         vipDashPanel.classList.toggle('hidden', !isVipOrAdmin);
       }
@@ -829,7 +1070,27 @@
       this.syncMainMenuDrawerUI();
     }
 
-    navigateToScreen(screenId) {
+    getHashForScreen(screenId, options = {}) {
+      if (screenId === 'screen-support') {
+        if (options.supportTab === 'bug') return '#bug';
+        if (options.supportTab === 'suggestion') return '#suggestion';
+        return '#support';
+      }
+      const map = {
+        'screen-menu': '#home',
+        'screen-profile': '#profile',
+        'screen-shop': '#shop',
+        'screen-vip-shop': '#ranks',
+        'screen-party': '#party',
+        'screen-leaderboard': '#leaderboard',
+        'screen-account-settings': '#settings',
+        'screen-history': '#history',
+        'screen-admin': '#admin'
+      };
+      return map[screenId] || '#home';
+    }
+
+    navigateToScreen(screenId, options = {}) {
       try {
         authGuard.verifySession(this.session);
       } catch (err) {
@@ -840,12 +1101,18 @@
         return;
       }
 
+      if (!options.skipHistory) {
+        this.pushRouteHash(this.getHashForScreen(screenId, options));
+      }
+
       if (screenId === 'screen-admin') {
         this.openAdminPanel();
+        this.updateActiveDrawerHighlight('screen-admin', options);
         return;
       }
       if (screenId === 'screen-party') {
-        this.openPartyLobby();
+        this.openPartyLobby(Boolean(options.openCreateBox));
+        this.updateActiveDrawerHighlight('screen-party', options);
         return;
       }
 
@@ -853,20 +1120,22 @@
         window.mcQuizGame.showScreen(screenId);
       }
 
-      document.querySelectorAll('[data-nav-screen]').forEach(btn => {
-        if (btn.classList.contains('main-nav-btn')) {
-          btn.classList.toggle('active', btn.getAttribute('data-nav-screen') === screenId);
-        }
-      });
-
       this.syncEconomyHeaderUI();
       if (screenId === 'screen-leaderboard') this.renderLeaderboard();
       if (screenId === 'screen-shop') this.renderEmeraldShop();
       if (screenId === 'screen-vip-shop') this.renderVipShop();
       if (screenId === 'screen-profile') this.renderPlayerProfile();
       if (screenId === 'screen-history') this.renderEmeraldHistory();
-      if (screenId === 'screen-support') this.renderSupportHub();
+      if (screenId === 'screen-support') {
+        if (options.supportTab) {
+          this.switchSupportTab(options.supportTab);
+        } else {
+          this.renderSupportHub();
+        }
+      }
       if (screenId === 'screen-account-settings') this.renderAccountSettings();
+
+      this.updateActiveDrawerHighlight(screenId, options);
     }
 
     bindTopBar() {
@@ -894,36 +1163,35 @@
         btn.addEventListener('click', () => {
           window.soundManager.playClick();
           const tab = btn.getAttribute('data-open-support-tab') || 'support';
-          this.navigateToScreen('screen-support');
-          this.switchSupportTab(tab);
+          this.navigateToScreen('screen-support', { supportTab: tab });
         });
       });
 
       if (adminBtn) {
         adminBtn.addEventListener('click', () => {
           window.soundManager.playClick();
-          this.openAdminPanel();
+          this.navigateToScreen('screen-admin');
         });
       }
 
       if (heroPartyBtn) {
         heroPartyBtn.addEventListener('click', () => {
           window.soundManager.playClick();
-          this.openPartyLobby();
+          this.navigateToScreen('screen-party');
         });
       }
 
       if (vipCreatePartyBtn) {
         vipCreatePartyBtn.addEventListener('click', () => {
           window.soundManager.playClick();
-          this.openPartyLobby(true);
+          this.navigateToScreen('screen-party', { openCreateBox: true });
         });
       }
 
       if (vipManagePartyBtn) {
         vipManagePartyBtn.addEventListener('click', () => {
           window.soundManager.playClick();
-          this.openPartyLobby(false);
+          this.navigateToScreen('screen-party');
         });
       }
 
@@ -1289,6 +1557,26 @@
       });
     }
 
+    getNetheriteIngotSvg(ingotCount = 1) {
+      const countBadge =
+        ingotCount > 1
+          ? `<span class="netherite-stack-count">×${ingotCount}</span>`
+          : '';
+      return `
+        <div class="netherite-ingot-badge" title="Netherite Külçesi (${ingotCount}x)">
+          <svg viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges" aria-hidden="true">
+            <rect x="3" y="5" width="10" height="6" fill="#3b343a"/>
+            <rect x="2" y="6" width="12" height="4" fill="#4c434a"/>
+            <rect x="4" y="4" width="8" height="2" fill="#655b63"/>
+            <rect x="4" y="6" width="7" height="1" fill="#7c707a"/>
+            <rect x="3" y="9" width="9" height="2" fill="#292328"/>
+            <rect x="5" y="7" width="5" height="2" fill="#594f57"/>
+          </svg>
+          ${countBadge}
+        </div>
+      `;
+    }
+
     renderEmeraldShop() {
       if (!this.session) return;
       const profile = economyService.getPlayerEconomyProfile(this.session.username);
@@ -1337,18 +1625,19 @@
       const packagesHtml = emeraldPackages
         .map(pkg => {
           const pkgTitle = pkg.name || pkg.title || `${pkg.emeralds} Zümrüt Paketi`;
+          const ingotCount = Number(pkg.ingotCount) || 1;
           return `
-            <div class="shop-item-card">
+            <div class="shop-item-card shop-netherite-card">
               <div>
                 <div class="shop-item-top">
-                  <div class="shop-item-icon">${this.escapeHtml(pkg.icon || '💚')}</div>
+                  ${this.getNetheriteIngotSvg(ingotCount)}
                   <span class="shop-item-price-tag">${pkg.priceTL.toLocaleString('tr-TR')} TL</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem; gap:0.4rem; flex-wrap:wrap;">
                   <h3 class="shop-item-title" style="margin:0;">${this.escapeHtml(pkgTitle)}</h3>
                   <span class="role-badge role-vip">${this.escapeHtml(pkg.badge || '5 💚 = 1 TL')}</span>
                 </div>
-                <p class="shop-item-desc">"${pkg.emeralds.toLocaleString('tr-TR')} Zümrüt Coin paketini Stripe güvencesiyle satın alın (${pkg.priceTL} TL)."</p>
+                <p class="shop-item-desc">⬛ Netherite Külçesi Paketi: <strong>+${pkg.emeralds.toLocaleString('tr-TR')} Zümrüt Coin</strong> (${pkg.priceTL} TL).</p>
               </div>
               <div class="shop-item-footer">
                 <span class="meta-muted">Stripe Doğrulanmış Webhook</span>
@@ -1983,12 +2272,7 @@
         window.mcQuizGame.showScreen('screen-party');
       }
 
-      document.querySelectorAll('[data-nav-screen]').forEach(btn => {
-        if (btn.classList.contains('main-nav-btn')) {
-          btn.classList.toggle('active', btn.getAttribute('data-nav-screen') === 'screen-party');
-        }
-      });
-
+      this.syncEconomyHeaderUI();
       this.renderPartyLobby(openCreateBox);
     }
 
@@ -1996,6 +2280,7 @@
       const backMenuBtn = document.getElementById('btn-party-back-menu');
       const playSoloBtn = document.getElementById('btn-party-play-solo');
       const openCreateBtn = document.getElementById('btn-open-create-party');
+      const rankLockViewBtn = document.getElementById('btn-rank-lock-view-ranks');
       const createBox = document.getElementById('organizer-create-party-box');
       const createForm = document.getElementById('form-create-party');
       const joinForm = document.getElementById('form-join-party');
@@ -2015,12 +2300,19 @@
         });
       }
 
+      if (rankLockViewBtn) {
+        rankLockViewBtn.addEventListener('click', () => {
+          window.soundManager.playClick();
+          this.navigateToScreen('screen-vip-shop');
+        });
+      }
+
       if (openCreateBtn && createBox) {
         openCreateBtn.addEventListener('click', () => {
           window.soundManager.playClick();
           const perms = authGuard.getUserPermissions(this.session);
           if (!perms.canCreateParty) {
-            this.showToast('Erişim Reddedildi: Sadece VIP, MVP ve ADMIN kullanıcılar parti oluşturabilir.', 'error');
+            this.showToast('🔒 Bu özellik VIP veya daha yüksek rütbe gerektirir.', 'error');
             return;
           }
           createBox.classList.toggle('hidden');
@@ -2091,6 +2383,7 @@
       const licName = document.getElementById('party-user-license-name');
       const createBtn = document.getElementById('btn-open-create-party');
       const createBox = document.getElementById('organizer-create-party-box');
+      const lockCard = document.getElementById('player-party-create-lock-card');
       const maxSelect = document.getElementById('input-party-max');
 
       if (welcomeTitle) {
@@ -2117,9 +2410,10 @@
           .join('');
       }
 
-      // Normal PLAYER sadece [ Partiye Katıl ] görür. Rütbeli ve ADMIN [ Parti Oluştur ] görür
+      // Normal PLAYER görsel kilit kartı (🔒) görür. Rütbeli ve ADMIN [ Parti Oluştur ] görür
       const canCreateParty = Boolean(perms.canCreateParty);
       if (createBtn) createBtn.classList.toggle('hidden', !canCreateParty);
+      if (lockCard) lockCard.classList.toggle('hidden', canCreateParty);
       if (createBox) {
         if (!canCreateParty) {
           createBox.classList.add('hidden');
@@ -2749,10 +3043,35 @@
     bindAccountSettings() {
       const unameForm = document.getElementById('form-acc-username');
       const pwdForm = document.getElementById('form-acc-password');
+      const activateLicForm = document.getElementById('form-acc-activate-license');
       const rgbEnableBtn = document.getElementById('btn-acc-rgb-enable');
       const rgbDisableBtn = document.getElementById('btn-acc-rgb-disable');
       const notifChk = document.getElementById('chk-acc-notifications');
       const logoutBtn = document.getElementById('btn-acc-logout');
+
+      if (activateLicForm) {
+        activateLicForm.addEventListener('submit', async e => {
+          e.preventDefault();
+          const inp = document.getElementById('inp-acc-activate-license');
+          const rawCode = inp ? inp.value.trim() : '';
+          if (!rawCode) return;
+
+          const res = await licenseService.activateLicenseOnAccount(this.session, rawCode);
+          if (!res.ok) {
+            window.soundManager.playError();
+            this.showToast(res.error, 'error');
+            return;
+          }
+
+          this.session = res.session;
+          if (inp) inp.value = '';
+          window.soundManager.playRankUpgrade();
+          this.showToast(res.message || 'Lisans kodu hesabınıza başarıyla tanımlandı!', 'success');
+          this.updateTopBarSessionUI();
+          this.syncEconomyHeaderUI();
+          this.renderAccountSettings();
+        });
+      }
 
       if (unameForm) {
         unameForm.addEventListener('submit', e => {
@@ -2886,12 +3205,7 @@
         window.mcQuizGame.showScreen('screen-admin');
       }
 
-      document.querySelectorAll('[data-nav-screen]').forEach(btn => {
-        if (btn.classList.contains('main-nav-btn')) {
-          btn.classList.toggle('active', btn.getAttribute('data-nav-screen') === 'screen-admin');
-        }
-      });
-
+      this.syncEconomyHeaderUI();
       this.renderAdminAll();
     }
 

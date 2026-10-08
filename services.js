@@ -16,22 +16,40 @@
   'use strict';
 
   const STORAGE_KEYS = {
-    USERS: 'mcm_platform_users_v3',
-    LICENSES: 'mcm_platform_licenses_v2',
-    PARTIES: 'mcm_platform_parties_v2',
-    PLAYERS: 'mcm_platform_players_v2',
-    ACTIVITY: 'mcm_platform_activity_v2',
-    SESSION: 'mcm_platform_active_session_v2',
-    REMEMBERED_USER: 'mcm_platform_remembered_user_v3',
-    SUPPORT_TICKETS: 'mcm_platform_support_tickets_v3',
-    BUG_REPORTS: 'mcm_platform_bug_reports_v3',
-    SUGGESTIONS: 'mcm_platform_suggestions_v3',
-    BACKUPS: 'mcm_platform_backups_v3',
-    PAYMENTS: 'mcm_platform_payments_v3',
-    WEBHOOK_EVENTS: 'mcm_stripe_webhook_events_v3',
-    EMERALD_PACKAGES: 'mcm_emerald_packages_v3',
-    SYSTEM_SETTINGS: 'mcm_platform_sys_settings_v3'
+    USERS: 'mcm_platform_users_v5_clean',
+    LICENSES: 'mcm_platform_licenses_v5_clean',
+    PARTIES: 'mcm_platform_parties_v5_clean',
+    PLAYERS: 'mcm_platform_players_v5_clean',
+    ACTIVITY: 'mcm_platform_activity_v5_clean',
+    SESSION: 'mcm_platform_active_session_v5_clean',
+    REMEMBERED_USER: 'mcm_platform_remembered_user_v5_clean',
+    SUPPORT_TICKETS: 'mcm_platform_support_tickets_v5_clean',
+    BUG_REPORTS: 'mcm_platform_bug_reports_v5_clean',
+    SUGGESTIONS: 'mcm_platform_suggestions_v5_clean',
+    BACKUPS: 'mcm_platform_backups_v5_clean',
+    PAYMENTS: 'mcm_platform_payments_v5_clean',
+    WEBHOOK_EVENTS: 'mcm_stripe_webhook_events_v5_clean',
+    EMERALD_PACKAGES: 'mcm_emerald_packages_v5_clean',
+    SYSTEM_SETTINGS: 'mcm_platform_sys_settings_v5_clean'
   };
+
+  // Purge legacy demo storage keys once so no fake/seeded data remains
+  try {
+    const LEGACY_KEYS = [
+      'mcm_platform_users_v3',
+      'mcm_platform_licenses_v2',
+      'mcm_platform_parties_v2',
+      'mcm_platform_players_v2',
+      'mcm_platform_support_tickets_v3',
+      'mcm_platform_bug_reports_v3',
+      'mcm_platform_suggestions_v3',
+      'mcm_platform_payments_v3',
+      'mcm_econ_accounts_v3',
+      'mcm_econ_transactions_v3',
+      'mcm_econ_achievements_v3'
+    ];
+    LEGACY_KEYS.forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
 
   // Precomputed SHA-256 digests (salted) so plaintext master license & secrets never appear in source
   const MASTER_SALT = 'MCM_2026_SALT::';
@@ -144,6 +162,9 @@
       r === 'MVP' ||
       r === 'MVP+' ||
       r === 'MVP_PLUS' ||
+      r === 'MVIP' ||
+      r === 'MVIP+' ||
+      r === 'MVIP_PLUS' ||
       r === 'ELITE' ||
       r === 'LEGEND' ||
       r === 'CHAMPION' ||
@@ -160,12 +181,15 @@
       .trim()
       .toUpperCase()
       .replace(/\+/g, '_PLUS');
+    if (r === 'OYUNCU') return 'PLAYER';
     const valid = [
       'PLAYER',
       'VIP',
       'VIP_PLUS',
       'MVP',
       'MVP_PLUS',
+      'MVIP',
+      'MVIP_PLUS',
       'ELITE',
       'LEGEND',
       'CHAMPION',
@@ -173,6 +197,12 @@
       'ADMIN'
     ];
     if (valid.includes(r)) return r;
+    if (window.MCMServices && window.MCMServices.rankService) {
+      const custom = window.MCMServices.rankService
+        .listRanks()
+        .find(x => x.id.toUpperCase() === r);
+      if (custom) return custom.id.toUpperCase();
+    }
     if (normalizeRole(fallbackRole) === 'ADMIN') return 'ADMIN';
     if (normalizeRole(fallbackRole) === 'VIP') return 'VIP';
     return 'PLAYER';
@@ -368,7 +398,7 @@
   const userService = {
     _ensureSeedUsers() {
       const existing = storageAdapter.get(STORAGE_KEYS.USERS, null);
-      if (existing && Array.isArray(existing) && existing.length > 0) {
+      if (existing && Array.isArray(existing)) {
         let changed = false;
         existing.forEach(u => {
           if (u.role === 'ORGANIZER') {
@@ -409,204 +439,9 @@
         return existing;
       }
 
-      const now = new Date().toISOString();
-      const seeded = [
-        {
-          id: 'USR-1001',
-          minecraftUsername: 'Mashallah',
-          licenseId: 'MASTER-ADMIN-ROOT',
-          role: 'ADMIN',
-          rank: 'ADMIN',
-          rankId: 'ADMIN',
-          rankExpiration: null,
-          vipStatus: { isVip: true, tier: 'ADMIN', expiresAt: null, grantedAt: now },
-          passwordHash: null,
-          emeraldBalance: 2450,
-          points: 14850,
-          leaderboardRank: 1,
-          gamesPlayed: 18,
-          gamesWon: 12,
-          gamesLost: 6,
-          extraLives: 3,
-          achievements: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER', 'ACH_MILLIONAIRE', 'ACH_CHAMPION'],
-          purchases: ['ITEM-RGB-NAME'],
-          cosmetics: {
-            rgbOwned: true,
-            rgbEnabled: true,
-            animatedNameOwned: true,
-            animatedNameEnabled: true,
-            profileEffects: true,
-            equippedRank: 'ADMIN'
-          },
-          status: 'ACTIVE',
-          createdAt: now,
-          lastLogin: now,
-          settings: { notifications: true, reducedMotion: false }
-        },
-        {
-          id: 'USR-1002',
-          minecraftUsername: 'DragonSlayer99',
-          licenseId: 'LIC-VIP-01',
-          role: 'VIP',
-          rank: 'VIP_PLUS',
-          rankId: 'VIP_PLUS',
-          rankExpiration: null,
-          vipStatus: { isVip: true, tier: 'VIP_PLUS', expiresAt: null, grantedAt: now },
-          passwordHash: null,
-          emeraldBalance: 1820,
-          points: 12450,
-          leaderboardRank: 2,
-          gamesPlayed: 16,
-          gamesWon: 9,
-          gamesLost: 7,
-          extraLives: 2,
-          achievements: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER', 'ACH_MILLIONAIRE'],
-          purchases: ['ITEM-RANK-VIP-PLUS'],
-          cosmetics: {
-            rgbOwned: true,
-            rgbEnabled: true,
-            animatedNameOwned: false,
-            animatedNameEnabled: false,
-            profileEffects: true,
-            equippedRank: 'VIP_PLUS'
-          },
-          status: 'ACTIVE',
-          createdAt: now,
-          lastLogin: now,
-          settings: { notifications: true, reducedMotion: false }
-        },
-        {
-          id: 'USR-1003',
-          minecraftUsername: 'NetherKing_TR',
-          licenseId: 'LIC-VIP-02',
-          role: 'VIP',
-          rank: 'MVP_PLUS',
-          rankId: 'MVP_PLUS',
-          rankExpiration: null,
-          vipStatus: { isVip: true, tier: 'MVP_PLUS', expiresAt: null, grantedAt: now },
-          passwordHash: null,
-          emeraldBalance: 1540,
-          points: 10820,
-          leaderboardRank: 3,
-          gamesPlayed: 15,
-          gamesWon: 8,
-          gamesLost: 7,
-          extraLives: 2,
-          achievements: ['ACH_FIRST_WIN', 'ACH_EMERALD_HUNTER'],
-          purchases: ['ITEM-RANK-MVP-PLUS'],
-          cosmetics: {
-            rgbOwned: true,
-            rgbEnabled: false,
-            animatedNameOwned: true,
-            animatedNameEnabled: true,
-            profileEffects: true,
-            equippedRank: 'MVP_PLUS'
-          },
-          status: 'ACTIVE',
-          createdAt: now,
-          lastLogin: now,
-          settings: { notifications: true, reducedMotion: false }
-        },
-        {
-          id: 'USR-1004',
-          minecraftUsername: 'OrganizerAlex',
-          licenseId: 'LIC-ORG-01',
-          role: 'VIP',
-          rank: 'VIP',
-          rankId: 'VIP',
-          rankExpiration: null,
-          vipStatus: { isVip: true, tier: 'VIP', expiresAt: null, grantedAt: now },
-          passwordHash: null,
-          emeraldBalance: 1290,
-          points: 9450,
-          leaderboardRank: 4,
-          gamesPlayed: 14,
-          gamesWon: 7,
-          gamesLost: 7,
-          extraLives: 1,
-          achievements: ['ACH_FIRST_WIN'],
-          purchases: [],
-          cosmetics: {
-            rgbOwned: true,
-            rgbEnabled: false,
-            animatedNameOwned: false,
-            animatedNameEnabled: false,
-            profileEffects: true,
-            equippedRank: 'VIP'
-          },
-          status: 'ACTIVE',
-          createdAt: now,
-          lastLogin: now,
-          settings: { notifications: true, reducedMotion: false }
-        },
-        {
-          id: 'USR-1005',
-          minecraftUsername: 'DiamondHunter',
-          licenseId: 'LIC-PLY-02',
-          role: 'PLAYER',
-          rank: 'PLAYER',
-          rankId: 'PLAYER',
-          rankExpiration: null,
-          vipStatus: { isVip: false, tier: 'NONE', expiresAt: null, grantedAt: null },
-          passwordHash: null,
-          emeraldBalance: 980,
-          points: 8920,
-          leaderboardRank: 5,
-          gamesPlayed: 12,
-          gamesWon: 6,
-          gamesLost: 6,
-          extraLives: 1,
-          achievements: ['ACH_FIRST_WIN'],
-          purchases: [],
-          cosmetics: {
-            rgbOwned: false,
-            rgbEnabled: false,
-            animatedNameOwned: false,
-            animatedNameEnabled: false,
-            profileEffects: false,
-            equippedRank: 'PLAYER'
-          },
-          status: 'ACTIVE',
-          createdAt: now,
-          lastLogin: now,
-          settings: { notifications: true, reducedMotion: false }
-        },
-        {
-          id: 'USR-1006',
-          minecraftUsername: 'Steve',
-          licenseId: 'LIC-PLY-01',
-          role: 'PLAYER',
-          rank: 'PLAYER',
-          rankId: 'PLAYER',
-          rankExpiration: null,
-          vipStatus: { isVip: false, tier: 'NONE', expiresAt: null, grantedAt: null },
-          passwordHash: null,
-          emeraldBalance: 650,
-          points: 6540,
-          leaderboardRank: 6,
-          gamesPlayed: 9,
-          gamesWon: 4,
-          gamesLost: 5,
-          extraLives: 0,
-          achievements: ['ACH_FIRST_WIN'],
-          purchases: [],
-          cosmetics: {
-            rgbOwned: false,
-            rgbEnabled: false,
-            animatedNameOwned: false,
-            animatedNameEnabled: false,
-            profileEffects: false,
-            equippedRank: 'PLAYER'
-          },
-          status: 'ACTIVE',
-          createdAt: now,
-          lastLogin: now,
-          settings: { notifications: true, reducedMotion: false }
-        }
-      ];
-
-      storageAdapter.set(STORAGE_KEYS.USERS, seeded);
-      return seeded;
+      const empty = [];
+      storageAdapter.set(STORAGE_KEYS.USERS, empty);
+      return empty;
     },
 
     _getAllRaw() {
@@ -662,22 +497,38 @@
       return copy;
     },
 
-    getOrCreateAccount({ minecraftUsername, licenseId, role = 'PLAYER', password = '' }) {
+    getOrCreateAccount({
+      minecraftUsername,
+      licenseId,
+      role = 'PLAYER',
+      rank = null,
+      password = '',
+      requireExistingPassword = false
+    }) {
       const cleanName = String(minecraftUsername || '').trim();
-      if (!cleanName) throw new Error('Please enter a valid Minecraft username.');
+      if (!cleanName) throw new Error('Lütfen geçerli bir Minecraft kullanıcı adı girin.');
 
       const all = this._getAllRaw();
       const now = new Date().toISOString();
       const normRole = normalizeRole(role);
+      const normRank = normalizeRankId(rank || normRole, normRole);
       let user = all.find(u => u.minecraftUsername.toLowerCase() === cleanName.toLowerCase());
 
       if (user) {
-        if (user.passwordHash && password) {
-          const candidateHash = hashPassword(password);
-          if (candidateHash !== user.passwordHash) {
-            throw new Error('Incorrect account password.');
+        if (user.passwordHash) {
+          if (requireExistingPassword && !password) {
+            throw new Error('Bu hesap şifre korumalıdır. Lütfen şifrenizi girin.');
           }
+          if (password) {
+            const candidateHash = hashPassword(password);
+            if (candidateHash !== user.passwordHash) {
+              throw new Error('Hatalı hesap şifresi girdiniz.');
+            }
+          }
+        } else if (password && String(password).trim().length >= 4) {
+          user.passwordHash = hashPassword(password);
         }
+
         if (normRole === 'ADMIN') {
           user.role = 'ADMIN';
           user.rank = 'ADMIN';
@@ -686,8 +537,8 @@
         } else if (normRole === 'VIP' && user.role !== 'ADMIN') {
           user.role = 'VIP';
           if (!user.rank || user.rank === 'PLAYER') {
-            user.rank = 'VIP';
-            user.rankId = 'VIP';
+            user.rank = normRank !== 'PLAYER' ? normRank : 'VIP';
+            user.rankId = user.rank;
           }
           user.vipStatus = {
             isVip: true,
@@ -702,7 +553,8 @@
         user.lastLogin = now;
       } else {
         const isVipOrAdmin = normRole === 'VIP' || normRole === 'ADMIN';
-        const initialRank = normRole === 'ADMIN' ? 'ADMIN' : isVipOrAdmin ? 'VIP' : 'PLAYER';
+        const initialRank =
+          normRole === 'ADMIN' ? 'ADMIN' : normRank !== 'PLAYER' ? normRank : isVipOrAdmin ? 'VIP' : 'PLAYER';
         user = {
           id:
             'USR-' +
@@ -722,7 +574,7 @@
             grantedAt: isVipOrAdmin ? now : null
           },
           passwordHash: password ? hashPassword(password) : null,
-          emeraldBalance: 250,
+          emeraldBalance: 0,
           points: 0,
           leaderboardRank: all.length + 1,
           gamesPlayed: 0,
@@ -1179,84 +1031,16 @@
   const licenseService = {
     _ensureSeedData() {
       const existing = storageAdapter.get(STORAGE_KEYS.LICENSES, null);
-      if (existing && Array.isArray(existing) && existing.length > 0) {
+      if (existing && Array.isArray(existing)) {
         existing.forEach(l => {
           l.role = normalizeRole(l.role);
         });
         return existing;
       }
 
-      const now = new Date().toISOString();
-      const seeded = [
-        {
-          id: 'LIC-VIP-01',
-          code: 'MCVP-VIP1-8899',
-          name: 'VIP+ Tournament License #1',
-          role: 'VIP',
-          rank: 'VIP_PLUS',
-          status: 'ACTIVE',
-          createdAt: now,
-          expiresAt: null,
-          assignedUsername: 'DragonSlayer99',
-          currentSessionUser: null,
-          lastUsedAt: null
-        },
-        {
-          id: 'LIC-ORG-01',
-          code: 'MCML-ORG1-7F4K',
-          name: 'VIP Organizer License #1',
-          role: 'VIP',
-          rank: 'VIP',
-          status: 'ACTIVE',
-          createdAt: now,
-          expiresAt: null,
-          assignedUsername: 'OrganizerAlex',
-          currentSessionUser: null,
-          lastUsedAt: null
-        },
-        {
-          id: 'LIC-PLY-01',
-          code: 'MCML-PLYR-92QX',
-          name: 'Player License — Steve',
-          role: 'PLAYER',
-          rank: 'PLAYER',
-          status: 'ACTIVE',
-          createdAt: now,
-          expiresAt: null,
-          assignedUsername: 'Steve',
-          currentSessionUser: null,
-          lastUsedAt: null
-        },
-        {
-          id: 'LIC-PLY-02',
-          code: 'MCML-PLYR-48BM',
-          name: 'Player License — DiamondHunter',
-          role: 'PLAYER',
-          rank: 'PLAYER',
-          status: 'ACTIVE',
-          createdAt: now,
-          expiresAt: null,
-          assignedUsername: 'DiamondHunter',
-          currentSessionUser: null,
-          lastUsedAt: null
-        },
-        {
-          id: 'LIC-REV-01',
-          code: 'MCML-REVK-1100',
-          name: 'Revoked Test License',
-          role: 'PLAYER',
-          rank: 'PLAYER',
-          status: 'REVOKED',
-          createdAt: now,
-          expiresAt: null,
-          assignedUsername: 'Herobrine',
-          currentSessionUser: null,
-          lastUsedAt: null
-        }
-      ];
-
-      storageAdapter.set(STORAGE_KEYS.LICENSES, seeded);
-      return seeded;
+      const empty = [];
+      storageAdapter.set(STORAGE_KEYS.LICENSES, empty);
+      return empty;
     },
 
     _getAllRaw() {
@@ -1293,12 +1077,12 @@
       return `${prefix}-${seg()}-${seg()}`;
     },
 
-    // STEP 1 OF LOGIN FLOW: Validate License Code Only
+    // Validate License Code (Master Admin, Community, or Admin-Created License)
     async validateLicenseStep(rawCode) {
-      await new Promise(r => setTimeout(r, 180));
+      await new Promise(r => setTimeout(r, 120));
       const cleanCode = String(rawCode || '').trim();
       if (!cleanCode) {
-        return { ok: false, error: 'Please enter a valid license code.' };
+        return { ok: false, error: 'Lütfen geçerli bir lisans kodu girin.' };
       }
 
       const digest = computeSaltedDigest(cleanCode);
@@ -1309,7 +1093,7 @@
           ok: true,
           licenseToken: {
             licenseId: 'MASTER-ADMIN-ROOT',
-            licenseName: 'Master Admin License',
+            licenseName: 'Master Admin Lisansı',
             role: 'ADMIN',
             rank: 'ADMIN',
             isMasterAdmin: true,
@@ -1325,7 +1109,7 @@
           ok: true,
           licenseToken: {
             licenseId: 'LIC-COMMUNITY-XXQ',
-            licenseName: 'XXQ Network Community License',
+            licenseName: 'XXQ Network Topluluk Lisansı',
             role: 'PLAYER',
             rank: 'PLAYER',
             isMasterAdmin: false,
@@ -1339,14 +1123,14 @@
       const all = this._getAllRaw();
       const found = all.find(l => l.code.toUpperCase() === cleanCode.toUpperCase());
       if (!found) {
-        return { ok: false, error: 'Invalid license code! Please check your code.' };
+        return { ok: false, error: 'Geçersiz lisans kodu! Lütfen kodunuzu kontrol edin.' };
       }
 
       const effStatus = this.computeEffectiveStatus(found);
       if (effStatus !== 'ACTIVE') {
         return {
           ok: false,
-          error: `This license is ${effStatus}. Please contact an administrator.`
+          error: `Bu lisansın durumu: ${effStatus}. Lütfen yönetici ile iletişime geçin.`
         };
       }
 
@@ -1364,13 +1148,207 @@
       };
     },
 
+    // KAYIT OL (Register New Account with Username + Password + Confirm Password + Optional License)
+    async registerAccount({ username, password, confirmPassword, licenseCode = '' }) {
+      await new Promise(r => setTimeout(r, 120));
+      const cleanName = String(username || '').trim();
+      if (!cleanName || cleanName.length < 3 || cleanName.length > 24) {
+        return { ok: false, error: 'Kullanıcı adı 3 ile 24 karakter arasında olmalıdır.' };
+      }
+      if (!password || String(password).length < 4) {
+        return { ok: false, error: 'Şifre en az 4 karakter olmalıdır.' };
+      }
+      if (confirmPassword !== undefined && password !== confirmPassword) {
+        return { ok: false, error: 'Şifre ve Şifre Tekrarı birbiriyle eşleşmiyor!' };
+      }
+
+      const existingUser = userService._findRawByUsername(cleanName);
+      if (existingUser) {
+        return {
+          ok: false,
+          error: 'Bu kullanıcı adı zaten kayıtlı! Lütfen GİRİŞ YAP sekmesini kullanın.'
+        };
+      }
+
+      let licenseToken = {
+        licenseId: 'LIC-COMMUNITY-XXQ',
+        licenseName: 'Standart Oyuncu Lisansı',
+        role: 'PLAYER',
+        rank: 'PLAYER',
+        isMasterAdmin: false,
+        suggestedUsername: cleanName,
+        codeMasked: 'STD-****-USER'
+      };
+
+      const cleanLic = String(licenseCode || '').trim();
+      if (cleanLic) {
+        const licCheck = await this.validateLicenseStep(cleanLic);
+        if (!licCheck.ok) {
+          return licCheck;
+        }
+        licenseToken = licCheck.licenseToken;
+      }
+
+      return this.completeAccountStep(licenseToken, cleanName, password);
+    },
+
+    // GİRİŞ YAP (Login with Username + Password + Optional License Upgrade)
+    async loginWithCredentials({ username, password = '', licenseCode = '' }) {
+      await new Promise(r => setTimeout(r, 120));
+      const cleanName = String(username || '').trim();
+      const cleanLic = String(licenseCode || '').trim();
+
+      // If user entered a Master/Admin license code with no username, default to suggested username
+      let resolvedName = cleanName;
+      let licTokenFromInput = null;
+      if (cleanLic) {
+        const licRes = await this.validateLicenseStep(cleanLic);
+        if (!licRes.ok) return licRes;
+        licTokenFromInput = licRes.licenseToken;
+        if (!resolvedName && licTokenFromInput.suggestedUsername) {
+          resolvedName = licTokenFromInput.suggestedUsername;
+        }
+      }
+
+      if (!resolvedName) {
+        return { ok: false, error: 'Lütfen Minecraft kullanıcı adınızı girin.' };
+      }
+
+      const rawUser = userService._findRawByUsername(resolvedName);
+      if (!rawUser) {
+        // If a valid license code was provided, allow instant account creation
+        if (licTokenFromInput) {
+          return this.completeAccountStep(licTokenFromInput, resolvedName, password);
+        }
+        return {
+          ok: false,
+          error: 'Bu kullanıcı adıyla kayıtlı hesap bulunamadı. Lütfen önce KAYIT OL sekmesinden hesap oluşturun.'
+        };
+      }
+
+      if (rawUser.passwordHash) {
+        if (!password) {
+          return { ok: false, error: 'Lütfen hesap şifrenizi girin.' };
+        }
+        if (hashPassword(password) !== rawUser.passwordHash) {
+          return { ok: false, error: 'Kullanıcı adı veya şifre hatalı!' };
+        }
+      }
+
+      const tokenToUse = licTokenFromInput || {
+        licenseId: rawUser.licenseId || 'LIC-COMMUNITY-XXQ',
+        licenseName:
+          rawUser.role === 'ADMIN'
+            ? 'Master Admin Lisansı'
+            : rawUser.role === 'VIP'
+              ? 'VIP Lisansı'
+              : 'Kayıtlı Hesap Lisansı',
+        role: rawUser.role || 'PLAYER',
+        rank: rawUser.rank || rawUser.role || 'PLAYER',
+        isMasterAdmin: rawUser.licenseId === 'MASTER-ADMIN-ROOT',
+        suggestedUsername: rawUser.minecraftUsername,
+        codeMasked: rawUser.licenseId === 'MASTER-ADMIN-ROOT' ? 'MASTER-****-ADMIN' : 'HESAP-****-AKTİF'
+      };
+
+      return this.completeAccountStep(tokenToUse, rawUser.minecraftUsername, password);
+    },
+
+    // ŞİFREMİ UNUTTUM (Reset Password with License Code or Account Verification)
+    async resetPasswordWithLicenseOrRecovery({ username, licenseCode = '', newPassword }) {
+      await new Promise(r => setTimeout(r, 120));
+      const cleanName = String(username || '').trim();
+      if (!cleanName) {
+        return { ok: false, error: 'Lütfen kullanıcı adınızı girin.' };
+      }
+      if (!newPassword || String(newPassword).length < 4) {
+        return { ok: false, error: 'Yeni şifreniz en az 4 karakter olmalıdır.' };
+      }
+
+      const all = userService._getAllRaw();
+      const user = all.find(u => u.minecraftUsername.toLowerCase() === cleanName.toLowerCase());
+      if (!user) {
+        return { ok: false, error: 'Bu kullanıcı adıyla kayıtlı bir hesap bulunamadı.' };
+      }
+
+      const cleanLic = String(licenseCode || '').trim();
+      if (cleanLic) {
+        const licCheck = await this.validateLicenseStep(cleanLic);
+        if (!licCheck.ok) {
+          return { ok: false, error: 'Doğrulama için girilen lisans kodu geçersiz.' };
+        }
+      }
+
+      user.passwordHash = hashPassword(newPassword);
+      userService._saveAllRaw(all);
+      activityService.log(
+        'PASSWORD_RESET',
+        user.minecraftUsername,
+        `${user.minecraftUsername} hesap şifresini sıfırladı`
+      );
+      return { ok: true, message: 'Şifreniz başarıyla güncellendi! Şimdi giriş yapabilirsiniz.' };
+    },
+
+    // Activate / Upgrade License Code on Logged-In Account (Settings / Profile)
+    async activateLicenseOnAccount(session, rawCode) {
+      authGuard.verifySession(session);
+      const licRes = await this.validateLicenseStep(rawCode);
+      if (!licRes.ok) return licRes;
+
+      const token = licRes.licenseToken;
+      const updatedUser = userService._grantRankInternal(
+        session.username,
+        token.rank || token.role,
+        null
+      );
+
+      const allUsers = userService._getAllRaw();
+      const rawU = allUsers.find(
+        u => u.minecraftUsername.toLowerCase() === session.username.toLowerCase()
+      );
+      if (rawU) {
+        rawU.licenseId = token.licenseId;
+        userService._saveAllRaw(allUsers);
+      }
+
+      const newSession = this._buildSignedSession({
+        userId: updatedUser.id,
+        licenseId: token.licenseId,
+        licenseName: token.licenseName,
+        role: updatedUser.role,
+        rank: updatedUser.rank,
+        username: updatedUser.minecraftUsername,
+        isMasterAdmin: token.isMasterAdmin,
+        codeMasked: token.codeMasked
+      });
+      this._saveSession(newSession);
+      storageAdapter.set(STORAGE_KEYS.REMEMBERED_USER, {
+        userId: updatedUser.id,
+        username: updatedUser.minecraftUsername,
+        role: updatedUser.role,
+        rank: updatedUser.rank,
+        licenseId: token.licenseId,
+        licenseName: token.licenseName,
+        isMasterAdmin: token.isMasterAdmin,
+        codeMasked: token.codeMasked,
+        savedAt: new Date().toISOString()
+      });
+
+      activityService.log(
+        'LICENSE_ACTIVATED',
+        updatedUser.minecraftUsername,
+        `${updatedUser.minecraftUsername} hesabında "${token.licenseName}" (${updatedUser.rank}) etkinleştirildi`
+      );
+
+      return { ok: true, session: newSession, user: updatedUser, licenseToken: token };
+    },
+
     // STEP 2 OF LOGIN FLOW: Enter Minecraft Username -> Create/Load Account -> Dashboard
     async completeAccountStep(licenseToken, minecraftUsername, password = '') {
-      await new Promise(r => setTimeout(r, 120));
+      await new Promise(r => setTimeout(r, 100));
       if (!licenseToken || !licenseToken.licenseId) {
         return {
           ok: false,
-          error: 'License verification expired. Please enter your license code.'
+          error: 'Lisans doğrulama süresi doldu. Lütfen tekrar giriş yapın.'
         };
       }
 
@@ -1379,13 +1357,14 @@
         licenseToken.suggestedUsername ||
         (licenseToken.role === 'ADMIN'
           ? 'Mashallah'
-          : 'Player_' + Math.floor(100 + Math.random() * 899));
+          : 'Oyuncu_' + Math.floor(100 + Math.random() * 899));
 
       try {
         const userAccount = userService.getOrCreateAccount({
           minecraftUsername: finalUsername,
           licenseId: licenseToken.licenseId,
           role: licenseToken.role,
+          rank: licenseToken.rank || licenseToken.role,
           password
         });
 
@@ -1427,7 +1406,7 @@
         activityService.log(
           'ACCOUNT_LOGIN',
           userAccount.minecraftUsername,
-          `${userAccount.minecraftUsername} (${userAccount.rank}) signed in`
+          `${userAccount.minecraftUsername} (${userAccount.rank}) giriş yaptı`
         );
 
         return { ok: true, session, user: userAccount };
@@ -1452,17 +1431,18 @@
       const user = userService.getOrCreateAccount({
         minecraftUsername: rem.username,
         licenseId: rem.licenseId,
-        role: rem.role
+        role: rem.role,
+        rank: rem.rank
       });
       const session = this._buildSignedSession({
         userId: user.id,
         licenseId: rem.licenseId,
-        licenseName: rem.licenseName || 'Saved License',
+        licenseName: rem.licenseName || 'Kayıtlı Lisans',
         role: user.role,
         rank: user.rank,
         username: user.minecraftUsername,
         isMasterAdmin: Boolean(rem.isMasterAdmin),
-        codeMasked: rem.codeMasked || 'SAVED-****'
+        codeMasked: rem.codeMasked || 'KAYITLI-****'
       });
       this._saveSession(session);
       return session;
@@ -1583,13 +1563,13 @@
       const all = this._getAllRaw();
 
       if (all.some(l => l.code.toUpperCase() === finalCode)) {
-        throw new Error('This license code already exists!');
+        throw new Error('Bu lisans kodu zaten mevcut!');
       }
 
       const newLic = {
         id: 'LIC-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5).toUpperCase(),
         code: finalCode,
-        name: (name || '').trim() || `${cleanRole} License`,
+        name: (name || '').trim() || `${cleanRole} Lisansı`,
         role: cleanRole,
         rank: normalizeRankId(role, cleanRole),
         status: 'ACTIVE',
@@ -1605,7 +1585,7 @@
       activityService.log(
         'LICENSE_CREATED',
         session.username,
-        `${session.username} created ${cleanRole} license "${newLic.name}" (${newLic.code})`
+        `${session.username} yeni ${cleanRole} lisansı oluşturdu: "${newLic.name}" (${newLic.code})`
       );
       return newLic;
     },
@@ -1613,11 +1593,11 @@
     updateLicenseStatus(session, licenseId, newStatus) {
       authGuard.requireRole(session, ['ADMIN']);
       const allowed = ['ACTIVE', 'DISABLED', 'REVOKED'];
-      if (!allowed.includes(newStatus)) throw new Error('Invalid license status.');
+      if (!allowed.includes(newStatus)) throw new Error('Geçersiz lisans durumu.');
 
       const all = this._getAllRaw();
       const target = all.find(l => l.id === licenseId);
-      if (!target) throw new Error('License not found.');
+      if (!target) throw new Error('Lisans bulunamadı.');
 
       target.status = newStatus;
       if (newStatus !== 'ACTIVE') {
@@ -1628,7 +1608,7 @@
       activityService.log(
         `LICENSE_${newStatus}`,
         session.username,
-        `${session.username} set license "${target.name}" (${target.code}) to ${newStatus}`
+        `${session.username} "${target.name}" (${target.code}) lisans durumunu ${newStatus} yaptı`
       );
       return target;
     },
@@ -1637,7 +1617,7 @@
       authGuard.requireRole(session, ['ADMIN']);
       const all = this._getAllRaw();
       const target = all.find(l => l.id === licenseId);
-      if (!target) throw new Error('License not found.');
+      if (!target) throw new Error('Lisans bulunamadı.');
 
       if (role) {
         target.role = normalizeRole(role);
@@ -1649,7 +1629,7 @@
       activityService.log(
         'LICENSE_UPDATED',
         session.username,
-        `${session.username} updated license "${target.code}" (Role: ${target.role})`
+        `${session.username} "${target.code}" lisansını güncelledi (Rol: ${target.role})`
       );
       return target;
     },
@@ -1658,14 +1638,14 @@
       authGuard.requireRole(session, ['ADMIN']);
       const all = this._getAllRaw();
       const idx = all.findIndex(l => l.id === licenseId);
-      if (idx === -1) throw new Error('License not found.');
+      if (idx === -1) throw new Error('Lisans bulunamadı.');
 
       const removed = all.splice(idx, 1)[0];
       this._saveAllRaw(all);
       activityService.log(
         'LICENSE_DELETED',
         session.username,
-        `${session.username} deleted license "${removed.name}" (${removed.code})`
+        `${session.username} "${removed.name}" (${removed.code}) lisansını sildi`
       );
       return removed;
     }
@@ -1679,69 +1659,18 @@
   const partyService = {
     _ensureSeedParties() {
       const existing = storageAdapter.get(STORAGE_KEYS.PARTIES, null);
-      if (existing && Array.isArray(existing) && existing.length > 0) {
+      if (existing && Array.isArray(existing)) {
         existing.forEach(p => {
-          if (!p.gameMode) p.gameMode = 'Classic Millionaire (15 Qs)';
+          if (!p.gameMode) p.gameMode = 'Klasik Milyoner (15 Soru)';
           if (p.description === undefined)
-            p.description = 'Official Minecraft Milyoner tournament lobby.';
+            p.description = 'Minecraft Milyoner turnuva parti odası.';
         });
         return existing;
       }
 
-      const now = new Date().toISOString();
-      const seeded = [
-        {
-          id: 'PRT-1001',
-          name: 'Minecraft Championship #1',
-          organizer: 'Mashallah',
-          organizerLicenseId: 'MASTER-ADMIN-ROOT',
-          maxPlayers: 8,
-          gameMode: 'Classic Millionaire (15 Qs)',
-          description: 'Official Grand Emerald Championship Party! Join with code MCM-8K2P.',
-          inviteCode: 'MCM-8K2P',
-          status: 'WAITING',
-          createdAt: now,
-          participants: [
-            {
-              username: 'Mashallah',
-              role: 'ADMIN',
-              joinStatus: 'JOINED',
-              joinedAt: now
-            },
-            {
-              username: 'Steve',
-              role: 'PLAYER',
-              joinStatus: 'JOINED',
-              joinedAt: now
-            }
-          ],
-          invitedUsers: []
-        },
-        {
-          id: 'PRT-1002',
-          name: 'VIP Diamond Arena',
-          organizer: 'DragonSlayer99',
-          organizerLicenseId: 'LIC-VIP-01',
-          maxPlayers: 6,
-          gameMode: 'Speed Blitz',
-          description: 'Fast-paced Minecraft trivia arena hosted by DragonSlayer99.',
-          inviteCode: 'MCM-VIP9',
-          status: 'WAITING',
-          createdAt: now,
-          participants: [
-            {
-              username: 'DragonSlayer99',
-              role: 'VIP',
-              joinStatus: 'JOINED',
-              joinedAt: now
-            }
-          ],
-          invitedUsers: []
-        }
-      ];
-
-      storageAdapter.set(STORAGE_KEYS.PARTIES, seeded);
-      return seeded;
+      const empty = [];
+      storageAdapter.set(STORAGE_KEYS.PARTIES, empty);
+      return empty;
     },
 
     _getAllRaw() {
@@ -2088,16 +2017,24 @@
   };
 
   const supportService = {
-    // Section 23: PLAYER -> Normal | VIP -> Yüksek (HIGH) | VIP+ / MVP / MVP+ / ELITE / LEGEND / CHAMPION / MILLIONAIRE -> Çok Yüksek (VERY HIGH) | ADMIN -> Kritik (CRITICAL)
+    // Section 23: PLAYER -> Normal | VIP -> Yüksek (HIGH) | VIP+ / MVP / MVP+ / MVIP / MVIP+ -> Çok Yüksek (VERY HIGH) | ADMIN -> Kritik (CRITICAL)
     computeUserPriority(session, kind = 'support') {
       const effRole = authGuard.getEffectiveRole(session);
       if (effRole === 'ADMIN') return 'CRITICAL';
 
       const rankId = authGuard.getEffectiveRankId(session);
       if (
-        ['VIP_PLUS', 'MVP', 'MVP_PLUS', 'ELITE', 'LEGEND', 'CHAMPION', 'MILLIONAIRE'].includes(
-          rankId
-        )
+        [
+          'VIP_PLUS',
+          'MVP',
+          'MVP_PLUS',
+          'MVIP',
+          'MVIP_PLUS',
+          'ELITE',
+          'LEGEND',
+          'CHAMPION',
+          'MILLIONAIRE'
+        ].includes(rankId)
       ) {
         return 'VERY HIGH';
       }
@@ -2136,56 +2073,9 @@
     _ensureSeedTickets() {
       const existing = storageAdapter.get(STORAGE_KEYS.SUPPORT_TICKETS, null);
       if (existing && Array.isArray(existing)) return existing;
-      const now = new Date().toISOString();
-      const seeded = [
-        {
-          id: 'TCK-101',
-          userId: 'USR-1003',
-          username: 'NetherKing_TR',
-          role: 'VIP',
-          rank: 'MVP_PLUS',
-          isVip: true,
-          category: 'Party',
-          title: 'MVP+ 10-Player Tournament Room Setup',
-          description: 'How can I lock spectator slots for our MVP+ championship lobby?',
-          priority: 'VERY HIGH',
-          status: 'OPEN',
-          adminReply: null,
-          createdAt: now
-        },
-        {
-          id: 'TCK-102',
-          userId: 'USR-1002',
-          username: 'DragonSlayer99',
-          role: 'VIP',
-          rank: 'VIP_PLUS',
-          isVip: true,
-          category: 'Shop',
-          title: 'VIP+ Bonus Multiplier Question',
-          description: 'Does the Score Booster stack with the VIP+ 1.5x Emerald multiplier?',
-          priority: 'HIGH',
-          status: 'OPEN',
-          adminReply: null,
-          createdAt: now
-        },
-        {
-          id: 'TCK-103',
-          userId: 'USR-1006',
-          username: 'Steve',
-          role: 'PLAYER',
-          rank: 'PLAYER',
-          isVip: false,
-          category: 'Account',
-          title: 'How to earn more Emerald Coins?',
-          description: 'I want to save up 500 Emeralds for an Extra Life.',
-          priority: 'NORMAL',
-          status: 'RESOLVED',
-          adminReply: 'Complete daily logins and solo quiz games to earn Emeralds quickly!',
-          createdAt: now
-        }
-      ];
-      storageAdapter.set(STORAGE_KEYS.SUPPORT_TICKETS, seeded);
-      return seeded;
+      const empty = [];
+      storageAdapter.set(STORAGE_KEYS.SUPPORT_TICKETS, empty);
+      return empty;
     },
 
     createSupportTicket(session, { category, title, description }) {
@@ -2193,7 +2083,7 @@
       const cleanTitle = String(title || '').trim();
       const cleanDesc = String(description || '').trim();
       if (!cleanTitle || !cleanDesc) {
-        throw new Error('Please fill in both the subject title and description.');
+        throw new Error('Lütfen konu başlığını ve detaylı açıklamayı doldurun.');
       }
 
       const effRole = authGuard.getEffectiveRole(session);
@@ -2208,7 +2098,7 @@
         role: effRole,
         rank: effRank,
         isVip,
-        category: category || 'Technical',
+        category: category || 'Teknik',
         title: cleanTitle,
         description: cleanDesc,
         priority,
@@ -2222,7 +2112,7 @@
       activityService.log(
         'SUPPORT_TICKET_CREATED',
         session.username,
-        `${session.username} [${effRank} / ${priority}] submitted support ticket "${cleanTitle}"`
+        `${session.username} [${effRank} / ${priority}] destek talebi gönderdi: "${cleanTitle}"`
       );
       return ticket;
     },
@@ -2234,7 +2124,11 @@
       const filtered =
         effRole === 'ADMIN' && !onlyMine
           ? all
-          : all.filter(t => t.username.toLowerCase() === session.username.toLowerCase());
+          : all.filter(
+              t =>
+                (t.userId && session.userId && t.userId === session.userId) ||
+                t.username.toLowerCase() === session.username.toLowerCase()
+            );
       return this._sortByPriorityAndDate(filtered);
     },
 
@@ -2242,14 +2136,14 @@
       authGuard.requireRole(session, ['ADMIN']);
       const all = this._ensureSeedTickets();
       const t = all.find(x => x.id === ticketId);
-      if (!t) throw new Error('Support ticket not found.');
+      if (!t) throw new Error('Destek talebi bulunamadı.');
       if (status) t.status = status;
       if (adminReply !== undefined) t.adminReply = adminReply;
       storageAdapter.set(STORAGE_KEYS.SUPPORT_TICKETS, all);
       activityService.log(
         'SUPPORT_TICKET_UPDATED',
         session.username,
-        `Admin ${session.username} updated ticket ${t.id} (${t.status})`
+        `Admin ${session.username} destek talebini (${t.id}) güncelledi (${t.status})`
       );
       return t;
     },
@@ -2258,28 +2152,9 @@
     _ensureSeedBugs() {
       const existing = storageAdapter.get(STORAGE_KEYS.BUG_REPORTS, null);
       if (existing && Array.isArray(existing)) return existing;
-      const now = new Date().toISOString();
-      const seeded = [
-        {
-          id: 'BUG-201',
-          userId: 'USR-1003',
-          username: 'NetherKing_TR',
-          role: 'VIP',
-          rank: 'MVP_PLUS',
-          isVip: true,
-          title: 'Villager Joker Hint Audio Volume on Safari',
-          description:
-            'Villager sound effect is slightly quieter than the level-up chime on iPad Safari.',
-          category: 'Audio / UI',
-          attachmentUrl: '',
-          relatedParty: 'PRT-1002',
-          priority: 'VERY HIGH',
-          status: 'IN PROGRESS',
-          createdAt: now
-        }
-      ];
-      storageAdapter.set(STORAGE_KEYS.BUG_REPORTS, seeded);
-      return seeded;
+      const empty = [];
+      storageAdapter.set(STORAGE_KEYS.BUG_REPORTS, empty);
+      return empty;
     },
 
     createBugReport(
@@ -2290,7 +2165,7 @@
       const cleanTitle = String(title || '').trim();
       const cleanDesc = String(description || '').trim();
       if (!cleanTitle || !cleanDesc) {
-        throw new Error('Please provide a bug title and detailed description.');
+        throw new Error('Lütfen hata başlığını ve detaylı açıklamayı girin.');
       }
 
       const effRole = authGuard.getEffectiveRole(session);
@@ -2307,7 +2182,7 @@
         isVip,
         title: cleanTitle,
         description: cleanDesc,
-        category: category || 'Gameplay',
+        category: category || 'Oynanış',
         attachmentUrl: String(attachmentUrl || '').trim(),
         relatedParty: String(relatedParty || '').trim(),
         priority,
@@ -2320,7 +2195,7 @@
       activityService.log(
         'BUG_REPORTED',
         session.username,
-        `${session.username} [${effRank} / ${priority}] reported bug "${cleanTitle}"`
+        `${session.username} [${effRank} / ${priority}] hata bildirdi: "${cleanTitle}"`
       );
       return bug;
     },
@@ -2332,23 +2207,27 @@
       const filtered =
         effRole === 'ADMIN' && !onlyMine
           ? all
-          : all.filter(b => b.username.toLowerCase() === session.username.toLowerCase());
+          : all.filter(
+              b =>
+                (b.userId && session.userId && b.userId === session.userId) ||
+                b.username.toLowerCase() === session.username.toLowerCase()
+            );
       return this._sortByPriorityAndDate(filtered);
     },
 
     adminUpdateBugStatus(session, bugId, newStatus) {
       authGuard.requireRole(session, ['ADMIN']);
       const allowed = ['OPEN', 'IN PROGRESS', 'WAITING FOR USER', 'RESOLVED', 'CLOSED'];
-      if (!allowed.includes(newStatus)) throw new Error('Invalid bug status.');
+      if (!allowed.includes(newStatus)) throw new Error('Geçersiz hata durumu.');
       const all = this._ensureSeedBugs();
       const bug = all.find(b => b.id === bugId);
-      if (!bug) throw new Error('Bug report not found.');
+      if (!bug) throw new Error('Hata bildirimi bulunamadı.');
       bug.status = newStatus;
       storageAdapter.set(STORAGE_KEYS.BUG_REPORTS, all);
       activityService.log(
         'BUG_STATUS_UPDATED',
         session.username,
-        `Admin ${session.username} set bug ${bug.id} status to ${newStatus}`
+        `Admin ${session.username} hata kaydını (${bug.id}) ${newStatus} olarak güncelledi`
       );
       return bug;
     },
@@ -2357,44 +2236,9 @@
     _ensureSeedSuggestions() {
       const existing = storageAdapter.get(STORAGE_KEYS.SUGGESTIONS, null);
       if (existing && Array.isArray(existing)) return existing;
-      const now = new Date().toISOString();
-      const seeded = [
-        {
-          id: 'SUG-301',
-          userId: 'USR-1002',
-          username: 'DragonSlayer99',
-          role: 'VIP',
-          rank: 'VIP_PLUS',
-          isVip: true,
-          title: 'Add Hardcore Redstone Engineering Category Mode',
-          description:
-            'A dedicated 15-question mode exclusively focused on Redstone circuits and comparators!',
-          category: 'Game Modes',
-          priority: 'HIGH',
-          status: 'PLANNED',
-          votes: 14,
-          votedBy: ['DragonSlayer99', 'Mashallah', 'NetherKing_TR'],
-          createdAt: now
-        },
-        {
-          id: 'SUG-302',
-          userId: 'USR-1005',
-          username: 'DiamondHunter',
-          role: 'PLAYER',
-          rank: 'PLAYER',
-          isVip: false,
-          title: 'Netherite Frame Avatar Border in Shop',
-          description: 'Allow spending Emeralds on custom profile borders.',
-          category: 'Cosmetics',
-          priority: 'NORMAL',
-          status: 'REVIEWING',
-          votes: 6,
-          votedBy: ['DiamondHunter'],
-          createdAt: now
-        }
-      ];
-      storageAdapter.set(STORAGE_KEYS.SUGGESTIONS, seeded);
-      return seeded;
+      const empty = [];
+      storageAdapter.set(STORAGE_KEYS.SUGGESTIONS, empty);
+      return empty;
     },
 
     createSuggestion(session, { title, description, category }) {
@@ -2402,7 +2246,7 @@
       const cleanTitle = String(title || '').trim();
       const cleanDesc = String(description || '').trim();
       if (!cleanTitle || !cleanDesc) {
-        throw new Error('Please provide a suggestion title and description.');
+        throw new Error('Lütfen öneri başlığını ve açıklamasını doldurun.');
       }
 
       const effRole = authGuard.getEffectiveRole(session);
@@ -2419,7 +2263,7 @@
         isVip,
         title: cleanTitle,
         description: cleanDesc,
-        category: category || 'Gameplay',
+        category: category || 'Oynanış',
         priority,
         status: 'REVIEWING',
         votes: 1,
@@ -2432,7 +2276,7 @@
       activityService.log(
         'SUGGESTION_CREATED',
         session.username,
-        `${session.username} [${effRank} / ${priority}] submitted suggestion "${cleanTitle}"`
+        `${session.username} [${effRank} / ${priority}] öneri gönderdi: "${cleanTitle}"`
       );
       return sug;
     },
@@ -2441,7 +2285,7 @@
       authGuard.verifySession(session);
       const all = this._ensureSeedSuggestions();
       const sug = all.find(s => s.id === suggestionId);
-      if (!sug) throw new Error('Suggestion not found.');
+      if (!sug) throw new Error('Öneri bulunamadı.');
       sug.votedBy = sug.votedBy || [];
       const already = sug.votedBy.some(u => u.toLowerCase() === session.username.toLowerCase());
       if (already) {
@@ -2455,9 +2299,18 @@
       return sug;
     },
 
-    listSuggestions(session, sortBy = 'PRIORITY') {
+    listSuggestions(session, sortBy = 'PRIORITY', onlyMine = false) {
       authGuard.verifySession(session);
-      const all = [...this._ensureSeedSuggestions()];
+      const raw = this._ensureSeedSuggestions();
+      const effRole = authGuard.getEffectiveRole(session);
+      const all =
+        effRole === 'ADMIN' && !onlyMine
+          ? [...raw]
+          : raw.filter(
+              s =>
+                (s.userId && session.userId && s.userId === session.userId) ||
+                s.username.toLowerCase() === session.username.toLowerCase()
+            );
       if (sortBy === 'NEWEST') {
         all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       } else if (sortBy === 'OLDEST') {
@@ -2525,58 +2378,58 @@
   };
 
   // ==========================================
-  // 7. STRIPE PAYMENT & EMERALD PACKAGE ARCHITECTURE (Sections 14, 15, 16, 17, 28)
+  // 7. STRIPE PAYMENT & NETHERITE EMERALD PACKAGE ARCHITECTURE (Sections 19, 20, 21, 22, 23)
   // ==========================================
-  // Currency Rule: 5 Emeralds = 1 TL -> 500 Emeralds = 100 TL (Minimum Purchase: 500 Emeralds)
+  // Currency Rule: 5 Zümrüt = 1 TL -> 500 Zümrüt = 100 TL (Minimum: 500 Zümrüt)
   const DEFAULT_EMERALD_PACKAGES = [
     {
       id: 'PKG-EMERALD-500',
-      name: '500 Emeralds Starter Pack',
+      name: '500 Zümrüt — Netherite Başlangıç Paketi',
       emeralds: 500,
       priceTL: 100,
       currency: 'TRY',
-      icon: '💚',
-      badge: 'STARTER',
+      icon: '⬛',
+      badge: 'BAŞLANGIÇ',
       enabled: true
     },
     {
       id: 'PKG-EMERALD-1000',
-      name: '1,000 Emeralds Miner Pack',
+      name: '1.000 Zümrüt — Netherite Madenci Paketi',
       emeralds: 1000,
       priceTL: 200,
       currency: 'TRY',
-      icon: '🟩',
-      badge: 'POPULAR',
+      icon: '⬛',
+      badge: 'POPÜLER',
       enabled: true
     },
     {
       id: 'PKG-EMERALD-2500',
-      name: '2,500 Emeralds Redstone Chest',
+      name: '2.500 Zümrüt — Netherite Sandığı',
       emeralds: 2500,
       priceTL: 500,
       currency: 'TRY',
-      icon: '💎',
-      badge: 'VALUE',
+      icon: '⬛',
+      badge: 'AVANTAJLI',
       enabled: true
     },
     {
       id: 'PKG-EMERALD-5000',
-      name: '5,000 Emeralds Netherite Vault',
+      name: '5.000 Zümrüt — Netherite Kasası',
       emeralds: 5000,
       priceTL: 1000,
       currency: 'TRY',
-      icon: '👑',
+      icon: '⬛',
       badge: 'PRO',
       enabled: true
     },
     {
       id: 'PKG-EMERALD-10000',
-      name: '10,000 Emeralds Millionaire Treasury',
+      name: '10.000 Zümrüt — Netherite Milyoner Hazinesi',
       emeralds: 10000,
       priceTL: 2000,
       currency: 'TRY',
-      icon: '🏆',
-      badge: 'ULTIMATE',
+      icon: '⬛',
+      badge: 'EFSANEVİ',
       enabled: true
     }
   ];
@@ -2604,7 +2457,7 @@
       const emeralds = Math.round(Number(pkgData.emeralds) || 0);
       if (emeralds < this.minEmeraldPurchase) {
         throw new Error(
-          `Minimum Emerald package size is ${this.minEmeraldPurchase} Emeralds (100 TL).`
+          `Minimum Zümrüt paketi miktarı ${this.minEmeraldPurchase} Zümrüt (100 TL) olmalıdır.`
         );
       }
       const priceTL =
@@ -2618,18 +2471,18 @@
         existing.name = String(pkgData.name || existing.name).trim();
         existing.emeralds = emeralds;
         existing.priceTL = priceTL;
-        existing.icon = String(pkgData.icon || existing.icon || '💚').trim();
-        existing.badge = String(pkgData.badge || existing.badge || 'PACK').trim();
+        existing.icon = String(pkgData.icon || existing.icon || '⬛').trim();
+        existing.badge = String(pkgData.badge || existing.badge || 'PAKET').trim();
         if (pkgData.enabled !== undefined) existing.enabled = Boolean(pkgData.enabled);
       } else {
         list.push({
           id: pkgData.id || 'PKG-EMERALD-' + emeralds + '-' + Date.now().toString(36).toUpperCase(),
-          name: String(pkgData.name || `${emeralds.toLocaleString('en-US')} Emeralds`).trim(),
+          name: String(pkgData.name || `${emeralds.toLocaleString('tr-TR')} Zümrüt`).trim(),
           emeralds,
           priceTL,
           currency: 'TRY',
-          icon: String(pkgData.icon || '💚').trim(),
-          badge: String(pkgData.badge || 'CUSTOM').trim(),
+          icon: String(pkgData.icon || '⬛').trim(),
+          badge: String(pkgData.badge || 'ÖZEL').trim(),
           enabled: pkgData.enabled !== false
         });
       }
@@ -2637,7 +2490,7 @@
       activityService.log(
         'EMERALD_PACKAGE_SAVED',
         session.username,
-        `Admin ${session.username} saved Emerald package (${emeralds} 💚 = ${priceTL} TL)`
+        `Admin ${session.username} Zümrüt paketini kaydetti (${emeralds} 💚 = ${priceTL} TL)`
       );
       return list;
     },
@@ -2653,49 +2506,9 @@
     _ensureSeedPayments() {
       const existing = storageAdapter.get(STORAGE_KEYS.PAYMENTS, null);
       if (existing && Array.isArray(existing)) return existing;
-      const now = new Date().toISOString();
-      const seeded = [
-        {
-          id: 'PAY-1001',
-          userId: 'USR-1002',
-          username: 'DragonSlayer99',
-          productType: 'RANK',
-          packageId: 'RANK-VIP-PLUS',
-          product: '👑 VIP+ Rank',
-          title: '👑 VIP+ Rank',
-          emeraldsGranted: 0,
-          rankGranted: 'VIP_PLUS',
-          amount: 350,
-          currency: 'TRY',
-          stripeSessionId: 'cs_test_a1b2c3d4e5',
-          stripePaymentId: 'pi_test_9988776655',
-          webhookEventId: 'evt_test_seed_1001',
-          status: 'PAID',
-          createdAt: now,
-          paidAt: now
-        },
-        {
-          id: 'PAY-1002',
-          userId: 'USR-1003',
-          username: 'NetherKing_TR',
-          productType: 'EMERALD_PACKAGE',
-          packageId: 'PKG-EMERALD-1000',
-          product: '1,000 Emeralds Miner Pack',
-          title: '1,000 Emeralds Miner Pack',
-          emeraldsGranted: 1000,
-          rankGranted: null,
-          amount: 200,
-          currency: 'TRY',
-          stripeSessionId: 'cs_test_f6g7h8i9j0',
-          stripePaymentId: 'pi_test_1122334455',
-          webhookEventId: 'evt_test_seed_1002',
-          status: 'PAID',
-          createdAt: now,
-          paidAt: now
-        }
-      ];
-      storageAdapter.set(STORAGE_KEYS.PAYMENTS, seeded);
-      return seeded;
+      const empty = [];
+      storageAdapter.set(STORAGE_KEYS.PAYMENTS, empty);
+      return empty;
     },
 
     // Step 1 & 2 of Stripe Flow: Create Checkout Session (Status = PENDING; NEVER grants Emeralds yet!)
@@ -3201,57 +3014,11 @@
   const playerService = {
     getAllPlayers() {
       const existing = storageAdapter.get(STORAGE_KEYS.PLAYERS, null);
-      if (existing && Array.isArray(existing) && existing.length > 0) {
+      if (existing && Array.isArray(existing)) {
         return existing;
       }
-
-      const now = new Date().toISOString();
-      const initial = [
-        {
-          username: 'Mashallah',
-          role: 'ADMIN',
-          licenseId: 'MASTER-ADMIN-ROOT',
-          lastSeenAt: now,
-          status: 'ONLINE'
-        },
-        {
-          username: 'DragonSlayer99',
-          role: 'VIP',
-          licenseId: 'LIC-VIP-01',
-          lastSeenAt: now,
-          status: 'ONLINE'
-        },
-        {
-          username: 'NetherKing_TR',
-          role: 'VIP',
-          licenseId: 'LIC-VIP-02',
-          lastSeenAt: now,
-          status: 'ONLINE'
-        },
-        {
-          username: 'OrganizerAlex',
-          role: 'VIP',
-          licenseId: 'LIC-ORG-01',
-          lastSeenAt: now,
-          status: 'ONLINE'
-        },
-        {
-          username: 'DiamondHunter',
-          role: 'PLAYER',
-          licenseId: 'LIC-PLY-02',
-          lastSeenAt: now,
-          status: 'ONLINE'
-        },
-        {
-          username: 'Steve',
-          role: 'PLAYER',
-          licenseId: 'LIC-PLY-01',
-          lastSeenAt: now,
-          status: 'ONLINE'
-        }
-      ];
-      storageAdapter.set(STORAGE_KEYS.PLAYERS, initial);
-      return initial;
+      storageAdapter.set(STORAGE_KEYS.PLAYERS, []);
+      return [];
     },
 
     TouchPlayer(username, role, licenseId) {

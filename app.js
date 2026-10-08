@@ -79,13 +79,24 @@
   }
 
   // ==========================================
-  // İSTATİSTİK VE KAYIT SİSTEMİ (localStorage)
+  // İSTATİSTİK VE KAYIT SİSTEMİ (Kullanıcı ID Bazlı localStorage)
   // ==========================================
-  const STATS_STORAGE_KEY = 'mc_millionaire_tr_stats_v1';
+  const STATS_KEY_PREFIX = 'mc_millionaire_tr_stats_v5_';
+
+  // Purge legacy shared stats key so accounts never share statistics
+  try {
+    localStorage.removeItem('mc_millionaire_tr_stats_v1');
+  } catch (e) {}
 
   class StatsManager {
-    constructor() {
-      this.stats = {
+    constructor(userId = null) {
+      this.userId = userId || this._detectSessionUserId() || 'guest';
+      this.stats = this._defaultStats();
+      this.load();
+    }
+
+    _defaultStats() {
+      return {
         highestPrize: 0,
         highestLevel: 0,
         totalGames: 0,
@@ -93,12 +104,34 @@
         wrongAnswers: 0,
         totalEmeralds: 0
       };
+    }
+
+    _detectSessionUserId() {
+      try {
+        const s = window.MCMServices?.licenseService?.getActiveSession?.();
+        if (s && (s.userId || s.username)) {
+          return String(s.userId || s.username).toLowerCase();
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    getStorageKey() {
+      const uid = this.userId || this._detectSessionUserId() || 'guest';
+      return `${STATS_KEY_PREFIX}${String(uid).toLowerCase()}`;
+    }
+
+    setUserId(userId) {
+      const nextId = userId ? String(userId).toLowerCase() : 'guest';
+      this.userId = nextId;
       this.load();
+      this.updateUI();
     }
 
     load() {
+      this.stats = this._defaultStats();
       try {
-        const raw = localStorage.getItem(STATS_STORAGE_KEY);
+        const raw = localStorage.getItem(this.getStorageKey());
         if (raw) {
           const parsed = JSON.parse(raw);
           this.stats = { ...this.stats, ...parsed };
@@ -110,7 +143,7 @@
 
     save() {
       try {
-        localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(this.stats));
+        localStorage.setItem(this.getStorageKey(), JSON.stringify(this.stats));
       } catch (e) {
         console.warn('İstatistikler kaydedilemedi:', e);
       }
@@ -147,14 +180,7 @@
     }
 
     reset() {
-      this.stats = {
-        highestPrize: 0,
-        highestLevel: 0,
-        totalGames: 0,
-        correctAnswers: 0,
-        wrongAnswers: 0,
-        totalEmeralds: 0
-      };
+      this.stats = this._defaultStats();
       this.save();
     }
 
@@ -163,9 +189,9 @@
     }
 
     updateUI() {
-      const prizeStr = `${this.formatNumber(this.stats.highestPrize)} Emerald`;
+      const prizeStr = `${this.formatNumber(this.stats.highestPrize)} Zümrüt`;
       const levelStr = `${this.stats.highestLevel} / 15`;
-      const totalEmStr = `${this.formatNumber(this.stats.totalEmeralds)} Emerald`;
+      const totalEmStr = `${this.formatNumber(this.stats.totalEmeralds)} Zümrüt`;
 
       // Ana Menü Özet İstatistikler
       const menuPrize = document.getElementById('menu-best-prize');

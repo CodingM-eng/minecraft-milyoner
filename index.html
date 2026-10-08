@@ -16,7 +16,7 @@
   <canvas id="fx-canvas" aria-hidden="true"></canvas>
 
   <!-- ==========================================
-       1 & 2. ADIM ADIM GİRİŞ & TEKRAR HOŞ GELDİN EKRANI
+       1 & 2. KAYIT OL / GİRİŞ YAP / ŞİFREMİ UNUTTUM & TEKRAR HOŞ GELDİN EKRANI
        ========================================== -->
   <div id="access-gate" class="access-gate-overlay" role="dialog" aria-modal="true" aria-labelledby="gate-title">
     <div class="gate-card mc-panel">
@@ -28,94 +28,177 @@
         <p class="gate-desc">TEKRAR HOŞ GELDİN</p>
         <div class="welcome-back-profile-box mc-panel-inset">
           <div class="wb-avatar" id="wb-avatar-box">⛏️</div>
-          <div class="wb-name" id="wb-username-display">Mashallah</div>
+          <div class="wb-name" id="wb-username-display">Oyuncu</div>
           <div class="wb-badges">
             <span id="wb-role-badge" class="role-badge role-player">OYUNCU</span>
-            <span id="wb-license-badge" class="meta-muted">Kayıtlı Lisans</span>
+            <span id="wb-license-badge" class="meta-muted">Aktif Hesap</span>
           </div>
         </div>
         <button type="button" id="btn-wb-continue" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
           <span class="btn-inner">🚀 Devam Et</span>
         </button>
         <button type="button" id="btn-wb-switch-account" class="mc-btn mc-btn-stone mc-btn-small" style="width:100%; margin-top:0.5rem;">
-          <span class="btn-inner">🔄 Hesap Değiştir / Lisans Değiştir</span>
+          <span class="btn-inner">🔄 Farklı Hesaba Geç / Giriş Yap</span>
         </button>
       </div>
 
-      <!-- ADIM B: ADIM 1 — LİSANS KODU GİRİŞİ -->
-      <form id="gate-form-license" class="gate-form" autocomplete="off">
-        <p class="gate-desc">Devam etmek için lisans kodunuzu girin</p>
-        <div class="gate-field-group">
-          <label for="access-code-input" class="gate-field-label">Lisans Kodu</label>
-          <div class="gate-input-wrap">
+      <!-- ADIM B: GİRİŞ YAP / KAYIT OL / ŞİFREMİ UNUTTUM SEKMELERİ -->
+      <div id="gate-auth-tabs-wrap">
+        <div class="gate-auth-tabs" role="tablist" aria-label="Kimlik Doğrulama Sekmeleri">
+          <button type="button" class="gate-auth-tab active" data-auth-tab="login">🔑 GİRİŞ YAP</button>
+          <button type="button" class="gate-auth-tab" data-auth-tab="register">✨ KAYIT OL</button>
+          <button type="button" class="gate-auth-tab" data-auth-tab="forgot">❓ ŞİFREMİ UNUTTUM</button>
+        </div>
+
+        <!-- SEKME 1: GİRİŞ YAP -->
+        <form id="gate-form-login" class="gate-form" autocomplete="off">
+          <p class="gate-desc">Minecraft kullanıcı adınız ve şifrenizle hesabınıza giriş yapın</p>
+
+          <div class="gate-field-group">
+            <label for="login-username-input" class="gate-field-label">Minecraft Kullanıcı Adı</label>
             <input
-              type="password"
-              id="access-code-input"
+              type="text"
+              id="login-username-input"
               class="mc-input"
-              placeholder="Lisans Kodunu Girin..."
+              placeholder="Kullanıcı adınızı girin..."
+              maxlength="24"
               required
               autofocus
             />
-            <button type="button" id="btn-toggle-code-vis" class="mc-icon-btn gate-eye-btn" title="Kodu Göster / Gizle" aria-label="Kodu Göster veya Gizle">
-              👁️
-            </button>
           </div>
-        </div>
 
-        <div id="access-gate-loading" class="gate-loading hidden" aria-live="polite">
-          <span class="mc-spinner">⛏️</span>
-          <span>Lisans doğrulanıyor...</span>
-        </div>
+          <div class="gate-field-group">
+            <label for="login-password-input" class="gate-field-label">Şifre</label>
+            <div class="gate-input-wrap">
+              <input
+                type="password"
+                id="login-password-input"
+                class="mc-input"
+                placeholder="Hesap şifreniz..."
+                required
+              />
+              <button type="button" id="btn-toggle-login-pwd" class="mc-icon-btn gate-eye-btn" title="Şifreyi Göster / Gizle" aria-label="Şifreyi Göster veya Gizle">
+                👁️
+              </button>
+            </div>
+          </div>
 
-        <p id="access-gate-error" class="gate-error hidden" role="alert">
-          ❌ Geçersiz, süresi dolmuş veya iptal edilmiş lisans kodu!
-        </p>
+          <div class="gate-field-group">
+            <label for="login-license-input" class="gate-field-label">Lisans / VIP Kodu (İsteğe Bağlı)</label>
+            <input
+              type="password"
+              id="login-license-input"
+              class="mc-input mc-input-sm"
+              placeholder="Varsa lisans kodunuzu girin (yoksa boş bırakın)"
+            />
+          </div>
 
-        <button type="submit" id="btn-license-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
-          <span class="btn-inner">🔑 Devam Et</span>
-        </button>
-      </form>
+          <p id="gate-login-error" class="gate-error hidden" role="alert"></p>
 
-      <!-- ADIM C: ADIM 2 — MINECRAFT KULLANICI ADI GİRİŞİ -->
-      <form id="gate-form-username" class="gate-form hidden" autocomplete="off">
-        <div class="verified-lic-banner mc-panel-inset">
-          <span>✅ Lisans Doğrulandı:</span>
-          <strong id="gate-verified-lic-name" class="emerald-text">Standart Lisans</strong>
-        </div>
-
-        <div class="gate-field-group">
-          <label for="access-username-input" class="gate-field-label">Minecraft Kullanıcı Adı</label>
-          <input
-            type="text"
-            id="access-username-input"
-            class="mc-input"
-            placeholder="Örn: Mashallah, Steve..."
-            maxlength="24"
-            required
-          />
-        </div>
-
-        <div class="gate-field-group">
-          <label for="access-password-input" class="gate-field-label">Hesap Şifresi (İsteğe Bağlı)</label>
-          <input
-            type="password"
-            id="access-password-input"
-            class="mc-input mc-input-sm"
-            placeholder="Şifre belirlenmediyse boş bırakın"
-          />
-        </div>
-
-        <p id="access-username-error" class="gate-error hidden" role="alert"></p>
-
-        <div style="display:flex; gap:0.6rem; width:100%;">
-          <button type="button" id="btn-gate-back-to-license" class="mc-btn mc-btn-stone mc-btn-small">
-            <span class="btn-inner">← Geri</span>
+          <button type="submit" id="btn-login-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
+            <span class="btn-inner">🔑 Giriş Yap</span>
           </button>
-          <button type="submit" id="btn-username-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn" style="flex:1;">
-            <span class="btn-inner">⛏️ Ana Sayfaya Devam Et</span>
+        </form>
+
+        <!-- SEKME 2: KAYIT OL -->
+        <form id="gate-form-register" class="gate-form hidden" autocomplete="off">
+          <p class="gate-desc">Yeni bir Minecraft Milyoner hesabı oluşturun</p>
+
+          <div class="gate-field-group">
+            <label for="reg-username-input" class="gate-field-label">Minecraft Kullanıcı Adı</label>
+            <input
+              type="text"
+              id="reg-username-input"
+              class="mc-input"
+              placeholder="3-24 karakter (Örn: Steve_TR)"
+              maxlength="24"
+              required
+            />
+          </div>
+
+          <div class="gate-field-group">
+            <label for="reg-password-input" class="gate-field-label">Şifre Oluştur</label>
+            <input
+              type="password"
+              id="reg-password-input"
+              class="mc-input"
+              placeholder="En az 4 karakter..."
+              required
+            />
+          </div>
+
+          <div class="gate-field-group">
+            <label for="reg-password-confirm-input" class="gate-field-label">Şifre Tekrar</label>
+            <input
+              type="password"
+              id="reg-password-confirm-input"
+              class="mc-input"
+              placeholder="Şifrenizi tekrar girin..."
+              required
+            />
+          </div>
+
+          <div class="gate-field-group">
+            <label for="reg-license-input" class="gate-field-label">Lisans / VIP Kodu (İsteğe Bağlı)</label>
+            <input
+              type="text"
+              id="reg-license-input"
+              class="mc-input mc-input-sm"
+              placeholder="Lisans kodunuz varsa girin (sonradan da eklenebilir)"
+            />
+          </div>
+
+          <p id="gate-register-error" class="gate-error hidden" role="alert"></p>
+
+          <button type="submit" id="btn-register-submit" class="mc-btn mc-btn-emerald mc-btn-large gate-submit-btn">
+            <span class="btn-inner">✨ Hesap Oluştur ve Başla</span>
           </button>
-        </div>
-      </form>
+        </form>
+
+        <!-- SEKME 3: ŞİFREMİ UNUTTUM -->
+        <form id="gate-form-forgot" class="gate-form hidden" autocomplete="off">
+          <p class="gate-desc">Hesabınıza bağlı lisans kodu ile yeni şifre belirleyin</p>
+
+          <div class="gate-field-group">
+            <label for="forgot-username-input" class="gate-field-label">Minecraft Kullanıcı Adı</label>
+            <input
+              type="text"
+              id="forgot-username-input"
+              class="mc-input"
+              placeholder="Kullanıcı adınız..."
+              maxlength="24"
+              required
+            />
+          </div>
+
+          <div class="gate-field-group">
+            <label for="forgot-license-input" class="gate-field-label">Hesaba Bağlı Lisans Kodu (Varsa)</label>
+            <input
+              type="password"
+              id="forgot-license-input"
+              class="mc-input mc-input-sm"
+              placeholder="Lisans kodunuzu girin..."
+            />
+          </div>
+
+          <div class="gate-field-group">
+            <label for="forgot-new-password-input" class="gate-field-label">Yeni Şifre</label>
+            <input
+              type="password"
+              id="forgot-new-password-input"
+              class="mc-input"
+              placeholder="En az 4 karakter yeni şifre..."
+              required
+            />
+          </div>
+
+          <p id="gate-forgot-error" class="gate-error hidden" role="alert"></p>
+
+          <button type="submit" id="btn-forgot-submit" class="mc-btn mc-btn-gold mc-btn-large gate-submit-btn">
+            <span class="btn-inner">🔄 Şifreyi Sıfırla ve Giriş Yap</span>
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -123,7 +206,7 @@
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- ==========================================
-       SECTIONS 5 & 6: TAM YÜKSEKLİKTE MİNECRAFT YAN MENÜ ÇEKMECESİ (DRAWER)
+       SAĞ TARAF KOMPAKT YAN MENÜ ÇEKMECESİ (RIGHT-SIDE DRAWER)
        ========================================== -->
   <div id="main-menu-backdrop" class="drawer-backdrop hidden" aria-hidden="true"></div>
   <aside id="main-menu-drawer" class="main-menu-drawer mc-panel hidden" aria-label="Ana Menü Çekmecesi">
@@ -132,36 +215,16 @@
         <span class="drawer-brand-icon">🟩</span>
         <div>
           <div class="drawer-title">MINECRAFT MİLYONER</div>
-          <div class="drawer-sub">ANA MENÜ</div>
+          <div class="drawer-sub">HIZLI MENÜ</div>
         </div>
       </div>
-      <button type="button" id="btn-close-main-drawer" class="mc-icon-btn" title="Menüyü Kapat" aria-label="Menüyü Kapat">✖</button>
+      <button type="button" id="btn-close-main-drawer" class="mc-icon-btn" title="Menüyü Kapat (ESC)" aria-label="Menüyü Kapat">✖</button>
     </div>
 
     <nav class="drawer-nav-list" aria-label="Yan Menü Navigasyonu">
       <button type="button" class="drawer-nav-item active" data-drawer-screen="screen-menu">
         <span class="drawer-item-icon">🏠</span>
         <span class="drawer-item-text">Ana Sayfa</span>
-      </button>
-      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-party">
-        <span class="drawer-item-icon">🎮</span>
-        <span class="drawer-item-text">Partiler</span>
-      </button>
-      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-leaderboard">
-        <span class="drawer-item-icon">🏆</span>
-        <span class="drawer-item-text">Liderlik Tablosu</span>
-      </button>
-      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-shop" data-drawer-shop-cat="ALL">
-        <span class="drawer-item-icon">💚</span>
-        <span class="drawer-item-text">Zümrüt Mağazası</span>
-      </button>
-      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-shop" data-drawer-shop-cat="Ranks">
-        <span class="drawer-item-icon">👑</span>
-        <span class="drawer-item-text">Rütbe Mağazası</span>
-      </button>
-      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-shop" data-drawer-shop-cat="Cosmetics">
-        <span class="drawer-item-icon">🎨</span>
-        <span class="drawer-item-text">Kozmetikler</span>
       </button>
       <button type="button" class="drawer-nav-item" data-drawer-screen="screen-profile">
         <span class="drawer-item-icon">👤</span>
@@ -177,7 +240,31 @@
       </button>
       <button type="button" class="drawer-nav-item" data-drawer-support-tab="suggestion">
         <span class="drawer-item-icon">💡</span>
-        <span class="drawer-item-text">Öneri</span>
+        <span class="drawer-item-text">Öneri Gönder</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-shop" data-drawer-shop-cat="ALL">
+        <span class="drawer-item-icon">💚</span>
+        <span class="drawer-item-text">Zümrüt Mağazası</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-vip-shop">
+        <span class="drawer-item-icon">👑</span>
+        <span class="drawer-item-text">Rütbe Mağazası</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-party">
+        <span class="drawer-item-icon">🎮</span>
+        <span class="drawer-item-text">Partiler / Partiye Katıl</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-action="open-stats">
+        <span class="drawer-item-icon">📊</span>
+        <span class="drawer-item-text">İstatistikler</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-screen="screen-leaderboard">
+        <span class="drawer-item-icon">🏆</span>
+        <span class="drawer-item-text">Liderlik Tablosu</span>
+      </button>
+      <button type="button" class="drawer-nav-item" data-drawer-action="open-rules">
+        <span class="drawer-item-icon">❓</span>
+        <span class="drawer-item-text">Nasıl Oynanır?</span>
       </button>
       <button type="button" class="drawer-nav-item" data-drawer-screen="screen-account-settings">
         <span class="drawer-item-icon">⚙️</span>
@@ -187,6 +274,10 @@
         <span class="drawer-item-icon">🛡️</span>
         <span class="drawer-item-text">Admin Paneli</span>
       </button>
+      <button type="button" class="drawer-nav-item drawer-logout-item" data-drawer-action="logout">
+        <span class="drawer-item-icon">🚪</span>
+        <span class="drawer-item-text">Çıkış Yap</span>
+      </button>
     </nav>
 
     <div class="drawer-footer mc-panel-inset">
@@ -194,10 +285,10 @@
         <img id="drawer-user-avatar" class="mc-avatar-img mc-avatar-sm avatar-border-stone" src="" alt="Avatar" />
         <div class="drawer-user-meta">
           <div class="drawer-user-name-row">
-            <strong id="drawer-user-name">Steve</strong>
+            <strong id="drawer-user-name">Oyuncu</strong>
             <span id="drawer-user-rank" class="role-badge role-player">OYUNCU</span>
           </div>
-          <div class="drawer-user-emeralds emerald-text">
+          <div class="drawer-user-emeralds-row emerald-text">
             💚 <strong id="drawer-user-emeralds">0</strong> Zümrüt
           </div>
         </div>
@@ -208,50 +299,14 @@
     </div>
   </aside>
 
-  <!-- Üst Sabit Başlık Çubuğu -->
+  <!-- Üst Sabit Başlık Çubuğu (Eski Üst Navigasyon Kaldırıldı, Menü Butonu Sağda) -->
   <header class="top-bar">
     <div style="display:flex; align-items:center; gap:0.55rem;">
-      <!-- Section 5 & 6: Ana Menü Çekmece Butonu -->
-      <button type="button" id="btn-open-main-drawer" class="mc-btn mc-btn-emerald mc-btn-small top-menu-trigger hidden" title="Ana Menüyü Aç" aria-label="Ana Menüyü Aç">
-        <span class="btn-inner">☰ MENÜ</span>
-      </button>
-
       <div class="brand-mini" id="top-brand-btn" role="button" tabindex="0" title="Ana Sayfaya Dön">
         <span class="emerald-svg-wrap" id="header-emerald-icon"></span>
         <span class="brand-mini-text">Minecraft Milyoner</span>
       </div>
     </div>
-
-    <!-- Ana Navigasyon Çubuğu (Masaüstü / Tablet & Mobil Alt Menü) -->
-    <nav id="main-nav-bar" class="main-nav-bar hidden" aria-label="Ana Navigasyon">
-      <button type="button" class="main-nav-btn active" data-nav-screen="screen-menu">
-        <span>🏠</span> <span class="nav-label">Ana Sayfa</span>
-      </button>
-      <button type="button" class="main-nav-btn" data-nav-screen="screen-party">
-        <span>🎮</span> <span class="nav-label">Partiler</span>
-      </button>
-      <button type="button" class="main-nav-btn" data-nav-screen="screen-leaderboard">
-        <span>🏆</span> <span class="nav-label">Liderlik Tablosu</span>
-      </button>
-      <button type="button" class="main-nav-btn" data-nav-screen="screen-shop">
-        <span>💚</span> <span class="nav-label">Zümrüt Mağazası</span>
-      </button>
-      <button type="button" class="main-nav-btn" data-nav-screen="screen-vip-shop">
-        <span>👑</span> <span class="nav-label">Rütbe &amp; VIP</span>
-      </button>
-      <button type="button" class="main-nav-btn" data-nav-screen="screen-profile">
-        <span>👤</span> <span class="nav-label">Profil</span>
-      </button>
-      <button type="button" class="main-nav-btn" data-nav-screen="screen-support">
-        <span>🎧</span> <span class="nav-label">Destek</span>
-      </button>
-      <button type="button" class="main-nav-btn" data-nav-screen="screen-account-settings">
-        <span>⚙️</span> <span class="nav-label">Ayarlar</span>
-      </button>
-      <button type="button" id="btn-nav-admin" class="main-nav-btn nav-admin-btn hidden" data-nav-screen="screen-admin">
-        <span>🛡️</span> <span class="nav-label">Admin Paneli</span>
-      </button>
-    </nav>
 
     <div class="top-controls">
       <!-- Sabit Zümrüt Bakiyesi ve Ekstra Can Göstergesi -->
@@ -277,7 +332,7 @@
       <!-- Aktif Kullanıcı & Rütbe Rozeti -->
       <div id="top-session-badge" class="session-profile-pill hidden" role="button" tabindex="0" title="Oyuncu Profilini Aç">
         <img id="top-session-avatar" class="mc-avatar-img mc-avatar-xs avatar-border-stone" src="" alt="Avatar" />
-        <span id="top-session-username" class="session-username">Steve</span>
+        <span id="top-session-username" class="session-username">Oyuncu</span>
         <span id="top-session-role" class="role-badge role-player">OYUNCU</span>
       </div>
 
@@ -299,8 +354,10 @@
       <button type="button" id="btn-top-settings" class="mc-icon-btn" title="Ses Ayarları">
         <span>🔊</span>
       </button>
-      <button type="button" id="btn-top-logout" class="mc-icon-btn mc-icon-btn-danger hidden" title="Çıkış Yap">
-        <span>🚪</span>
+
+      <!-- Sağ Üst Kompakt Menü Çekmecesi Butonu -->
+      <button type="button" id="btn-open-main-drawer" class="mc-btn mc-btn-emerald mc-btn-small top-menu-trigger hidden" title="Menüyü Aç" aria-label="Menüyü Aç" aria-expanded="false">
+        <span class="btn-inner">☰ MENÜ</span>
       </button>
     </div>
   </header>
@@ -309,7 +366,7 @@
   <main class="app-container">
 
     <!-- ==========================================
-         EKRAN 1: KULLANICI & VIP ANA SAYFASI (BÖLÜM 31 & 32)
+         EKRAN 1: KULLANICI & VIP ANA SAYFASI (SADE VE HIZLI EYLEM DÜZENİ)
          ========================================== -->
     <section id="screen-menu" class="screen active" aria-labelledby="main-title">
       <div class="menu-card mc-panel">
@@ -329,7 +386,7 @@
         <div class="user-dashboard-welcome mc-panel-inset">
           <div class="ud-welcome-left">
             <img id="dash-welcome-avatar" class="mc-avatar-img mc-avatar-sm avatar-border-stone" src="" alt="Avatar" />
-            <span class="ud-greeting">Hoş Geldin, <strong id="dash-welcome-username">Steve</strong></span>
+            <span class="ud-greeting">Hoş Geldin, <strong id="dash-welcome-username">Oyuncu</strong></span>
             <span id="dash-welcome-role-badge" class="role-badge role-player">OYUNCU</span>
             <span id="dash-welcome-rank-badge" class="profile-rank-pill">⛏️ OYUNCU</span>
           </div>
@@ -395,48 +452,25 @@
           </div>
         </div>
 
-        <!-- Ana Eylem Butonları -->
+        <!-- Ana Sayfa Birincil Eylem Butonları (Temiz ve Odaklı Hiyerarşi) -->
         <div class="menu-buttons">
           <button type="button" id="btn-start-game" class="mc-btn mc-btn-emerald mc-btn-large">
-            <span class="btn-inner">⚔️ OYUNA BAŞLA (BİREYSEL YARIŞMA)</span>
+            <span class="btn-inner">⚔️ OYUNA BAŞLA</span>
           </button>
 
-          <div class="dashboard-quick-grid">
-            <button type="button" id="btn-open-party-hub" class="mc-btn mc-btn-emerald">
-              <span class="btn-inner">🎮 Partiye Katıl</span>
-            </button>
-            <button type="button" id="btn-open-leaderboard-hero" class="mc-btn mc-btn-gold">
-              <span class="btn-inner">🏆 Liderlik Tablosu</span>
-            </button>
-            <button type="button" id="btn-open-shop-hero" class="mc-btn mc-btn-emerald">
-              <span class="btn-inner">💚 Zümrüt Mağazası</span>
-            </button>
-            <button type="button" class="mc-btn mc-btn-gold" data-nav-screen="screen-vip-shop">
-              <span class="btn-inner">👑 Rütbe &amp; VIP Mağazası</span>
-            </button>
-            <button type="button" class="mc-btn mc-btn-stone" data-nav-screen="screen-profile">
-              <span class="btn-inner">👤 Profil</span>
-            </button>
-            <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="support">
-              <span class="btn-inner">🎧 Destek</span>
-            </button>
-            <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="bug">
-              <span class="btn-inner">🐛 Hata Bildir</span>
-            </button>
-            <button type="button" class="mc-btn mc-btn-stone" data-open-support-tab="suggestion">
-              <span class="btn-inner">💡 Öneri Gönder</span>
-            </button>
-          </div>
+          <button type="button" id="btn-open-party-hub" class="mc-btn mc-btn-gold mc-btn-large home-party-cta-btn">
+            <span class="btn-inner">🎮 PARTİYE KATIL</span>
+          </button>
 
           <div class="menu-secondary-grid">
-            <button type="button" id="btn-open-rules" class="mc-btn mc-btn-stone">
-              <span class="btn-inner">📖 NASIL OYNANIR?</span>
+            <button type="button" id="btn-open-leaderboard-hero" class="mc-btn mc-btn-stone">
+              <span class="btn-inner">🏆 LİDERLİK TABLOSU</span>
             </button>
             <button type="button" id="btn-open-stats" class="mc-btn mc-btn-stone">
               <span class="btn-inner">📊 İSTATİSTİKLER</span>
             </button>
-            <button type="button" id="btn-open-audio" class="mc-btn mc-btn-stone">
-              <span class="btn-inner">🔊 SES AYARLARI</span>
+            <button type="button" id="btn-open-rules" class="mc-btn mc-btn-stone">
+              <span class="btn-inner">❓ NASIL OYNANIR?</span>
             </button>
           </div>
         </div>
@@ -715,6 +749,20 @@
                   <span class="btn-inner">Katıl</span>
                 </button>
               </form>
+            </div>
+
+            <!-- Görsel Rütbe Kilidi (Normal OYUNCU Rütbesi İçin Gösterilir) -->
+            <div id="player-party-create-lock-card" class="mc-panel rank-lock-card">
+              <div class="rank-lock-header">
+                <span class="rank-lock-icon">🔒</span>
+                <div>
+                  <h3 class="panel-sec-title" style="margin:0;">Parti Oluştur (Kilitli)</h3>
+                  <p class="panel-sec-desc" style="margin-top:0.2rem;">Bu özellik <strong>VIP</strong> veya üstü rütbe gerektirir (VIP, VIP+, MVP, MVP+, MVIP, MVIP+).</p>
+                </div>
+              </div>
+              <button type="button" id="btn-rank-lock-view-ranks" class="mc-btn mc-btn-gold mc-btn-small" style="width:100%; margin-top:0.55rem;">
+                <span class="btn-inner">👑 Rütbeleri Gör</span>
+              </button>
             </div>
 
             <!-- Parti Oluştur Kartı (Yalnızca VIP, MVP ve ADMIN Yetkilidir) -->
@@ -1412,12 +1460,25 @@
               <h3 class="panel-sec-title">🔑 Lisans ve Hesap Kimliği</h3>
               <ul class="sys-status-list" style="margin-top:0.5rem;">
                 <li><span>Sabit Kullanıcı ID:</span> <strong id="acc-info-userid">USR-1001</strong></li>
-                <li><span>Minecraft Kullanıcı Adı:</span> <strong id="acc-info-username" class="emerald-text">Steve</strong></li>
+                <li><span>Minecraft Kullanıcı Adı:</span> <strong id="acc-info-username" class="emerald-text">Oyuncu</strong></li>
                 <li><span>Rol ve Rütbe:</span> <strong id="acc-info-role" class="gold-text">OYUNCU</strong></li>
                 <li><span>VIP Üyeliği:</span> <strong id="acc-info-vip">Pasif</strong></li>
-                <li><span>Bağlı Lisans ID:</span> <strong id="acc-info-license">LIC-COMMUNITY-XXQ</strong></li>
+                <li><span>Bağlı Lisans ID:</span> <strong id="acc-info-license">Standart Hesap</strong></li>
                 <li><span>Şifre Koruması:</span> <strong id="acc-info-pwd-status" class="emerald-text">SHA-256 Hazır</strong></li>
               </ul>
+
+              <form id="form-acc-activate-license" class="inline-join-form" style="margin-top:0.65rem;" autocomplete="off">
+                <input
+                  type="password"
+                  id="inp-acc-license-code"
+                  class="mc-input mc-input-sm"
+                  placeholder="Lisans / VIP / Admin kodu girin..."
+                  required
+                />
+                <button type="submit" class="mc-btn mc-btn-gold mc-btn-small">
+                  <span class="btn-inner">🔑 Lisansı Aktif Et</span>
+                </button>
+              </form>
             </div>
 
             <!-- 4. Kozmetikler ve Bildirim Tercihleri -->
