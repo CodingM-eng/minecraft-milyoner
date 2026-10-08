@@ -2292,6 +2292,9 @@
               <button type="button" id="btn-admin-cloud-sync-now" class="mc-btn mc-btn-sm mc-btn-primary">
                 ☁️ Şimdi Bulut İle Senkronize Et
               </button>
+              <button type="button" id="btn-admin-reset-all-data" class="mc-btn mc-btn-sm mc-btn-danger">
+                🧨 Tüm Bilgileri Sıfırla
+              </button>
               <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-admin-tab="settings">
                 🤖 Gemini API &amp; Soru Üretici (${aiPoolCount} AI Soru)
               </button>
@@ -3330,13 +3333,16 @@
             </div>
           </form>
 
-          <h3>☁️ Çoklu Bilgisayar Bulut Senkronizasyonu</h3>
+          <h3>☁️ Çoklu Bilgisayar Bulut Senkronizasyonu &amp; Tam Sıfırlama</h3>
           <p class="card-sub">
-            Farklı bilgisayarlardan veya tarayıcılardan açılan hesaplar, liderlik tablosu, rütbeler ve AI soruları otomatik olarak ortak bulut veritabanı ile senkronize edilir.
+            Farklı bilgisayarlardan veya tarayıcılardan açılan hesaplar (Zümrüt, Netherite, rütbe, kozmetik, başarım, ayarlar, satın alımlar, partiler, bildirimler, destek/hata/öneri kayıtları, liderlik tablosu ve AI soruları) otomatik olarak ortak bulut veritabanı ile senkronize edilir.
           </p>
-          <div class="header-bar-actions" style="margin-bottom: 24px;">
+          <div class="header-bar-actions" style="margin-bottom: 24px; display:flex; flex-wrap:wrap; gap:10px;">
             <button type="button" id="btn-admin-cloud-sync-now" class="mc-btn mc-btn-primary">
               🔄 Şimdi Bulut İle Senkronize Et
+            </button>
+            <button type="button" id="btn-admin-reset-all-data" class="mc-btn mc-btn-danger">
+              🧨 Tüm Hesapları, Verileri ve Bulutu Sıfırla
             </button>
           </div>
 
@@ -4038,11 +4044,28 @@
         try {
           await svc().cloudSyncService?.pushNow();
           await svc().cloudSyncService?.pullAndMerge(true);
-          showToast('✓ Tüm hesaplar, liderlik tablosu ve rütbeler bulutla senkronize edildi!', 'success');
+          showToast('✓ Tüm hesap bilgileri, liderlik tablosu ve veriler bulutla senkronize edildi!', 'success');
           syncHeaderAndDrawer();
           renderAdmin();
         } catch (err) {
           showToast('Bulut senkronizasyonu sırasında hata oluştu.', 'error');
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-admin-reset-all-data')) {
+        const resetBtn = e.target.closest('#btn-admin-reset-all-data');
+        if (resetBtn) resetBtn.disabled = true;
+        showToast('🧨 Tüm hesaplar, geçmişler ve bulut veritabanı sıfırlanıyor...', 'info');
+        try {
+          await svc().cloudSyncService?.resetAllPlatformData(session);
+          showToast('✓ Tüm hesaplar, skorlar, partiler ve bulut verileri tamamen sıfırlandı!', 'success');
+          syncHeaderAndDrawer();
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message || 'Sıfırlama sırasında hata oluştu.', 'error');
+        } finally {
+          if (resetBtn) resetBtn.disabled = false;
         }
         return;
       }
@@ -4559,6 +4582,11 @@
 
     // Çoklu Bilgisayar Bulut Senkronizasyonu geldiğinde ekranı canlı yenile
     window.addEventListener('mcm:cloud-synced', () => {
+      const currentSess = getSession();
+      if (!currentSess) {
+        const gate = document.getElementById('access-gate');
+        if (gate) gate.classList.remove('hidden');
+      }
       syncHeaderAndDrawer();
       if (state.currentScreen === 'leaderboard') renderLeaderboard();
       else if (state.currentScreen === 'shop') renderShop();

@@ -20,16 +20,16 @@
   'use strict';
 
   const STORAGE_KEYS = {
-    RANKS: 'mc_millionaire_tr_ranks_v9',
-    ECONOMY_SETTINGS: 'mc_millionaire_tr_economy_settings_v8',
-    TRANSACTIONS: 'mc_millionaire_tr_emerald_tx_v6',
-    NETHERITE_TX: 'mc_millionaire_tr_netherite_tx_v6',
-    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v9',
-    PURCHASES: 'mc_millionaire_tr_purchases_v6',
-    GIFT_HISTORY: 'mc_millionaire_tr_rank_gifts_v6',
-    ACHIEVEMENTS: 'mc_millionaire_tr_achievements_v6',
-    EXTRA_LIFE_COOLDOWNS: 'mc_millionaire_tr_extralife_cd_v6',
-    LEADERBOARD_META: 'mc_millionaire_tr_leaderboard_meta_v6'
+    RANKS: 'mc_millionaire_tr_ranks_v10',
+    ECONOMY_SETTINGS: 'mc_millionaire_tr_economy_settings_v10',
+    TRANSACTIONS: 'mc_millionaire_tr_emerald_tx_v10',
+    NETHERITE_TX: 'mc_millionaire_tr_netherite_tx_v10',
+    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v10',
+    PURCHASES: 'mc_millionaire_tr_purchases_v10',
+    GIFT_HISTORY: 'mc_millionaire_tr_rank_gifts_v10',
+    ACHIEVEMENTS: 'mc_millionaire_tr_achievements_v10',
+    EXTRA_LIFE_COOLDOWNS: 'mc_millionaire_tr_extralife_cd_v10',
+    LEADERBOARD_META: 'mc_millionaire_tr_leaderboard_meta_v10'
   };
 
   function safeRead(key, fallback) {
@@ -46,15 +46,9 @@
   function safeWrite(key, data) {
     try {
       localStorage.setItem(key, JSON.stringify(data));
-      if (
-        key === STORAGE_KEYS.RANKS ||
-        key === STORAGE_KEYS.SHOP_ITEMS ||
-        key === STORAGE_KEYS.LEADERBOARD_META
-      ) {
-        const cloud = window.MCMServices?.cloudSyncService;
-        if (cloud && typeof cloud.schedulePush === 'function') {
-          cloud.schedulePush(250);
-        }
+      const cloud = window.MCMServices?.cloudSyncService;
+      if (cloud && typeof cloud.schedulePush === 'function') {
+        cloud.schedulePush(250);
       }
       return true;
     } catch (e) {

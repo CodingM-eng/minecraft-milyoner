@@ -15,27 +15,44 @@
   'use strict';
 
   const STORAGE_KEYS = {
-    USERS: 'mc_millionaire_tr_users_v6',
-    ACTIVE_SESSION: 'mc_millionaire_tr_active_session_v6',
-    PARTIES: 'mc_millionaire_tr_parties_v6',
-    PARTY_INVITATIONS: 'mc_millionaire_tr_party_invites_v6',
-    NOTIFICATIONS: 'mc_millionaire_tr_notifications_v6',
-    SUPPORT_TICKETS: 'mc_millionaire_tr_support_v6',
-    BUG_REPORTS: 'mc_millionaire_tr_bugs_v6',
-    SUGGESTIONS: 'mc_millionaire_tr_suggestions_v6',
-    STRIPE_CONFIG: 'mc_millionaire_tr_stripe_cfg_v6',
-    STRIPE_SESSIONS: 'mc_millionaire_tr_stripe_sessions_v6',
-    MOD_PERMISSIONS: 'mc_millionaire_tr_mod_perms_v6',
-    BACKUPS: 'mc_millionaire_tr_backups_v6',
-    PLATFORM_SETTINGS: 'mc_millionaire_tr_platform_settings_v6',
-    ACTIVITY: 'mc_millionaire_tr_activity_v6',
-    FIRST_PREMIUM_NETHERITE_GRANTED: 'mc_millionaire_tr_first_netherite_v6',
-    AI_CONFIG: 'mc_millionaire_tr_ai_cfg_v6',
-    AI_QUESTIONS: 'mc_millionaire_tr_ai_questions_v6',
-    SEEN_QUESTIONS: 'mc_millionaire_tr_seen_questions_v6',
-    CLOUD_SYNC_META: 'mc_millionaire_tr_cloud_sync_meta_v6',
-    TOMBSTONES: 'mc_millionaire_tr_tombstones_v6'
+    USERS: 'mc_millionaire_tr_users_v10',
+    ACTIVE_SESSION: 'mc_millionaire_tr_active_session_v10',
+    PARTIES: 'mc_millionaire_tr_parties_v10',
+    PARTY_INVITATIONS: 'mc_millionaire_tr_party_invites_v10',
+    NOTIFICATIONS: 'mc_millionaire_tr_notifications_v10',
+    SUPPORT_TICKETS: 'mc_millionaire_tr_support_v10',
+    BUG_REPORTS: 'mc_millionaire_tr_bugs_v10',
+    SUGGESTIONS: 'mc_millionaire_tr_suggestions_v10',
+    STRIPE_CONFIG: 'mc_millionaire_tr_stripe_cfg_v10',
+    STRIPE_SESSIONS: 'mc_millionaire_tr_stripe_sessions_v10',
+    MOD_PERMISSIONS: 'mc_millionaire_tr_mod_perms_v10',
+    BACKUPS: 'mc_millionaire_tr_backups_v10',
+    PLATFORM_SETTINGS: 'mc_millionaire_tr_platform_settings_v10',
+    ACTIVITY: 'mc_millionaire_tr_activity_v10',
+    FIRST_PREMIUM_NETHERITE_GRANTED: 'mc_millionaire_tr_first_netherite_v10',
+    AI_CONFIG: 'mc_millionaire_tr_ai_cfg_v10',
+    AI_QUESTIONS: 'mc_millionaire_tr_ai_questions_v10',
+    SEEN_QUESTIONS: 'mc_millionaire_tr_seen_questions_v10',
+    CLOUD_SYNC_META: 'mc_millionaire_tr_cloud_sync_meta_v10',
+    TOMBSTONES: 'mc_millionaire_tr_tombstones_v10',
+    RESET_EPOCH: 'mc_millionaire_tr_reset_epoch_v10'
   };
+
+  // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan tüm önbellek verilerini temizle
+  try {
+    if (typeof localStorage !== 'undefined' && typeof localStorage.length === 'number') {
+      const legacyKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('mc_millionaire_tr_') && !k.endsWith('_v10')) {
+          legacyKeys.push(k);
+        }
+      }
+      legacyKeys.forEach(k => localStorage.removeItem(k));
+    }
+  } catch (e) {
+    // ignore storage access errors
+  }
 
   let cloudSyncInternalWrite = false;
   const CLOUD_SYNCED_STORAGE_KEYS = new Set([
@@ -46,11 +63,16 @@
     STORAGE_KEYS.SUPPORT_TICKETS,
     STORAGE_KEYS.BUG_REPORTS,
     STORAGE_KEYS.SUGGESTIONS,
+    STORAGE_KEYS.STRIPE_CONFIG,
+    STORAGE_KEYS.STRIPE_SESSIONS,
     STORAGE_KEYS.MOD_PERMISSIONS,
     STORAGE_KEYS.PLATFORM_SETTINGS,
+    STORAGE_KEYS.ACTIVITY,
+    STORAGE_KEYS.FIRST_PREMIUM_NETHERITE_GRANTED,
     STORAGE_KEYS.AI_CONFIG,
     STORAGE_KEYS.AI_QUESTIONS,
-    STORAGE_KEYS.TOMBSTONES
+    STORAGE_KEYS.TOMBSTONES,
+    STORAGE_KEYS.RESET_EPOCH
   ]);
 
   // ==========================================
@@ -2681,13 +2703,20 @@
   // rütbeleri, partileri ve Gemini AI soru havuzunu gerçek zamanlı senkronize eder.
   // ==========================================
   const DEFAULT_CLOUD_ENDPOINT =
-    'https://kvdb.io/VbaQ2SwvGVXLqWRhnvv6sM/mcm_cloud_db_v9';
+    'https://kvdb.io/VbaQ2SwvGVXLqWRhnvv6sM/mcm_cloud_db_v10';
   const FALLBACK_CLOUD_ENDPOINT =
-    'https://api.restful-api.dev/objects/ff808181a09d98f701a11d54a62f2531';
+    'https://kvdb.io/VbaQ2SwvGVXLqWRhnvv6sM/mcm_cloud_db_v10_backup';
   const ECONOMY_STORAGE_KEYS = {
-    RANKS: 'mc_millionaire_tr_ranks_v9',
-    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v9',
-    LEADERBOARD_META: 'mc_millionaire_tr_leaderboard_meta_v6'
+    RANKS: 'mc_millionaire_tr_ranks_v10',
+    ECONOMY_SETTINGS: 'mc_millionaire_tr_economy_settings_v10',
+    TRANSACTIONS: 'mc_millionaire_tr_emerald_tx_v10',
+    NETHERITE_TX: 'mc_millionaire_tr_netherite_tx_v10',
+    SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v10',
+    PURCHASES: 'mc_millionaire_tr_purchases_v10',
+    GIFT_HISTORY: 'mc_millionaire_tr_rank_gifts_v10',
+    ACHIEVEMENTS: 'mc_millionaire_tr_achievements_v10',
+    EXTRA_LIFE_COOLDOWNS: 'mc_millionaire_tr_extralife_cd_v10',
+    LEADERBOARD_META: 'mc_millionaire_tr_leaderboard_meta_v10'
   };
 
   const cloudSyncService = {
@@ -2706,7 +2735,8 @@
       if (
         !meta ||
         !meta.endpoint ||
-        String(meta.endpoint).includes('ff808181a09d98f701a11d14ce6a249f')
+        String(meta.endpoint).includes('ff808181a09d98f701a11d14ce6a249f') ||
+        String(meta.endpoint).includes('mcm_cloud_db_v9')
       ) {
         const upgraded = {
           ...(meta || {}),
@@ -2727,7 +2757,11 @@
     getEndpoint() {
       const meta = this.getMeta();
       const raw = String(meta?.endpoint || DEFAULT_CLOUD_ENDPOINT).trim();
-      if (!raw || raw.includes('ff808181a09d98f701a11d14ce6a249f')) {
+      if (
+        !raw ||
+        raw.includes('ff808181a09d98f701a11d14ce6a249f') ||
+        raw.includes('mcm_cloud_db_v9')
+      ) {
         return DEFAULT_CLOUD_ENDPOINT;
       }
       return raw;
@@ -2784,8 +2818,12 @@
       if (!Array.isArray(users)) return [];
       return users.map(u => {
         const copy = { ...u };
-        // Eğer avatar büyük bir data:image base64 ise bulut boyutunu şişirmemek için kısalt
-        if (typeof copy.avatarUrl === 'string' && copy.avatarUrl.startsWith('data:') && copy.avatarUrl.length > 4096) {
+        // 64x64 piksel avatarlar (yaklaşık 2-12 KB) buluta tam senkronize edilir; yalnızca çok büyük olanlar kırpılır
+        if (
+          typeof copy.avatarUrl === 'string' &&
+          copy.avatarUrl.startsWith('data:') &&
+          copy.avatarUrl.length > 32768
+        ) {
           copy.avatarUrl = '';
         }
         return copy;
@@ -2805,12 +2843,20 @@
 
     _buildLocalPayload() {
       return {
-        schemaVersion: '8.5',
+        schemaVersion: '10.0',
+        resetEpoch: Number(storage.get(STORAGE_KEYS.RESET_EPOCH, 1) || 1),
         updatedAt: new Date().toISOString(),
         tombstones: this.getTombstones(),
         users: this._sanitizeUsersForCloud(storage.get(STORAGE_KEYS.USERS, [])),
         ranks: storage.get(ECONOMY_STORAGE_KEYS.RANKS, []),
         shopItems: storage.get(ECONOMY_STORAGE_KEYS.SHOP_ITEMS, []),
+        economySettings: storage.get(ECONOMY_STORAGE_KEYS.ECONOMY_SETTINGS, null),
+        transactions: storage.get(ECONOMY_STORAGE_KEYS.TRANSACTIONS, []).slice(0, 150),
+        netheriteTx: storage.get(ECONOMY_STORAGE_KEYS.NETHERITE_TX, []).slice(0, 150),
+        purchases: storage.get(ECONOMY_STORAGE_KEYS.PURCHASES, []).slice(0, 150),
+        giftHistory: storage.get(ECONOMY_STORAGE_KEYS.GIFT_HISTORY, []).slice(0, 100),
+        extraLifeCooldowns: storage.get(ECONOMY_STORAGE_KEYS.EXTRA_LIFE_COOLDOWNS, {}),
+        firstPremiumNetheriteGranted: storage.get(STORAGE_KEYS.FIRST_PREMIUM_NETHERITE_GRANTED, {}),
         leaderboardMeta: storage.get(ECONOMY_STORAGE_KEYS.LEADERBOARD_META, null),
         parties: storage.get(STORAGE_KEYS.PARTIES, []).slice(0, 80),
         partyInvitations: storage.get(STORAGE_KEYS.PARTY_INVITATIONS, []).slice(0, 120),
@@ -2818,8 +2864,10 @@
         support: storage.get(STORAGE_KEYS.SUPPORT_TICKETS, []).slice(0, 80),
         bugs: this._sanitizeBugsForCloud(storage.get(STORAGE_KEYS.BUG_REPORTS, [])),
         suggestions: storage.get(STORAGE_KEYS.SUGGESTIONS, []).slice(0, 80),
+        activity: storage.get(STORAGE_KEYS.ACTIVITY, []).slice(0, 120),
         modPermissions: storage.get(STORAGE_KEYS.MOD_PERMISSIONS, null),
         platformSettings: storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, null),
+        stripeConfig: storage.get(STORAGE_KEYS.STRIPE_CONFIG, null),
         aiConfig: storage.get(STORAGE_KEYS.AI_CONFIG, null),
         aiQuestions: storage.get(STORAGE_KEYS.AI_QUESTIONS, []).slice(0, 250)
       };
@@ -2859,6 +2907,43 @@
       return Array.from(mMap.values());
     },
 
+    _mergeUserRecords(lItem, rItem, rTime, lTime) {
+      const newer = rTime >= lTime ? { ...lItem, ...rItem } : { ...rItem, ...lItem };
+      const ownedCosmetics = Array.from(
+        new Set([
+          ...(Array.isArray(lItem.ownedCosmetics) ? lItem.ownedCosmetics : []),
+          ...(Array.isArray(rItem.ownedCosmetics) ? rItem.ownedCosmetics : [])
+        ])
+      );
+      const achievements = Array.from(
+        new Set([
+          ...(Array.isArray(lItem.achievements) ? lItem.achievements : []),
+          ...(Array.isArray(rItem.achievements) ? rItem.achievements : [])
+        ])
+      );
+      newer.ownedCosmetics = ownedCosmetics;
+      newer.achievements = achievements;
+      if (!newer.avatarUrl) {
+        newer.avatarUrl = lItem.avatarUrl || rItem.avatarUrl || '';
+      }
+      if (!newer.minecraftPlayerName) {
+        newer.minecraftPlayerName = lItem.minecraftPlayerName || rItem.minecraftPlayerName || '';
+      }
+      newer.bestScore = Math.max(Number(lItem.bestScore || 0), Number(rItem.bestScore || 0));
+      newer.emeraldsEarnedTotal = Math.max(
+        Number(lItem.emeraldsEarnedTotal || 0),
+        Number(rItem.emeraldsEarnedTotal || 0)
+      );
+      newer.emeraldsSpentTotal = Math.max(
+        Number(lItem.emeraldsSpentTotal || 0),
+        Number(rItem.emeraldsSpentTotal || 0)
+      );
+      newer.initialNetheriteBonusClaimed = Boolean(
+        lItem.initialNetheriteBonusClaimed || rItem.initialNetheriteBonusClaimed
+      );
+      return newer;
+    },
+
     _mergeArraysById(localArr, remoteArr, idField, deletedSet = new Set(), normalizeIdFn = null) {
       const map = new Map();
       let changedLocal = false;
@@ -2895,10 +2980,10 @@
           changedLocal = true;
         } else {
           const rTime = this._parseTime(
-            rItem.updatedAt || rItem.respondedAt || rItem.lastLoginAt || rItem.createdAt
+            rItem.updatedAt || rItem.respondedAt || rItem.lastLoginAt || rItem.createdAt || rItem.timestamp
           );
           const lTime = this._parseTime(
-            lItem.updatedAt || lItem.respondedAt || lItem.lastLoginAt || lItem.createdAt
+            lItem.updatedAt || lItem.respondedAt || lItem.lastLoginAt || lItem.createdAt || lItem.timestamp
           );
           if (idField === 'partyId') {
             const mergedRemoved = Array.from(
@@ -2929,24 +3014,42 @@
               map.set(key, baseParty);
               localHasUnpushed = true;
             }
+          } else if (idField === 'username') {
+            const mergedUser = this._mergeUserRecords(lItem, rItem, rTime, lTime);
+            if (rTime > lTime) {
+              map.set(key, mergedUser);
+              changedLocal = true;
+            } else if (lTime > rTime) {
+              map.set(key, mergedUser);
+              localHasUnpushed = true;
+            } else {
+              const rGames = Number(rItem.gamesPlayed || 0);
+              const lGames = Number(lItem.gamesPlayed || 0);
+              const rPoints = Number(rItem.points || 0);
+              const lPoints = Number(lItem.points || 0);
+              if (
+                rGames > lGames ||
+                rPoints > lPoints ||
+                mergedUser.ownedCosmetics.length > (lItem.ownedCosmetics || []).length ||
+                mergedUser.achievements.length > (lItem.achievements || []).length
+              ) {
+                map.set(key, mergedUser);
+                changedLocal = true;
+              } else if (
+                lGames > rGames ||
+                lPoints > rPoints ||
+                mergedUser.ownedCosmetics.length > (rItem.ownedCosmetics || []).length ||
+                mergedUser.achievements.length > (rItem.achievements || []).length
+              ) {
+                map.set(key, mergedUser);
+                localHasUnpushed = true;
+              }
+            }
           } else if (rTime > lTime) {
-            const merged = { ...lItem, ...rItem };
-            if (!merged.avatarUrl && lItem.avatarUrl) merged.avatarUrl = lItem.avatarUrl;
-            map.set(key, merged);
+            map.set(key, { ...lItem, ...rItem });
             changedLocal = true;
           } else if (lTime > rTime) {
             localHasUnpushed = true;
-          } else if (idField === 'username') {
-            const rGames = Number(rItem.gamesPlayed || 0);
-            const lGames = Number(lItem.gamesPlayed || 0);
-            const rPoints = Number(rItem.points || 0);
-            const lPoints = Number(lItem.points || 0);
-            if (rGames > lGames || rPoints > lPoints) {
-              map.set(key, { ...lItem, ...rItem });
-              changedLocal = true;
-            } else if (lGames > rGames || lPoints > rPoints) {
-              localHasUnpushed = true;
-            }
           }
         }
       });
@@ -2964,6 +3067,40 @@
       };
     },
 
+    _wipeLocalCollectionsForReset(newResetEpoch) {
+      storage.set(STORAGE_KEYS.RESET_EPOCH, Number(newResetEpoch || Date.now()));
+      storage.set(STORAGE_KEYS.TOMBSTONES, {
+        deletedUsers: [],
+        deletedRanks: [],
+        deletedItems: [],
+        deletedParties: []
+      });
+      storage.set(STORAGE_KEYS.USERS, []);
+      storage.set(STORAGE_KEYS.PARTIES, []);
+      storage.set(STORAGE_KEYS.PARTY_INVITATIONS, []);
+      storage.set(STORAGE_KEYS.NOTIFICATIONS, {});
+      storage.set(STORAGE_KEYS.SUPPORT_TICKETS, []);
+      storage.set(STORAGE_KEYS.BUG_REPORTS, []);
+      storage.set(STORAGE_KEYS.SUGGESTIONS, []);
+      storage.set(STORAGE_KEYS.ACTIVITY, []);
+      storage.set(STORAGE_KEYS.FIRST_PREMIUM_NETHERITE_GRANTED, {});
+      storage.set(STORAGE_KEYS.SEEN_QUESTIONS, []);
+      storage.set(ECONOMY_STORAGE_KEYS.TRANSACTIONS, []);
+      storage.set(ECONOMY_STORAGE_KEYS.NETHERITE_TX, []);
+      storage.set(ECONOMY_STORAGE_KEYS.PURCHASES, []);
+      storage.set(ECONOMY_STORAGE_KEYS.GIFT_HISTORY, []);
+      storage.set(ECONOMY_STORAGE_KEYS.ACHIEVEMENTS, {});
+      storage.set(ECONOMY_STORAGE_KEYS.EXTRA_LIFE_COOLDOWNS, {});
+      storage.set(ECONOMY_STORAGE_KEYS.LEADERBOARD_META, {
+        lastResetAt: new Date().toISOString(),
+        lastResetBy: 'SYSTEM_RESET'
+      });
+      const active = storage.get(STORAGE_KEYS.ACTIVE_SESSION, null);
+      if (active && !active.isAdminSession) {
+        storage.remove(STORAGE_KEYS.ACTIVE_SESSION);
+      }
+    },
+
     _mergeAndSave(remoteData) {
       if (!remoteData || typeof remoteData !== 'object') {
         return { changedLocal: false, needsPush: true };
@@ -2974,6 +3111,16 @@
 
       cloudSyncInternalWrite = true;
       try {
+        // 0. Tam Platform Sıfırlama (resetEpoch) kontrolü
+        const localEpoch = Number(storage.get(STORAGE_KEYS.RESET_EPOCH, 1) || 1);
+        const remoteEpoch = Number(remoteData.resetEpoch || 1);
+        if (remoteEpoch > localEpoch) {
+          this._wipeLocalCollectionsForReset(remoteEpoch);
+          anyLocalChanged = true;
+        } else if (localEpoch > remoteEpoch) {
+          anyNeedsPush = true;
+        }
+
         // 1. Tombstones birleştir
         const lTombs = this.getTombstones();
         const rTombs = remoteData.tombstones || {};
@@ -2990,7 +3137,7 @@
         const delItemsSet = new Set(mergedTombs.deletedItems.map(x => String(x).toLowerCase()));
         const delPartiesSet = new Set(mergedTombs.deletedParties.map(x => String(x).toLowerCase()));
 
-        // 2. Kullanıcıları birleştir
+        // 2. Kullanıcıları (Hesap Bilgileri, Rütbe, Zümrüt, Netherite, Kozmetik, Başarım, Şifre Hash) birleştir
         const userMerge = this._mergeArraysById(
           storage.get(STORAGE_KEYS.USERS, []),
           remoteData.users,
@@ -3007,25 +3154,30 @@
         const activeSession = storage.get(STORAGE_KEYS.ACTIVE_SESSION, null);
         if (activeSession && activeSession.username) {
           const activeClean = activeSession.username.toLowerCase();
-          const matchedUser = userMerge.merged.find(
-            u => u && u.username && u.username.toLowerCase() === activeClean
-          );
-          if (matchedUser) {
-            const nextSession = {
-              ...activeSession,
-              userId: matchedUser.userId || activeSession.userId,
-              rank: activeSession.isAdminSession ? 'ADMIN' : normalizeRankId(matchedUser.rank || 'MEMBER'),
-              role: activeSession.isAdminSession ? 'ADMIN' : matchedUser.role || 'MEMBER',
-              isModerator: Boolean(matchedUser.isModerator),
-              minecraftPlayerName: matchedUser.minecraftPlayerName || '',
-              avatarUrl: matchedUser.avatarUrl || activeSession.avatarUrl || '',
-              emeraldBalance: Number(matchedUser.emeraldBalance || 0),
-              netheriteBalance: Number(matchedUser.netheriteBalance || 0),
-              extraLives: Number(matchedUser.extraLives || 0),
-              points: Number(matchedUser.points || 0)
-            };
-            nextSession.signature = computeTokenSignature(nextSession);
-            storage.set(STORAGE_KEYS.ACTIVE_SESSION, nextSession);
+          if (delUsersSet.has(activeClean) && !activeSession.isAdminSession) {
+            storage.remove(STORAGE_KEYS.ACTIVE_SESSION);
+            anyLocalChanged = true;
+          } else {
+            const matchedUser = userMerge.merged.find(
+              u => u && u.username && u.username.toLowerCase() === activeClean
+            );
+            if (matchedUser) {
+              const nextSession = {
+                ...activeSession,
+                userId: matchedUser.userId || activeSession.userId,
+                rank: activeSession.isAdminSession ? 'ADMIN' : normalizeRankId(matchedUser.rank || 'MEMBER'),
+                role: activeSession.isAdminSession ? 'ADMIN' : matchedUser.role || 'MEMBER',
+                isModerator: Boolean(matchedUser.isModerator),
+                minecraftPlayerName: matchedUser.minecraftPlayerName || '',
+                avatarUrl: matchedUser.avatarUrl || activeSession.avatarUrl || '',
+                emeraldBalance: Number(matchedUser.emeraldBalance || 0),
+                netheriteBalance: Number(matchedUser.netheriteBalance || 0),
+                extraLives: Number(matchedUser.extraLives || 0),
+                points: Number(matchedUser.points || 0)
+              };
+              nextSession.signature = computeTokenSignature(nextSession);
+              storage.set(STORAGE_KEYS.ACTIVE_SESSION, nextSession);
+            }
           }
         }
 
@@ -3060,7 +3212,77 @@
           if (itemMerge.localHasUnpushed) anyNeedsPush = true;
         }
 
-        // 4b. Leaderboard Meta birleştir
+        // 4b. Ekonomi Ayarları, İşlem Geçmişi, Satın Alımlar ve Hediye Geçmişini birleştir
+        if (remoteData.economySettings && typeof remoteData.economySettings === 'object') {
+          const localEco = storage.get(ECONOMY_STORAGE_KEYS.ECONOMY_SETTINGS, null);
+          if (!localEco) {
+            storage.set(ECONOMY_STORAGE_KEYS.ECONOMY_SETTINGS, remoteData.economySettings);
+            anyLocalChanged = true;
+          }
+        }
+
+        [
+          { remoteKey: 'transactions', storageKey: ECONOMY_STORAGE_KEYS.TRANSACTIONS, max: 150 },
+          { remoteKey: 'netheriteTx', storageKey: ECONOMY_STORAGE_KEYS.NETHERITE_TX, max: 150 },
+          { remoteKey: 'purchases', storageKey: ECONOMY_STORAGE_KEYS.PURCHASES, max: 150 },
+          { remoteKey: 'giftHistory', storageKey: ECONOMY_STORAGE_KEYS.GIFT_HISTORY, max: 100 },
+          { remoteKey: 'activity', storageKey: STORAGE_KEYS.ACTIVITY, max: 120 }
+        ].forEach(({ remoteKey, storageKey, max }) => {
+          if (Array.isArray(remoteData[remoteKey])) {
+            const txMerge = this._mergeArraysById(
+              storage.get(storageKey, []),
+              remoteData[remoteKey],
+              'id'
+            );
+            if (txMerge.changedLocal) {
+              const sorted = txMerge.merged
+                .sort(
+                  (a, b) =>
+                    this._parseTime(b.createdAt || b.timestamp) -
+                    this._parseTime(a.createdAt || a.timestamp)
+                )
+                .slice(0, max);
+              storage.set(storageKey, sorted);
+              anyLocalChanged = true;
+            }
+            if (txMerge.localHasUnpushed) anyNeedsPush = true;
+          }
+        });
+
+        if (
+          remoteData.extraLifeCooldowns &&
+          typeof remoteData.extraLifeCooldowns === 'object'
+        ) {
+          const localCd = storage.get(ECONOMY_STORAGE_KEYS.EXTRA_LIFE_COOLDOWNS, {});
+          const mergedCd = { ...localCd };
+          let cdChanged = false;
+          Object.keys(remoteData.extraLifeCooldowns).forEach(uKey => {
+            const rVal = remoteData.extraLifeCooldowns[uKey];
+            const lVal = localCd[uKey];
+            if (rVal && (!lVal || this._parseTime(rVal) > this._parseTime(lVal))) {
+              mergedCd[uKey] = rVal;
+              cdChanged = true;
+            }
+          });
+          if (cdChanged) {
+            storage.set(ECONOMY_STORAGE_KEYS.EXTRA_LIFE_COOLDOWNS, mergedCd);
+            anyLocalChanged = true;
+          }
+        }
+
+        if (
+          remoteData.firstPremiumNetheriteGranted &&
+          typeof remoteData.firstPremiumNetheriteGranted === 'object'
+        ) {
+          const localGranted = storage.get(STORAGE_KEYS.FIRST_PREMIUM_NETHERITE_GRANTED, {});
+          const mergedGranted = { ...localGranted, ...remoteData.firstPremiumNetheriteGranted };
+          if (Object.keys(mergedGranted).length > Object.keys(localGranted).length) {
+            storage.set(STORAGE_KEYS.FIRST_PREMIUM_NETHERITE_GRANTED, mergedGranted);
+            anyLocalChanged = true;
+          }
+        }
+
+        // 4c. Leaderboard Meta birleştir
         if (remoteData.leaderboardMeta && typeof remoteData.leaderboardMeta === 'object') {
           const localLbMeta = storage.get(ECONOMY_STORAGE_KEYS.LEADERBOARD_META, null);
           const rLbTime = this._parseTime(remoteData.leaderboardMeta.lastResetAt);
@@ -3173,11 +3395,18 @@
           }
         });
 
-        // 7b. Platform Ayarları ve Moderatör İzinlerini birleştir
+        // 7b. Platform Ayarları, Stripe ve Moderatör İzinlerini birleştir
         if (remoteData.platformSettings && typeof remoteData.platformSettings === 'object') {
           const localPs = storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, null);
           if (!localPs) {
             storage.set(STORAGE_KEYS.PLATFORM_SETTINGS, remoteData.platformSettings);
+            anyLocalChanged = true;
+          }
+        }
+        if (remoteData.stripeConfig && typeof remoteData.stripeConfig === 'object') {
+          const localSc = storage.get(STORAGE_KEYS.STRIPE_CONFIG, null);
+          if (!localSc) {
+            storage.set(STORAGE_KEYS.STRIPE_CONFIG, remoteData.stripeConfig);
             anyLocalChanged = true;
           }
         }
@@ -3240,6 +3469,48 @@
       return { changedLocal: anyLocalChanged, needsPush: anyNeedsPush };
     },
 
+    async resetAllPlatformData(session) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const newResetEpoch = Date.now();
+      cloudSyncInternalWrite = true;
+      try {
+        this._wipeLocalCollectionsForReset(newResetEpoch);
+        storage.set(ECONOMY_STORAGE_KEYS.RANKS, []);
+        storage.set(ECONOMY_STORAGE_KEYS.SHOP_ITEMS, []);
+        storage.set(STORAGE_KEYS.AI_QUESTIONS, []);
+      } finally {
+        cloudSyncInternalWrite = false;
+      }
+
+      // Varsayılan rütbe, ekonomi ve mağaza verilerini yeniden başlat
+      window.MCMServices?.rankService?.init?.();
+      window.MCMServices?.economyService?.init?.();
+      window.MCMServices?.shopService?.init?.();
+
+      const freshPayload = this._buildLocalPayload();
+      freshPayload.resetEpoch = newResetEpoch;
+
+      try {
+        await this._putJsonToUrl(this.getEndpoint(), freshPayload);
+      } catch (e) {
+        // ignore primary error
+      }
+      try {
+        await this._putJsonToUrl(FALLBACK_CLOUD_ENDPOINT, freshPayload);
+      } catch (e) {
+        // ignore fallback error
+      }
+
+      if (typeof window !== 'undefined' && window.dispatchEvent) {
+        window.dispatchEvent(
+          new CustomEvent('mcm:cloud-synced', {
+            detail: { syncedAt: new Date().toISOString(), reset: true }
+          })
+        );
+      }
+      return true;
+    },
+
     async _fetchJsonFromUrl(url) {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timeoutId = controller ? setTimeout(() => controller.abort(), 7000) : null;
@@ -3286,7 +3557,7 @@
     async _putJsonToUrl(url, payload) {
       const isRestfulApiDev = url.includes('restful-api.dev/objects/');
       const bodyObj = isRestfulApiDev
-        ? { name: 'MCM_CLOUD_DB_V9', data: payload }
+        ? { name: 'MCM_CLOUD_DB_V10', data: payload }
         : payload;
 
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
