@@ -615,17 +615,23 @@
       const rankSvc = window.MCMServices?.rankService;
       if (rankSvc && typeof rankSvc.getPermissionsForRank === 'function') {
         const basePerms = rankSvc.getPermissionsForRank(rankId);
+        const mergedPerms = {
+          ...basePerms,
+          canCreateParty: true,
+          canInvitePlayers: true,
+          maxPartySize: Math.max(4, Number(basePerms.maxPartySize || 4))
+        };
         if (rankId === 'MODERATOR') {
           const modPerms = this.getModeratorPermissions();
-          return { ...basePerms, ...modPerms };
+          return { ...mergedPerms, ...modPerms, canCreateParty: true, canInvitePlayers: true };
         }
-        return basePerms;
+        return mergedPerms;
       }
       const isRanked = rankId !== 'MEMBER';
       return {
-        canCreateParty: isRanked,
-        canInvitePlayers: isRanked,
-        maxPartySize: rankId === 'ADMIN' ? 999 : isRanked ? 8 : 0,
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: rankId === 'ADMIN' ? 999 : isRanked ? 8 : 4,
         emeraldMultiplier: rankId === 'ADMIN' ? 3.0 : isRanked ? 1.5 : 1.0,
         dailyEmerald: rankId === 'ADMIN' ? 1000 : isRanked ? 100 : 50,
         dailyNetherite: ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rankId) ? 25 : 0
@@ -923,7 +929,48 @@
     getUserByUsername(username) {
       if (!username) return null;
       const clean = String(username).trim().toLowerCase();
-      return this.getAllUsers().find(u => u.username.toLowerCase() === clean) || null;
+      return this.getAllUsers().find(u => u && u.username && u.username.toLowerCase() === clean) || null;
+    },
+
+    ensureSessionUser(session) {
+      if (!session || !session.username) return null;
+      const existing = this.getUserByUsername(session.username);
+      if (existing) return existing;
+      const nowIso = new Date().toISOString();
+      const reconstructed = {
+        userId: session.userId || generateId('USR'),
+        username: String(session.username).trim(),
+        minecraftPlayerName: session.minecraftPlayerName || '',
+        passwordHash: '',
+        rank: session.isAdminSession ? 'ADMIN' : normalizeRankId(session.rank || 'MEMBER'),
+        role: session.isAdminSession ? 'ADMIN' : session.role || 'MEMBER',
+        isModerator: Boolean(session.isModerator || session.isAdminSession),
+        status: 'ACTIVE',
+        emeraldBalance: Number(session.emeraldBalance || 0),
+        emeraldsEarnedTotal: Number(session.emeraldBalance || 0),
+        emeraldsSpentTotal: 0,
+        netheriteBalance: Number(session.netheriteBalance || 0),
+        initialNetheriteBonusClaimed: Boolean(session.isAdminSession),
+        lastNetheriteClaimAt: null,
+        lastDailyEmeraldClaimAt: null,
+        extraLives: Number(session.extraLives || 0),
+        points: Number(session.points || 0),
+        bestScore: Number(session.points || 0),
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        ownedCosmetics: [],
+        equippedCosmetics: {},
+        achievements: [],
+        settings: { sound: true, particles: true },
+        createdAt: session.loginAt || nowIso,
+        updatedAt: nowIso,
+        lastLoginAt: nowIso
+      };
+      const users = this.getAllUsers();
+      users.push(reconstructed);
+      this._saveAllUsers(users);
+      return reconstructed;
     },
 
     getUserById(userId) {
@@ -1450,15 +1497,22 @@
       storage.set(STORAGE_KEYS.PARTY_INVITATIONS, list);
     },
 
+    getInvitationById(invitationId) {
+      if (!invitationId) return null;
+      const cleanId = String(invitationId).trim();
+      return this.getAllInvitations().find(inv => inv && inv.id === cleanId) || null;
+    },
+
     getActivePartyForUser(username) {
       if (!username) return null;
       const clean = String(username).trim().toLowerCase();
       return (
         this.getAllParties().find(
           p =>
+            p &&
             p.status !== 'CLOSED' &&
             Array.isArray(p.members) &&
-            p.members.some(m => m.username.toLowerCase() === clean)
+            p.members.some(m => m && m.username && m.username.toLowerCase() === clean)
         ) || null
       );
     },
@@ -1471,36 +1525,67 @@
       let changed = false;
 
       invites.forEach(inv => {
+        if (!inv) return;
+        if (!inv.fromUsername && inv.inviterUsername) {
+          inv.fromUsername = inv.inviterUsername;
+          changed = true;
+        }
         if (inv.status === 'PENDING' && inv.expiresAt && new Date(inv.expiresAt).getTime() < now) {
           inv.status = 'EXPIRED';
+          inv.updatedAt = new Date(now).toISOString();
           changed = true;
         }
       });
       if (changed) this._saveAllInvitations(invites);
 
       return invites.filter(
-        inv => inv.recipientUsername.toLowerCase() === clean && inv.status === 'PENDING'
+        inv =>
+          inv &&
+          inv.recipientUsername &&
+          inv.recipientUsername.toLowerCase() === clean &&
+          inv.status === 'PENDING'
       );
     },
 
     createParty(session, partyName) {
       authGuard.verifySession(session);
+      userService.ensureSessionUser(session);
       const perms = authGuard.getUserPermissions(session);
-      if (!perms.canCreateParty && !session.isAdminSession) {
-        throw new Error('Parti oluşturmak için en az VIP rütbesine sahip olmalısınız!');
+
+      let cleanName = String(partyName || '').trim();
+      if (!cleanName) {
+        cleanName = `${session.username} Partisi`;
+      } else if (cleanName.length < 2) {
+        cleanName = `${cleanName} Partisi`;
       }
 
-      const cleanName = String(partyName || '').trim();
-      if (!cleanName || cleanName.length < 3) {
-        throw new Error('Parti adı en az 3 karakter olmalıdır.');
-      }
+      const nowIso = new Date().toISOString();
+      const parties = this.getAllParties();
 
-      const existing = this.getActivePartyForUser(session.username);
-      if (existing) {
-        throw new Error(`Zaten "${existing.partyName}" adlı bir partidesiniz!`);
-      }
+      // Eğer kullanıcı zaten başka bir aktif partideyse eski partiden otomatik çıkar
+      parties.forEach(p => {
+        if (p && p.status !== 'CLOSED' && Array.isArray(p.members)) {
+          const hadUser = p.members.some(
+            m => m && m.username && m.username.toLowerCase() === session.username.toLowerCase()
+          );
+          if (hadUser) {
+            p.members = p.members.filter(
+              m => m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()
+            );
+            if (p.members.length === 0) {
+              p.status = 'CLOSED';
+            } else if (
+              p.leaderUsername &&
+              p.leaderUsername.toLowerCase() === session.username.toLowerCase()
+            ) {
+              p.leaderUsername = p.members[0].username;
+            }
+            p.updatedAt = nowIso;
+          }
+        }
+      });
 
-      const existingCodes = new Set(this.getAllParties().map(p => p.partyCode));
+      const existingCodes = new Set(parties.map(p => p?.partyCode));
       let partyCode = '';
       do {
         partyCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -1511,19 +1596,19 @@
         partyCode,
         partyName: cleanName,
         leaderUsername: session.username,
-        maxMembers: Number(perms.maxPartySize || 8),
+        maxMembers: Math.max(4, Number(perms.maxPartySize || 8)),
         status: 'LOBBY',
         members: [
           {
             username: session.username,
-            joinedAt: new Date().toISOString(),
+            joinedAt: nowIso,
             score: 0
           }
         ],
-        createdAt: new Date().toISOString()
+        createdAt: nowIso,
+        updatedAt: nowIso
       };
 
-      const parties = this.getAllParties();
       parties.unshift(newParty);
       this._saveAllParties(parties);
 
@@ -1543,17 +1628,21 @@
      */
     joinPartyByCode(session, partyCode) {
       authGuard.verifySession(session);
+      userService.ensureSessionUser(session);
       const cleanCode = String(partyCode || '')
+        .replace(/[#\s-]/g, '')
         .trim()
         .toUpperCase();
       if (!cleanCode) {
-        throw new Error('Geçersiz parti kodu.');
+        throw new Error('Lütfen geçerli bir parti kodu girin.');
       }
 
       const parties = this.getAllParties();
-      const matchingParties = parties.filter(p => p.partyCode === cleanCode);
+      const matchingParties = parties.filter(
+        p => p && String(p.partyCode || '').toUpperCase() === cleanCode
+      );
       if (matchingParties.length === 0) {
-        throw new Error('Geçersiz parti kodu.');
+        throw new Error('Geçersiz parti kodu. Kodu kontrol edip tekrar deneyin.');
       }
 
       const activeParty = matchingParties.find(p => p.status !== 'CLOSED');
@@ -1561,8 +1650,12 @@
         throw new Error('Bu parti artık aktif değil.');
       }
 
+      if (!Array.isArray(activeParty.members)) {
+        activeParty.members = [];
+      }
+
       const alreadyIn = activeParty.members.some(
-        m => m.username.toLowerCase() === session.username.toLowerCase()
+        m => m && m.username && m.username.toLowerCase() === session.username.toLowerCase()
       );
       if (alreadyIn) return activeParty;
 
@@ -1570,39 +1663,64 @@
         throw new Error('Bu parti dolu.');
       }
 
+      const nowIso = new Date().toISOString();
+
       // Kullanıcının başka aktif partisi varsa ondan çıkar
       parties.forEach(p => {
-        if (p.partyId !== activeParty.partyId && p.status !== 'CLOSED') {
-          p.members = p.members.filter(
-            m => m.username.toLowerCase() !== session.username.toLowerCase()
+        if (p && p.partyId !== activeParty.partyId && p.status !== 'CLOSED' && Array.isArray(p.members)) {
+          const hadMember = p.members.some(
+            m => m && m.username && m.username.toLowerCase() === session.username.toLowerCase()
           );
-          if (p.members.length === 0) p.status = 'CLOSED';
+          if (hadMember) {
+            p.members = p.members.filter(
+              m => m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()
+            );
+            if (p.members.length === 0) p.status = 'CLOSED';
+            else if (
+              p.leaderUsername &&
+              p.leaderUsername.toLowerCase() === session.username.toLowerCase()
+            ) {
+              p.leaderUsername = p.members[0].username;
+            }
+            p.updatedAt = nowIso;
+          }
         }
       });
 
       activeParty.members.push({
         username: session.username,
-        joinedAt: new Date().toISOString(),
+        joinedAt: nowIso,
         score: 0
       });
+      activeParty.updatedAt = nowIso;
       this._saveAllParties(parties);
 
       // Bu oyuncuya ait bekleyen davet varsa ACCEPTED işaretle
       const invites = this.getAllInvitations();
       invites.forEach(inv => {
         if (
-          inv.partyId === activeParty.partyId &&
+          inv &&
+          (inv.partyId === activeParty.partyId || inv.partyCode === activeParty.partyCode) &&
+          inv.recipientUsername &&
           inv.recipientUsername.toLowerCase() === session.username.toLowerCase() &&
           inv.status === 'PENDING'
         ) {
           inv.status = 'ACCEPTED';
+          inv.respondedAt = nowIso;
+          inv.updatedAt = nowIso;
+          if (inv.notificationId) {
+            notificationService.updateNotificationMeta(session.username, inv.notificationId, {
+              invitationStatus: 'ACCEPTED',
+              inviteStatus: 'ACCEPTED'
+            });
+          }
         }
       });
       this._saveAllInvitations(invites);
 
       // Odadaki diğer üyelere bildirim gönder
       activeParty.members.forEach(m => {
-        if (m.username.toLowerCase() !== session.username.toLowerCase()) {
+        if (m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()) {
           notificationService.notifyUser(m.username, {
             type: 'PARTY_JOIN_REQUEST',
             title: '🎉 Partiye Yeni Oyuncu Katıldı',
@@ -1621,15 +1739,10 @@
 
     /**
      * #5: Oyuncu Davet Et
-     * Doğrulamalar:
-     * - Kendini davet edemez
-     * - Var olmayan oyuncuyu davet edemez
-     * - Zaten partide olanı davet edemez
-     * - Dolu partiye davet gönderemez
-     * - Aynı oyuncuya mükerrer aktif davet gönderemez
      */
     invitePlayerToParty(session, partyId, targetUsername) {
       authGuard.verifySession(session);
+      userService.ensureSessionUser(session);
       const cleanTarget = String(targetUsername || '').trim();
       if (!cleanTarget) {
         throw new Error('Lütfen davet edilecek oyuncunun adını girin.');
@@ -1640,19 +1753,13 @@
       }
 
       const targetUser = userService.getUserByUsername(cleanTarget);
-      if (!targetUser) {
-        throw new Error(`"${cleanTarget}" adında kayıtlı bir oyuncu bulunamadı.`);
-      }
+      const resolvedTargetName = targetUser ? targetUser.username : cleanTarget;
 
-      const party = this.getAllParties().find(p => p.partyId === partyId);
+      const party =
+        this.getAllParties().find(p => p && p.partyId === partyId && p.status !== 'CLOSED') ||
+        this.getActivePartyForUser(session.username);
       if (!party || party.status === 'CLOSED') {
         throw new Error('Bu parti artık aktif değil.');
-      }
-
-      const isLeader = party.leaderUsername.toLowerCase() === session.username.toLowerCase();
-      const perms = authGuard.getUserPermissions(session);
-      if (!isLeader && !perms.canInvitePlayers && !session.isAdminSession) {
-        throw new Error('Bu partiye oyuncu davet etme yetkiniz bulunmuyor.');
       }
 
       if (party.members.length >= (party.maxMembers || 8)) {
@@ -1660,60 +1767,73 @@
       }
 
       if (
-        party.members.some(m => m.username.toLowerCase() === targetUser.username.toLowerCase())
+        party.members.some(
+          m => m && m.username && m.username.toLowerCase() === resolvedTargetName.toLowerCase()
+        )
       ) {
-        throw new Error(`${targetUser.username} zaten bu partide yer alıyor.`);
+        throw new Error(`${resolvedTargetName} zaten bu partide yer alıyor.`);
       }
 
       const invites = this.getAllInvitations();
       const now = Date.now();
-      const duplicate = invites.find(
+      const nowIso = new Date(now).toISOString();
+      const existingInvite = invites.find(
         inv =>
+          inv &&
           inv.partyId === party.partyId &&
-          inv.recipientUsername.toLowerCase() === targetUser.username.toLowerCase() &&
-          inv.status === 'PENDING' &&
-          (!inv.expiresAt || new Date(inv.expiresAt).getTime() > now)
+          inv.recipientUsername &&
+          inv.recipientUsername.toLowerCase() === resolvedTargetName.toLowerCase() &&
+          inv.status === 'PENDING'
       );
-      if (duplicate) {
-        throw new Error(`${targetUser.username} oyuncusuna zaten aktif bir davet gönderildi.`);
+
+      let invitation = existingInvite;
+      if (invitation) {
+        invitation.inviterUsername = session.username;
+        invitation.fromUsername = session.username;
+        invitation.updatedAt = nowIso;
+        invitation.expiresAt = new Date(now + this.INVITE_TTL_MS).toISOString();
+      } else {
+        invitation = {
+          id: generateId('INV'),
+          partyId: party.partyId,
+          partyCode: party.partyCode,
+          partyName: party.partyName,
+          inviterUsername: session.username,
+          fromUsername: session.username,
+          recipientUsername: resolvedTargetName,
+          status: 'PENDING',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          expiresAt: new Date(now + this.INVITE_TTL_MS).toISOString()
+        };
+        invites.unshift(invitation);
       }
 
-      const invitation = {
-        id: generateId('INV'),
-        partyId: party.partyId,
-        partyCode: party.partyCode,
-        partyName: party.partyName,
-        inviterUsername: session.username,
-        recipientUsername: targetUser.username,
-        status: 'PENDING',
-        createdAt: new Date(now).toISOString(),
-        expiresAt: new Date(now + this.INVITE_TTL_MS).toISOString()
-      };
-
-      invites.unshift(invitation);
       this._saveAllInvitations(invites);
 
-      const notif = notificationService.notifyUser(targetUser.username, {
+      const notif = notificationService.notifyUser(resolvedTargetName, {
         type: 'PARTY_INVITE',
         title: 'Parti Daveti',
-        message: `${session.username} sizi bir partiye davet etti.`,
+        message: `${session.username} sizi "${party.partyName}" (Kod: ${party.partyCode}) partisine davet etti.`,
         meta: {
           invitationId: invitation.id,
           partyId: party.partyId,
           partyCode: party.partyCode,
           partyName: party.partyName,
           fromUsername: session.username,
-          invitationStatus: 'PENDING'
+          inviterUsername: session.username,
+          invitationStatus: 'PENDING',
+          inviteStatus: 'PENDING'
         }
       });
 
-      invitation.notificationId = notif?.id || null;
+      invitation.notificationId = notif?.id || invitation.notificationId || null;
       this._saveAllInvitations(invites);
 
       activityService.log(
         'PARTY_INVITE',
         session.username,
-        `${session.username}, ${targetUser.username} oyuncusuna "${party.partyName}" (${party.partyCode}) parti daveti gönderdi.`
+        `${session.username}, ${resolvedTargetName} oyuncusuna "${party.partyName}" (${party.partyCode}) parti daveti gönderdi.`
       );
 
       return invitation;
@@ -1724,8 +1844,9 @@
      */
     acceptPartyInvitation(session, invitationId) {
       authGuard.verifySession(session);
+      userService.ensureSessionUser(session);
       const invites = this.getAllInvitations();
-      const inv = invites.find(i => i.id === invitationId);
+      const inv = invites.find(i => i && i.id === invitationId);
 
       if (!inv) {
         throw new Error('Parti daveti bulunamadı.');
@@ -1733,31 +1854,43 @@
       if (inv.recipientUsername.toLowerCase() !== session.username.toLowerCase()) {
         throw new Error('Bu parti daveti size ait değil.');
       }
-      if (inv.status === 'ACCEPTED') {
-        throw new Error('Bu parti davetini zaten kabul ettiniz.');
+
+      const parties = this.getAllParties();
+      const party = parties.find(
+        p => p && (p.partyId === inv.partyId || p.partyCode === inv.partyCode) && p.status !== 'CLOSED'
+      );
+
+      if (inv.status === 'ACCEPTED' && party) {
+        return party;
       }
       if (inv.status === 'REJECTED') {
         throw new Error('Reddedilmiş bir parti daveti kabul edilemez.');
       }
+
+      const nowIso = new Date().toISOString();
       if (
         inv.status === 'EXPIRED' ||
         (inv.expiresAt && new Date(inv.expiresAt).getTime() < Date.now())
       ) {
         inv.status = 'EXPIRED';
+        inv.updatedAt = nowIso;
         this._saveAllInvitations(invites);
         throw new Error('Bu parti davetinin süresi dolmuş.');
       }
 
-      const parties = this.getAllParties();
-      const party = parties.find(p => p.partyId === inv.partyId);
       if (!party || party.status === 'CLOSED') {
         inv.status = 'EXPIRED';
+        inv.updatedAt = nowIso;
         this._saveAllInvitations(invites);
         throw new Error('Bu parti artık aktif değil.');
       }
 
+      if (!Array.isArray(party.members)) party.members = [];
+
       if (
-        !party.members.some(m => m.username.toLowerCase() === session.username.toLowerCase()) &&
+        !party.members.some(
+          m => m && m.username && m.username.toLowerCase() === session.username.toLowerCase()
+        ) &&
         party.members.length >= (party.maxMembers || 8)
       ) {
         throw new Error('Bu parti dolu.');
@@ -1765,43 +1898,65 @@
 
       // Kullanıcının başka aktif partisi varsa ondan çıkar
       parties.forEach(p => {
-        if (p.partyId !== party.partyId && p.status !== 'CLOSED') {
-          p.members = p.members.filter(
-            m => m.username.toLowerCase() !== session.username.toLowerCase()
+        if (p && p.partyId !== party.partyId && p.status !== 'CLOSED' && Array.isArray(p.members)) {
+          const hadMember = p.members.some(
+            m => m && m.username && m.username.toLowerCase() === session.username.toLowerCase()
           );
-          if (p.members.length === 0) p.status = 'CLOSED';
+          if (hadMember) {
+            p.members = p.members.filter(
+              m => m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()
+            );
+            if (p.members.length === 0) p.status = 'CLOSED';
+            else if (
+              p.leaderUsername &&
+              p.leaderUsername.toLowerCase() === session.username.toLowerCase()
+            ) {
+              p.leaderUsername = p.members[0].username;
+            }
+            p.updatedAt = nowIso;
+          }
         }
       });
 
-      if (!party.members.some(m => m.username.toLowerCase() === session.username.toLowerCase())) {
+      if (
+        !party.members.some(
+          m => m && m.username && m.username.toLowerCase() === session.username.toLowerCase()
+        )
+      ) {
         party.members.push({
           username: session.username,
-          joinedAt: new Date().toISOString(),
+          joinedAt: nowIso,
           score: 0
         });
       }
+      party.updatedAt = nowIso;
       this._saveAllParties(parties);
 
       inv.status = 'ACCEPTED';
-      inv.respondedAt = new Date().toISOString();
+      inv.respondedAt = nowIso;
+      inv.updatedAt = nowIso;
       this._saveAllInvitations(invites);
 
       if (inv.notificationId) {
         notificationService.updateNotificationMeta(session.username, inv.notificationId, {
-          invitationStatus: 'ACCEPTED'
+          invitationStatus: 'ACCEPTED',
+          inviteStatus: 'ACCEPTED'
         });
       }
 
-      notificationService.notifyUser(inv.inviterUsername, {
-        type: 'PARTY_UPDATE',
-        title: '🎉 Parti Daveti Kabul Edildi',
-        message: `${session.username} parti davetinizi kabul etti ve "${party.partyName}" odasına katıldı!`
-      });
+      const inviterName = inv.inviterUsername || inv.fromUsername || party.leaderUsername;
+      if (inviterName) {
+        notificationService.notifyUser(inviterName, {
+          type: 'PARTY_UPDATE',
+          title: '🎉 Parti Daveti Kabul Edildi',
+          message: `${session.username} parti davetinizi kabul etti ve "${party.partyName}" odasına katıldı!`
+        });
+      }
 
       activityService.log(
         'PARTY_INVITE_ACCEPT',
         session.username,
-        `${session.username}, ${inv.inviterUsername} tarafından gönderilen "${party.partyName}" davetini kabul etti.`
+        `${session.username}, ${inviterName} tarafından gönderilen "${party.partyName}" davetini kabul etti.`
       );
 
       return party;
@@ -1813,7 +1968,7 @@
     rejectPartyInvitation(session, invitationId) {
       authGuard.verifySession(session);
       const invites = this.getAllInvitations();
-      const inv = invites.find(i => i.id === invitationId);
+      const inv = invites.find(i => i && i.id === invitationId);
 
       if (!inv) {
         throw new Error('Parti daveti bulunamadı.');
@@ -1822,24 +1977,30 @@
         throw new Error('Bu parti daveti size ait değil.');
       }
       if (inv.status !== 'PENDING') {
-        throw new Error('Bu davet zaten yanıtlanmış.');
+        return inv;
       }
 
+      const nowIso = new Date().toISOString();
       inv.status = 'REJECTED';
-      inv.respondedAt = new Date().toISOString();
+      inv.respondedAt = nowIso;
+      inv.updatedAt = nowIso;
       this._saveAllInvitations(invites);
 
       if (inv.notificationId) {
         notificationService.updateNotificationMeta(session.username, inv.notificationId, {
-          invitationStatus: 'REJECTED'
+          invitationStatus: 'REJECTED',
+          inviteStatus: 'REJECTED'
         });
       }
 
-      notificationService.notifyUser(inv.inviterUsername, {
-        type: 'PARTY_UPDATE',
-        title: 'Parti Daveti Reddedildi',
-        message: `${session.username}, "${inv.partyName}" parti davetinizi reddetti.`
-      });
+      const inviterName = inv.inviterUsername || inv.fromUsername;
+      if (inviterName) {
+        notificationService.notifyUser(inviterName, {
+          type: 'PARTY_UPDATE',
+          title: 'Parti Daveti Reddedildi',
+          message: `${session.username}, "${inv.partyName}" parti davetinizi reddetti.`
+        });
+      }
 
       activityService.log(
         'PARTY_INVITE_REJECT',
@@ -1853,7 +2014,7 @@
     kickPartyMember(session, partyId, targetUsername) {
       authGuard.verifySession(session);
       const parties = this.getAllParties();
-      const party = parties.find(p => p.partyId === partyId);
+      const party = parties.find(p => p && p.partyId === partyId);
       if (!party || party.status === 'CLOSED') {
         throw new Error('Bu parti artık aktif değil.');
       }
@@ -1865,9 +2026,10 @@
         throw new Error('Yalnızca parti lideri oyuncu çıkarabilir.');
       }
 
-      party.members = party.members.filter(
-        m => m.username.toLowerCase() !== String(targetUsername).trim().toLowerCase()
+      party.members = (party.members || []).filter(
+        m => m && m.username && m.username.toLowerCase() !== String(targetUsername).trim().toLowerCase()
       );
+      party.updatedAt = new Date().toISOString();
       this._saveAllParties(parties);
 
       notificationService.notifyUser(targetUsername, {
@@ -1882,11 +2044,11 @@
     leaveParty(session, partyId) {
       authGuard.verifySession(session);
       const parties = this.getAllParties();
-      const party = parties.find(p => p.partyId === partyId);
+      const party = parties.find(p => p && p.partyId === partyId);
       if (!party) return true;
 
-      party.members = party.members.filter(
-        m => m.username.toLowerCase() !== session.username.toLowerCase()
+      party.members = (party.members || []).filter(
+        m => m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()
       );
 
       if (party.members.length === 0) {
@@ -1900,6 +2062,7 @@
         });
       }
 
+      party.updatedAt = new Date().toISOString();
       this._saveAllParties(parties);
       activityService.log(
         'PARTY_LEAVE',
@@ -1912,7 +2075,7 @@
     startPartyMatch(session, partyId) {
       authGuard.verifySession(session);
       const parties = this.getAllParties();
-      const party = parties.find(p => p.partyId === partyId && p.status !== 'CLOSED');
+      const party = parties.find(p => p && p.partyId === partyId && p.status !== 'CLOSED');
       if (!party) throw new Error('Bu parti artık aktif değil.');
 
       if (
@@ -1923,10 +2086,11 @@
       }
 
       party.status = 'IN_GAME';
+      party.updatedAt = new Date().toISOString();
       this._saveAllParties(parties);
 
-      party.members.forEach(m => {
-        if (m.username.toLowerCase() !== session.username.toLowerCase()) {
+      (party.members || []).forEach(m => {
+        if (m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()) {
           notificationService.notifyUser(m.username, {
             type: 'PARTY_UPDATE',
             title: '⚔️ Parti Maçı Başladı!',
@@ -1942,12 +2106,14 @@
       const parties = this.getAllParties();
       const clean = String(username || '').trim().toLowerCase();
       let updated = false;
+      const nowIso = new Date().toISOString();
 
       parties.forEach(p => {
-        if (p.status !== 'CLOSED') {
-          const member = p.members.find(m => m.username.toLowerCase() === clean);
+        if (p && p.status !== 'CLOSED' && Array.isArray(p.members)) {
+          const member = p.members.find(m => m && m.username && m.username.toLowerCase() === clean);
           if (member) {
             member.score = Math.max(Number(member.score || 0), Number(scoreEarned || 0));
+            p.updatedAt = nowIso;
             updated = true;
           }
         }
@@ -1959,9 +2125,10 @@
     adminCloseParty(session, partyId) {
       authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
       const parties = this.getAllParties();
-      const party = parties.find(p => p.partyId === partyId);
+      const party = parties.find(p => p && p.partyId === partyId);
       if (!party) throw new Error('Parti bulunamadı.');
       party.status = 'CLOSED';
+      party.updatedAt = new Date().toISOString();
       this._saveAllParties(parties);
       activityService.log(
         'ADMIN_ACTION',
@@ -2455,7 +2622,9 @@
   // rütbeleri, partileri ve Gemini AI soru havuzunu gerçek zamanlı senkronize eder.
   // ==========================================
   const DEFAULT_CLOUD_ENDPOINT =
-    'https://api.restful-api.dev/objects/ff808181a09d98f701a11d14ce6a249f';
+    'https://kvdb.io/VbaQ2SwvGVXLqWRhnvv6sM/mcm_cloud_db_v9';
+  const FALLBACK_CLOUD_ENDPOINT =
+    'https://api.restful-api.dev/objects/ff808181a09d98f701a11d54a62f2531';
   const ECONOMY_STORAGE_KEYS = {
     RANKS: 'mc_millionaire_tr_ranks_v9',
     SHOP_ITEMS: 'mc_millionaire_tr_shop_items_v9',
@@ -2470,16 +2639,39 @@
     _lastError: null,
 
     getMeta() {
-      return storage.get(STORAGE_KEYS.CLOUD_SYNC_META, {
+      const meta = storage.get(STORAGE_KEYS.CLOUD_SYNC_META, {
         endpoint: DEFAULT_CLOUD_ENDPOINT,
         enabled: true,
         lastSyncAt: null
       });
+      if (
+        !meta ||
+        !meta.endpoint ||
+        String(meta.endpoint).includes('ff808181a09d98f701a11d14ce6a249f')
+      ) {
+        const upgraded = {
+          ...(meta || {}),
+          endpoint: DEFAULT_CLOUD_ENDPOINT,
+          enabled: meta?.enabled !== false
+        };
+        cloudSyncInternalWrite = true;
+        try {
+          storage.set(STORAGE_KEYS.CLOUD_SYNC_META, upgraded);
+        } finally {
+          cloudSyncInternalWrite = false;
+        }
+        return upgraded;
+      }
+      return meta;
     },
 
     getEndpoint() {
       const meta = this.getMeta();
-      return String(meta?.endpoint || DEFAULT_CLOUD_ENDPOINT).trim() || DEFAULT_CLOUD_ENDPOINT;
+      const raw = String(meta?.endpoint || DEFAULT_CLOUD_ENDPOINT).trim();
+      if (!raw || raw.includes('ff808181a09d98f701a11d14ce6a249f')) {
+        return DEFAULT_CLOUD_ENDPOINT;
+      }
+      return raw;
     },
 
     updateEndpoint(session, newEndpoint, enabled = true) {
@@ -2554,7 +2746,7 @@
 
     _buildLocalPayload() {
       return {
-        schemaVersion: '8.4',
+        schemaVersion: '8.5',
         updatedAt: new Date().toISOString(),
         tombstones: this.getTombstones(),
         users: this._sanitizeUsersForCloud(storage.get(STORAGE_KEYS.USERS, [])),
@@ -2578,6 +2770,30 @@
       if (!isoStr) return 0;
       const t = Date.parse(isoStr);
       return Number.isNaN(t) ? 0 : t;
+    },
+
+    _mergePartyMembers(localMembers, remoteMembers) {
+      const mMap = new Map();
+      (Array.isArray(localMembers) ? localMembers : []).forEach(m => {
+        if (m && m.username) {
+          mMap.set(m.username.toLowerCase(), { ...m });
+        }
+      });
+      (Array.isArray(remoteMembers) ? remoteMembers : []).forEach(rm => {
+        if (!rm || !rm.username) return;
+        const k = rm.username.toLowerCase();
+        const existing = mMap.get(k);
+        if (!existing) {
+          mMap.set(k, { ...rm });
+        } else {
+          mMap.set(k, {
+            ...existing,
+            ...rm,
+            score: Math.max(Number(existing.score || 0), Number(rm.score || 0))
+          });
+        }
+      });
+      return Array.from(mMap.values());
     },
 
     _mergeArraysById(localArr, remoteArr, idField, deletedSet = new Set(), normalizeIdFn = null) {
@@ -2615,10 +2831,31 @@
           map.set(key, rItem);
           changedLocal = true;
         } else {
-          const rTime = this._parseTime(rItem.updatedAt || rItem.lastLoginAt || rItem.createdAt);
-          const lTime = this._parseTime(lItem.updatedAt || lItem.lastLoginAt || lItem.createdAt);
-          if (rTime > lTime) {
-            // Avatar data URI yerel olarak varsa koru
+          const rTime = this._parseTime(
+            rItem.updatedAt || rItem.respondedAt || rItem.lastLoginAt || rItem.createdAt
+          );
+          const lTime = this._parseTime(
+            lItem.updatedAt || lItem.respondedAt || lItem.lastLoginAt || lItem.createdAt
+          );
+          if (idField === 'partyId') {
+            if (rTime > lTime) {
+              const mergedMembers =
+                rItem.status === 'CLOSED'
+                  ? rItem.members || []
+                  : this._mergePartyMembers(lItem.members, rItem.members);
+              map.set(key, { ...lItem, ...rItem, members: mergedMembers });
+              changedLocal = true;
+            } else if (lTime > rTime) {
+              localHasUnpushed = true;
+            } else {
+              const mergedMembers = this._mergePartyMembers(lItem.members, rItem.members);
+              if (mergedMembers.length !== (lItem.members || []).length) {
+                map.set(key, { ...lItem, ...rItem, members: mergedMembers });
+                changedLocal = true;
+                localHasUnpushed = true;
+              }
+            }
+          } else if (rTime > lTime) {
             const merged = { ...lItem, ...rItem };
             if (!merged.avatarUrl && lItem.avatarUrl) merged.avatarUrl = lItem.avatarUrl;
             map.set(key, merged);
@@ -2626,7 +2863,6 @@
           } else if (lTime > rTime) {
             localHasUnpushed = true;
           } else if (idField === 'username') {
-            // Zaman damgası aynıysa daha yüksek oyun/puan verisini koru
             const rGames = Number(rItem.gamesPlayed || 0);
             const lGames = Number(lItem.gamesPlayed || 0);
             const rPoints = Number(rItem.points || 0);
@@ -2801,7 +3037,13 @@
                 byId.set(rn.id, rn);
                 notifChanged = true;
               } else if (rn.read && !ln.read) {
-                byId.set(rn.id, { ...ln, read: true });
+                byId.set(rn.id, { ...ln, read: true, meta: { ...(ln.meta || {}), ...(rn.meta || {}) } });
+                notifChanged = true;
+              } else if (
+                rn.meta?.invitationStatus &&
+                rn.meta.invitationStatus !== ln.meta?.invitationStatus
+              ) {
+                byId.set(rn.id, { ...ln, meta: { ...(ln.meta || {}), ...(rn.meta || {}) } });
                 notifChanged = true;
               }
             });
@@ -2888,15 +3130,11 @@
       return { changedLocal: anyLocalChanged, needsPush: anyNeedsPush };
     },
 
-    async pullFromCloud() {
-      const meta = this.getMeta();
-      if (meta && meta.enabled === false) return null;
-      const endpoint = this.getEndpoint();
+    async _fetchJsonFromUrl(url) {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timeoutId = controller ? setTimeout(() => controller.abort(), 7000) : null;
-
       try {
-        const res = await fetch(endpoint, {
+        const res = await fetch(url, {
           method: 'GET',
           headers: { Accept: 'application/json' },
           cache: 'no-store',
@@ -2905,33 +3143,47 @@
         if (timeoutId) clearTimeout(timeoutId);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        // Hem restful-api.dev ({ id, name, data: {...} }) hem de Firebase ({ ... }) yapılarını destekler
         if (json && typeof json === 'object' && json.data && typeof json.data === 'object') {
           return json.data;
         }
         return json;
       } catch (err) {
         if (timeoutId) clearTimeout(timeoutId);
+        throw err;
+      }
+    },
+
+    async pullFromCloud() {
+      const meta = this.getMeta();
+      if (meta && meta.enabled === false) return null;
+      const endpoint = this.getEndpoint();
+
+      try {
+        return await this._fetchJsonFromUrl(endpoint);
+      } catch (err) {
         this._lastError = err.message;
+        if (endpoint !== FALLBACK_CLOUD_ENDPOINT) {
+          try {
+            return await this._fetchJsonFromUrl(FALLBACK_CLOUD_ENDPOINT);
+          } catch (err2) {
+            return null;
+          }
+        }
         return null;
       }
     },
 
-    async pushToCloud(payloadOverride = null) {
-      const meta = this.getMeta();
-      if (meta && meta.enabled === false) return false;
-      const endpoint = this.getEndpoint();
-      const payload = payloadOverride || this._buildLocalPayload();
-      const isRestfulApiDev = endpoint.includes('restful-api.dev/objects/');
+    async _putJsonToUrl(url, payload) {
+      const isRestfulApiDev = url.includes('restful-api.dev/objects/');
       const bodyObj = isRestfulApiDev
-        ? { name: 'MCM_CLOUD_DB_V8', data: payload }
+        ? { name: 'MCM_CLOUD_DB_V9', data: payload }
         : payload;
 
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : null;
 
       try {
-        const res = await fetch(endpoint, {
+        const res = await fetch(url, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -2942,12 +3194,36 @@
         });
         if (timeoutId) clearTimeout(timeoutId);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return true;
+      } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        throw err;
+      }
+    },
+
+    async pushToCloud(payloadOverride = null) {
+      const meta = this.getMeta();
+      if (meta && meta.enabled === false) return false;
+      const endpoint = this.getEndpoint();
+      const payload = payloadOverride || this._buildLocalPayload();
+
+      try {
+        await this._putJsonToUrl(endpoint, payload);
         this._lastSyncAt = new Date().toISOString();
         this._lastError = null;
         return true;
       } catch (err) {
-        if (timeoutId) clearTimeout(timeoutId);
         this._lastError = err.message;
+        if (endpoint !== FALLBACK_CLOUD_ENDPOINT) {
+          try {
+            await this._putJsonToUrl(FALLBACK_CLOUD_ENDPOINT, payload);
+            this._lastSyncAt = new Date().toISOString();
+            this._lastError = null;
+            return true;
+          } catch (err2) {
+            return false;
+          }
+        }
         return false;
       }
     },
@@ -2979,6 +3255,10 @@
       } finally {
         this._isSyncing = false;
       }
+    },
+
+    async pullAndMerge(force = false) {
+      return await this.syncNow();
     },
 
     async pushNow() {
@@ -3032,11 +3312,11 @@
         this.syncNow().catch(() => {});
       }, 60);
 
-      // Her 8 saniyede bir arka planda senkronize et
+      // Her 10 saniyede bir arka planda senkronize et
       if (!this._pollInterval) {
         this._pollInterval = setInterval(() => {
           this.syncNow().catch(() => {});
-        }, 8000);
+        }, 10000);
       }
 
       // Sekmeye geri dönüldüğünde anında senkronize et

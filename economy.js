@@ -108,9 +108,9 @@
       dailyNetherite: 0,
       stripePriceId: null,
       permissions: {
-        canCreateParty: false,
-        canInvitePlayers: false,
-        maxPartySize: 0,
+        canCreateParty: true,
+        canInvitePlayers: true,
+        maxPartySize: 4,
         emeraldMultiplier: 1.0,
         dailyEmerald: 50,
         dailyNetherite: 0,
@@ -125,7 +125,7 @@
       features: [
         'Her 24 Saatte +50 Günlük Zümrüt Ödülü',
         'Bireysel bilgi yarışması moduna tam erişim',
-        'Parti kodu ile mevcut partilere katılabilme',
+        '4 Kişilik Parti Oluşturma ve Arkadaş Davet Etme',
         'Kazanılan Zümrütlerle mağazadan alışveriş yapabilme'
       ]
     },
@@ -146,7 +146,7 @@
       permissions: {
         canCreateParty: true,
         canInvitePlayers: true,
-        maxPartySize: 4,
+        maxPartySize: 6,
         emeraldMultiplier: 1.25,
         dailyEmerald: 100,
         dailyNetherite: 0,
@@ -161,7 +161,7 @@
       features: [
         'Her 24 Saatte +100 Günlük Zümrüt Ödülü',
         'Özel 💎 VIP Rozeti ve Mavi İsim Rengi',
-        'Parti Oluşturabilme (4 Kişilik Kapasite)',
+        'Parti Oluşturabilme (6 Kişilik Kapasite)',
         '1.25x Zümrüt Kazanım Çarpanı',
         'Yüksek Öncelikli Destek ve Hata Bildirimi',
         'VIP Kozmetik Çerçevelerine Erişim'
@@ -1103,6 +1103,12 @@
             permissions: {
               ...def.permissions,
               ...(found.permissions || {}),
+              canCreateParty: true,
+              canInvitePlayers: true,
+              maxPartySize: Math.max(
+                Number(def.permissions?.maxPartySize || 4),
+                Number(found.permissions?.maxPartySize || 4)
+              ),
               dailyEmerald:
                 found.dailyEmerald !== undefined && found.dailyEmerald > 0
                   ? found.dailyEmerald

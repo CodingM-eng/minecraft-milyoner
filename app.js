@@ -300,6 +300,32 @@
       [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
         setTimeout(() => this.playTone(f, 0.18, 'triangle', 0.1), i * 110);
       });
+    },
+
+    creeperHissAndBoom() {
+      // Tsssss fuse + explosion
+      [380, 440, 520, 620].forEach((f, i) => {
+        setTimeout(() => this.playTone(f, 0.08, 'sawtooth', 0.045), i * 75);
+      });
+      setTimeout(() => {
+        this.playTone(110, 0.32, 'square', 0.11);
+        this.playTone(75, 0.38, 'sawtooth', 0.1);
+      }, 340);
+    },
+
+    endermanTeleport() {
+      // Ender pearl / Enderman vwoop
+      this.playTone(740, 0.09, 'sine', 0.08);
+      setTimeout(() => this.playTone(310, 0.12, 'triangle', 0.09), 70);
+      setTimeout(() => this.playTone(590, 0.14, 'sine', 0.08), 160);
+    },
+
+    villagerHrmmm() {
+      // Iconic Villager "Hrmmm!" + emerald chime
+      this.playTone(235, 0.14, 'triangle', 0.09);
+      setTimeout(() => this.playTone(275, 0.18, 'triangle', 0.09), 110);
+      setTimeout(() => this.playTone(220, 0.16, 'sine', 0.08), 240);
+      setTimeout(() => this.playTone(987.77, 0.15, 'sine', 0.07), 380);
     }
   };
 
@@ -548,6 +574,11 @@
       feedbackEl.classList.add('hidden');
       feedbackEl.innerHTML = '';
     }
+    const stageActorsEl = document.getElementById('mc-stage-actors');
+    if (stageActorsEl) {
+      stageActorsEl.classList.add('hidden');
+      stageActorsEl.innerHTML = '';
+    }
 
     for (let i = 0; i < 4; i++) {
       const btn = document.getElementById(`ans-${i}`);
@@ -778,12 +809,61 @@
   }
 
   // ==========================================
-  // JOKERLER (50:50, SUNUCUYA SOR, BİLGE KÖYLÜ)
+  // JOKERLER & MINECRAFT MOB ANİMASYONLARI (CREEPER, ENDERMAN, BİLGE KÖYLÜ SAĞA GEÇER)
   // ==========================================
+  const STAGE_MOB_SVGS = {
+    CREEPER: `<svg viewBox="0 0 16 24" class="stage-mob-svg" shape-rendering="crispEdges">
+      <rect x="4" y="2" width="8" height="8" fill="#50c846"/>
+      <rect x="5" y="3" width="2" height="2" fill="#82eb78"/>
+      <rect x="5" y="4" width="2" height="2" fill="#111827"/>
+      <rect x="9" y="4" width="2" height="2" fill="#111827"/>
+      <rect x="7" y="6" width="2" height="3" fill="#111827"/>
+      <rect x="6" y="7" width="1" height="3" fill="#111827"/>
+      <rect x="9" y="7" width="1" height="3" fill="#111827"/>
+      <rect x="5" y="10" width="6" height="8" fill="#3da134"/>
+      <rect x="6" y="11" width="3" height="4" fill="#50c846"/>
+      <rect x="3" y="18" width="4" height="5" fill="#2c7a24"/>
+      <rect x="9" y="18" width="4" height="5" fill="#2c7a24"/>
+      <rect x="3" y="21" width="4" height="2" fill="#143811"/>
+      <rect x="9" y="21" width="4" height="2" fill="#143811"/>
+    </svg>`,
+    ENDERMAN: `<svg viewBox="0 0 16 24" class="stage-mob-svg" shape-rendering="crispEdges">
+      <rect x="2" y="1" width="1" height="1" fill="#d946ef"/>
+      <rect x="13" y="3" width="1" height="1" fill="#a855f7"/>
+      <rect x="1" y="12" width="1" height="1" fill="#e879f9"/>
+      <rect x="14" y="15" width="1" height="1" fill="#c084fc"/>
+      <rect x="4" y="2" width="8" height="7" fill="#111827"/>
+      <rect x="4" y="5" width="3" height="1" fill="#f5d0fe"/>
+      <rect x="5" y="5" width="1" height="1" fill="#d946ef"/>
+      <rect x="9" y="5" width="3" height="1" fill="#f5d0fe"/>
+      <rect x="10" y="5" width="1" height="1" fill="#d946ef"/>
+      <rect x="5" y="9" width="6" height="6" fill="#0f172a"/>
+      <rect x="3" y="9" width="1" height="10" fill="#1e293b"/>
+      <rect x="12" y="9" width="1" height="10" fill="#1e293b"/>
+      <rect x="6" y="15" width="1" height="8" fill="#0f172a"/>
+      <rect x="9" y="15" width="1" height="8" fill="#0f172a"/>
+    </svg>`,
+    VILLAGER: `<svg viewBox="0 0 16 24" class="stage-mob-svg" shape-rendering="crispEdges">
+      <rect x="3" y="1" width="10" height="3" fill="#dc2626"/>
+      <rect x="4" y="2" width="8" height="1" fill="#facc15"/>
+      <rect x="4" y="4" width="8" height="7" fill="#d4946a"/>
+      <rect x="4" y="5" width="8" height="1" fill="#78350f"/>
+      <rect x="5" y="6" width="2" height="2" fill="#16a34a"/>
+      <rect x="9" y="6" width="2" height="2" fill="#16a34a"/>
+      <rect x="7" y="7" width="2" height="5" fill="#b5764e"/>
+      <rect x="4" y="11" width="8" height="9" fill="#78350f"/>
+      <rect x="6" y="11" width="4" height="9" fill="#a16207"/>
+      <rect x="3" y="12" width="10" height="4" fill="#92400e"/>
+      <rect x="7" y="13" width="2" height="2" fill="#22c55e"/>
+      <rect x="5" y="20" width="2" height="3" fill="#451a03"/>
+      <rect x="9" y="20" width="2" height="3" fill="#451a03"/>
+    </svg>`
+  };
+
   function useFiftyFifty() {
     if (!gameState.active || !gameState.lifelines.fifty) return;
     gameState.lifelines.fifty = false;
-    soundEngine.click();
+    soundEngine.creeperHissAndBoom();
 
     const btn = document.getElementById('lifeline-5050');
     if (btn) {
@@ -794,21 +874,45 @@
     const qObj = gameState.questions[gameState.currentIndex];
     if (!qObj) return;
 
+    const letters = ['A', 'B', 'C', 'D'];
     const wrongIndices = [0, 1, 2, 3].filter(i => i !== qObj.answer);
     const toHide = shuffle(wrongIndices).slice(0, 2);
-    toHide.forEach(idx => {
-      const b = document.getElementById(`ans-${idx}`);
-      if (b) {
-        b.disabled = true;
-        b.classList.add('eliminated');
-      }
-    });
+
+    // Sahneye Creeper çıkar, şişip parlasın ve 2 yanlış şıkkı patlatsın!
+    const stageActorsEl = document.getElementById('mc-stage-actors');
+    if (stageActorsEl) {
+      stageActorsEl.classList.remove('hidden');
+      stageActorsEl.innerHTML = `
+        <div class="mc-stage-actor creeper-stage-actor creeper-fuse">
+          <div class="actor-character-wrap">
+            ${STAGE_MOB_SVGS.CREEPER}
+            <div class="creeper-explosion-particles">
+              <span>💥</span><span>🟩</span><span>💨</span><span>🔥</span>
+            </div>
+          </div>
+          <div class="actor-speech-bubble creeper-bubble">
+            <strong>💥 Creeper 50:50 Patlaması!</strong>
+            <p><em>"Tsssss... BOOM!"</em> — <strong>${letters[toHide[0]]}</strong> ve <strong>${letters[toHide[1]]}</strong> şıkları Creeper tarafından havaya uçuruldu!</p>
+          </div>
+        </div>
+      `;
+    }
+
+    setTimeout(() => {
+      toHide.forEach(idx => {
+        const b = document.getElementById(`ans-${idx}`);
+        if (b) {
+          b.disabled = true;
+          b.classList.add('eliminated', 'creeper-blasted');
+        }
+      });
+    }, 320);
   }
 
   function useAskAudience() {
     if (!gameState.active || !gameState.lifelines.audience) return;
     gameState.lifelines.audience = false;
-    soundEngine.click();
+    soundEngine.endermanTeleport();
 
     const btn = document.getElementById('lifeline-audience');
     if (btn) {
@@ -834,6 +938,40 @@
         }
       });
 
+    // Sahneye Enderman ışınlansın ve End Boyutu Sunucu Oylaması çubuklarını göstersin!
+    const stageActorsEl = document.getElementById('mc-stage-actors');
+    if (stageActorsEl) {
+      stageActorsEl.classList.remove('hidden');
+      stageActorsEl.innerHTML = `
+        <div class="mc-stage-actor enderman-stage-actor enderman-teleport-in">
+          <div class="actor-character-wrap">
+            ${STAGE_MOB_SVGS.ENDERMAN}
+            <div class="ender-portal-particles">
+              <span>✦</span><span>🟣</span><span>✦</span><span>🔮</span>
+            </div>
+          </div>
+          <div class="actor-speech-bubble enderman-bubble">
+            <strong>🔮 Enderman &amp; Sunucu Oylaması:</strong>
+            <div class="enderman-poll-bars">
+              ${rates
+                .map(
+                  (r, i) => `
+                  <div class="ender-poll-row ${i === qObj.answer ? 'is-top' : ''}">
+                    <span class="ender-poll-letter">${letters[i]}</span>
+                    <div class="ender-poll-track">
+                      <div class="ender-poll-fill" style="width:${r}%"></div>
+                    </div>
+                    <strong class="ender-poll-pct">%${r}</strong>
+                  </div>
+                `
+                )
+                .join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     const fb = document.getElementById('lifeline-feedback');
     if (fb) {
       fb.classList.remove('hidden');
@@ -846,7 +984,7 @@
   function useWiseVillager() {
     if (!gameState.active || !gameState.lifelines.villager) return;
     gameState.lifelines.villager = false;
-    soundEngine.click();
+    soundEngine.villagerHrmmm();
 
     const btn = document.getElementById('lifeline-villager');
     if (btn) {
@@ -858,12 +996,43 @@
     if (!qObj) return;
 
     const letters = ['A', 'B', 'C', 'D'];
+    const recommendedLetter = letters[qObj.answer];
+    const recommendedText = qObj.options[qObj.answer];
+
+    // Bilge Köylü sahnede belirir ve SAĞA GEÇER (.villager-move-right)!
+    const stageActorsEl = document.getElementById('mc-stage-actors');
+    if (stageActorsEl) {
+      stageActorsEl.classList.remove('hidden');
+      stageActorsEl.innerHTML = `
+        <div id="active-villager-stage-actor" class="mc-stage-actor villager-stage-actor">
+          <div class="actor-speech-bubble villager-bubble">
+            <strong>📖 Bilge Köylü (Sağ Kürsüye Geçti):</strong>
+            <p>"Hrmmm! Sağa geçip antik parşömenlerime baktım... Doğru cevap büyük ihtimalle <strong>${recommendedLetter}) ${recommendedText}</strong>!"</p>
+          </div>
+          <div class="actor-character-wrap villager-character-wrap">
+            ${STAGE_MOB_SVGS.VILLAGER}
+            <div class="villager-emerald-sparkles">
+              <span>🟢</span><span>✨</span><span>📖</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Animasyon: Bilge Köylü soldan yürüyerek SAĞA GEÇSİN
+      requestAnimationFrame(() => {
+        const vActor = document.getElementById('active-villager-stage-actor');
+        vActor?.classList.add('villager-move-right');
+      });
+    }
+
+    // Önerilen şıkkı zümrüt ışıltısıyla vurgula
+    const recBtn = document.getElementById(`ans-${qObj.answer}`);
+    recBtn?.classList.add('villager-recommended');
+
     const fb = document.getElementById('lifeline-feedback');
     if (fb) {
       fb.classList.remove('hidden');
-      fb.innerHTML = `<strong>🧙‍♂️ Bilge Köylü:</strong> "Hrmmm! Parşömenlerime göre doğru cevap büyük ihtimalle <strong>${
-        letters[qObj.answer]
-      }) ${qObj.options[qObj.answer]}</strong>!"`;
+      fb.innerHTML = `<strong>🧙‍♂️ Bilge Köylü:</strong> "Hrmmm! Parşömenlerime göre doğru cevap büyük ihtimalle <strong>${recommendedLetter}) ${recommendedText}</strong>!"`;
     }
   }
 
@@ -1114,9 +1283,72 @@
     });
   }
 
+  // ==========================================
+  // ETKİLEŞİMLİ MINECRAFT CANLI MOB SAHNESİ (ENDERMAN, CREEPER, ALLAY, BİLGE KÖYLÜ)
+  // ==========================================
+  function initAmbientMobs() {
+    const endermanEl = document.getElementById('ambient-mob-enderman');
+    const creeperEl = document.getElementById('ambient-mob-creeper');
+    const allayEl = document.getElementById('ambient-mob-allay');
+    const villagerEl = document.getElementById('ambient-mob-villager');
+
+    if (endermanEl) {
+      const triggerEndermanTeleport = () => {
+        soundEngine.endermanTeleport();
+        endermanEl.classList.add('is-teleporting');
+        const offsetX = Math.floor((Math.random() - 0.5) * 220);
+        const offsetY = Math.floor(Math.random() * -28);
+        endermanEl.style.setProperty('--mob-tx', `${offsetX}px`);
+        endermanEl.style.setProperty('--mob-ty', `${offsetY}px`);
+        setTimeout(() => {
+          endermanEl.classList.remove('is-teleporting');
+        }, 550);
+      };
+
+      endermanEl.addEventListener('click', triggerEndermanTeleport);
+      setInterval(() => {
+        if (!document.hidden && Math.random() < 0.55) {
+          triggerEndermanTeleport();
+        }
+      }, 14000);
+    }
+
+    if (creeperEl) {
+      creeperEl.addEventListener('click', () => {
+        soundEngine.creeperHissAndBoom();
+        creeperEl.classList.remove('is-exploding');
+        void creeperEl.offsetWidth;
+        creeperEl.classList.add('is-exploding');
+        setTimeout(() => {
+          creeperEl.classList.remove('is-exploding');
+        }, 1200);
+      });
+    }
+
+    if (allayEl) {
+      allayEl.addEventListener('click', () => {
+        soundEngine.win();
+        allayEl.classList.remove('is-dancing');
+        void allayEl.offsetWidth;
+        allayEl.classList.add('is-dancing');
+        setTimeout(() => {
+          allayEl.classList.remove('is-dancing');
+        }, 1400);
+      });
+    }
+
+    if (villagerEl) {
+      villagerEl.addEventListener('click', () => {
+        soundEngine.villagerHrmmm();
+        villagerEl.classList.toggle('walked-right');
+      });
+    }
+  }
+
   function initApp() {
     initAccessGate();
     bindGameControls();
+    initAmbientMobs();
     renderPrizeLadder();
   }
 

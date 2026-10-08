@@ -608,6 +608,17 @@
 
     syncHeaderAndDrawer();
 
+    // Bulut senkronizasyonu: farklı bilgisayarlardaki profilleri, partileri ve liderlik tablosunu anında çek
+    if (
+      ['profile', 'party', 'leaderboard', 'notifications', 'admin', 'stats'].includes(screenKey)
+    ) {
+      try {
+        svc().cloudSyncService?.syncNow();
+      } catch (e) {
+        // ignore
+      }
+    }
+
     // İlgili ekranın içeriğini tazele
     switch (screenKey) {
       case 'welcome':
@@ -679,8 +690,11 @@
       achievementService
     } = svc();
 
-    const user = userService.getUserByUsername(session.username);
-    if (!user) return;
+    const user =
+      (userService?.ensureSessionUser
+        ? userService.ensureSessionUser(session)
+        : userService?.getUserByUsername(session.username)) || session;
+    if (!user || !user.username) return;
 
     const rank = rankService.getUserRank(user.username);
     const emeralds = economyService.getBalance(user.username);
@@ -899,7 +913,9 @@
           invitationId && partyService?.getInvitationById
             ? partyService.getInvitationById(invitationId)
             : null;
-        const invStatus = invObj ? invObj.status : n.meta?.inviteStatus || '';
+        const invStatus = invObj
+          ? invObj.status
+          : n.meta?.invitationStatus || n.meta?.inviteStatus || 'PENDING';
 
         let partyActionHtml = '';
         if (invitationId) {
@@ -1269,13 +1285,13 @@
   // ==========================================
   // #11: "🎁 ARKADAŞINA HEDİYE ET" MODAL AKIŞI (Sadece Netherite ile)
   // ==========================================
-  function openGiftRankModal(rankId) {
+  function openGiftRankModal(rankId, prefillFriendUsername = '') {
     const { rankService } = svc();
-    const rank = rankService.getRankById(rankId);
+    const rank = rankService.getRankById(rankId) || rankService.getRankById('VIP');
     if (!rank || !rank.purchasable) return;
 
     state.giftModal.rankId = rank.id;
-    state.giftModal.friendUsername = '';
+    state.giftModal.friendUsername = prefillFriendUsername || '';
 
     const modal = document.getElementById('modal-gift-rank');
     const summaryBox = document.getElementById('gift-rank-summary-box');
@@ -1295,7 +1311,7 @@
       `;
     }
 
-    if (input) input.value = '';
+    if (input) input.value = prefillFriendUsername || '';
     err1?.classList.add('hidden');
     err2?.classList.add('hidden');
     step1?.classList.remove('hidden');
@@ -1307,6 +1323,155 @@
   function closeGiftRankModal() {
     const modal = document.getElementById('modal-gift-rank');
     modal?.classList.add('hidden');
+  }
+
+  // ==========================================
+  // OYUNCU PROFİL KARTI MODALI (Liderlik, Parti, Admin ve Önerilerden Tıklanabilir)
+  // ==========================================
+  function openPlayerProfileModal(username) {
+    if (!username) return;
+    const session = getSession();
+    const {
+      userService,
+      rankService,
+      economyService,
+      netheriteService,
+      achievementService
+    } = svc();
+
+    let user = userService?.getUserByUsername(username);
+    if (!user) {
+      try {
+        svc().cloudSyncService?.syncNow();
+      } catch (e) {
+        // ignore
+      }
+      user = userService?.getUserByUsername(username) || {
+        username: String(username).trim(),
+        rank: 'MEMBER',
+        emeraldBalance: 100,
+        netheriteBalance: 0,
+        points: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    const modal = document.getElementById('modal-player-profile');
+    if (!modal) return;
+
+    const rank = rankService.getUserRank(user.username);
+    const cosMeta = getUserCosmeticMeta(user);
+    const emeralds = Number(user.emeraldBalance ?? economyService?.getBalance(user.username) ?? 0);
+    const netherites = Number(user.netheriteBalance ?? netheriteService?.getBalance(user.username) ?? 0);
+
+    const heroEl = document.getElementById('modal-player-profile-hero');
+    if (heroEl) {
+      heroEl.className = 'profile-hero-card';
+      if (cosMeta.effectClass) heroEl.classList.add(cosMeta.effectClass);
+    }
+
+    const frameEl = document.getElementById('modal-player-profile-frame');
+    if (frameEl) {
+      frameEl.className = 'profile-avatar-wrapper';
+      if (cosMeta.frameClass) frameEl.classList.add(cosMeta.frameClass);
+    }
+
+    setAvatarImageWithFallback(document.getElementById('modal-player-profile-avatar'), user);
+
+    const uNameEl = document.getElementById('modal-player-profile-username');
+    if (uNameEl) {
+      uNameEl.textContent = user.username;
+      uNameEl.className = cosMeta.nameClass || '';
+      uNameEl.style.color = cosMeta.nameColor || '';
+    }
+
+    const rankEl = document.getElementById('modal-player-profile-rank');
+    if (rankEl) {
+      rankEl.className = getRankBadgeClass(rank.id);
+      rankEl.innerHTML = `${mcIcon(rank.badge, 14)} ${escapeHtml(rank.name)}`;
+    }
+
+    const badgeEl = document.getElementById('modal-player-profile-badge');
+    if (badgeEl) {
+      if (cosMeta.badgeText) {
+        badgeEl.className = 'custom-cosmetic-badge-pill';
+        badgeEl.innerHTML = replaceEmojis(escapeHtml(cosMeta.badgeText), 13);
+      } else {
+        badgeEl.className = '';
+        badgeEl.innerHTML = '';
+      }
+    }
+
+    const mcEl = document.getElementById('modal-player-profile-mcname');
+    if (mcEl) {
+      mcEl.innerHTML = user.minecraftPlayerName
+        ? `${mcIcon('GRASS', 14)} Minecraft Hesabı: <strong>${escapeHtml(user.minecraftPlayerName)}</strong>`
+        : `${mcIcon('GRASS', 14)} Minecraft Hesabı: <strong>${escapeHtml(user.username)}</strong>`;
+    }
+
+    const joinedEl = document.getElementById('modal-player-profile-joined');
+    if (joinedEl) {
+      joinedEl.textContent = `Katılım Tarihi: ${formatDateTR(user.createdAt)}`;
+    }
+
+    const ptsEl = document.getElementById('modal-player-profile-points');
+    if (ptsEl) {
+      ptsEl.textContent = formatCurrencyTRY(user.points || user.bestScore || 0);
+    }
+
+    const winsEl = document.getElementById('modal-player-profile-wins');
+    if (winsEl) {
+      winsEl.textContent = `${Number(user.gamesWon || 0)} / ${Number(user.gamesPlayed || 0)}`;
+    }
+
+    const emEl = document.getElementById('modal-player-profile-emeralds');
+    if (emEl) {
+      emEl.innerHTML = `${emeralds.toLocaleString('tr-TR')} ${mcIcon('EMERALD', 15)}`;
+    }
+
+    const neEl = document.getElementById('modal-player-profile-netherite');
+    if (neEl) {
+      neEl.innerHTML = `${netherites.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 15)}`;
+    }
+
+    const achBox = document.getElementById('modal-player-profile-achievements');
+    if (achBox && achievementService) {
+      const achs = achievementService.getUserAchievements(user.username).filter(a => a.unlocked);
+      if (achs.length === 0) {
+        achBox.innerHTML = `<div class="empty-state-box" style="padding:10px;">Henüz kazanılmış başarım rozeti bulunmuyor.</div>`;
+      } else {
+        achBox.innerHTML = achs
+          .map(
+            a => `
+            <span class="custom-cosmetic-badge-pill" style="padding:5px 10px;">
+              ${mcIcon(a.icon, 14)} ${escapeHtml(a.title)}
+            </span>
+          `
+          )
+          .join('');
+      }
+    }
+
+    const inviteBtn = document.getElementById('btn-modal-invite-to-party');
+    const giftBtn = document.getElementById('btn-modal-gift-rank-player');
+    const isSelf = session && session.username.toLowerCase() === user.username.toLowerCase();
+
+    if (inviteBtn) {
+      inviteBtn.setAttribute('data-modal-invite-user', user.username);
+      inviteBtn.classList.toggle('hidden', Boolean(isSelf));
+    }
+    if (giftBtn) {
+      giftBtn.setAttribute('data-modal-gift-user', user.username);
+      giftBtn.classList.toggle('hidden', Boolean(isSelf));
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  function closePlayerProfileModal() {
+    document.getElementById('modal-player-profile')?.classList.add('hidden');
   }
 
   function proceedGiftRankStep2() {
@@ -1414,8 +1579,9 @@
       } else {
         pendingBox.classList.remove('hidden');
         pendingList.innerHTML = pendingInvites
-          .map(
-            inv => `
+          .map(inv => {
+            const senderName = inv.inviterUsername || inv.fromUsername || 'Bir oyuncu';
+            return `
             <div class="notification-card is-unread">
               <div class="notif-card-icon">${mcIcon('SWORD', 22)}</div>
               <div class="notif-card-body">
@@ -1424,11 +1590,13 @@
                   <span class="notif-time">${formatDateTR(inv.createdAt)}</span>
                 </div>
                 <h4 class="notif-title">Parti Daveti</h4>
-                <p class="notif-message">${escapeHtml(
-                  inv.fromUsername
-                )} sizi bir partiye davet etti. (${escapeHtml(inv.partyName)} — Kod: <code>${escapeHtml(
-              inv.partyCode
-            )}</code>)</p>
+                <p class="notif-message"><strong class="clickable-player-name" data-view-profile="${escapeHtml(
+                  senderName
+                )}">${escapeHtml(
+              senderName
+            )}</strong> sizi bir partiye davet etti. (${escapeHtml(
+              inv.partyName
+            )} — Kod: <code>${escapeHtml(inv.partyCode)}</code>)</p>
                 <div class="notif-card-actions">
                   <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-accept-party-invite="${escapeHtml(
                     inv.id
@@ -1439,8 +1607,8 @@
                 </div>
               </div>
             </div>
-          `
-          )
+          `;
+          })
           .join('');
       }
     }
@@ -1514,14 +1682,14 @@
               isLeader && m.username.toLowerCase() !== activeParty.leaderUsername.toLowerCase();
             return `
               <div class="party-member-row ${escapeHtml(mCos.effectClass)}">
-                <div class="pm-left">
+                <div class="pm-left clickable-player-trigger" data-view-profile="${escapeHtml(m.username)}" title="Profili Görüntüle">
                   <img src="${escapeHtml(mAvatar)}" onerror="this.onerror=null;this.src='${escapeHtml(
               mFallback
             )}';" class="lb-avatar ${escapeHtml(mCos.frameClass)}" alt="" />
                   <span class="${getRankBadgeClass(mRank.id)}">${mcIcon(mRank.badge, 13)} ${escapeHtml(
               mRank.name
             )}</span>
-                  <strong class="${escapeHtml(mCos.nameClass)}" ${mCos.nameStyle}>${escapeHtml(m.username)}</strong>
+                  <strong class="clickable-player-name ${escapeHtml(mCos.nameClass)}" ${mCos.nameStyle}>${escapeHtml(m.username)}</strong>
                   ${
                     mCos.badgeText
                       ? `<span class="custom-cosmetic-badge-pill">${replaceEmojis(escapeHtml(mCos.badgeText), 12)}</span>`
@@ -1534,6 +1702,9 @@
                   }
                 </div>
                 <div class="pm-right">
+                  <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-view-profile="${escapeHtml(
+                    m.username
+                  )}">👤 Profil</button>
                   <span class="pm-score">${formatCurrencyTRY(m.score || 0)}</span>
                   ${
                     canKick
@@ -1566,15 +1737,22 @@
             <div class="public-party-card">
               <div>
                 <strong>${escapeHtml(p.partyName)}</strong>
-                <span>Lider: ${escapeHtml(p.leaderUsername)} • Oyuncular: ${p.members.length}/${
+                <span>Lider: <strong class="clickable-player-name" data-view-profile="${escapeHtml(
+                  p.leaderUsername
+                )}">${escapeHtml(p.leaderUsername)}</strong> • Oyuncular: ${p.members.length}/${
               p.maxMembers || 8
             }</span>
               </div>
-              <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-quick-join-party="${escapeHtml(
-                p.partyCode
-              )}">
-                Katıl (${escapeHtml(p.partyCode)})
-              </button>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-view-profile="${escapeHtml(
+                  p.leaderUsername
+                )}">👤 Lider Profili</button>
+                <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-quick-join-party="${escapeHtml(
+                  p.partyCode
+                )}">
+                  Katıl (${escapeHtml(p.partyCode)})
+                </button>
+              </div>
             </div>
           `
           )
@@ -1590,7 +1768,10 @@
     const session = getSession();
     if (!session) return;
     const { userService, netheriteService, extraLifeService } = svc();
-    const user = userService.getUserByUsername(session.username);
+    const user =
+      (userService?.ensureSessionUser
+        ? userService.ensureSessionUser(session)
+        : userService?.getUserByUsername(session.username)) || session;
     if (!user) return;
 
     const gamesPlayed = Number(user.gamesPlayed || 0);
@@ -1732,18 +1913,23 @@
           <tr>
             <td><strong>${medal}</strong></td>
             <td>
-              <div class="lb-player-cell">
+              <div class="lb-player-cell clickable-player-trigger" data-view-profile="${escapeHtml(
+                r.username
+              )}" title="${escapeHtml(r.username)} profilini görüntüle">
                 <img src="${escapeHtml(avatarSrc)}" onerror="this.onerror=null;this.src='${escapeHtml(
           fallbackSrc
         )}';" class="lb-avatar ${escapeHtml(rCos.frameClass)}" alt="" />
                 <div>
                   <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                    <strong class="${escapeHtml(rCos.nameClass)}" ${rCos.nameStyle}>${escapeHtml(r.username)}</strong>
+                    <strong class="clickable-player-name ${escapeHtml(rCos.nameClass)}" ${
+          rCos.nameStyle
+        }>${escapeHtml(r.username)}</strong>
                     ${
                       rCos.badgeText
                         ? `<span class="custom-cosmetic-badge-pill">${replaceEmojis(escapeHtml(rCos.badgeText), 12)}</span>`
                         : ''
                     }
+                    <span class="profile-mini-tag">👤 Profil</span>
                   </div>
                   ${
                     r.minecraftPlayerName
@@ -1940,7 +2126,9 @@
               <strong>${mcIcon('STAR', 16)} #${escapeHtml(s.id)} — ${escapeHtml(s.title)}</strong>
               <span class="status-pill">${escapeHtml(s.status)}</span>
             </div>
-            <p class="ticket-meta">Gönderen: <strong>${escapeHtml(s.username)}</strong> • Kategori: <strong>${escapeHtml(
+            <p class="ticket-meta">Gönderen: <strong class="clickable-player-name" data-view-profile="${escapeHtml(
+              s.username
+            )}">${escapeHtml(s.username)}</strong> • Kategori: <strong>${escapeHtml(
           s.category
         )}</strong> • Net Skor: <strong>${netScore >= 0 ? `+${netScore}` : netScore}</strong> • ${formatDateTR(
           s.createdAt
@@ -2088,6 +2276,7 @@
           )
         : allUsers;
       const ranks = rankService.getAllRanks();
+      const { avatarService } = svc();
 
       container.innerHTML = `
         <div class="admin-panel-section">
@@ -2120,15 +2309,31 @@
                 ${users
                   .map(u => {
                     const uRank = rankService.getUserRank(u.username);
+                    const uCos = getUserCosmeticMeta(u);
+                    const uAvatar = avatarService ? avatarService.getAvatarForUser(u) : '';
+                    const uFallback = avatarService
+                      ? avatarService.generatePixelAvatarDataUrl(u.username)
+                      : '';
                     return `
                       <tr>
                         <td>
-                          <strong>${escapeHtml(u.username)}</strong>
-                          <div class="lb-mc-sub">Puan: ${formatCurrencyTRY(
-                            u.points || 0
-                          )} • Oyun: ${Number(u.gamesWon || 0)}/${Number(
+                          <div class="lb-player-cell clickable-player-trigger" data-view-profile="${escapeHtml(
+                            u.username
+                          )}" title="${escapeHtml(u.username)} profilini görüntüle">
+                            <img src="${escapeHtml(uAvatar)}" onerror="this.onerror=null;this.src='${escapeHtml(
+                      uFallback
+                    )}';" class="lb-avatar ${escapeHtml(uCos.frameClass)}" alt="" />
+                            <div>
+                              <strong class="clickable-player-name ${escapeHtml(uCos.nameClass)}" ${
+                      uCos.nameStyle
+                    }>${escapeHtml(u.username)}</strong>
+                              <div class="lb-mc-sub">Puan: ${formatCurrencyTRY(
+                                u.points || 0
+                              )} • Oyun: ${Number(u.gamesWon || 0)}/${Number(
                       u.gamesPlayed || 0
                     )} • Can: ${Number(u.extraLives || 0)} ${mcIcon('HEART', 12)}</div>
+                            </div>
+                          </div>
                         </td>
                         <td>${escapeHtml(u.minecraftPlayerName || '-')}</td>
                         <td>
@@ -2160,6 +2365,9 @@
                         </td>
                         <td>
                           <div class="admin-action-btns">
+                            <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-view-profile="${escapeHtml(
+                              u.username
+                            )}">👤 Profil</button>
                             <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-give-emerald="${escapeHtml(
                               u.username
                             )}">+500 ${mcIcon('EMERALD', 13)}</button>
@@ -3109,7 +3317,53 @@
         closeDrawer();
         closeGiftRankModal();
         closeResetLeaderboardModal();
+        closePlayerProfileModal();
       }
+    });
+
+    // Oyuncu Profil Kartı Modalı Kapatma & Hızlı Aksiyonlar
+    document
+      .getElementById('btn-close-player-profile-modal')
+      ?.addEventListener('click', closePlayerProfileModal);
+    document
+      .getElementById('btn-close-player-profile-footer')
+      ?.addEventListener('click', closePlayerProfileModal);
+    document.getElementById('modal-player-profile')?.addEventListener('click', e => {
+      if (e.target.id === 'modal-player-profile') {
+        closePlayerProfileModal();
+      }
+    });
+
+    document.getElementById('btn-modal-invite-to-party')?.addEventListener('click', function () {
+      const targetUser = this.getAttribute('data-modal-invite-user');
+      const session = getSession();
+      if (!session || !targetUser) return;
+      try {
+        let activeParty = svc().partyService.getActivePartyForUser(session.username);
+        if (!activeParty) {
+          activeParty = svc().partyService.createParty(
+            session,
+            `${session.username} Milyoner Partisi`
+          );
+        }
+        svc().partyService.invitePlayerToParty(session, activeParty.partyId, targetUser);
+        svc().cloudSyncService?.pushNow();
+        closePlayerProfileModal();
+        showToast(
+          `🎉 "${targetUser}" oyuncusuna "${activeParty.partyName}" (${activeParty.partyCode}) partisi için davet gönderildi!`,
+          'success'
+        );
+        syncHeaderAndDrawer();
+        navigateToScreen('party');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('btn-modal-gift-rank-player')?.addEventListener('click', function () {
+      const targetUser = this.getAttribute('data-modal-gift-user') || '';
+      closePlayerProfileModal();
+      openGiftRankModal('VIP', targetUser);
     });
 
     // Marka logosuna tıklayınca Ana Sayfa
@@ -3234,15 +3488,22 @@
       }
     });
 
-    // Parti Formları
-    document.getElementById('party-join-form')?.addEventListener('submit', e => {
+    // Parti Formları (Bulut Senkronizasyonlu)
+    document.getElementById('party-join-form')?.addEventListener('submit', async e => {
       e.preventDefault();
       const session = getSession();
       if (!session) return;
       const code = document.getElementById('party-join-code-input')?.value || '';
       try {
+        // Önce buluttan açık partileri çekmeyi dene (başka bilgisayarda açılmış olabilir)
+        try {
+          await svc().cloudSyncService?.syncNow();
+        } catch (syncErr) {
+          // ignore
+        }
         const party = svc().partyService.joinPartyByCode(session, code);
         svc().achievementService?.checkAndUnlock(session.username, { joinedParty: true });
+        svc().cloudSyncService?.pushNow();
         showToast(`🎉 "${party.partyName}" partisine katıldınız!`, 'success');
         syncHeaderAndDrawer();
         renderParty();
@@ -3259,6 +3520,7 @@
       try {
         const party = svc().partyService.createParty(session, name);
         svc().achievementService?.checkAndUnlock(session.username, { joinedParty: true });
+        svc().cloudSyncService?.pushNow();
         showToast(`👑 "${party.partyName}" partisi kuruldu! Kod: ${party.partyCode}`, 'success');
         syncHeaderAndDrawer();
         renderParty();
@@ -3267,7 +3529,7 @@
       }
     });
 
-    document.getElementById('party-invite-form')?.addEventListener('submit', e => {
+    document.getElementById('party-invite-form')?.addEventListener('submit', async e => {
       e.preventDefault();
       const session = getSession();
       if (!session) return;
@@ -3275,7 +3537,13 @@
       const targetUser = document.getElementById('party-invite-username')?.value || '';
       if (!activeParty) return;
       try {
+        try {
+          await svc().cloudSyncService?.syncNow();
+        } catch (syncErr) {
+          // ignore
+        }
         svc().partyService.invitePlayerToParty(session, activeParty.partyId, targetUser);
+        svc().cloudSyncService?.pushNow();
         showToast(`✉️ ${targetUser} oyuncusuna parti daveti gönderildi!`, 'success');
         document.getElementById('party-invite-username').value = '';
       } catch (err) {
@@ -3298,6 +3566,7 @@
       if (!activeParty) return;
       try {
         svc().partyService.leaveParty(session, activeParty.partyId);
+        svc().cloudSyncService?.pushNow();
         showToast('Partiden ayrıldınız.', 'info');
         syncHeaderAndDrawer();
         renderParty();
@@ -3313,6 +3582,7 @@
       if (!activeParty) return;
       try {
         svc().partyService.startPartyMatch(session, activeParty.partyId);
+        svc().cloudSyncService?.pushNow();
         showToast('⚔️ Parti maçı başlatıldı!', 'success');
         if (typeof window.startNewGameSession === 'function') {
           window.startNewGameSession(true);
@@ -3400,8 +3670,20 @@
       }
     });
 
-    // Genel Tıklama Delegasyonu (Navigasyon, Mağaza, Bildirimler, Parti Daveti, Admin İşlemleri)
+    // Genel Tıklama Delegasyonu (Navigasyon, Oyuncu Profili, Mağaza, Bildirimler, Parti Daveti, Admin İşlemleri)
     document.addEventListener('click', async e => {
+      // 0. Oyuncu Profili Görüntüle ([data-view-profile])
+      const viewProfileTrigger = e.target.closest('[data-view-profile]');
+      if (viewProfileTrigger) {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetUsername = viewProfileTrigger.getAttribute('data-view-profile');
+        if (targetUsername) {
+          openPlayerProfileModal(targetUsername);
+        }
+        return;
+      }
+
       // 1. Ekran Navigasyonu ([data-nav-screen])
       const navTrigger = e.target.closest('[data-nav-screen]');
       if (navTrigger) {
@@ -3537,6 +3819,7 @@
             svc().notificationService?.markAsRead(session.username, notifId);
           }
           svc().achievementService?.checkAndUnlock(session.username, { joinedParty: true });
+          svc().cloudSyncService?.pushNow();
           showToast(`🎉 Parti daveti kabul edildi! "${party.partyName}" odasına katıldınız.`, 'success');
           syncHeaderAndDrawer();
           navigateToScreen('party');
@@ -3560,6 +3843,7 @@
           if (notifId) {
             svc().notificationService?.markAsRead(session.username, notifId);
           }
+          svc().cloudSyncService?.pushNow();
           showToast('Parti daveti reddedildi.', 'info');
           syncHeaderAndDrawer();
           if (state.currentScreen === 'notifications') renderNotifications();
@@ -3578,6 +3862,7 @@
         const code = notifJoinBtn.getAttribute('data-notif-join-party');
         try {
           const party = svc().partyService.joinPartyByCode(session, code);
+          svc().cloudSyncService?.pushNow();
           showToast(`🎉 "${party.partyName}" partisine katıldınız!`, 'success');
           navigateToScreen('party');
         } catch (err) {
@@ -3594,6 +3879,7 @@
         const code = quickJoinBtn.getAttribute('data-quick-join-party');
         try {
           const party = svc().partyService.joinPartyByCode(session, code);
+          svc().cloudSyncService?.pushNow();
           showToast(`🎉 "${party.partyName}" partisine katıldınız!`, 'success');
           syncHeaderAndDrawer();
           renderParty();
@@ -3614,6 +3900,7 @@
             kickBtn.getAttribute('data-party-id'),
             kickBtn.getAttribute('data-kick-party-member')
           );
+          svc().cloudSyncService?.pushNow();
           showToast('Oyuncu partiden çıkarıldı.', 'info');
           renderParty();
         } catch (err) {
