@@ -1184,6 +1184,29 @@
       }
     };
 
+    function renderGateErrorWithCopyButton(el, message) {
+      if (!el) return;
+      el.innerHTML = '';
+      const textSpan = document.createElement('span');
+      textSpan.textContent = message;
+      el.appendChild(textSpan);
+
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'mc-btn mc-btn-secondary mc-btn-xs';
+      copyBtn.style.cssText =
+        'margin-left: 8px; padding: 2px 6px; font-size: 0.72rem; white-space: nowrap; vertical-align: middle; cursor: pointer; display: inline-block;';
+      copyBtn.innerHTML = '📋 Hatayı Kopyala';
+      copyBtn.title = 'Hata ve sistem detaylarını panoya kopyala';
+      copyBtn.onclick = e => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.MCMPlatform?.copyDiagnosticsReport(message);
+      };
+      el.appendChild(copyBtn);
+      el.classList.remove('hidden');
+    }
+
     // 1. Birleşik Giriş (Tüm Kullanıcılar, Moderatörler ve Yöneticiler)
     loginForm?.addEventListener('submit', async e => {
       e.preventDefault();
@@ -1213,10 +1236,7 @@
           );
         }
       } catch (err) {
-        if (errEl) {
-          errEl.textContent = err.message;
-          errEl.classList.remove('hidden');
-        }
+        renderGateErrorWithCopyButton(errEl, err.message);
       }
     });
 
@@ -1246,10 +1266,7 @@
           'success'
         );
       } catch (err) {
-        if (errEl) {
-          errEl.textContent = err.message;
-          errEl.classList.remove('hidden');
-        }
+        renderGateErrorWithCopyButton(errEl, err.message);
       }
     });
 
@@ -1277,10 +1294,7 @@
         }
         forgotForm.reset();
       } catch (err) {
-        if (errEl) {
-          errEl.textContent = err.message;
-          errEl.classList.remove('hidden');
-        }
+        renderGateErrorWithCopyButton(errEl, err.message);
       }
     });
 
@@ -1297,10 +1311,7 @@
         }
         launchOtpScreen(email, true, '');
       } catch (err) {
-        if (errEl) {
-          errEl.textContent = err.message;
-          errEl.classList.remove('hidden');
-        }
+        renderGateErrorWithCopyButton(errEl, err.message);
       }
     });
 
@@ -1350,10 +1361,7 @@
           if (pwdInput) pwdInput.focus();
         }
       } catch (err) {
-        if (errEl) {
-          errEl.textContent = err.message;
-          errEl.classList.remove('hidden');
-        }
+        renderGateErrorWithCopyButton(errEl, err.message);
       }
     });
 
@@ -1396,10 +1404,7 @@
           window.MCMPlatform?.showToast(`🎉 Tebrikler ${session.username}! Hesabın başarıyla oluşturuldu.`, 'success');
         }
       } catch (err) {
-        if (errEl) {
-          errEl.textContent = err.message;
-          errEl.classList.remove('hidden');
-        }
+        renderGateErrorWithCopyButton(errEl, err.message);
       }
     });
 
@@ -1411,20 +1416,20 @@
         googleLoginBtn.disabled = true;
         googleLoginBtn.innerHTML = `<span>⏳ Google Hesabı Bağlanıyor...</span>`;
 
-        const fbReady = Boolean(
+        let res = null;
+        if (
           window.MCMFirebase &&
-          typeof window.MCMFirebase.isFirebaseReady === 'function' &&
-          window.MCMFirebase.isFirebaseReady()
-        );
-
-        if (fbReady) {
-          const res = await window.MCMFirebase.signInWithGoogleAndDrive({ promptConsent: true });
-          if (res && res.user && res.user.email) {
-            launchOtpScreen(res.user.email, res.drivePermissionGranted, res.user.photoURL);
-            return;
-          }
+          typeof window.MCMFirebase.signInWithGoogleAndDrive === 'function'
+        ) {
+          res = await window.MCMFirebase.signInWithGoogleAndDrive({ promptConsent: true });
         }
-        // Canlı Firebase hazır değilse veya ortam pop-up desteklemiyorsa temiz Gmail ekranını aç
+
+        if (res && res.success && res.user && res.user.email) {
+          launchOtpScreen(res.user.email, res.drivePermissionGranted, res.user.photoURL);
+          return;
+        }
+
+        // Firebase canlı yapılandırılmamışsa veya ortam pop-up desteklemiyorsa temiz Gmail OTP ekranını aç
         window.launchGmailEmailPrompt();
       } catch (err) {
         console.warn('Google pop-up bağlantısı başarısız, Gmail formuna yönlendiriliyor:', err);
@@ -1433,11 +1438,6 @@
         googleLoginBtn.disabled = false;
         googleLoginBtn.innerHTML = origHtml;
       }
-    });
-
-    // ⚙️ Firebase Yapılandırma Modalını Açma
-    document.getElementById('btn-open-firebase-config')?.addEventListener('click', () => {
-      window.MCMFirebase?.openFirebaseSetupModal();
     });
 
     // Aktif oturum varsa kapıyı gizle

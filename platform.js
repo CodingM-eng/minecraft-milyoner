@@ -67,6 +67,50 @@
     return `${Number(num || 0).toLocaleString('tr-TR')} ₺`;
   }
 
+  function copyDiagnosticsReport(errorInfo = {}) {
+    const session = getSession();
+    const timestamp = new Date().toLocaleString('tr-TR');
+    const errText =
+      typeof errorInfo === 'string'
+        ? errorInfo
+        : errorInfo?.message || JSON.stringify(errorInfo);
+
+    const reportLines = [
+      '==========================================',
+      '⛏️ MC MİLYONER SİSTEM VE HATA RAPORU',
+      '==========================================',
+      `📅 Tarih / Saat: ${timestamp}`,
+      `📱 Uygulama: MC Milyoner (v0.0.1)`,
+      `👤 Kullanıcı: ${session ? session.username : 'Giriş Yapılmamış'}`,
+      `📧 E-posta: ${session?.email || 'N/A'}`,
+      `👑 Rütbe: ${session?.role || 'MEMBER'}`,
+      `🖥️ Aktif Ekran: ${state.currentScreen || 'welcome'}`,
+      `🌐 Platform/Tarayıcı: ${navigator.userAgent}`,
+      `🔗 URL: ${window.location.href}`,
+      `❌ Karşılaşılan Hata: ${errText}`,
+      '==========================================',
+      'Bu raporu geliştiriciye veya Bug/Öneri formuna doğrudan iletebilirsiniz.'
+    ];
+
+    const fullText = reportLines.join('\n');
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(fullText)
+        .then(() => {
+          showToast(
+            '📋 Hata detayları kopyalandı! Bug ve öneri kısmına veya geliştiriciye yapıştırabilirsiniz.',
+            'success'
+          );
+        })
+        .catch(() => {
+          prompt('Lütfen aşağıdaki rapor metnini kopyalayın (Ctrl+C):', fullText);
+        });
+    } else {
+      prompt('Lütfen aşağıdaki rapor metnini kopyalayın (Ctrl+C):', fullText);
+    }
+  }
+
   function showToast(message, type = 'info') {
     if (typeof window.showToastNotification === 'function') {
       window.showToastNotification(message, type);
@@ -76,12 +120,31 @@
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = `mc-toast mc-toast-${type}`;
-    toast.textContent = message;
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = message;
+    toast.appendChild(textSpan);
+
+    if (type === 'error') {
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'mc-btn mc-btn-secondary mc-btn-xs';
+      copyBtn.style.cssText =
+        'margin-left: 8px; padding: 2px 6px; font-size: 0.72rem; white-space: nowrap; vertical-align: middle; cursor: pointer;';
+      copyBtn.innerHTML = '📋 Hatayı Kopyala';
+      copyBtn.title = 'Hata ve sistem detaylarını panoya kopyala';
+      copyBtn.onclick = e => {
+        e.stopPropagation();
+        copyDiagnosticsReport(message);
+      };
+      toast.appendChild(copyBtn);
+    }
+
     container.appendChild(toast);
     setTimeout(() => {
       toast.classList.add('fade-out');
       setTimeout(() => toast.remove(), 300);
-    }, 3600);
+    }, type === 'error' ? 6000 : 3600);
   }
 
   // ==========================================
@@ -4696,11 +4759,28 @@
       }
     });
 
-    // Tarayıcı geri/ileri butonları
+    // Tarayıcı ve Android Donanım Geri/İleri butonları (FreeWebToAPK desteği)
     window.addEventListener('popstate', () => {
+      // 1. Çekmece açıksa önce çekmeceyi kapat
+      const drawer = document.getElementById('side-drawer');
+      if (drawer && drawer.classList.contains('open')) {
+        closeDrawer();
+        return;
+      }
+
+      // 2. Açık modal pencere varsa önce onu kapat
+      const openModal = document.querySelector('.mc-modal:not(.hidden)');
+      if (openModal) {
+        openModal.classList.add('hidden');
+        return;
+      }
+
+      // 3. Ekrana geçiş yap
       const hash = (window.location.hash || '').replace(/^#/, '');
       if (hash && document.getElementById(`screen-${hash}`)) {
         navigateToScreen(hash, { skipHistory: true });
+      } else {
+        navigateToScreen('welcome', { skipHistory: true });
       }
     });
 
@@ -4739,6 +4819,7 @@
     renderStats,
     renderLeaderboard,
     renderAdmin,
-    showToast
+    showToast,
+    copyDiagnosticsReport
   };
 })(window);

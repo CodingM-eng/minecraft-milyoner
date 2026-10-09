@@ -5260,6 +5260,24 @@ body.theme-mc-light {
   flex-shrink: 0;
 }
 
+.brand-logo-img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 6px;
+  filter: drop-shadow(0 2px 6px rgba(16, 185, 129, 0.45));
+  flex-shrink: 0;
+}
+
+.gate-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  margin: 0 auto 12px;
+  display: block;
+  filter: drop-shadow(0 4px 14px rgba(16, 185, 129, 0.45));
+}
+
 .cube-face {
   font-family: var(--font-pixel);
   font-size: 1.05rem;
