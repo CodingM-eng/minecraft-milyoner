@@ -551,12 +551,42 @@
   const otpService = {
     _activeOtps: new Map(),
 
+    async sendOtpToGmail(email) {
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        throw new Error('Lütfen geçerli bir Gmail / e-posta adresi girin.');
+      }
+
+      // 1. Sunucu API çağrısı (POST /api/auth/send-otp)
+      try {
+        if (typeof fetch === 'function') {
+          const res = await fetch('/api/auth/send-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cleanEmail })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            return {
+              email: cleanEmail,
+              expiresAt: data.expiresAt || Date.now() + 3 * 60 * 1000,
+              serverSent: true
+            };
+          }
+        }
+      } catch (err) {
+        // Sunucu bağlantısı başarısızsa yerel yedeğe geç
+      }
+
+      // 2. Yerel bellek yedeği
+      return this.generateOtp(cleanEmail);
+    },
+
     generateOtp(email) {
       const cleanEmail = String(email || '').trim().toLowerCase();
       if (!cleanEmail || !cleanEmail.includes('@')) {
         throw new Error('Lütfen geçerli bir Gmail / e-posta adresi girin.');
       }
-      // 6 haneli güvenli kod
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = Date.now() + 3 * 60 * 1000; // 3 dakika
       this._activeOtps.set(cleanEmail, { code, expiresAt, attempts: 0 });
@@ -570,6 +600,8 @@
 
     verifyOtp(email, inputCode) {
       const cleanEmail = String(email || '').trim().toLowerCase();
+      const cleanInput = String(inputCode || '').trim();
+
       const record = this._activeOtps.get(cleanEmail);
       if (!record) {
         throw new Error('Bu e-posta için aktif bir onay kodu bulunamadı veya süresi doldu.');
@@ -583,7 +615,6 @@
         this._activeOtps.delete(cleanEmail);
         throw new Error('Çok fazla hatalı deneme yapıldı. Lütfen yeni kod isteyin.');
       }
-      const cleanInput = String(inputCode || '').trim();
       if (cleanInput !== record.code) {
         throw new Error('Girdiğiniz 6 haneli onay kodu hatalı! Lütfen tekrar kontrol edin.');
       }

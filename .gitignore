@@ -10,6 +10,9 @@ world_the_end/
 *.txt
 *.json
 !manifest.json
+!package.json
+!package-lock.json
+node_modules/
 *.properties
 *.bat
 SUNUCU.md

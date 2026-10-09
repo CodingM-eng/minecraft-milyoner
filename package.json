@@ -1,0 +1,21 @@
+{
+  "name": "mc-milyoner",
+  "version": "0.0.1",
+  "description": "MC Milyoner - Minecraft Bilgi Yarışması & Turnuva Platformu Sunucusu",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/auth_drive_visibility.test.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.10.0"
+  },
+  "keywords": [
+    "minecraft",
+    "milyoner",
+    "quiz",
+    "turnuva"
+  ],
+  "author": "codingdevelopia@gmail.com",
+  "license": "ISC"
+}

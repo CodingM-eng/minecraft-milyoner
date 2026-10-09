@@ -1155,13 +1155,10 @@
       }
     }
 
-    function launchOtpScreen(email, driveScope = true, photoUrl = '') {
+    async function launchOtpScreen(email, driveScope = true, photoUrl = '') {
       currentOtpEmail = String(email || '').trim().toLowerCase();
       currentOtpDriveScope = Boolean(driveScope);
       currentOtpPhotoUrl = photoUrl || '';
-
-      const otpData = svc().authService.generateOtp(currentOtpEmail);
-      currentOtpCode = otpData.code;
 
       hideAllGateForms();
       otpForm?.classList.remove('hidden');
@@ -1170,11 +1167,8 @@
       const targetEmailEl = document.getElementById('gate-otp-target-email');
       if (targetEmailEl) targetEmailEl.textContent = currentOtpEmail;
 
-      const codeDisplayEl = document.getElementById('gate-otp-code-display');
-      if (codeDisplayEl) {
-        codeDisplayEl.textContent = otpData.code;
-        codeDisplayEl.onclick = () => copyCodeToClipboard(currentOtpCode);
-      }
+      const sentEmailEl = document.getElementById('gate-otp-sent-email');
+      if (sentEmailEl) sentEmailEl.textContent = currentOtpEmail;
 
       const inputEl = document.getElementById('gate-otp-input');
       if (inputEl) {
@@ -1185,17 +1179,23 @@
       const errEl = document.getElementById('gate-otp-error');
       errEl?.classList.add('hidden');
 
-      startOtpCountdown(otpData.expiresAt);
-
-      // Kodu panoya otomatik kopyalamayı da dene
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(otpData.code).catch(() => {});
+      // Gerçek Gmail (mail.google.com) gelen kutusuna e-posta gönder
+      let otpData = null;
+      try {
+        if (svc().otpService?.sendOtpToGmail) {
+          otpData = await svc().otpService.sendOtpToGmail(currentOtpEmail);
+        } else {
+          otpData = svc().authService.generateOtp(currentOtpEmail);
+        }
+      } catch (err) {
+        otpData = svc().authService.generateOtp(currentOtpEmail);
       }
 
+      startOtpCountdown(otpData.expiresAt);
+
       window.MCMPlatform?.showToast(
-        `📬 [Gmail Gelen Kutusu]: Doğrulama kodunuz: ${otpData.code}`,
-        'info',
-        { copyText: otpData.code, copyLabel: '📋 Kodu Kopyala' }
+        `📬 Doğrulama kodunuz ${currentOtpEmail} adresine gönderildi! Lütfen mail.google.com gelen kutunuzu kontrol edin.`,
+        'success'
       );
     }
 
@@ -1352,7 +1352,7 @@
       const inputCode = document.getElementById('gate-otp-input')?.value || '';
 
       try {
-        svc().authService.verifyOtp(currentOtpEmail, inputCode);
+        await svc().authService.verifyOtp(currentOtpEmail, inputCode);
 
         // Kullanıcı bu Gmail ile daha önce kayıt olmuş mu?
         const existingUser = svc().userService.getUserByEmail(currentOtpEmail);
@@ -1397,32 +1397,6 @@
     document.getElementById('btn-resend-otp')?.addEventListener('click', () => {
       if (!currentOtpEmail) return;
       launchOtpScreen(currentOtpEmail, currentOtpDriveScope, currentOtpPhotoUrl);
-    });
-
-    // OTP Kodu Doğrudan Kopyalama Butonu
-    document.getElementById('btn-copy-otp-code')?.addEventListener('click', () => {
-      if (!currentOtpCode) return;
-      copyCodeToClipboard(currentOtpCode);
-      const btn = document.getElementById('btn-copy-otp-code');
-      if (btn) {
-        const orig = btn.innerHTML;
-        btn.innerHTML = '<span>✅</span> <span>Kopyalandı!</span>';
-        setTimeout(() => (btn.innerHTML = orig), 2500);
-      }
-    });
-
-    // OTP Kodu Hemen Doldur Butonu
-    document.getElementById('btn-autofill-otp-code')?.addEventListener('click', () => {
-      if (!currentOtpCode) return;
-      const inputEl = document.getElementById('gate-otp-input');
-      if (inputEl) {
-        inputEl.value = currentOtpCode;
-        inputEl.focus();
-        window.MCMPlatform?.showToast(
-          '⚡ Kod kutuya otomatik yazıldı! "Kodu Onayla" butonuna basabilirsiniz.',
-          'success'
-        );
-      }
     });
 
     // 6. Kullanıcı Adı ve Şifre Belirleme Formu Submit
