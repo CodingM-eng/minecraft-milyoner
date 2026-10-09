@@ -1063,14 +1063,27 @@
       const cleanList = list.filter(u => !u.isDemo);
       let mutated = false;
       cleanList.forEach(u => {
-        if (!u.vipPlusBonusRuleMigrated) {
+        if (!u.vipTierBonusRuleMigrated_v2) {
           const rId = normalizeRankId(u.rank || u.role || 'MEMBER');
-          if (!['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rId) && u.initialNetheriteBonusClaimed) {
-            u.netheriteBalance = Math.max(0, Number(u.netheriteBalance || 0) - 250);
-            u.initialNetheriteBonusClaimed = false;
+          if (rId === 'MEMBER' || rId === 'MODERATOR') {
+            // Normal üye ve moderatörlere başlangıç/giriş bonusu verilmez (varsa başlangıç bonusu düşülür)
+            if (u.initialNetheriteBonusClaimed) {
+              const bonusAmt = Number(u.initialNetheriteBonusAmount || 250);
+              u.netheriteBalance = Math.max(0, Number(u.netheriteBalance || 0) - bonusAmt);
+              u.initialNetheriteBonusClaimed = false;
+              u.initialNetheriteBonusAmount = 0;
+              mutated = true;
+            }
+          } else if (rId === 'VIP') {
+            // Yalnızca VIP rütbesine sahip olanlara tek seferlik 50 Netherite verilir
+            if (u.initialNetheriteBonusClaimed && Number(u.initialNetheriteBonusAmount || 250) > 50) {
+              const diff = Number(u.initialNetheriteBonusAmount || 250) - 50;
+              u.netheriteBalance = Math.max(0, Number(u.netheriteBalance || 0) - diff);
+              u.initialNetheriteBonusAmount = 50;
+              mutated = true;
+            }
           }
-          u.vipPlusBonusRuleMigrated = true;
-          mutated = true;
+          u.vipTierBonusRuleMigrated_v2 = true;
         }
       });
       if (mutated) {
@@ -1490,7 +1503,7 @@
         type: 'SYSTEM_NOTIFICATION',
         title: '🎉 MC Milyoner Olmak İster Platformuna Hoş Geldin!',
         message:
-          'Hesabın başarıyla oluşturuldu! Her gün ücretsiz Günlük Zümrüt ödülünü alabilir, ilk VIP+ ve üzeri rütbe alımında anında +250 Netherite kazanabilirsin!'
+          'Hesabın başarıyla oluşturuldu! Her gün ücretsiz Günlük Zümrüt ödülünü alabilir, ilk VIP alımında +50, ilk VIP+ ve üzeri rütbe alımında anında +250 Netherite kazanabilirsin!'
       });
 
       activityService.log(
@@ -2996,7 +3009,7 @@
     getPlatformSettings() {
       return storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {
         siteTitle: 'MC Milyoner Olmak İster',
-        announcementText: 'Yeni Sezon Başladı! Her gün ücretsiz Günlük Zümrüt al, ilk VIP+ ve üzeri alımda +250 Netherite kazan!'
+        announcementText: 'Yeni Sezon Başladı! Her gün ücretsiz Günlük Zümrüt al, ilk VIP alımında +50, ilk VIP+ ve üzeri alımda +250 Netherite kazan!'
       });
     },
 

@@ -501,7 +501,7 @@
           wBtn.innerHTML = `+${dailyNe} ${neSvg} &amp; +${dailyEm} ${emSvg} Al`;
         } else {
           wTitle.innerHTML = `${emSvg} ${escapeHtml(status.rankName)} Günlük Zümrüt Ödülünüz Hazır!`;
-          wDesc.innerHTML = `Bugünkü +${dailyEm} ${emSvg} Zümrüt ödülünüzü hemen alın! (VIP+ ve üzeri ilk alımda +250 ${neSvg} ve günlük +25/50/100 ${neSvg} kazanır)`;
+          wDesc.innerHTML = `Bugünkü +${dailyEm} ${emSvg} Zümrüt ödülünüzü hemen alın! (VIP ilk alımda +50 ${neSvg}, VIP+ ve üzeri ilk alımda +250 ${neSvg} ve günlük +25/50/100 ${neSvg} kazanır)`;
           wBtn.innerHTML = `+${dailyEm} ${emSvg} Zümrüt Al`;
         }
         wBtn.disabled = false;
@@ -528,7 +528,7 @@
           sText.innerHTML = `${escapeHtml(status.rankName)} ayrıcalığınızla +${dailyNe} ${neSvg} Netherite ve +${dailyEm} ${emSvg} Zümrüt ödülünüz hazır!`;
           sBtn.innerHTML = `+${dailyNe} ${neSvg} &amp; +${dailyEm} ${emSvg} Al`;
         } else {
-          sText.innerHTML = `${escapeHtml(status.rankName)} günlük +${dailyEm} ${emSvg} Zümrüt ödülünüz hazır! (En az VIP+ ilk alımda +250 ${neSvg} + günlük +25/50/100 ${neSvg} verir)`;
+          sText.innerHTML = `${escapeHtml(status.rankName)} günlük +${dailyEm} ${emSvg} Zümrüt ödülünüz hazır! (VIP ilk alımda +50 ${neSvg}, en az VIP+ ilk alımda +250 ${neSvg} + günlük +25/50/100 ${neSvg} verir)`;
           sBtn.innerHTML = `+${dailyEm} ${emSvg} Zümrüt Al`;
         }
         sBtn.disabled = false;
@@ -1125,9 +1125,11 @@
         const isCurrent = userRank.id === rank.id;
         const nPrice = Math.max(500, Number(rank.netheritePrice || 500));
         const dailyNetheriteText =
-          rank.dailyNetherite > 0
+          rank.id === 'VIP'
+            ? `<div class="rank-daily-netherite-pill">${mcIcon('NETHERITE', 14)} İlk Alımda +50 ${mcIcon('NETHERITE', 14)} &bull; Günlük +${rank.dailyEmerald || 100} ${mcIcon('EMERALD', 14)}</div>`
+            : rank.dailyNetherite > 0
             ? `<div class="rank-daily-netherite-pill">${mcIcon('NETHERITE', 14)} İlk Alımda +250 ${mcIcon('NETHERITE', 14)} • Günlük +${rank.dailyNetherite} ${mcIcon('NETHERITE', 14)} &amp; +${rank.dailyEmerald || 200} ${mcIcon('EMERALD', 14)}</div>`
-            : `<div class="rank-daily-netherite-pill muted">${mcIcon('EMERALD', 14)} Günlük +${rank.dailyEmerald || 100} Zümrüt Ödülü</div>`;
+            : `<div class="rank-daily-netherite-pill muted">${mcIcon('EMERALD', 14)} Günlük +${rank.dailyEmerald || 50} Zümrüt Ödülü</div>`;
 
         return `
           <div class="rank-card" style="border-top: 4px solid ${escapeHtml(rank.color)};">
@@ -3975,8 +3977,9 @@
         try {
           const res = svc().shopService.purchaseRankForSelf(session, rankId, 'NETHERITE');
           if (res.firstVipPlusBonusGranted) {
+            const bonusMsg = res.rank.id === 'VIP' ? '+50 Netherite' : '+250 Netherite';
             showToast(
-              `🎉 Tebrikler! ${res.rank.name} rütbesine yükseldiniz ve ilk VIP+ ve üzeri alımınıza özel +250 Netherite kazandınız!`,
+              `🎉 Tebrikler! ${res.rank.name} rütbesine yükseldiniz ve ilk alımınıza özel ${bonusMsg} kazandınız!`,
               'success'
             );
           } else {

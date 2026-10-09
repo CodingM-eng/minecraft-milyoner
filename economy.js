@@ -153,6 +153,7 @@
         profileEffects: false
       },
       features: [
+        'İlk Alımda Tek Seferlik +50 Netherite Hoş Geldin Ödülü!',
         'Her 24 Saatte +100 Günlük Zümrüt Ödülü',
         'Özel 💎 VIP Rozeti ve Mavi İsim Rengi',
         'Parti Oluşturabilme (6 Kişilik Kapasite)',
@@ -1489,46 +1490,75 @@
     },
 
     /**
-     * Sadece ilk kez en az VIP+ (VIP_PLUS, MVIP, MVIP_PLUS, ADMIN) rütbesine ulaşıldığında
-     * tek seferlik +250 Netherite verir. Normal Üye ve VIP rütbelerinde verilmez.
+     * Rütbe İlk Alım / Hoş Geldin Netherite Bonusu Kuralı:
+     * - Normal Üye (MEMBER) ve diğerleri: 0 Netherite (Otomatik bonus verilmez!).
+     * - Yalnızca VIP: 50 Netherite ilk alım hoş geldin bonusu verilir.
+     * - En az VIP+ (VIP+, MVIP, MVIP+, ADMIN): 250 Netherite ilk alım hoş geldin bonusu verilir.
+     * - Bir kullanıcı önce VIP alıp (+50) sonra VIP+ veya üzerine yükselirse, kalan +200 eklenerek 250'ye tamamlanır.
      */
     ensureInitialBonusOnce(username) {
       const { userService, notificationService } = getServices();
       if (!userService || !username) return false;
       const user = userService.getUserByUsername(username);
       if (!user) return false;
-      if (user.initialNetheriteBonusClaimed === true) {
-        return false;
-      }
 
       const rank = rankService.getUserRank(user.username);
-      const qualifiesForInitialBonus =
-        ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rank.id) ||
-        (rank.id !== 'MODERATOR' && (Number(rank.order || 0) >= 3 || Number(rank.dailyNetherite || 0) > 0));
-      if (!qualifiesForInitialBonus) {
+      const rankId = rank.id;
+
+      // Normal üye ve moderatörlere başlangıçta Netherite bonusu verilmez
+      if (rankId === 'MEMBER' || rankId === 'MODERATOR') {
         return false;
       }
 
+      const isVipOnly = (rankId === 'VIP');
+      const isVipPlusOrHigher =
+        ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rankId) ||
+        (rankId !== 'MODERATOR' && rankId !== 'MEMBER' && Number(rank.order || 0) >= 3);
+
+      const targetBonus = isVipPlusOrHigher ? 250 : isVipOnly ? 50 : 0;
+      if (targetBonus <= 0) return false;
+
+      const alreadyClaimedAmount = Number(
+        user.initialNetheriteBonusAmount !== undefined
+          ? user.initialNetheriteBonusAmount
+          : (user.initialNetheriteBonusClaimed ? (user.rank === 'VIP' ? 50 : 250) : 0)
+      );
+
+      if (alreadyClaimedAmount >= targetBonus) {
+        return false; // Zaten bu rütbenin seviyesine denk veya daha yüksek bonus almış
+      }
+
+      const grantAmount = targetBonus - alreadyClaimedAmount;
+      if (grantAmount <= 0) return false;
+
       const currentBalance = Number(user.netheriteBalance || 0);
-      const nextBalance = currentBalance + 250;
+      const nextBalance = currentBalance + grantAmount;
+
       userService.syncUserFields(user.username, {
         netheriteBalance: nextBalance,
-        initialNetheriteBonusClaimed: true
+        initialNetheriteBonusClaimed: true,
+        initialNetheriteBonusAmount: targetBonus
       });
 
       this.recordTransaction({
         username: user.username,
-        amount: 250,
+        amount: grantAmount,
         type: 'INITIAL_BONUS',
-        reason: `İlk ${rank.name} Rütbe Alımı Tek Seferlik Hoş Geldin Ödülü (+250 Netherite)`,
+        reason: isVipOnly
+          ? `İlk VIP Rütbe Alımı Tek Seferlik Hoş Geldin Ödülü (+50 Netherite)`
+          : `İlk ${rank.name} Rütbe Alımı Tek Seferlik Hoş Geldin Ödülü (+${grantAmount} Netherite)`,
         balanceAfter: nextBalance
       });
 
       if (notificationService) {
         notificationService.notifyUser(user.username, {
           type: 'NETHERITE_DAILY_REWARD',
-          title: '🎉 İlk VIP+ ve Üzeri Rütbe Bonusu: +250 Netherite!',
-          message: `İlk kez ${rank.name} rütbesine ulaştığınız için tek seferlik +250 Netherite ödülünüz hesabınıza eklendi!`
+          title: isVipOnly
+            ? '🎉 VIP Bonusu: +50 Netherite!'
+            : `🎉 İlk ${rank.name} Rütbe Bonusu: +${grantAmount} Netherite!`,
+          message: isVipOnly
+            ? 'Tebrikler! VIP rütbesine ulaştığınız için tek seferlik +50 Netherite ödülünüz hesabınıza tanımlandı!'
+            : `Tebrikler! ${rank.name} rütbesine ulaştığınız için tek seferlik +${grantAmount} Netherite ödülünüz hesabınıza eklendi!`
         });
       }
       return true;

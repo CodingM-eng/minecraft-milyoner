@@ -373,11 +373,36 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     console.log('✓ codingdevelopia@gmail.com Gmail & OTP ile Kullanıcı Adı ve Şifre belirleyip ADMIN olarak kaydoldu.');
 
     console.log('\n====================================================');
+    console.log('TEST 8: Netherite Bonus Kademeleri (Üye: 0, VIP: 50, VIP+: 250)');
+    console.log('====================================================');
+
+    // 8.1: Normal Üye (MEMBER) 0 Netherite ile başlar
+    const freshMember = userService.getUserByUsername('GmailVerifiedHero');
+    assert.strictEqual(Number(freshMember.netheriteBalance || 0), 0, 'Normal üye kayıt olduğunda 0 Netherite almalıdır.');
+    console.log('✓ Normal üye (MEMBER) kayıt ve girişte 0 Netherite aldı.');
+
+    // 8.2: VIP Rütbesi tek seferlik 50 Netherite verir
+    userService.syncUserFields('GmailVerifiedHero', { rank: 'VIP', role: 'VIP' });
+    if (window.MCMServices?.netheriteService) {
+      window.MCMServices.netheriteService.ensureInitialBonusOnce('GmailVerifiedHero');
+      const vipUser = userService.getUserByUsername('GmailVerifiedHero');
+      assert.strictEqual(Number(vipUser.netheriteBalance), 50, 'VIP rütbesi tek seferlik 50 Netherite vermelidir.');
+      console.log('✓ VIP olan kullanıcıya tek seferlik 50 Netherite verildi.');
+
+      // 8.3: VIP+ Rütbesine yükseldiğinde 250 Netherite'e tamamlanır (+200 eklenir)
+      userService.syncUserFields('GmailVerifiedHero', { rank: 'VIP_PLUS', role: 'VIP' });
+      window.MCMServices.netheriteService.ensureInitialBonusOnce('GmailVerifiedHero');
+      const vipPlusUser = userService.getUserByUsername('GmailVerifiedHero');
+      assert.strictEqual(Number(vipPlusUser.netheriteBalance), 250, 'VIP+ rütbesine yükseldiğinde toplam 250 Netherite tamamlanmalıdır.');
+      console.log('✓ VIP+ rütbesine yükselen kullanıcı toplam 250 Netherite bonusuna ulaştı.');
+    }
+
+    console.log('\n====================================================');
     console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {
-    console.error('TEST 6 Hatası:', err);
+    console.error('Test Hatası:', err);
     process.exit(1);
   }
 })();
