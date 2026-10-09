@@ -1,5 +1,5 @@
 /**
- * MC Milyoner Olmak İster - Çekirdek Servis Katmanı (v7.0 Production)
+ * MC Milyoner Olmak İster - Çekirdek Servis Katmanı (v0.0.1 Production)
  *
  * Mimari Özellikler:
  * 1. Lisanssız Normal Kullanıcı Kayıt / Giriş / Çıkış ve Tam Hesap İzolasyonu (#1, #7)
@@ -2843,7 +2843,7 @@
 
     _buildLocalPayload() {
       return {
-        schemaVersion: '10.0',
+        schemaVersion: '0.0.1',
         resetEpoch: Number(storage.get(STORAGE_KEYS.RESET_EPOCH, 1) || 1),
         updatedAt: new Date().toISOString(),
         tombstones: this.getTombstones(),

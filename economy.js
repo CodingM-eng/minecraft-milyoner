@@ -1,5 +1,5 @@
 /**
- * Minecraft Milyoner - Ekonomi, 7 Rütbe, Netherite, Birleşik Mağaza, Hediye Rütbe ve Liderlik Servisleri (v6.0)
+ * Minecraft Milyoner - Ekonomi, 7 Rütbe, Netherite, Birleşik Mağaza, Hediye Rütbe ve Liderlik Servisleri (v0.0.1)
  *
  * Mimari Özellikler:
  * 1. 7 Rütbe Hiyerarşisi (#3): Üye (MEMBER), VIP, VIP+ (VIP_PLUS), MVIP, MVIP+ (MVIP_PLUS), Moderator (MODERATOR), ADMIN

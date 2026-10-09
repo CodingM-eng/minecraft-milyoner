@@ -1,5 +1,5 @@
 /**
- * Minecraft Milyoner - Platform Arayüz Kontrolcüsü (v6.0)
+ * Minecraft Milyoner - Platform Arayüz Kontrolcüsü (v0.0.1)
  *
  * Kapsam:
  * - Sağdan Açılır Kompakt 3 Çizgili Menü Çekmecesi (#5, #6)

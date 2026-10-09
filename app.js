@@ -1,5 +1,5 @@
 /**
- * Minecraft Milyoner - Ana Oyun Motoru, Kimlik Doğrulama Kapısı ve Ses Sistemi (v6.0)
+ * Minecraft Milyoner - Ana Oyun Motoru, Kimlik Doğrulama Kapısı ve Ses Sistemi (v0.0.1)
  *
  * Özellikler:
  * - Lisanssız Tam Türkçe Giriş / Kayıt / Şifre Sıfırlama (#1)
