@@ -1213,6 +1213,11 @@
       }
     });
 
+    // ⚙️ Firebase Yapılandırma / Test Modu Açma
+    document.getElementById('btn-open-firebase-config')?.addEventListener('click', () => {
+      window.MCMFirebase?.openFirebaseSetupModal();
+    });
+
     // Aktif oturum varsa kapıyı gizle
     const activeSession = svc().authService?.getActiveSession();
     if (activeSession) {
