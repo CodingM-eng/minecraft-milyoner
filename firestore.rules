@@ -1,0 +1,670 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Application: Minecraft Milyoner Web Application
+//
+// 1. Collection: users
+//    Document ID: {userId} (matches request.auth.uid)
+//    Fields:
+//      - userId: string (required, immutable) - Firebase Auth UID
+//      - username: string (required, 3-32 chars) - Player username
+//      - minecraftPlayerName: string (optional, 0-32 chars) - Linked Minecraft IGN
+//      - rank: string (required, 1-32 chars) - Player rank badge identifier (e.g., MEMBER, VIP, MVP)
+//      - rankBadge: string (optional, 0-64 chars) - Visual rank icon/badge
+//      - avatarUrl: string (optional, 0-4096 chars) - Profile picture or skin URL
+//      - position: number (optional, >= 0) - Leaderboard rank position
+//      - role: string (required, in ['MEMBER', 'VIP', 'VIP_PLUS', 'MVP', 'MVP_PLUS', 'MODERATOR', 'ADMIN']) - User system role
+//      - isModerator: bool (optional) - Moderator flag
+//      - status: string (optional, in ['ACTIVE', 'BANNED', 'SUSPENDED']) - Account status
+//      - drivePermissionGranted: bool (optional) - Google Drive integration permission grant
+//      - coins: number (optional, >= 0) - Private currency
+//      - emeralds: number (optional, >= 0) - Private currency
+//      - emeraldBalance: number (optional, >= 0) - Private emerald wallet balance
+//      - emeraldsEarnedTotal: number (optional, >= 0) - Private emerald stats
+//      - emeraldsSpentTotal: number (optional, >= 0) - Private emerald stats
+//      - netheriteBalance: number (optional, >= 0) - Private netherite currency
+//      - points: number (optional, >= 0) - Private total quiz score
+//      - bestScore: number (optional, >= 0) - High score
+//      - extraLives: number (optional, >= 0) - Gameplay lives
+//      - gamesPlayed: number (optional, >= 0) - Games played counter
+//      - gamesWon: number (optional, >= 0) - Games won counter
+//      - gamesLost: number (optional, >= 0) - Games lost counter
+//      - achievements: list (optional, max 100 items) - Unlocked achievement keys
+//      - transactions: list (optional, max 150 items) - Private transaction records
+//      - inventory: list (optional, max 100 items) - Owned items / perks
+//      - ownedCosmetics: list (optional, max 100 items) - Purchased cosmetics
+//      - equippedCosmetics: map (optional) - Active cosmetics map
+//      - settings: map (optional) - Sound/UI settings
+//      - createdAt: timestamp / string (required, immutable) - Registration date
+//      - updatedAt: timestamp / string (optional) - Last update date
+//
+// 2. Collection: users/{userId}/public/{docId} (and users_public/{userId})
+//    Document ID: profile / {userId}
+//    Fields:
+//      - userId: string (required, matches userId)
+//      - username: string (required, 3-32 chars)
+//      - minecraftPlayerName: string (optional, 0-32 chars)
+//      - rank: string (required, 1-32 chars)
+//      - rankBadge: string (optional, 0-64 chars)
+//      - avatarUrl: string (optional, 0-4096 chars)
+//      - position: number (optional, >= 0)
+//      - updatedAt: timestamp / string (optional)
+//
+// 3. Collection: leaderboard
+//    Document ID: {entryId} (player ID or rank index)
+//    Fields:
+//      - userId: string (required, 1-128 chars)
+//      - username: string (required, 3-32 chars)
+//      - position: number (required, >= 1)
+//      - minecraftPlayerName: string (optional, 0-32 chars)
+//      - rank: string (required, 1-32 chars)
+//      - rankBadge: string (optional, 0-64 chars)
+//      - drivePermissionGranted: bool (optional)
+//      - coins: number (optional, private stats)
+//      - emeralds: number (optional, private stats)
+//      - emeraldBalance: number (optional, private stats)
+//      - netheriteBalance: number (optional, private stats)
+//      - points: number (optional, score)
+//      - gamesWon: number (optional)
+//      - gamesPlayed: number (optional)
+//      - updatedAt: timestamp / string (optional)
+//
+// 4. Collection: transactions (and users/{userId}/transactions/{txId})
+//    Document ID: {transactionId}
+//    Fields:
+//      - id: string (optional, 1-64 chars)
+//      - userId: string (required, matches request.auth.uid)
+//      - username: string (optional, 3-32 chars)
+//      - amount: number (required)
+//      - currency: string (optional, in ['EMERALD', 'NETHERITE', 'COIN', 'TL'])
+//      - type: string (required, in ['CREDIT', 'DEBIT', 'TRANSFER', 'PURCHASE', 'REWARD', 'BONUS', 'RESET', 'CLAIM'])
+//      - reason: string (required, 1-256 chars)
+//      - balanceAfter: number (required, >= 0)
+//      - createdAt: timestamp / string (required)
+//
+// 5. Collection: platform_settings & settings
+//    Document ID: {settingId} (e.g., 'global', 'economy', 'stripe')
+//    Fields: Strictly managed by codingdevelopia@gmail.com
+//
+// 6. Collection: backups & backup
+//    Document ID: {backupId}
+//    Fields: Strictly managed by codingdevelopia@gmail.com
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Global Helper Functions
+    // ===============================================================
+
+    // Check if the request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Server-side Super Admin check
+    // STRICT RULE: ONLY codingdevelopia@gmail.com is granted admin authority.
+    // Client-supplied claims, roles, or document payloads are NEVER trusted for admin status.
+    function isAdmin() {
+      return isAuthenticated() &&
+             request.auth.token.email is string &&
+             request.auth.token.email == 'codingdevelopia@gmail.com';
+    }
+
+    // Check if user owns the document by route param
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if document owner matches authenticated user
+    function isDocOwner() {
+      return isAuthenticated() &&
+             'userId' in resource.data &&
+             request.auth.uid == resource.data.userId;
+    }
+
+    // Verify userId hasn't been spoofed on create
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) ||
+             request.resource.data.userId == request.auth.uid;
+    }
+
+    // Ensure userId field cannot be modified on update
+    function uidNotModified() {
+      return !('userId' in request.resource.data) ||
+             request.resource.data.userId == resource.data.userId;
+    }
+
+    // Validate required fields exist in request payload
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate request payload contains only explicitly allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Ensure immutable fields are not modified
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate string length bounds
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= minLen &&
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    // Validate optional string length if present
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    // Validate optional positive number
+    function isValidOptionalNumber(field, minVal, maxVal) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is number &&
+              request.resource.data[field] >= minVal &&
+              request.resource.data[field] <= maxVal);
+    }
+
+    // Validate optional boolean
+    function isValidOptionalBool(field) {
+      return !(field in request.resource.data) ||
+             request.resource.data[field] is bool;
+    }
+
+    // Validate optional list bounds
+    function isValidOptionalList(field, maxSize) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is list &&
+              request.resource.data[field].size() <= maxSize);
+    }
+
+    // Validate URL format (http, https or inline base64 image avatar)
+    function isValidUrlOrData(url) {
+      return url is string &&
+             url.size() <= 4096 &&
+             (url.matches('^https://.*') ||
+              url.matches('^http://.*') ||
+              url.matches('^data:image/.*'));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    // Validates allowed fields for the full user profile
+    function userAllowedFields() {
+      return [
+        'userId', 'username', 'minecraftPlayerName', 'rank', 'rankBadge',
+        'avatarUrl', 'position', 'role', 'isModerator', 'status',
+        'drivePermissionGranted', 'coins', 'emeralds', 'emeraldBalance',
+        'emeraldsEarnedTotal', 'emeraldsSpentTotal', 'netheriteBalance',
+        'points', 'bestScore', 'extraLives', 'gamesPlayed', 'gamesWon',
+        'gamesLost', 'achievements', 'transactions', 'inventory',
+        'ownedCosmetics', 'equippedCosmetics', 'settings',
+        'initialNetheriteBonusClaimed', 'lastNetheriteClaimAt',
+        'lastDailyEmeraldClaimAt', 'createdAt', 'updatedAt', 'lastLoginAt'
+      ];
+    }
+
+    // Validate user creation payload
+    function isValidUser(data) {
+      return hasRequiredFields(['userId', 'username']) &&
+             hasOnlyAllowedFields(userAllowedFields()) &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 32 &&
+             isValidOptionalString('minecraftPlayerName', 0, 32) &&
+             isValidOptionalString('rank', 1, 32) &&
+             isValidOptionalString('rankBadge', 0, 64) &&
+             (!(data.avatarUrl is string) || isValidUrlOrData(data.avatarUrl)) &&
+             isValidOptionalNumber('position', 0, 1000000) &&
+             (!(data.role is string) || data.role in ['MEMBER', 'VIP', 'VIP_PLUS', 'MVP', 'MVP_PLUS', 'MODERATOR', 'ADMIN']) &&
+             isValidOptionalBool('isModerator') &&
+             (!(data.status is string) || data.status in ['ACTIVE', 'BANNED', 'SUSPENDED']) &&
+             isValidOptionalBool('drivePermissionGranted') &&
+             isValidOptionalNumber('coins', 0, 1000000000) &&
+             isValidOptionalNumber('emeralds', 0, 1000000000) &&
+             isValidOptionalNumber('emeraldBalance', 0, 1000000000) &&
+             isValidOptionalNumber('netheriteBalance', 0, 1000000000) &&
+             isValidOptionalNumber('points', 0, 1000000000) &&
+             isValidOptionalNumber('bestScore', 0, 1000000000) &&
+             isValidOptionalNumber('extraLives', 0, 1000) &&
+             isValidOptionalNumber('gamesPlayed', 0, 1000000) &&
+             isValidOptionalNumber('gamesWon', 0, 1000000) &&
+             isValidOptionalNumber('gamesLost', 0, 1000000) &&
+             isValidOptionalList('achievements', 100) &&
+             isValidOptionalList('transactions', 150) &&
+             isValidOptionalList('inventory', 100) &&
+             isValidOptionalList('ownedCosmetics', 100) &&
+             (!(data.equippedCosmetics is map) || data.equippedCosmetics.keys().size() <= 30) &&
+             (!(data.settings is map) || data.settings.keys().size() <= 30);
+    }
+
+    // Validate user update payload (prevents privilege self-escalation)
+    function isValidUserUpdate(data) {
+      return isValidUser(data) &&
+             areImmutableFieldsUnchanged(['userId', 'createdAt']) &&
+             // Non-admins cannot grant themselves ADMIN role, rank or moderator status
+             (isAdmin() || (
+               (!('role' in data) || data.role == resource.data.role || (data.role != 'ADMIN' && resource.data.role != 'ADMIN')) &&
+               (!('rank' in data) || data.rank == resource.data.rank || data.rank != 'ADMIN') &&
+               (!('isModerator' in data) || data.isModerator == resource.data.isModerator || data.isModerator == false)
+             ));
+    }
+
+    // Validates public profile document (strictly no sensitive data)
+    function isValidPublicProfile(data) {
+      return hasRequiredFields(['userId', 'username']) &&
+             hasOnlyAllowedFields(['userId', 'username', 'minecraftPlayerName', 'rank', 'rankBadge', 'avatarUrl', 'position', 'updatedAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 32 &&
+             isValidOptionalString('minecraftPlayerName', 0, 32) &&
+             isValidOptionalString('rank', 1, 32) &&
+             isValidOptionalString('rankBadge', 0, 64) &&
+             (!(data.avatarUrl is string) || isValidUrlOrData(data.avatarUrl)) &&
+             isValidOptionalNumber('position', 0, 1000000);
+    }
+
+    // Check if a document in users or leaderboard contains ONLY public fields
+    function hasOnlyPublicFields(docData) {
+      return !('coins' in docData ||
+               'emeralds' in docData ||
+               'emeraldBalance' in docData ||
+               'netheriteBalance' in docData ||
+               'points' in docData ||
+               'gamesWon' in docData ||
+               'gamesLost' in docData ||
+               'achievements' in docData ||
+               'transactions' in docData ||
+               'inventory' in docData);
+    }
+
+    // Validates leaderboard entry payload
+    function isValidLeaderboardEntry(data) {
+      return hasRequiredFields(['userId', 'username', 'position', 'rank']) &&
+             hasOnlyAllowedFields([
+               'userId', 'username', 'position', 'minecraftPlayerName', 'rank',
+               'rankBadge', 'avatarUrl', 'drivePermissionGranted', 'coins', 'emeralds',
+               'emeraldBalance', 'netheriteBalance', 'points', 'gamesWon', 'gamesPlayed', 'updatedAt'
+             ]) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 32 &&
+             data.position is number && data.position >= 1 &&
+             data.rank is string && data.rank.size() <= 32 &&
+             isValidOptionalString('minecraftPlayerName', 0, 32) &&
+             isValidOptionalString('rankBadge', 0, 64) &&
+             (!(data.avatarUrl is string) || isValidUrlOrData(data.avatarUrl)) &&
+             isValidOptionalBool('drivePermissionGranted') &&
+             isValidOptionalNumber('coins', 0, 1000000000) &&
+             isValidOptionalNumber('emeralds', 0, 1000000000) &&
+             isValidOptionalNumber('emeraldBalance', 0, 1000000000) &&
+             isValidOptionalNumber('netheriteBalance', 0, 1000000000) &&
+             isValidOptionalNumber('points', 0, 1000000000) &&
+             isValidOptionalNumber('gamesWon', 0, 1000000) &&
+             isValidOptionalNumber('gamesPlayed', 0, 1000000);
+    }
+
+    // Validates financial transaction records
+    function isValidTransaction(data) {
+      return hasRequiredFields(['userId', 'amount', 'type', 'reason', 'balanceAfter', 'createdAt']) &&
+             hasOnlyAllowedFields(['id', 'userId', 'username', 'amount', 'currency', 'type', 'reason', 'balanceAfter', 'createdAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             isValidOptionalString('username', 3, 32) &&
+             data.amount is number &&
+             (!(data.currency is string) || data.currency in ['EMERALD', 'NETHERITE', 'COIN', 'TL']) &&
+             data.type in ['CREDIT', 'DEBIT', 'TRANSFER', 'PURCHASE', 'REWARD', 'BONUS', 'RESET', 'CLAIM'] &&
+             data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 256 &&
+             data.balanceAfter is number && data.balanceAfter >= 0;
+    }
+
+    // Validates store purchase records
+    function isValidPurchase(data) {
+      return hasRequiredFields(['userId', 'itemId', 'price', 'purchasedAt']) &&
+             hasOnlyAllowedFields(['id', 'userId', 'username', 'itemId', 'itemName', 'price', 'currency', 'purchasedAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.itemId is string && data.itemId.size() <= 64 &&
+             data.price is number && data.price >= 0;
+    }
+
+    // Validates party multiplayer records
+    function isValidParty(data) {
+      return hasRequiredFields(['partyId', 'ownerId', 'name', 'members', 'status']) &&
+             hasOnlyAllowedFields(['partyId', 'ownerId', 'name', 'members', 'status', 'inviteCode', 'createdAt', 'updatedAt']) &&
+             data.partyId is string && data.partyId.size() <= 64 &&
+             data.ownerId is string && data.ownerId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 64 &&
+             data.members is list && data.members.size() <= 20 &&
+             data.status in ['OPEN', 'IN_GAME', 'CLOSED'];
+    }
+
+    // Validates bug report records
+    function isValidBugReport(data) {
+      return hasRequiredFields(['userId', 'title', 'description', 'createdAt']) &&
+             hasOnlyAllowedFields(['id', 'userId', 'username', 'title', 'description', 'screenshotData', 'status', 'createdAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.title is string && data.title.size() >= 3 && data.title.size() <= 128 &&
+             data.description is string && data.description.size() >= 5 && data.description.size() <= 2000 &&
+             isValidOptionalString('screenshotData', 0, 16384);
+    }
+
+    // Validates user support ticket
+    function isValidSupportTicket(data) {
+      return hasRequiredFields(['userId', 'subject', 'message', 'createdAt']) &&
+             hasOnlyAllowedFields(['id', 'userId', 'username', 'subject', 'message', 'status', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 128 &&
+             data.message is string && data.message.size() >= 5 && data.message.size() <= 2000;
+    }
+
+    // ===============================================================
+    // Rules: Users Collection & Subcollections
+    // ===============================================================
+
+    match /users/{userId} {
+      // READ RULES:
+      // (a) Readable by anyone IF the record contains ONLY non-sensitive public profile fields, OR
+      // (b) request.auth != null and request.auth.uid == userId (the user reading their own full profile), OR
+      // (c) request.auth != null and request.auth.token.email == 'codingdevelopia@gmail.com' (admin), OR
+      // (d) resource.data.drivePermissionGranted == true (when Google Drive permission is explicitly granted and verified on the record).
+      allow read: if hasOnlyPublicFields(resource.data) ||
+                     isOwner(userId) ||
+                     isAdmin() ||
+                     (resource.data.drivePermissionGranted == true);
+
+      // CREATE: Authenticated user creating their own document or Super Admin
+      allow create: if (isOwner(userId) &&
+                        uidUnchanged() &&
+                        isValidUser(request.resource.data) &&
+                        // Non-admins cannot bootstrap themselves as ADMIN
+                        (isAdmin() || (
+                          (!('role' in request.resource.data) || request.resource.data.role != 'ADMIN') &&
+                          (!('rank' in request.resource.data) || request.resource.data.rank != 'ADMIN') &&
+                          (!('isModerator' in request.resource.data) || request.resource.data.isModerator != true)
+                        ))) || isAdmin();
+
+      // UPDATE: Document owner or Super Admin
+      allow update: if (isOwner(userId) &&
+                        uidNotModified() &&
+                        isValidUserUpdate(request.resource.data)) ||
+                       isAdmin();
+
+      // DELETE: Super Admin only
+      allow delete: if isAdmin();
+
+      // Public profile subcollection: 'username', 'minecraftPlayerName', 'rank', 'rankBadge', 'avatarUrl', 'position'
+      // Readable by all users (authenticated or public)
+      match /public/{docId} {
+        allow read: if true;
+        allow create, update: if (isOwner(userId) && isValidPublicProfile(request.resource.data)) || isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      // Explicit publicProfile subcollection
+      match /public_profile/{docId} {
+        allow read: if true;
+        allow create, update: if (isOwner(userId) && isValidPublicProfile(request.resource.data)) || isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      // Private profile subcollection (coins, emeralds, transactions, inventory, etc.)
+      match /private/{docId} {
+        allow read: if isOwner(userId) ||
+                       isAdmin() ||
+                       (get(/databases/$(database)/documents/users/$(userId)).data.drivePermissionGranted == true);
+        allow create, update: if (isOwner(userId) && hasOnlyAllowedFields([
+          'coins', 'emeralds', 'emeraldBalance', 'netheriteBalance', 'points',
+          'gamesWon', 'gamesLost', 'achievements', 'transactions', 'inventory', 'updatedAt'
+        ])) || isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      // User's own transaction ledger subcollection
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if (isOwner(userId) &&
+                          request.resource.data.userId == userId &&
+                          isValidTransaction(request.resource.data)) || isAdmin();
+        allow update, delete: if isAdmin();
+      }
+
+      // User's achievements subcollection
+      match /achievements/{achId} {
+        allow read: if isOwner(userId) || isAdmin() ||
+                       (get(/databases/$(database)/documents/users/$(userId)).data.drivePermissionGranted == true);
+        allow create, update: if isOwner(userId) || isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      // User's inventory subcollection
+      match /inventory/{itemId} {
+        allow read: if isOwner(userId) || isAdmin() ||
+                       (get(/databases/$(database)/documents/users/$(userId)).data.drivePermissionGranted == true);
+        allow create, update: if isOwner(userId) || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Split collection pattern for public profiles (non-sensitive user data)
+    match /users_public/{userId} {
+      allow read: if true;
+      allow create, update: if (isOwner(userId) && isValidPublicProfile(request.resource.data)) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // Rules: Leaderboard Collection
+    // ===============================================================
+
+    match /leaderboard/{entryId} {
+      // READ RULES:
+      // - Public leaderboard entries containing only position, username, minecraftPlayerName, rank, rankBadge are readable by all.
+      // - Detailed coin and private stats in leaderboard entries are restricted unless viewer or owner has drivePermissionGranted == true or isAdmin.
+      allow read: if hasOnlyPublicFields(resource.data) ||
+                     isOwner(resource.data.userId) ||
+                     isOwner(entryId) ||
+                     isAdmin() ||
+                     (resource.data.drivePermissionGranted == true);
+
+      // CREATE & UPDATE: Owner updating their own entry or Super Admin
+      allow create: if (isAuthenticated() &&
+                        (request.auth.uid == entryId || request.resource.data.userId == request.auth.uid) &&
+                        isValidLeaderboardEntry(request.resource.data)) || isAdmin();
+
+      allow update: if (isAuthenticated() &&
+                        (request.auth.uid == entryId || resource.data.userId == request.auth.uid) &&
+                        isValidLeaderboardEntry(request.resource.data) &&
+                        areImmutableFieldsUnchanged(['userId'])) || isAdmin();
+
+      // DELETE (e.g. Admin "Leaderboard'u Sıfırla" action): Restricted strictly to Super Admin
+      allow delete: if isAdmin();
+
+      // Subcollection for detailed leaderboard stats
+      match /details/{detailId} {
+        allow read: if isOwner(entryId) ||
+                       (isAuthenticated() && resource.data.userId == request.auth.uid) ||
+                       isAdmin() ||
+                       (resource.data.drivePermissionGranted == true);
+        allow write: if isAdmin();
+      }
+    }
+
+    // ===============================================================
+    // Rules: Economy & Transactions
+    // ===============================================================
+
+    // Root-level transactions collection
+    // Only the owner or admin can read their own transactions.
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if (isAuthenticated() &&
+                        request.resource.data.userId == request.auth.uid &&
+                        isValidTransaction(request.resource.data)) || isAdmin();
+
+      // Transactions are immutable audit records; updates and deletions strictly restricted to Admin
+      allow update, delete: if isAdmin();
+    }
+
+    // Netherite transactions ledger
+    match /netherite_transactions/{transactionId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if (isAuthenticated() &&
+                        request.resource.data.userId == request.auth.uid &&
+                        isValidTransaction(request.resource.data)) || isAdmin();
+
+      allow update, delete: if isAdmin();
+    }
+
+    // Store item purchases
+    match /purchases/{purchaseId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if (isAuthenticated() &&
+                        request.resource.data.userId == request.auth.uid &&
+                        isValidPurchase(request.resource.data)) || isAdmin();
+
+      allow update, delete: if isAdmin();
+    }
+
+    // Ranks catalog: Publicly/Authenticated readable, modifiable only by Admin
+    match /ranks/{rankId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Shop items catalog: Authenticated readable, modifiable only by Admin
+    match /shop_items/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // Rules: Platform Settings & Backups
+    // ===============================================================
+
+    // Platform settings: Read/write strictly restricted to admin (codingdevelopia@gmail.com)
+    match /platform_settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
+    // System configuration: Read/write strictly restricted to admin
+    match /settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Economy configuration: Read/write strictly restricted to admin
+    match /economy_settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Versioned backups collection: Read/write strictly restricted to admin
+    match /backups/{backupId} {
+      allow read, write: if isAdmin();
+
+      match /{allSubcollections=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // Backup root namespace
+    match /backup/{backupId} {
+      allow read, write: if isAdmin();
+
+      match /{allSubcollections=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // ===============================================================
+    // Rules: Social, Support, and Multiplayer Features
+    // ===============================================================
+
+    // Parties collection
+    match /parties/{partyId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.ownerId == request.auth.uid ||
+                      (resource.data.members is list && request.auth.uid in resource.data.members) ||
+                      isAdmin());
+
+      allow create: if isAuthenticated() &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       isValidParty(request.resource.data);
+
+      allow update: if isAuthenticated() &&
+                       (resource.data.ownerId == request.auth.uid || isAdmin()) &&
+                       isValidParty(request.resource.data);
+
+      allow delete: if isAuthenticated() &&
+                       (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // Party invitations
+    match /party_invitations/{invitationId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.toUserId == request.auth.uid ||
+                      resource.data.fromUserId == request.auth.uid ||
+                      isAdmin());
+
+      allow create: if isAuthenticated() &&
+                       request.resource.data.fromUserId == request.auth.uid &&
+                       hasRequiredFields(['fromUserId', 'toUserId', 'partyId']) &&
+                       validStringLength('fromUserId', 1, 128) &&
+                       validStringLength('toUserId', 1, 128) &&
+                       validStringLength('partyId', 1, 64);
+
+      allow update, delete: if isAuthenticated() &&
+                               (resource.data.toUserId == request.auth.uid ||
+                                resource.data.fromUserId == request.auth.uid ||
+                                isAdmin());
+    }
+
+    // Bug reports
+    match /bug_reports/{reportId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if (isAuthenticated() &&
+                        request.resource.data.userId == request.auth.uid &&
+                        isValidBugReport(request.resource.data)) || isAdmin();
+
+      allow update, delete: if isAdmin();
+    }
+
+    // Support tickets
+    match /support_tickets/{ticketId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if (isAuthenticated() &&
+                        request.resource.data.userId == request.auth.uid &&
+                        isValidSupportTicket(request.resource.data)) || isAdmin();
+
+      allow update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // Fallback: Default Deny All
+    // ===============================================================
+
+    // Catch-all: Deny all reads and writes to unhandled paths
+    match /{document=**} {
+      allow read, write: false;
+    }
+  }
+}

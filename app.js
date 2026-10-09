@@ -1176,6 +1176,43 @@
       }
     });
 
+    // 🌐 Firebase Google ile Giriş & Drive Senkronizasyonu
+    const googleLoginBtn = document.getElementById('btn-firebase-google-login');
+    googleLoginBtn?.addEventListener('click', async () => {
+      const origHtml = googleLoginBtn.innerHTML;
+      try {
+        googleLoginBtn.disabled = true;
+        googleLoginBtn.innerHTML = `<span>⏳ Google Hesabı Bağlanıyor...</span>`;
+        const session = await svc().authService.loginWithFirebaseGoogle({ promptConsent: true });
+        gate?.classList.add('hidden');
+        window.MCMPlatform?.syncHeaderAndDrawer();
+        if (session.isAdminSession) {
+          window.MCMPlatform?.navigateToScreen('admin');
+          window.MCMPlatform?.showToast(
+            `🛡️ Yönetici oturumu açıldı (${session.email})!`,
+            'success'
+          );
+        } else {
+          window.MCMPlatform?.navigateToScreen('welcome');
+          window.MCMPlatform?.showToast(
+            `🌐 Hoş geldin, ${session.username}! Drive senkronizasyonu aktif.`,
+            'success'
+          );
+        }
+      } catch (err) {
+        console.error('Firebase Google Login Error:', err);
+        const errEl = document.getElementById('gate-login-error');
+        if (errEl) {
+          errEl.textContent = err.message || 'Google ile giriş başarısız oldu.';
+          errEl.classList.remove('hidden');
+        }
+        window.MCMPlatform?.showToast(err.message || 'Google girişi başarısız oldu.', 'error');
+      } finally {
+        googleLoginBtn.disabled = false;
+        googleLoginBtn.innerHTML = origHtml;
+      }
+    });
+
     // Aktif oturum varsa kapıyı gizle
     const activeSession = svc().authService?.getActiveSession();
     if (activeSession) {
@@ -1190,10 +1227,14 @@
     }
   }
 
-  function handleUserLogout() {
+  async function handleUserLogout() {
     stopQuestionTimer();
     gameState.active = false;
-    svc().authService?.logout();
+    try {
+      await svc().authService?.logout();
+    } catch (e) {
+      // ignore
+    }
     window.MCMPlatform?.syncHeaderAndDrawer();
 
     const gate = document.getElementById('access-gate');

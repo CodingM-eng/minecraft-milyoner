@@ -1346,7 +1346,7 @@
     const modalBody = document.getElementById('modal-player-profile-body');
     if (modalBody && !document.getElementById('modal-player-profile-hero')) {
       modalBody.innerHTML = `
-        <div class="profile-hero-card" id="modal-player-profile-hero" style="margin-bottom: 16px;">
+        <div class="profile-hero-card" id="modal-player-profile-hero" style="margin-bottom: 12px;">
           <div class="profile-avatar-wrapper" id="modal-player-profile-frame">
             <img id="modal-player-profile-avatar" src="" alt="Oyuncu Avatarı" class="profile-avatar-lg" />
           </div>
@@ -1360,6 +1360,7 @@
             <p class="profile-joined-sub" id="modal-player-profile-joined">Katılım Tarihi: -</p>
           </div>
         </div>
+        <div id="modal-player-profile-drive-alert"></div>
         <div class="stats-kpi-grid" style="grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px;">
           <div class="stat-kpi-card">
             <span class="kpi-label">TOPLAM PUAN</span>
@@ -1390,7 +1391,14 @@
       `;
     }
 
-    let user = userService?.getUserByUsername(username);
+    const isSelf = Boolean(
+      session && session.username && session.username.toLowerCase() === String(username).toLowerCase()
+    );
+
+    let user = userService?.getUserPublicProfile
+      ? userService.getUserPublicProfile(username, session)
+      : userService?.getUserByUsername(username);
+
     if (!user) {
       if (!_isRetry && svc().cloudSyncService?.syncNow) {
         svc()
@@ -1402,22 +1410,81 @@
           })
           .catch(() => {});
       }
-      user = userService?.getUserByUsername(username) || {
-        username: String(username).trim(),
-        rank: 'MEMBER',
-        emeraldBalance: 100,
-        netheriteBalance: 0,
-        points: 0,
-        gamesPlayed: 0,
-        gamesWon: 0,
-        createdAt: new Date().toISOString()
-      };
+      user = userService?.getUserPublicProfile
+        ? userService.getUserPublicProfile(username, session)
+        : null;
+      if (!user) {
+        user = {
+          username: String(username).trim(),
+          rank: 'MEMBER',
+          emeraldBalance: 100,
+          netheriteBalance: 0,
+          points: 0,
+          gamesPlayed: 0,
+          gamesWon: 0,
+          createdAt: new Date().toISOString(),
+          _isRestricted: false
+        };
+      }
+    }
+
+    const isRestricted = Boolean(user._isRestricted);
+    const alertEl = document.getElementById('modal-player-profile-drive-alert');
+    if (alertEl) {
+      if (isRestricted) {
+        alertEl.innerHTML = `
+          <div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:0.85rem; color:#fca5a5; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:1.2rem;">🔒</span>
+            <span>Bu oyuncu Google Drive izin onayını henüz vermediği için ayrıntılı bakiye, puan ve başarım verileri gizlenmiştir.</span>
+          </div>
+        `;
+      } else if (isSelf && !session.drivePermissionGranted) {
+        alertEl.innerHTML = `
+          <div style="background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:12px; margin-bottom:14px;">
+            <p style="margin:0 0 8px 0; font-size:0.85rem; color:#93c5fd;">
+              ℹ️ Google Drive izniniz henüz verilmedi. Profil verilerinizin liderlik tablosunda herkese açık görünmesi ve buluta senkronize olması için Drive izni verin.
+            </p>
+            <button type="button" id="btn-modal-grant-drive" class="mc-btn mc-btn-primary mc-btn-sm" style="width:100%;">
+              🔄 Google Drive İzni Ver / Tam Profili Aç
+            </button>
+          </div>
+        `;
+        const grantBtn = document.getElementById('btn-modal-grant-drive');
+        if (grantBtn) {
+          grantBtn.onclick = async () => {
+            try {
+              grantBtn.disabled = true;
+              grantBtn.textContent = 'Drive İzni Alınıyor...';
+              await svc().authService.refreshDrivePermission();
+              showToast('Google Drive izni başarıyla verildi!', 'success');
+              openPlayerProfileModal(session.username);
+              if (state.currentScreen === 'leaderboard') renderLeaderboard();
+            } catch (err) {
+              showToast(err.message || 'Drive izni alınamadı.', 'error');
+              grantBtn.disabled = false;
+              grantBtn.textContent = '🔄 Google Drive İzni Ver / Tam Profili Aç';
+            }
+          };
+        }
+      } else if (user.drivePermissionGranted) {
+        alertEl.innerHTML = `
+          <div style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); border-radius:6px; padding:6px 12px; margin-bottom:12px; font-size:0.8rem; color:#86efac; display:inline-flex; align-items:center; gap:6px;">
+            <span>✓</span> <span>Google Drive Senkronizasyonu Doğrulandı</span>
+          </div>
+        `;
+      } else {
+        alertEl.innerHTML = '';
+      }
     }
 
     const rank = rankService.getUserRank(user.username);
     const cosMeta = getUserCosmeticMeta(user);
-    const emeralds = Number(user.emeraldBalance ?? economyService?.getBalance(user.username) ?? 0);
-    const netherites = Number(user.netheriteBalance ?? netheriteService?.getBalance(user.username) ?? 0);
+    const emeralds = isRestricted
+      ? null
+      : Number(user.emeraldBalance ?? economyService?.getBalance(user.username) ?? 0);
+    const netherites = isRestricted
+      ? null
+      : Number(user.netheriteBalance ?? netheriteService?.getBalance(user.username) ?? 0);
 
     const heroEl = document.getElementById('modal-player-profile-hero');
     if (heroEl) {
@@ -1471,45 +1538,56 @@
 
     const ptsEl = document.getElementById('modal-player-profile-points');
     if (ptsEl) {
-      ptsEl.textContent = formatCurrencyTRY(user.points || user.bestScore || 0);
+      ptsEl.innerHTML = isRestricted
+        ? `<span style="color:#94a3b8;font-size:0.95rem;">🔒 Gizli</span>`
+        : formatCurrencyTRY(user.points || user.bestScore || 0);
     }
 
     const winsEl = document.getElementById('modal-player-profile-wins');
     if (winsEl) {
-      winsEl.textContent = `${Number(user.gamesWon || 0)} / ${Number(user.gamesPlayed || 0)}`;
+      winsEl.innerHTML = isRestricted
+        ? `<span style="color:#94a3b8;font-size:0.95rem;">🔒 Gizli</span>`
+        : `${Number(user.gamesWon || 0)} / ${Number(user.gamesPlayed || 0)}`;
     }
 
     const emEl = document.getElementById('modal-player-profile-emeralds');
     if (emEl) {
-      emEl.innerHTML = `${emeralds.toLocaleString('tr-TR')} ${mcIcon('EMERALD', 15)}`;
+      emEl.innerHTML = isRestricted
+        ? `<span style="color:#94a3b8;font-size:0.95rem;">🔒 Gizli</span>`
+        : `${emeralds.toLocaleString('tr-TR')} ${mcIcon('EMERALD', 15)}`;
     }
 
     const neEl = document.getElementById('modal-player-profile-netherite');
     if (neEl) {
-      neEl.innerHTML = `${netherites.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 15)}`;
+      neEl.innerHTML = isRestricted
+        ? `<span style="color:#94a3b8;font-size:0.95rem;">🔒 Gizli</span>`
+        : `${netherites.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 15)}`;
     }
 
     const achBox = document.getElementById('modal-player-profile-achievements');
-    if (achBox && achievementService) {
-      const achs = achievementService.getUserAchievements(user.username).filter(a => a.unlocked);
-      if (achs.length === 0) {
-        achBox.innerHTML = `<div class="empty-state-box" style="padding:10px;">Henüz kazanılmış başarım rozeti bulunmuyor.</div>`;
-      } else {
-        achBox.innerHTML = achs
-          .map(
-            a => `
-            <span class="custom-cosmetic-badge-pill" style="padding:5px 10px;">
-              ${mcIcon(a.icon, 14)} ${escapeHtml(a.title)}
-            </span>
-          `
-          )
-          .join('');
+    if (achBox) {
+      if (isRestricted) {
+        achBox.innerHTML = `<div class="empty-state-box" style="padding:10px; color:#94a3b8;">🔒 Google Drive izni verilmediği için başarımlar gizlidir.</div>`;
+      } else if (achievementService) {
+        const achs = achievementService.getUserAchievements(user.username).filter(a => a.unlocked);
+        if (achs.length === 0) {
+          achBox.innerHTML = `<div class="empty-state-box" style="padding:10px;">Henüz kazanılmış başarım rozeti bulunmuyor.</div>`;
+        } else {
+          achBox.innerHTML = achs
+            .map(
+              a => `
+              <span class="custom-cosmetic-badge-pill" style="padding:5px 10px;">
+                ${mcIcon(a.icon, 14)} ${escapeHtml(a.title)}
+              </span>
+            `
+            )
+            .join('');
+        }
       }
     }
 
     const inviteBtn = document.getElementById('btn-modal-invite-to-party');
     const giftBtn = document.getElementById('btn-modal-gift-rank-player');
-    const isSelf = session && session.username.toLowerCase() === user.username.toLowerCase();
 
     if (inviteBtn) {
       inviteBtn.setAttribute('data-modal-invite-user', user.username);
@@ -1971,6 +2049,19 @@
         const avatarSrc = avatarService.getAvatarForUser(rUser);
         const fallbackSrc = avatarService.generatePixelAvatarDataUrl(r.username);
 
+        const isRestricted = Boolean(r._isRestricted);
+        const ptsHtml = isRestricted
+          ? `<span class="restricted-badge" style="color:#94a3b8;font-size:0.85rem;" title="Google Drive izni verilmediği için gizli">🔒 Gizli</span>`
+          : `<strong class="gold-text">${formatCurrencyTRY(r.points)}</strong>`;
+        const winsHtml = isRestricted ? `<span style="color:#94a3b8;">🔒</span>` : `${r.gamesWon ?? 0}`;
+        const playedHtml = isRestricted ? `<span style="color:#94a3b8;">🔒</span>` : `${r.gamesPlayed ?? 0}`;
+        const emeraldHtml = isRestricted
+          ? `<span class="restricted-badge" style="color:#94a3b8;font-size:0.85rem;" title="Google Drive izni verilmediği için gizli">🔒 Gizli</span>`
+          : `<strong class="emerald-text">${Number(r.emeraldBalance || 0).toLocaleString('tr-TR')} ${mcIcon('EMERALD', 15)}</strong>`;
+        const driveStatusTag = isRestricted
+          ? `<span class="profile-mini-tag" style="background:rgba(239,68,68,0.18);color:#fca5a5;border:1px solid rgba(239,68,68,0.4);" title="Google Drive izni onaylanmadı — Ayrıntılı veriler gizlidir">🔒 Drive İzni Yok</span>`
+          : `<span class="profile-mini-tag" style="background:rgba(34,197,94,0.18);color:#86efac;border:1px solid rgba(34,197,94,0.4);" title="Google Drive senkronizasyonu aktif">✓ Drive Senkron</span>`;
+
         return `
           <tr>
             <td><strong>${medal}</strong></td>
@@ -1992,6 +2083,7 @@
                         : ''
                     }
                     <span class="profile-mini-tag">👤 Profil</span>
+                    ${driveStatusTag}
                   </div>
                   ${
                     r.minecraftPlayerName
@@ -2004,10 +2096,10 @@
             <td><span class="${getRankBadgeClass(r.rankId)}">${mcIcon(r.rankBadge, 14)} ${escapeHtml(
           r.rankName
         )}</span></td>
-            <td><strong class="gold-text">${formatCurrencyTRY(r.points)}</strong></td>
-            <td>${r.gamesWon}</td>
-            <td>${r.gamesPlayed}</td>
-            <td><strong class="emerald-text">${r.emeraldBalance.toLocaleString('tr-TR')} ${mcIcon('EMERALD', 15)}</strong></td>
+            <td>${ptsHtml}</td>
+            <td>${winsHtml}</td>
+            <td>${playedHtml}</td>
+            <td>${emeraldHtml}</td>
           </tr>
         `;
       })

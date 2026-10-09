@@ -545,6 +545,8 @@
     canReviewSuggestions: true
   };
 
+  const SUPER_ADMIN_EMAIL = 'codingdevelopia@gmail.com';
+
   const authGuard = {
     getModeratorPermissions() {
       const saved = storage.get(STORAGE_KEYS.MOD_PERMISSIONS, null);
@@ -607,11 +609,15 @@
 
     getEffectiveRankId(session) {
       if (!session) return 'MEMBER';
-      if (session.isAdminSession) return 'ADMIN';
+      const email = String(session.email || '').trim().toLowerCase();
+      if (session.isAdminSession && email === SUPER_ADMIN_EMAIL) return 'ADMIN';
       // Always read authoritative rank from stored user record (#20, #25)
       const user = userService.getUserByUsername(session.username);
       if (user) {
-        if (user.role === 'ADMIN' || user.rank === 'ADMIN') return 'ADMIN';
+        const uEmail = String(user.email || '').trim().toLowerCase();
+        if ((user.role === 'ADMIN' || user.rank === 'ADMIN') && uEmail === SUPER_ADMIN_EMAIL) {
+          return 'ADMIN';
+        }
         if (user.isModerator || user.role === 'MODERATOR' || user.rank === 'MODERATOR') {
           return 'MODERATOR';
         }
@@ -622,7 +628,8 @@
 
     getEffectiveRole(session) {
       if (!session) return 'MEMBER';
-      if (session.isAdminSession) return 'ADMIN';
+      const email = String(session.email || '').trim().toLowerCase();
+      if (session.isAdminSession && email === SUPER_ADMIN_EMAIL) return 'ADMIN';
       const rankId = this.getEffectiveRankId(session);
       if (rankId === 'ADMIN') return 'ADMIN';
       if (rankId === 'MODERATOR') return 'MODERATOR';
@@ -680,14 +687,15 @@
       this.verifySession(session);
       const effectiveRole = this.getEffectiveRole(session);
       const effectiveRank = this.getEffectiveRankId(session);
+      const sessionEmail = String(session.email || '').trim().toLowerCase();
 
-      if (allowedRoles.includes('ADMIN') && allowedRoles.length === 1) {
-        if (!session.isAdminSession && effectiveRole !== 'ADMIN' && effectiveRank !== 'ADMIN') {
+      if (allowedRoles.includes('ADMIN')) {
+        if (sessionEmail !== SUPER_ADMIN_EMAIL || (!session.isAdminSession && effectiveRole !== 'ADMIN')) {
           throw new Error(
-            'Erişim Reddedildi: Bu işlem yalnızca doğrulanmış Yönetici (Admin) oturumu ile yapılabilir.'
+            'Erişim Reddedildi: Bu işlem yalnızca codingdevelopia@gmail.com doğrulanmış Yönetici oturumu ile yapılabilir.'
           );
         }
-        return effectiveRole;
+        return 'ADMIN';
       }
 
       const normalizedAllowed = allowedRoles.map(r => (r === 'PLAYER' ? 'MEMBER' : r));
@@ -961,6 +969,69 @@
       return this.getAllUsers().find(u => u && u.username && u.username.toLowerCase() === clean) || null;
     },
 
+    /**
+     * Görünürlük Kuralı (Data Access Layer):
+     * Drive izni verilmemişse yalnızca leaderboard'da görünen adları ve temel profil bilgileri döner.
+     * Drive izni verildiğinde (veya kendi profili/admin olduğunda) tüm profil verileri görünür olur.
+     */
+    getUserPublicProfile(username, viewerSession = null) {
+      if (!username) return null;
+      const targetUser = this.getUserByUsername(username);
+      if (!targetUser) return null;
+
+      const viewer = viewerSession || storage.get(STORAGE_KEYS.ACTIVE_SESSION, null);
+      const isOwner = Boolean(
+        viewer &&
+        viewer.username &&
+        viewer.username.toLowerCase() === targetUser.username.toLowerCase()
+      );
+      const isAdmin = Boolean(
+        viewer &&
+        String(viewer.email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL
+      );
+      const hasDrivePermission = Boolean(targetUser.drivePermissionGranted);
+
+      // Tam profil erişimi: Sahip, Admin veya Drive izni verilmişse
+      if (isOwner || isAdmin || hasDrivePermission) {
+        return {
+          ...targetUser,
+          _isRestricted: false,
+          drivePermissionGranted: hasDrivePermission
+        };
+      }
+
+      // Kısıtlı erişim (Drive izni yoksa):
+      // Yalnızca görünen ad, minecraft adı, rütbe ve avatar döner.
+      // Zümrüt, Netherite, puanlar ve başarımlar veri katmanında sıfırlanır.
+      return {
+        userId: targetUser.userId,
+        username: targetUser.username,
+        minecraftPlayerName: targetUser.minecraftPlayerName || '',
+        avatarUrl: targetUser.avatarUrl || '',
+        rank: targetUser.rank || 'MEMBER',
+        role: targetUser.role || 'MEMBER',
+        isModerator: Boolean(targetUser.isModerator),
+        status: targetUser.status || 'ACTIVE',
+        createdAt: targetUser.createdAt,
+        drivePermissionGranted: false,
+        _isRestricted: true,
+        // Hassas veriler veri katmanı seviyesinde korumalı:
+        emeraldBalance: null,
+        netheriteBalance: null,
+        emeraldsEarnedTotal: null,
+        emeraldsSpentTotal: null,
+        points: null,
+        bestScore: null,
+        gamesPlayed: null,
+        gamesWon: null,
+        gamesLost: null,
+        achievements: [],
+        ownedCosmetics: [],
+        transactions: [],
+        settings: null
+      };
+    },
+
     ensureSessionUser(session) {
       if (!session || !session.username) return null;
       const existing = this.getUserByUsername(session.username);
@@ -1170,15 +1241,21 @@
   // KİMLİK DOĞRULAMA SERVİSİ (authService — #7 Lisanssız Akış & #8 Ayrı Admin Girişi)
   // ==========================================
   function buildSessionPayload(user, isAdminSession = false) {
+    const userEmail = String(user.email || '').trim().toLowerCase();
+    const verifiedAdmin = Boolean(isAdminSession && userEmail === SUPER_ADMIN_EMAIL);
     const payload = {
       userId: user.userId || generateId('USR'),
       username: user.username,
+      email: userEmail || '',
+      firebaseUid: user.firebaseUid || null,
+      drivePermissionGranted: Boolean(user.drivePermissionGranted),
+      driveGrantedAt: user.driveGrantedAt || null,
       minecraftPlayerName: user.minecraftPlayerName || '',
       avatarUrl: user.avatarUrl || '',
-      rank: isAdminSession ? 'ADMIN' : normalizeRankId(user.rank || 'MEMBER'),
-      role: isAdminSession ? 'ADMIN' : user.role || 'MEMBER',
+      rank: verifiedAdmin ? 'ADMIN' : normalizeRankId(user.rank || 'MEMBER'),
+      role: verifiedAdmin ? 'ADMIN' : user.role || 'MEMBER',
       isModerator: Boolean(user.isModerator),
-      isAdminSession: Boolean(isAdminSession),
+      isAdminSession: Boolean(verifiedAdmin),
       emeraldBalance: Number(user.emeraldBalance || 0),
       netheriteBalance: Number(user.netheriteBalance ?? 0),
       extraLives: Number(user.extraLives || 0),
@@ -1503,12 +1580,150 @@
       return true;
     },
 
+    async loginWithFirebaseGoogle({ promptConsent = true } = {}) {
+      if (typeof window === 'undefined' || !window.MCMFirebase) {
+        throw new Error('Firebase entegrasyonu hazır değil.');
+      }
+
+      const res = await window.MCMFirebase.signInWithGoogleAndDrive({ promptConsent });
+      const fUser = res.user;
+      const email = String(fUser.email || '').trim().toLowerCase();
+      const isAdmin = email === SUPER_ADMIN_EMAIL;
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
+        await cloudSyncService.syncNow().catch(() => {});
+      }
+
+      // Mevcut kullanıcıyı email veya firebaseUid ile eşleştir
+      let matchedUser = userService.getAllUsers().find(
+        u => (u.email && u.email.toLowerCase() === email) || (u.firebaseUid && u.firebaseUid === fUser.uid)
+      );
+
+      const nowIso = new Date().toISOString();
+
+      if (!matchedUser) {
+        let chosenUsername = (fUser.displayName || email.split('@')[0])
+          .replace(/[^a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]/g, '_')
+          .substring(0, 18);
+        if (chosenUsername.length < 3) chosenUsername = 'Oyuncu_' + fUser.uid.substring(0, 5);
+
+        if (userService.getUserByUsername(chosenUsername)) {
+          chosenUsername += '_' + Math.floor(Math.random() * 899 + 100);
+        }
+
+        matchedUser = {
+          userId: fUser.uid || generateId('USR'),
+          username: chosenUsername,
+          email: email,
+          firebaseUid: fUser.uid,
+          minecraftPlayerName: '',
+          avatarUrl: fUser.photoURL || '',
+          passwordHash: '',
+          drivePermissionGranted: Boolean(res.drivePermissionGranted),
+          driveGrantedAt: res.drivePermissionGranted ? nowIso : null,
+          rank: isAdmin ? 'ADMIN' : 'MEMBER',
+          role: isAdmin ? 'ADMIN' : 'MEMBER',
+          isModerator: Boolean(isAdmin),
+          status: 'ACTIVE',
+          emeraldBalance: 0,
+          emeraldsEarnedTotal: 0,
+          emeraldsSpentTotal: 0,
+          netheriteBalance: isAdmin ? 250 : 0,
+          initialNetheriteBonusClaimed: Boolean(isAdmin),
+          lastNetheriteClaimAt: null,
+          lastDailyEmeraldClaimAt: null,
+          extraLives: 0,
+          points: 0,
+          bestScore: 0,
+          gamesPlayed: 0,
+          gamesWon: 0,
+          gamesLost: 0,
+          ownedCosmetics: [],
+          equippedCosmetics: {},
+          achievements: [],
+          settings: { sound: true, particles: true },
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          lastLoginAt: nowIso
+        };
+
+        const users = userService.getAllUsers();
+        users.push(matchedUser);
+        userService._saveAllUsers(users);
+
+        activityService.log(
+          'FIREBASE_REGISTER',
+          matchedUser.username,
+          `${matchedUser.username} (${email}) Firebase ile bağlandı. (Drive İzni: ${res.drivePermissionGranted ? 'Evet' : 'Hayır'})`
+        );
+      } else {
+        const updates = {
+          email: email,
+          firebaseUid: fUser.uid,
+          lastLoginAt: nowIso,
+          drivePermissionGranted: Boolean(res.drivePermissionGranted),
+          driveGrantedAt: res.drivePermissionGranted ? nowIso : matchedUser.driveGrantedAt
+        };
+        if (fUser.photoURL && !matchedUser.avatarUrl) {
+          updates.avatarUrl = fUser.photoURL;
+        }
+        if (isAdmin) {
+          updates.rank = 'ADMIN';
+          updates.role = 'ADMIN';
+          updates.isModerator = true;
+        }
+        matchedUser = userService.syncUserFields(matchedUser.username, updates);
+
+        activityService.log(
+          'FIREBASE_LOGIN',
+          matchedUser.username,
+          `${matchedUser.username} (${email}) Firebase ile giriş yaptı. (Drive İzni: ${res.drivePermissionGranted ? 'Evet' : 'Hayır'})`
+        );
+      }
+
+      const session = buildSessionPayload(matchedUser, isAdmin);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
+
+      return session;
+    },
+
+    async refreshDrivePermission() {
+      if (typeof window === 'undefined' || !window.MCMFirebase) {
+        throw new Error('Firebase entegrasyonu hazır değil.');
+      }
+      const session = this.getActiveSession();
+      if (!session) throw new Error('Lütfen önce oturum açın.');
+
+      const res = await window.MCMFirebase.requestDrivePermissionOnly();
+      const nowIso = new Date().toISOString();
+      const updatedUser = userService.syncUserFields(session.username, {
+        drivePermissionGranted: Boolean(res.drivePermissionGranted),
+        driveGrantedAt: res.drivePermissionGranted ? nowIso : session.driveGrantedAt
+      });
+
+      const updatedSession = buildSessionPayload(updatedUser, session.isAdminSession);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, updatedSession);
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
+
+      return updatedSession;
+    },
+
     logout() {
       const active = this.getActiveSession();
       if (active) {
         activityService.log('USER_LOGOUT', active.username, `${active.username} çıkış yaptı.`);
       }
       storage.remove(STORAGE_KEYS.ACTIVE_SESSION);
+      if (typeof window !== 'undefined' && window.MCMFirebase?.signOut) {
+        window.MCMFirebase.signOut().catch(() => {});
+      }
       return true;
     }
   };

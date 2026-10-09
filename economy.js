@@ -2866,10 +2866,53 @@
         return b.points - a.points || b.gamesWon - a.gamesWon || b.emeraldBalance - a.emeraldBalance;
       });
 
-      return filtered.map((item, idx) => ({
-        ...item,
-        position: idx + 1
-      }));
+      const viewer = getServices().authService?.getActiveSession?.() || null;
+      const isViewerAdmin = Boolean(
+        viewer &&
+        String(viewer.email || '').trim().toLowerCase() === 'codingdevelopia@gmail.com'
+      );
+
+      return filtered.map((item, idx) => {
+        const uRec = userService.getUserByUsername(item.username);
+        const hasDrive = Boolean(uRec?.drivePermissionGranted);
+        const isSelf = Boolean(
+          viewer &&
+          viewer.username &&
+          viewer.username.toLowerCase() === item.username.toLowerCase()
+        );
+
+        // Tam profil: Drive izni verilmişse, görüntüleyen kullanıcı kendisiyse veya Admin ise
+        if (hasDrive || isSelf || isViewerAdmin) {
+          return {
+            ...item,
+            position: idx + 1,
+            drivePermissionGranted: hasDrive,
+            _isRestricted: false
+          };
+        }
+
+        // Kısıtlı görünüm: Yalnızca leaderboard'da görünen adları ve temel profil bilgileri
+        // Puanlar, galibiyetler, maç sayıları ve Zümrüt/Netherite bakiyeleri veri katmanında gizlenir
+        return {
+          position: idx + 1,
+          username: item.username,
+          minecraftPlayerName: item.minecraftPlayerName || '',
+          avatarUrl: item.avatarUrl || '',
+          rankId: item.rankId,
+          rankName: item.rankName,
+          rankBadge: item.rankBadge,
+          rankColor: item.rankColor,
+          equippedCosmetics: {},
+          lastUpdatedAt: item.lastUpdatedAt,
+          points: null,
+          gamesWon: null,
+          gamesPlayed: null,
+          emeraldBalance: null,
+          netheriteBalance: null,
+          drivePermissionGranted: false,
+          _isRestricted: true
+        };
+      });
     },
 
     /**
