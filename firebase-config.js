@@ -125,26 +125,17 @@
             <strong>Bilgi:</strong> Firebase API anahtarınız henüz girilmemiş veya canlı Google bağlantısı yapılandırılmamış. Aşağıdaki seçeneklerden birini kullanarak hemen devam edebilirsiniz.
           </div>
 
-          <!-- 1. HIZLI TEST / SİMÜLASYON GİRİŞİ -->
+          <!-- 1. GMAIL İLE DOĞRULAMA (OTP) AKIŞI -->
           <div style="margin-bottom: 20px; background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; border-radius: 8px; padding: 14px;">
             <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: #60a5fa; display: flex; align-items: center; gap: 6px;">
-              <span>⚡</span> <span>Hızlı Test / Simülasyon Girişi (Kurulum Gerektirmez)</span>
+              <span>📧</span> <span>Gmail &amp; OTP Doğrulama ile Devam Et</span>
             </h4>
             <p style="margin: 0 0 12px 0; font-size: 0.8rem; color: #94a3b8; line-height: 1.4;">
-              Firebase Console ile uğraşmadan tüm oyunu, rütbeleri, Drive görünürlük kurallarını ve Admin panelini hemen test edin:
+              Gmail adresinizi girerek 6 haneli OTP kodu ile hesabınızı doğrulayabilir, kullanıcı adı ve şifrenizi belirleyerek giriş yapabilirsiniz:
             </p>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <button type="button" id="btn-fb-test-admin" class="mc-btn mc-btn-gold mc-btn-sm" style="text-align: left; padding: 10px 14px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
-                <span>👑 <strong>Admin Olarak Giriş Yap</strong> (codingdevelopia@gmail.com)</span>
-                <span style="font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">Tam Yetkili</span>
-              </button>
-              <button type="button" id="btn-fb-test-user-drive" class="mc-btn mc-btn-primary mc-btn-sm" style="text-align: left; padding: 10px 14px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
-                <span>👤 <strong>Normal Oyuncu</strong> (Drive İzni Açık — Tam Profil)</span>
-                <span style="font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">✓ Drive Onaylı</span>
-              </button>
-              <button type="button" id="btn-fb-test-user-nodrive" class="mc-btn mc-btn-secondary mc-btn-sm" style="text-align: left; padding: 10px 14px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
-                <span>🔒 <strong>Kısıtlı Oyuncu</strong> (Drive İzni Yok — Gizli Bakiye)</span>
-                <span style="font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">🔒 Gizli Profil</span>
+            <div>
+              <button type="button" id="btn-fb-goto-gmail-otp" class="mc-btn mc-btn-gold mc-btn-sm" style="width: 100%; text-align: center; padding: 11px 14px; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <span>🚀 Gmail &amp; OTP Kod Doğrulamasını Başlat</span>
               </button>
             </div>
           </div>
@@ -179,32 +170,12 @@
       }
     };
 
-    // Test Girişleri
-    modal.querySelector('#btn-fb-test-admin').onclick = () => {
-      resolveWithSimulation({
-        isAdmin: true,
-        hasDrive: true,
-        email: SUPER_ADMIN_EMAIL,
-        name: 'CodingDevelopia'
-      });
-    };
-
-    modal.querySelector('#btn-fb-test-user-drive').onclick = () => {
-      resolveWithSimulation({
-        isAdmin: false,
-        hasDrive: true,
-        email: 'steve.pro@gmail.com',
-        name: 'StevePro'
-      });
-    };
-
-    modal.querySelector('#btn-fb-test-user-nodrive').onclick = () => {
-      resolveWithSimulation({
-        isAdmin: false,
-        hasDrive: false,
-        email: 'alex.nodrive@gmail.com',
-        name: 'AlexNoDrive'
-      });
+    // Gmail & OTP Akışına Yönlendir
+    modal.querySelector('#btn-fb-goto-gmail-otp').onclick = () => {
+      closeFirebaseSetupModal();
+      if (typeof window.launchGmailEmailPrompt === 'function') {
+        window.launchGmailEmailPrompt();
+      }
     };
 
     // Yapılandırma Kaydet
@@ -245,10 +216,12 @@
 
   function resolveWithSimulation({ isAdmin, hasDrive, email, name }) {
     closeFirebaseSetupModal();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const isActuallyAdmin = Boolean(cleanEmail === SUPER_ADMIN_EMAIL);
     const result = {
       success: true,
       user: {
-        uid: 'sim_' + (isAdmin ? 'admin_codingdevelopia' : hasDrive ? 'drive_user' : 'nodrive_user'),
+        uid: 'sim_' + (isActuallyAdmin ? 'admin_codingdevelopia' : hasDrive ? 'drive_user' : 'nodrive_user'),
         email: email,
         displayName: name,
         photoURL: '',
@@ -256,7 +229,7 @@
       },
       accessToken: hasDrive ? 'mock_drive_access_token_' + Date.now() : null,
       drivePermissionGranted: Boolean(hasDrive),
-      isAdmin: Boolean(isAdmin),
+      isAdmin: isActuallyAdmin,
       isSimulated: true
     };
 

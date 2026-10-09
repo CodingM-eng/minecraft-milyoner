@@ -234,7 +234,6 @@
     const userChip = document.getElementById('user-account-chip');
     const notifBtn = document.getElementById('btn-open-notifications');
     const drawerAdminBtn = document.getElementById('drawer-btn-admin');
-    const drawerAdminLoginBtn = document.getElementById('btn-open-admin-login-modal');
 
     if (!session) {
       emeraldPill?.classList.add('hidden');
@@ -242,7 +241,6 @@
       userChip?.classList.add('hidden');
       notifBtn?.classList.add('hidden');
       drawerAdminBtn?.classList.add('hidden');
-      drawerAdminLoginBtn?.classList.remove('hidden');
       return;
     }
 
@@ -346,10 +344,12 @@
     const dNetherite = document.getElementById('drawer-netherite-count');
     if (dNetherite) dNetherite.textContent = netherites.toLocaleString('tr-TR');
 
-    // Admin butonu görünürlüğü (#2)
-    const isAdmin = Boolean(session.isAdminSession || rank.id === 'ADMIN');
+    // Admin butonu görünürlüğü (Yalnızca codingdevelopia@gmail.com)
+    const sessionEmail = String(session.email || '').trim().toLowerCase();
+    const isAdmin = Boolean(
+      (session.isAdminSession || rank.id === 'ADMIN') && sessionEmail === 'codingdevelopia@gmail.com'
+    );
     if (drawerAdminBtn) drawerAdminBtn.classList.toggle('hidden', !isAdmin);
-    if (drawerAdminLoginBtn) drawerAdminLoginBtn.classList.toggle('hidden', isAdmin);
 
     const lbResetBtn = document.getElementById('btn-leaderboard-admin-reset');
     if (lbResetBtn) lbResetBtn.classList.toggle('hidden', !isAdmin);
@@ -569,12 +569,16 @@
       return;
     }
 
-    // Admin ekranı güvenlik kontrolü (#2)
+    // Admin ekranı güvenlik kontrolü (Yalnızca codingdevelopia@gmail.com)
     if (screenKey === 'admin') {
+      const email = String(session.email || '').trim().toLowerCase();
       const rankId = svc().authGuard?.getEffectiveRankId(session);
-      if (!session.isAdminSession && rankId !== 'ADMIN') {
-        showToast('Yönetici Paneline erişmek için Yönetici Girişi yapmalısınız!', 'error');
-        openAdminLoginModal();
+      const isVerifiedAdmin = Boolean(
+        (session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com'
+      );
+      if (!isVerifiedAdmin) {
+        showToast('Yönetici paneline yalnızca yetkili yönetici (codingdevelopia@gmail.com) erişebilir!', 'error');
+        navigateToScreen('welcome');
         return;
       }
     }
@@ -672,8 +676,8 @@
     const gate = document.getElementById('access-gate');
     if (!gate) return;
     gate.classList.remove('hidden');
-    const adminTabBtn = document.getElementById('tab-btn-admin');
-    if (adminTabBtn) adminTabBtn.click();
+    const loginTabBtn = document.getElementById('tab-btn-login');
+    if (loginTabBtn) loginTabBtn.click();
   }
 
   // ==========================================
@@ -3533,11 +3537,6 @@
     // Marka logosuna tıklayınca Ana Sayfa
     document.getElementById('brand-home-trigger')?.addEventListener('click', () => {
       navigateToScreen('welcome');
-    });
-
-    // Yönetici Girişi butonu (çekmeceden)
-    document.getElementById('btn-open-admin-login-modal')?.addEventListener('click', () => {
-      openAdminLoginModal();
     });
 
     // Günlük Netherite Ödülü Butonları (#13)

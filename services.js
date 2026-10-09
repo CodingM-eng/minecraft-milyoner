@@ -81,8 +81,6 @@
   // ==========================================
   const AUTH_SALT = 'MCM_2026_SALT';
   const SESSION_SECRET = 'MCM_2026_SIG_KEY';
-  const ADMIN_USER_HASH = '1608bd23ef77e2854bd4a14bb3bc0fd5e734d77bd851f6e37e795c7eb695a073';
-  const ADMIN_PASS_HASH = 'df8896b8447df2314b2a64f4ba6abb3992740163430da594d1b5cdc0686c24eb';
 
   function sha256SyncAscii(ascii) {
     function rightRotate(value, amount) {
@@ -547,6 +545,53 @@
 
   const SUPER_ADMIN_EMAIL = 'codingdevelopia@gmail.com';
 
+  // ==========================================
+  // GMAIL DOĞRULAMA (OTP) SERVİSİ
+  // ==========================================
+  const otpService = {
+    _activeOtps: new Map(),
+
+    generateOtp(email) {
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        throw new Error('Lütfen geçerli bir Gmail / e-posta adresi girin.');
+      }
+      // 6 haneli güvenli kod
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 3 * 60 * 1000; // 3 dakika
+      this._activeOtps.set(cleanEmail, { code, expiresAt, attempts: 0 });
+      return { code, expiresAt, email: cleanEmail };
+    },
+
+    getPendingOtp(email) {
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      return this._activeOtps.get(cleanEmail) || null;
+    },
+
+    verifyOtp(email, inputCode) {
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const record = this._activeOtps.get(cleanEmail);
+      if (!record) {
+        throw new Error('Bu e-posta için aktif bir onay kodu bulunamadı veya süresi doldu.');
+      }
+      if (Date.now() > record.expiresAt) {
+        this._activeOtps.delete(cleanEmail);
+        throw new Error('Onay kodunun 3 dakikalık süresi doldu. Lütfen tekrar kod isteyin.');
+      }
+      record.attempts = (record.attempts || 0) + 1;
+      if (record.attempts > 5) {
+        this._activeOtps.delete(cleanEmail);
+        throw new Error('Çok fazla hatalı deneme yapıldı. Lütfen yeni kod isteyin.');
+      }
+      const cleanInput = String(inputCode || '').trim();
+      if (cleanInput !== record.code) {
+        throw new Error('Girdiğiniz 6 haneli onay kodu hatalı! Lütfen tekrar kontrol edin.');
+      }
+      this._activeOtps.delete(cleanEmail);
+      return true;
+    }
+  };
+
   const authGuard = {
     getModeratorPermissions() {
       const saved = storage.get(STORAGE_KEYS.MOD_PERMISSIONS, null);
@@ -621,7 +666,8 @@
         if (user.isModerator || user.role === 'MODERATOR' || user.rank === 'MODERATOR') {
           return 'MODERATOR';
         }
-        return normalizeRankId(user.rank || user.role || 'MEMBER');
+        const norm = normalizeRankId(user.rank || user.role || 'MEMBER');
+        return norm === 'ADMIN' ? 'MEMBER' : norm;
       }
       return 'MEMBER';
     },
@@ -969,6 +1015,12 @@
       return this.getAllUsers().find(u => u && u.username && u.username.toLowerCase() === clean) || null;
     },
 
+    getUserByEmail(email) {
+      if (!email) return null;
+      const clean = String(email).trim().toLowerCase();
+      return this.getAllUsers().find(u => u && u.email && String(u.email).trim().toLowerCase() === clean) || null;
+    },
+
     /**
      * Görünürlük Kuralı (Data Access Layer):
      * Drive izni verilmemişse yalnızca leaderboard'da görünen adları ve temel profil bilgileri döner.
@@ -1243,6 +1295,9 @@
   function buildSessionPayload(user, isAdminSession = false) {
     const userEmail = String(user.email || '').trim().toLowerCase();
     const verifiedAdmin = Boolean(isAdminSession && userEmail === SUPER_ADMIN_EMAIL);
+    const rawRank = normalizeRankId(user.rank || 'MEMBER');
+    const safeRank = verifiedAdmin ? 'ADMIN' : (rawRank === 'ADMIN' ? 'MEMBER' : rawRank);
+    const safeRole = verifiedAdmin ? 'ADMIN' : (user.role === 'ADMIN' ? 'MEMBER' : (user.role || 'MEMBER'));
     const payload = {
       userId: user.userId || generateId('USR'),
       username: user.username,
@@ -1252,8 +1307,8 @@
       driveGrantedAt: user.driveGrantedAt || null,
       minecraftPlayerName: user.minecraftPlayerName || '',
       avatarUrl: user.avatarUrl || '',
-      rank: verifiedAdmin ? 'ADMIN' : normalizeRankId(user.rank || 'MEMBER'),
-      role: verifiedAdmin ? 'ADMIN' : user.role || 'MEMBER',
+      rank: safeRank,
+      role: safeRole,
       isModerator: Boolean(user.isModerator),
       isAdminSession: Boolean(verifiedAdmin),
       emeraldBalance: Number(user.emeraldBalance || 0),
@@ -1282,13 +1337,6 @@
       }
       if (!/^[a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]+$/.test(cleanUser)) {
         throw new Error('Kullanıcı adı yalnızca harf, rakam ve alt çizgi (_) içerebilir.');
-      }
-
-      const userCheckHash = await sha256Async(
-        `${AUTH_SALT}::ADMIN_USER::${cleanUser.toLowerCase()}`
-      );
-      if (userCheckHash === ADMIN_USER_HASH) {
-        throw new Error('Bu kullanıcı adı sistem yöneticisi için ayrılmıştır.');
       }
 
       if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
@@ -1399,77 +1447,7 @@
         await cloudSyncService.syncNow().catch(() => {});
       }
 
-      // 1. Yönetici Hesabı Hash Kontrolü (Legacy admin parolası veya anahtar)
-      const uHash = await sha256Async(`${AUTH_SALT}::ADMIN_USER::${cleanUser.toLowerCase()}`);
-      const pHash = await sha256Async(`${AUTH_SALT}::${rawPass}`);
-
-      if (uHash === ADMIN_USER_HASH && pHash === ADMIN_PASS_HASH) {
-        let adminUser = userService.getUserByUsername(cleanUser);
-        const nowIso = new Date().toISOString();
-
-        if (!adminUser) {
-          adminUser = {
-            userId: 'USR-ADMIN-ROOT',
-            username: cleanUser,
-            email: SUPER_ADMIN_EMAIL,
-            minecraftPlayerName: cleanUser,
-            passwordHash: pHash,
-            rank: 'ADMIN',
-            role: 'ADMIN',
-            isModerator: true,
-            status: 'ACTIVE',
-            drivePermissionGranted: true,
-            driveGrantedAt: nowIso,
-            emeraldBalance: 1000,
-            emeraldsEarnedTotal: 1000,
-            emeraldsSpentTotal: 0,
-            netheriteBalance: 500,
-            initialNetheriteBonusClaimed: true,
-            lastNetheriteClaimAt: null,
-            extraLives: 99,
-            points: 1000000,
-            bestScore: 1000000,
-            gamesPlayed: 100,
-            gamesWon: 100,
-            gamesLost: 0,
-            ownedCosmetics: [],
-            equippedCosmetics: {},
-            achievements: [],
-            settings: { sound: true, particles: true },
-            createdAt: nowIso,
-            updatedAt: nowIso,
-            lastLoginAt: nowIso
-          };
-          const users = userService.getAllUsers();
-          users.push(adminUser);
-          userService._saveAllUsers(users);
-        } else {
-          adminUser = userService.syncUserFields(adminUser.username, {
-            email: SUPER_ADMIN_EMAIL,
-            rank: 'ADMIN',
-            role: 'ADMIN',
-            isModerator: true,
-            lastLoginAt: nowIso
-          });
-        }
-
-        const session = buildSessionPayload(adminUser, true);
-        storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
-
-        activityService.log(
-          'ADMIN_LOGIN',
-          adminUser.username,
-          `Yönetici ${adminUser.username} giriş yaptı.`
-        );
-
-        if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
-          cloudSyncService.pushNow().catch(() => {});
-        }
-
-        return session;
-      }
-
-      // 2. Normal Kullanıcı, Moderatör veya E-posta ile Kayıtlı Admin Kontrolü
+      // Kullanıcı / Moderatör / Admin Giriş Doğrulaması (Tek Birleşik Giriş Kapısı)
       const user = userService.getUserByUsername(cleanUser);
       if (!user) {
         throw new Error('Kullanıcı adı veya şifre hatalı.');
@@ -1591,6 +1569,158 @@
       return true;
     },
 
+    generateOtp(email) {
+      return otpService.generateOtp(email);
+    },
+
+    verifyOtp(email, code) {
+      return otpService.verifyOtp(email, code);
+    },
+
+    getPendingOtp(email) {
+      return otpService.getPendingOtp(email);
+    },
+
+    async registerWithGmailAndOtp({
+      email,
+      otpCode,
+      username,
+      password,
+      passwordConfirm,
+      minecraftPlayerName = '',
+      drivePermissionGranted = true,
+      photoUrl = ''
+    }) {
+      if (otpCode) {
+        otpService.verifyOtp(email, otpCode);
+      }
+
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        throw new Error('Geçerli bir Gmail adresi gereklidir.');
+      }
+
+      const cleanUser = String(username || '').trim();
+      const cleanMc = String(minecraftPlayerName || '').trim();
+      const rawPass = String(password || '');
+      const rawConf = String(passwordConfirm ?? rawPass);
+
+      if (!cleanUser || cleanUser.length < 3 || cleanUser.length > 20) {
+        throw new Error('Kullanıcı adı 3 ile 20 karakter arasında olmalıdır.');
+      }
+      if (!/^[a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]+$/.test(cleanUser)) {
+        throw new Error('Kullanıcı adı yalnızca harf, rakam ve alt çizgi (_) içerebilir.');
+      }
+      if (userService.getUserByUsername(cleanUser)) {
+        throw new Error('Bu kullanıcı adı zaten alınmış. Lütfen başka bir ad seçin.');
+      }
+      if (cleanMc && !/^[a-zA-Z0-9_]{2,16}$/.test(cleanMc)) {
+        throw new Error(
+          'Minecraft oyuncu adı 2-16 karakter olmalı ve yalnızca harf, rakam veya alt çizgi içermelidir.'
+        );
+      }
+      if (rawPass.length < 4) {
+        throw new Error('Şifreniz en az 4 karakter uzunluğunda olmalıdır.');
+      }
+      if (rawPass !== rawConf) {
+        throw new Error('Girdiğiniz şifreler birbiriyle uyuşmuyor.');
+      }
+
+      const pHash = await sha256Async(`${AUTH_SALT}::PWD::${cleanUser.toLowerCase()}::${rawPass}`);
+      const isAdmin = Boolean(cleanEmail === SUPER_ADMIN_EMAIL);
+      const nowIso = new Date().toISOString();
+
+      const newUser = {
+        userId: generateId('USR'),
+        username: cleanUser,
+        email: cleanEmail,
+        firebaseUid: 'gmail_' + cleanUser.toLowerCase(),
+        minecraftPlayerName: cleanMc || cleanUser,
+        avatarUrl: photoUrl || '',
+        passwordHash: pHash,
+        drivePermissionGranted: Boolean(drivePermissionGranted),
+        driveGrantedAt: drivePermissionGranted ? nowIso : null,
+        rank: isAdmin ? 'ADMIN' : 'MEMBER',
+        role: isAdmin ? 'ADMIN' : 'MEMBER',
+        isModerator: Boolean(isAdmin),
+        status: 'ACTIVE',
+        emeraldBalance: 0,
+        emeraldsEarnedTotal: 0,
+        emeraldsSpentTotal: 0,
+        netheriteBalance: isAdmin ? 250 : 0,
+        initialNetheriteBonusClaimed: Boolean(isAdmin),
+        lastNetheriteClaimAt: null,
+        lastDailyEmeraldClaimAt: null,
+        extraLives: 0,
+        points: 0,
+        bestScore: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        ownedCosmetics: [],
+        equippedCosmetics: {
+          avatarFrame: null,
+          nameColor: null,
+          badge: null,
+          profileEffect: null
+        },
+        achievements: [],
+        settings: { sound: true, particles: true },
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        lastLoginAt: nowIso
+      };
+
+      const users = userService.getAllUsers();
+      users.push(newUser);
+      userService._saveAllUsers(users);
+
+      const session = buildSessionPayload(newUser, isAdmin);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+      activityService.log(
+        'GMAIL_REGISTER_OTP',
+        newUser.username,
+        `${newUser.username} (${cleanEmail}) Gmail & OTP doğrulaması ile kaydını tamamladı.`
+      );
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
+
+      return session;
+    },
+
+    async loginExistingGmailUser({ email, otpCode }) {
+      if (otpCode) {
+        otpService.verifyOtp(email, otpCode);
+      }
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const existingUser = userService.getUserByEmail(cleanEmail);
+      if (!existingUser) {
+        throw new Error('Bu Gmail adresine kayıtlı bir kullanıcı bulunamadı.');
+      }
+      const isAdmin = Boolean(cleanEmail === SUPER_ADMIN_EMAIL);
+      const nowIso = new Date().toISOString();
+      const updatedUser = userService.syncUserFields(existingUser.username, {
+        lastLoginAt: nowIso
+      });
+      const session = buildSessionPayload(updatedUser, isAdmin);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+      activityService.log(
+        'GMAIL_LOGIN_OTP',
+        updatedUser.username,
+        `${updatedUser.username} (${cleanEmail}) Gmail & OTP ile giriş yaptı.`
+      );
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
+
+      return session;
+    },
+
     async loginWithFirebaseGoogle({ promptConsent = true } = {}) {
       if (typeof window === 'undefined' || !window.MCMFirebase) {
         throw new Error('Firebase entegrasyonu hazır değil.');
@@ -1613,60 +1743,13 @@
       const nowIso = new Date().toISOString();
 
       if (!matchedUser) {
-        let chosenUsername = (fUser.displayName || email.split('@')[0])
-          .replace(/[^a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]/g, '_')
-          .substring(0, 18);
-        if (chosenUsername.length < 3) chosenUsername = 'Oyuncu_' + fUser.uid.substring(0, 5);
-
-        if (userService.getUserByUsername(chosenUsername)) {
-          chosenUsername += '_' + Math.floor(Math.random() * 899 + 100);
-        }
-
-        matchedUser = {
-          userId: fUser.uid || generateId('USR'),
-          username: chosenUsername,
+        // Otomatik sahte hesap AÇILMAZ. Kullanıcı adı ve şifre kurulumu tetiklenir.
+        return {
+          requiresSetup: true,
           email: email,
-          firebaseUid: fUser.uid,
-          minecraftPlayerName: '',
-          avatarUrl: fUser.photoURL || '',
-          passwordHash: '',
-          drivePermissionGranted: Boolean(res.drivePermissionGranted),
-          driveGrantedAt: res.drivePermissionGranted ? nowIso : null,
-          rank: isAdmin ? 'ADMIN' : 'MEMBER',
-          role: isAdmin ? 'ADMIN' : 'MEMBER',
-          isModerator: Boolean(isAdmin),
-          status: 'ACTIVE',
-          emeraldBalance: 0,
-          emeraldsEarnedTotal: 0,
-          emeraldsSpentTotal: 0,
-          netheriteBalance: isAdmin ? 250 : 0,
-          initialNetheriteBonusClaimed: Boolean(isAdmin),
-          lastNetheriteClaimAt: null,
-          lastDailyEmeraldClaimAt: null,
-          extraLives: 0,
-          points: 0,
-          bestScore: 0,
-          gamesPlayed: 0,
-          gamesWon: 0,
-          gamesLost: 0,
-          ownedCosmetics: [],
-          equippedCosmetics: {},
-          achievements: [],
-          settings: { sound: true, particles: true },
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          lastLoginAt: nowIso
+          photoUrl: fUser.photoURL || '',
+          drivePermissionGranted: Boolean(res.drivePermissionGranted)
         };
-
-        const users = userService.getAllUsers();
-        users.push(matchedUser);
-        userService._saveAllUsers(users);
-
-        activityService.log(
-          'FIREBASE_REGISTER',
-          matchedUser.username,
-          `${matchedUser.username} (${email}) Firebase ile bağlandı. (Drive İzni: ${res.drivePermissionGranted ? 'Evet' : 'Hayır'})`
-        );
       } else {
         const updates = {
           email: email,
@@ -4449,7 +4532,8 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     paymentService,
     backupService,
     cloudSyncService,
-    aiQuestionService
+    aiQuestionService,
+    otpService
   });
 })(window);
 

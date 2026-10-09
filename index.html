@@ -158,6 +158,114 @@
           </button>
         </div>
       </form>
+
+      <!-- 4. GMAIL İLE DOĞRULAMA (E-posta Girişi) -->
+      <form id="access-gmail-email-form" class="gate-form hidden" novalidate>
+        <div style="text-align: center; margin-bottom: 12px;">
+          <h3 style="margin: 0 0 6px 0; color: #38bdf8; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>📧</span> <span>GMAIL HESABINIZI DOĞRULAYIN</span>
+          </h3>
+          <p style="margin: 0; font-size: 0.82rem; color: #94a3b8; line-height: 1.4;">
+            Google Drive senkronizasyonu ve güvenli giriş için Gmail adresinizi girin. E-postanıza 6 haneli tek kullanımlık onay kodu (OTP) gönderilecektir.
+          </p>
+        </div>
+        <div class="input-group">
+          <label for="gate-gmail-address">GMAIL ADRESİNİZ</label>
+          <input type="email" id="gate-gmail-address" placeholder="ornek@gmail.com" autocomplete="email" required />
+        </div>
+        <div id="gate-gmail-email-error" class="gate-error hidden" role="alert"></div>
+        <button type="submit" id="btn-send-gmail-otp" class="mc-btn mc-btn-primary mc-btn-lg gate-submit-btn">
+          📨 DOĞRULAMA KODU (OTP) GÖNDER
+        </button>
+        <div style="text-align: center; margin-top: 10px;">
+          <button type="button" class="btn-cancel-to-login" style="background: none; border: none; color: #60a5fa; font-size: 0.8rem; cursor: pointer; text-decoration: underline;">
+            ← Giriş Yap Ekranına Dön
+          </button>
+        </div>
+      </form>
+
+      <!-- 5. 6 HANELİ OTP KODU ONAYLAMA FORMU -->
+      <form id="access-otp-form" class="gate-form hidden" novalidate>
+        <div style="text-align: center; margin-bottom: 12px;">
+          <h3 style="margin: 0 0 6px 0; color: #fbbf24; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>🔐</span> <span>GMAIL DOĞRULAMA KODU (OTP)</span>
+          </h3>
+          <p style="margin: 0; font-size: 0.82rem; color: #cbd5e1; line-height: 1.4;">
+            Doğrulama kodu <strong id="gate-otp-target-email" style="color: #60a5fa;"></strong> adresinize gönderildi.
+          </p>
+        </div>
+
+        <!-- Canlı E-posta Bildirim Kutusu (Kullanıcının gelen kodu anında görüp kopyalaması için) -->
+        <div id="gate-otp-live-notice" class="gate-success" style="margin-bottom: 12px; font-size: 0.82rem; line-height: 1.5; border: 2px dashed #10b981; background: rgba(16, 185, 129, 0.12);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <span>📬 <strong>Gmail Gelen Kutusu:</strong></span>
+            <span id="gate-otp-timer-badge" style="font-size: 0.75rem; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; color: #fde047;">⏱️ 03:00</span>
+          </div>
+          <div style="font-size: 0.95rem;">Gelen Onay Kodunuz: <strong id="gate-otp-code-display" style="font-size: 1.3rem; font-family: monospace; letter-spacing: 4px; color: #facc15; padding: 0 4px; background: rgba(0,0,0,0.3); border-radius: 4px;">------</strong></div>
+          <div style="margin-top: 4px; font-size: 0.75rem; color: #94a3b8;">(Kodu aşağıdaki kutuya yazın veya onaylayın)</div>
+        </div>
+
+        <div class="input-group">
+          <label for="gate-otp-input">6 HANELİ DOĞRULAMA KODU</label>
+          <input type="text" id="gate-otp-input" placeholder="000000" maxlength="6" autocomplete="one-time-code" style="text-align: center; font-size: 1.4rem; letter-spacing: 6px; font-family: monospace; font-weight: bold;" required />
+        </div>
+
+        <div id="gate-otp-error" class="gate-error hidden" role="alert"></div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button type="submit" id="btn-verify-otp-submit" class="mc-btn mc-btn-gold mc-btn-lg" style="flex: 1;">
+            ✅ KODU ONAYLA
+          </button>
+          <button type="button" id="btn-resend-otp" class="mc-btn mc-btn-secondary mc-btn-sm" style="white-space: nowrap; padding: 0 12px;" title="Kodu Tekrar Gönder">
+            🔄 Tekrar Gönder
+          </button>
+        </div>
+
+        <div style="text-align: center; margin-top: 10px;">
+          <button type="button" class="btn-cancel-to-login" style="background: none; border: none; color: #60a5fa; font-size: 0.8rem; cursor: pointer; text-decoration: underline;">
+            ← Farklı bir yöntemle giriş yap
+          </button>
+        </div>
+      </form>
+
+      <!-- 6. KULLANICI ADI VE ŞİFRE BELİRLEME FORMU (Yeni Gmail Girişleri İçin) -->
+      <form id="access-gmail-setup-form" class="gate-form hidden" novalidate>
+        <div style="text-align: center; margin-bottom: 12px;">
+          <h3 style="margin: 0 0 6px 0; color: #34d399; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>🛡️</span> <span>HESAP BİLGİLERİNİZİ BELİRLEYİN</span>
+          </h3>
+          <p style="margin: 0; font-size: 0.82rem; color: #94a3b8; line-height: 1.4;">
+            Gmail adresiniz (<strong id="gate-setup-verified-email" style="color: #60a5fa;"></strong>) başarıyla doğrulandı! Platformda kullanacağınız kullanıcı adı ve şifrenizi belirleyin:
+          </p>
+        </div>
+
+        <div class="input-group">
+          <label for="gate-setup-username">KULLANICI ADI</label>
+          <input type="text" id="gate-setup-username" placeholder="Örn: EnderHero (3-20 karakter)" maxlength="20" autocomplete="username" required />
+        </div>
+
+        <div class="input-group">
+          <label for="gate-setup-mc-name">İSTEĞE BAĞLI MINECRAFT OYUNCU ADI</label>
+          <input type="text" id="gate-setup-mc-name" placeholder="Örn: Steve (Avatarınız için)" maxlength="16" autocomplete="off" />
+        </div>
+
+        <div class="input-row-2">
+          <div class="input-group">
+            <label for="gate-setup-password">ŞİFRE</label>
+            <input type="password" id="gate-setup-password" placeholder="En az 4 karakter" autocomplete="new-password" required />
+          </div>
+          <div class="input-group">
+            <label for="gate-setup-password-confirm">ŞİFRE TEKRAR</label>
+            <input type="password" id="gate-setup-password-confirm" placeholder="Şifreyi onaylayın" autocomplete="new-password" required />
+          </div>
+        </div>
+
+        <div id="gate-setup-error" class="gate-error hidden" role="alert"></div>
+
+        <button type="submit" id="btn-complete-gmail-setup" class="mc-btn mc-btn-primary mc-btn-lg gate-submit-btn">
+          🚀 HESABIMI OLUŞTUR VE BAŞLA
+        </button>
+      </form>
     </div>
   </div>
 
@@ -314,10 +422,6 @@
         </div>
 
         <div class="drawer-section drawer-section-footer">
-          <button type="button" id="btn-open-admin-login-modal" class="drawer-item">
-            <span class="drawer-item-icon">🔐</span>
-            <span class="drawer-item-text">Yönetici Girişi</span>
-          </button>
           <button type="button" id="btn-logout-account" class="drawer-item drawer-item-danger"
             data-nav-action="logout">
             <span class="drawer-item-icon">🚪</span>

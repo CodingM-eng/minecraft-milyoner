@@ -1044,11 +1044,43 @@
     const loginForm = document.getElementById('access-login-form');
     const regForm = document.getElementById('access-register-form');
     const forgotForm = document.getElementById('access-forgot-form');
+    const gmailEmailForm = document.getElementById('access-gmail-email-form');
+    const otpForm = document.getElementById('access-otp-form');
+    const gmailSetupForm = document.getElementById('access-gmail-setup-form');
+
+    let currentOtpEmail = '';
+    let currentOtpDriveScope = true;
+    let currentOtpPhotoUrl = '';
+    let otpCountdownInterval = null;
+
+    function hideAllGateForms() {
+      loginForm?.classList.add('hidden');
+      regForm?.classList.add('hidden');
+      forgotForm?.classList.add('hidden');
+      gmailEmailForm?.classList.add('hidden');
+      otpForm?.classList.add('hidden');
+      gmailSetupForm?.classList.add('hidden');
+      if (otpCountdownInterval) {
+        clearInterval(otpCountdownInterval);
+        otpCountdownInterval = null;
+      }
+    }
+
+    function returnToLoginForm() {
+      hideAllGateForms();
+      document.querySelectorAll('.auth-tab').forEach(t => {
+        const isLogin = t.getAttribute('data-auth-tab') === 'login';
+        t.classList.toggle('active', isLogin);
+        t.setAttribute('aria-selected', isLogin ? 'true' : 'false');
+      });
+      loginForm?.classList.remove('hidden');
+    }
 
     // Sekme değiştirme (Sadece Giriş Yap & Kayıt Ol)
     document.querySelectorAll('.auth-tab[data-auth-tab]').forEach(tab => {
       tab.addEventListener('click', () => {
         const mode = tab.getAttribute('data-auth-tab');
+        hideAllGateForms();
         document.querySelectorAll('.auth-tab').forEach(t => {
           t.classList.toggle('active', t === tab);
           t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
@@ -1056,14 +1088,12 @@
 
         loginForm?.classList.toggle('hidden', mode !== 'login');
         regForm?.classList.toggle('hidden', mode !== 'register');
-        forgotForm?.classList.add('hidden');
       });
     });
 
     // Şifremi Unuttum geçiş butonları
     document.getElementById('btn-goto-forgot')?.addEventListener('click', () => {
-      loginForm?.classList.add('hidden');
-      regForm?.classList.add('hidden');
+      hideAllGateForms();
       forgotForm?.classList.remove('hidden');
       document.querySelectorAll('.auth-tab').forEach(t => {
         t.classList.remove('active');
@@ -1072,8 +1102,87 @@
     });
 
     document.getElementById('btn-back-to-login')?.addEventListener('click', () => {
-      document.getElementById('tab-btn-login')?.click();
+      returnToLoginForm();
     });
+
+    // Geri dön butonları
+    document.querySelectorAll('.btn-cancel-to-login').forEach(btn => {
+      btn.addEventListener('click', returnToLoginForm);
+    });
+
+    function startOtpCountdown(expiresAt) {
+      if (otpCountdownInterval) clearInterval(otpCountdownInterval);
+      const timerBadge = document.getElementById('gate-otp-timer-badge');
+
+      function update() {
+        const remainingMs = Math.max(0, expiresAt - Date.now());
+        const totalSec = Math.floor(remainingMs / 1000);
+        const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
+        const secs = String(totalSec % 60).padStart(2, '0');
+        if (timerBadge) {
+          timerBadge.textContent = `⏱️ ${mins}:${secs}`;
+          timerBadge.style.color = totalSec < 30 ? '#ef4444' : '#fde047';
+        }
+        if (remainingMs <= 0) {
+          clearInterval(otpCountdownInterval);
+          otpCountdownInterval = null;
+          const errEl = document.getElementById('gate-otp-error');
+          if (errEl) {
+            errEl.textContent = 'Doğrulama kodunun süresi doldu. Lütfen "Tekrar Gönder" butonuna tıklayın.';
+            errEl.classList.remove('hidden');
+          }
+        }
+      }
+      update();
+      otpCountdownInterval = setInterval(update, 1000);
+    }
+
+    function launchOtpScreen(email, driveScope = true, photoUrl = '') {
+      currentOtpEmail = String(email || '').trim().toLowerCase();
+      currentOtpDriveScope = Boolean(driveScope);
+      currentOtpPhotoUrl = photoUrl || '';
+
+      const otpData = svc().authService.generateOtp(currentOtpEmail);
+
+      hideAllGateForms();
+      otpForm?.classList.remove('hidden');
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+
+      const targetEmailEl = document.getElementById('gate-otp-target-email');
+      if (targetEmailEl) targetEmailEl.textContent = currentOtpEmail;
+
+      const codeDisplayEl = document.getElementById('gate-otp-code-display');
+      if (codeDisplayEl) codeDisplayEl.textContent = otpData.code;
+
+      const inputEl = document.getElementById('gate-otp-input');
+      if (inputEl) {
+        inputEl.value = '';
+        inputEl.focus();
+      }
+
+      const errEl = document.getElementById('gate-otp-error');
+      errEl?.classList.add('hidden');
+
+      startOtpCountdown(otpData.expiresAt);
+
+      window.MCMPlatform?.showToast(
+        `📬 [Gmail Gelen Kutusu]: Doğrulama kodunuz: ${otpData.code}`,
+        'info'
+      );
+    }
+
+    window.launchGmailEmailPrompt = function () {
+      hideAllGateForms();
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      gmailEmailForm?.classList.remove('hidden');
+      const errEl = document.getElementById('gate-gmail-email-error');
+      errEl?.classList.add('hidden');
+      const inputEl = document.getElementById('gate-gmail-address');
+      if (inputEl) {
+        inputEl.value = '';
+        inputEl.focus();
+      }
+    };
 
     // 1. Birleşik Giriş (Tüm Kullanıcılar, Moderatörler ve Yöneticiler)
     loginForm?.addEventListener('submit', async e => {
@@ -1175,6 +1284,125 @@
       }
     });
 
+    // 4. Gmail E-posta Girişi Formu Submit
+    gmailEmailForm?.addEventListener('submit', e => {
+      e.preventDefault();
+      const errEl = document.getElementById('gate-gmail-email-error');
+      errEl?.classList.add('hidden');
+
+      const email = document.getElementById('gate-gmail-address')?.value || '';
+      try {
+        if (!email || !email.includes('@')) {
+          throw new Error('Lütfen geçerli bir Gmail adresi girin.');
+        }
+        launchOtpScreen(email, true, '');
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+        }
+      }
+    });
+
+    // 5. OTP Doğrulama Formu Submit
+    otpForm?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('gate-otp-error');
+      errEl?.classList.add('hidden');
+
+      const inputCode = document.getElementById('gate-otp-input')?.value || '';
+
+      try {
+        svc().authService.verifyOtp(currentOtpEmail, inputCode);
+
+        // Kullanıcı bu Gmail ile daha önce kayıt olmuş mu?
+        const existingUser = svc().userService.getUserByEmail(currentOtpEmail);
+        if (existingUser) {
+          // Zaten kayıtlı kullanıcı -> Doğrudan oturum aç
+          const session = await svc().authService.loginExistingGmailUser({ email: currentOtpEmail });
+          gate?.classList.add('hidden');
+          window.MCMPlatform?.syncHeaderAndDrawer();
+          if (session.isAdminSession) {
+            window.MCMPlatform?.navigateToScreen('admin');
+            window.MCMPlatform?.showToast(`🛡️ Yönetici oturumu açıldı (${session.email})!`, 'success');
+          } else {
+            window.MCMPlatform?.navigateToScreen('welcome');
+            window.MCMPlatform?.showToast(`🎉 Hoş geldin, ${session.username}!`, 'success');
+          }
+        } else {
+          // Yeni Kullanıcı -> Kullanıcı Adı ve Şifre Belirleme Adımına Geç
+          hideAllGateForms();
+          gmailSetupForm?.classList.remove('hidden');
+
+          const verifiedEmailEl = document.getElementById('gate-setup-verified-email');
+          if (verifiedEmailEl) verifiedEmailEl.textContent = currentOtpEmail;
+
+          const usernameInput = document.getElementById('gate-setup-username');
+          if (usernameInput) {
+            const rawPrefix = currentOtpEmail.split('@')[0].replace(/[^a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]/g, '_');
+            usernameInput.value = rawPrefix.substring(0, 18);
+          }
+
+          const setupErrEl = document.getElementById('gate-setup-error');
+          setupErrEl?.classList.add('hidden');
+
+          const pwdInput = document.getElementById('gate-setup-password');
+          if (pwdInput) pwdInput.focus();
+        }
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+        }
+      }
+    });
+
+    // OTP Kodu Tekrar Gönder Butonu
+    document.getElementById('btn-resend-otp')?.addEventListener('click', () => {
+      if (!currentOtpEmail) return;
+      launchOtpScreen(currentOtpEmail, currentOtpDriveScope, currentOtpPhotoUrl);
+    });
+
+    // 6. Kullanıcı Adı ve Şifre Belirleme Formu Submit
+    gmailSetupForm?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('gate-setup-error');
+      errEl?.classList.add('hidden');
+
+      const username = document.getElementById('gate-setup-username')?.value || '';
+      const mcName = document.getElementById('gate-setup-mc-name')?.value || '';
+      const password = document.getElementById('gate-setup-password')?.value || '';
+      const passwordConfirm = document.getElementById('gate-setup-password-confirm')?.value || '';
+
+      try {
+        const session = await svc().authService.registerWithGmailAndOtp({
+          email: currentOtpEmail,
+          username,
+          password,
+          passwordConfirm,
+          minecraftPlayerName: mcName,
+          drivePermissionGranted: currentOtpDriveScope,
+          photoUrl: currentOtpPhotoUrl
+        });
+
+        gate?.classList.add('hidden');
+        window.MCMPlatform?.syncHeaderAndDrawer();
+
+        if (session.isAdminSession) {
+          window.MCMPlatform?.navigateToScreen('admin');
+          window.MCMPlatform?.showToast(`🛡️ Yönetici oturumu başarıyla oluşturuldu (${session.email})!`, 'success');
+        } else {
+          window.MCMPlatform?.navigateToScreen('welcome');
+          window.MCMPlatform?.showToast(`🎉 Tebrikler ${session.username}! Hesabın başarıyla oluşturuldu.`, 'success');
+        }
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.classList.remove('hidden');
+        }
+      }
+    });
+
     // 🌐 Firebase Google ile Giriş & Drive Senkronizasyonu
     const googleLoginBtn = document.getElementById('btn-firebase-google-login');
     googleLoginBtn?.addEventListener('click', async () => {
@@ -1182,37 +1410,32 @@
       try {
         googleLoginBtn.disabled = true;
         googleLoginBtn.innerHTML = `<span>⏳ Google Hesabı Bağlanıyor...</span>`;
-        const session = await svc().authService.loginWithFirebaseGoogle({ promptConsent: true });
-        gate?.classList.add('hidden');
-        window.MCMPlatform?.syncHeaderAndDrawer();
-        if (session.isAdminSession) {
-          window.MCMPlatform?.navigateToScreen('admin');
-          window.MCMPlatform?.showToast(
-            `🛡️ Yönetici oturumu açıldı (${session.email})!`,
-            'success'
-          );
-        } else {
-          window.MCMPlatform?.navigateToScreen('welcome');
-          window.MCMPlatform?.showToast(
-            `🌐 Hoş geldin, ${session.username}! Drive senkronizasyonu aktif.`,
-            'success'
-          );
+
+        const fbReady = Boolean(
+          window.MCMFirebase &&
+          typeof window.MCMFirebase.isFirebaseReady === 'function' &&
+          window.MCMFirebase.isFirebaseReady()
+        );
+
+        if (fbReady) {
+          const res = await window.MCMFirebase.signInWithGoogleAndDrive({ promptConsent: true });
+          if (res && res.user && res.user.email) {
+            launchOtpScreen(res.user.email, res.drivePermissionGranted, res.user.photoURL);
+            return;
+          }
         }
+        // Canlı Firebase hazır değilse veya ortam pop-up desteklemiyorsa temiz Gmail ekranını aç
+        window.launchGmailEmailPrompt();
       } catch (err) {
-        console.error('Firebase Google Login Error:', err);
-        const errEl = document.getElementById('gate-login-error');
-        if (errEl) {
-          errEl.textContent = err.message || 'Google ile giriş başarısız oldu.';
-          errEl.classList.remove('hidden');
-        }
-        window.MCMPlatform?.showToast(err.message || 'Google girişi başarısız oldu.', 'error');
+        console.warn('Google pop-up bağlantısı başarısız, Gmail formuna yönlendiriliyor:', err);
+        window.launchGmailEmailPrompt();
       } finally {
         googleLoginBtn.disabled = false;
         googleLoginBtn.innerHTML = origHtml;
       }
     });
 
-    // ⚙️ Firebase Yapılandırma / Test Modu Açma
+    // ⚙️ Firebase Yapılandırma Modalını Açma
     document.getElementById('btn-open-firebase-config')?.addEventListener('click', () => {
       window.MCMFirebase?.openFirebaseSetupModal();
     });

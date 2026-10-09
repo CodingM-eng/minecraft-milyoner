@@ -79,12 +79,18 @@ const economyCode = fs.readFileSync(path.join(__dirname, '..', 'economy.js'), 'u
 eval(servicesCode);
 eval(economyCode);
 
-const { authGuard, userService, authService, leaderboardService } = window.MCMServices;
+if (window.MCMServices?.cloudSyncService) {
+  window.MCMServices.cloudSyncService.syncNow = async () => {};
+  window.MCMServices.cloudSyncService.pushNow = async () => {};
+  window.MCMServices.cloudSyncService.schedulePush = () => {};
+}
+const { authGuard, userService, authService, leaderboardService, otpService } = window.MCMServices;
 assert(authGuard, 'authGuard servisi bulunamadı!');
 assert(userService, 'userService bulunamadı!');
 assert(authService, 'authService bulunamadı!');
 assert(leaderboardService, 'leaderboardService bulunamadı!');
-console.log('✓ Servis katmanı başarıyla yüklendi.');
+assert(otpService, 'otpService bulunamadı!');
+console.log('✓ Servis katmanı ve OTP servisi başarıyla yüklendi.');
 
 console.log('\n====================================================');
 console.log('TEST 3: Admin Yetkilendirme & Sahte Oturum Koruması');
@@ -287,6 +293,84 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.strictEqual(regSession.isAdminSession, false, 'Normal oyuncu admin oturumu alamaz.');
     assert.strictEqual(regSession.isModerator, false, 'Normal oyuncu moderatör olamaz.');
     console.log('✓ Normal üye standart giriş formundan başarıyla MEMBER rolüyle giriş yaptı.');
+
+    // 6.4: codingdevelopia@gmail.com Harici Hesapların ADMIN Yetkisi Kazanmasının Engellenmesi
+    await authService.registerAccount({
+      username: 'HackerAttempt',
+      password: 'hackerpass123',
+      passwordConfirm: 'hackerpass123'
+    });
+    userService.syncUserFields('HackerAttempt', {
+      email: 'hacker@evil.com',
+      rank: 'ADMIN',
+      role: 'ADMIN'
+    });
+    const hackerSession = await authService.login({ username: 'HackerAttempt', password: 'hackerpass123' });
+    assert.strictEqual(hackerSession.role, 'MEMBER', 'Yetkisiz kullanıcı asla ADMIN rolü alamaz!');
+    assert.strictEqual(hackerSession.rank, 'MEMBER', 'Yetkisiz kullanıcı asla ADMIN rütbesi alamaz!');
+    assert.strictEqual(hackerSession.isAdminSession, false, 'Yetkisiz kullanıcı asla isAdminSession=true alamaz!');
+    assert.strictEqual(authGuard.getEffectiveRankId(hackerSession), 'MEMBER', 'authGuard yetkisiz hesabı MEMBER olarak görmelidir.');
+    console.log('✓ codingdevelopia@gmail.com harici hesapların ADMIN olma girişimi kesin olarak engellendi.');
+
+    console.log('\n====================================================');
+    console.log('TEST 7: Gmail & OTP Doğrulama ve Kullanıcı Adı/Şifre Belirleme');
+    console.log('====================================================');
+
+    // 7.1: OTP Üretimi
+    const testEmail = 'newplayer@gmail.com';
+    const otpResult = authService.generateOtp(testEmail);
+    assert(otpResult.code && otpResult.code.length === 6, 'OTP kodu 6 haneli olmalıdır.');
+    console.log(`✓ 6 haneli OTP kodu başarıyla üretildi (${otpResult.code}).`);
+
+    // 7.2: Hatalı OTP Reddi
+    assert.throws(
+      () => authService.verifyOtp(testEmail, '000000'),
+      /hatalı/i,
+      'Hatalı kod girildiğinde hata fırlatmalıdır.'
+    );
+    console.log('✓ Hatalı OTP kodu başarıyla reddedildi.');
+
+    // 7.3: Yeni Gmail Kullanıcısının OTP Doğrulaması ve Kullanıcı Adı + Şifre Belirlemesi
+    const newGmailSession = await authService.registerWithGmailAndOtp({
+      email: testEmail,
+      otpCode: otpResult.code,
+      username: 'GmailVerifiedHero',
+      password: 'mypassword123',
+      passwordConfirm: 'mypassword123',
+      minecraftPlayerName: 'HeroSteve',
+      drivePermissionGranted: true
+    });
+    assert.strictEqual(newGmailSession.username, 'GmailVerifiedHero', 'Kullanıcı adı atanmalıdır.');
+    assert.strictEqual(newGmailSession.email, testEmail, 'Email doğru atanmalıdır.');
+    assert.strictEqual(newGmailSession.role, 'MEMBER', 'Normal Gmail üyesi MEMBER rolü almalıdır.');
+    assert.strictEqual(newGmailSession.isAdminSession, false, 'Normal Gmail üyesi admin olamaz.');
+    assert.strictEqual(newGmailSession.drivePermissionGranted, true, 'Drive izni atanmalıdır.');
+    console.log('✓ Yeni Gmail kullanıcısı OTP onayladı ve Kullanıcı Adı + Şifre belirleyerek kaydoldu.');
+
+    // 7.4: Bu kullanıcının daha sonra normal Giriş Formundan Kullanıcı Adı ve Şifre ile girebilmesi
+    const directLoginSession = await authService.login({
+      username: 'GmailVerifiedHero',
+      password: 'mypassword123'
+    });
+    assert.strictEqual(directLoginSession.username, 'GmailVerifiedHero');
+    assert.strictEqual(directLoginSession.email, testEmail);
+    console.log('✓ Gmail ile kaydolan kullanıcı daha sonra klasik formdan kullanıcı adı ve şifresiyle başarıyla girdi.');
+
+    // 7.5: codingdevelopia@gmail.com'un Gmail & OTP ile kaydı durumunda ADMIN olması
+    const adminOtp = authService.generateOtp('codingdevelopia@gmail.com');
+    const gmailAdminSession = await authService.registerWithGmailAndOtp({
+      email: 'codingdevelopia@gmail.com',
+      otpCode: adminOtp.code,
+      username: 'CodingDevAdmin',
+      password: 'adminsecret123',
+      passwordConfirm: 'adminsecret123',
+      minecraftPlayerName: 'DevAdmin',
+      drivePermissionGranted: true
+    });
+    assert.strictEqual(gmailAdminSession.role, 'ADMIN', 'codingdevelopia@gmail.com ADMIN rolü almalıdır.');
+    assert.strictEqual(gmailAdminSession.isAdminSession, true, 'codingdevelopia@gmail.com isAdminSession=true almalıdır.');
+    assert.strictEqual(authGuard.getEffectiveRankId(gmailAdminSession), 'ADMIN', 'Effective rank ADMIN olmalıdır.');
+    console.log('✓ codingdevelopia@gmail.com Gmail & OTP ile Kullanıcı Adı ve Şifre belirleyip ADMIN olarak kaydoldu.');
 
     console.log('\n====================================================');
     console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆');
