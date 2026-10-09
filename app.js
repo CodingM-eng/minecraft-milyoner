@@ -1044,9 +1044,8 @@
     const loginForm = document.getElementById('access-login-form');
     const regForm = document.getElementById('access-register-form');
     const forgotForm = document.getElementById('access-forgot-form');
-    const adminForm = document.getElementById('access-admin-form');
 
-    // Sekme değiştirme
+    // Sekme değiştirme (Sadece Giriş Yap & Kayıt Ol)
     document.querySelectorAll('.auth-tab[data-auth-tab]').forEach(tab => {
       tab.addEventListener('click', () => {
         const mode = tab.getAttribute('data-auth-tab');
@@ -1057,12 +1056,26 @@
 
         loginForm?.classList.toggle('hidden', mode !== 'login');
         regForm?.classList.toggle('hidden', mode !== 'register');
-        forgotForm?.classList.toggle('hidden', mode !== 'forgot');
-        adminForm?.classList.toggle('hidden', mode !== 'admin');
+        forgotForm?.classList.add('hidden');
       });
     });
 
-    // 1. Normal Kullanıcı Girişi (#1: Lisans Kodu Yok)
+    // Şifremi Unuttum geçiş butonları
+    document.getElementById('btn-goto-forgot')?.addEventListener('click', () => {
+      loginForm?.classList.add('hidden');
+      regForm?.classList.add('hidden');
+      forgotForm?.classList.remove('hidden');
+      document.querySelectorAll('.auth-tab').forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+    });
+
+    document.getElementById('btn-back-to-login')?.addEventListener('click', () => {
+      document.getElementById('tab-btn-login')?.click();
+    });
+
+    // 1. Birleşik Giriş (Tüm Kullanıcılar, Moderatörler ve Yöneticiler)
     loginForm?.addEventListener('submit', async e => {
       e.preventDefault();
       const errEl = document.getElementById('gate-login-error');
@@ -1075,8 +1088,21 @@
         const session = await svc().authService.login({ username, password });
         gate?.classList.add('hidden');
         window.MCMPlatform?.syncHeaderAndDrawer();
-        window.MCMPlatform?.navigateToScreen('welcome');
-        window.MCMPlatform?.showToast(`Hoş geldin, ${session.username}!`, 'success');
+        if (session.isAdminSession) {
+          window.MCMPlatform?.navigateToScreen('admin');
+          window.MCMPlatform?.showToast(
+            `🛡️ Yönetici oturumu açıldı (${session.username}).`,
+            'success'
+          );
+        } else {
+          window.MCMPlatform?.navigateToScreen('welcome');
+          window.MCMPlatform?.showToast(
+            session.isModerator
+              ? `🛡️ Hoş geldin Moderatör ${session.username}!`
+              : `Hoş geldin, ${session.username}!`,
+            'success'
+          );
+        }
       } catch (err) {
         if (errEl) {
           errEl.textContent = err.message;
@@ -1141,33 +1167,6 @@
           okEl.classList.remove('hidden');
         }
         forgotForm.reset();
-      } catch (err) {
-        if (errEl) {
-          errEl.textContent = err.message;
-          errEl.classList.remove('hidden');
-        }
-      }
-    });
-
-    // 4. Ayrı Yönetici Girişi (#2: MashallahMC)
-    adminForm?.addEventListener('submit', async e => {
-      e.preventDefault();
-      const errEl = document.getElementById('gate-admin-error');
-      errEl?.classList.add('hidden');
-
-      const username = document.getElementById('gate-admin-username')?.value || '';
-      const password = document.getElementById('gate-admin-password')?.value || '';
-
-      try {
-        const session = await svc().authService.adminLogin({ username, password });
-        adminForm.reset();
-        gate?.classList.add('hidden');
-        window.MCMPlatform?.syncHeaderAndDrawer();
-        window.MCMPlatform?.navigateToScreen('admin');
-        window.MCMPlatform?.showToast(
-          `🛡️ Yönetici oturumu açıldı (${session.username}).`,
-          'success'
-        );
       } catch (err) {
         if (errEl) {
           errEl.textContent = err.message;

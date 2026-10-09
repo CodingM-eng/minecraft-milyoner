@@ -36,7 +36,7 @@
         Hesabınıza giriş yapın veya ücretsiz kayıt olarak her gün <strong>Günlük Zümrüt</strong> ödülüyle yarışmaya başlayın! (İlk en az <strong>VIP+</strong> rütbe alımında anında <strong>+250 Netherite</strong> hediye!)
       </p>
 
-      <!-- Sekmeler: Giriş Yap / Kayıt Ol / Şifremi Unuttum / Yönetici Girişi -->
+      <!-- Sekmeler: Sadece Giriş Yap & Kayıt Ol -->
       <div class="auth-tabs" role="tablist">
         <button type="button" class="auth-tab active" data-auth-tab="login" id="tab-btn-login" role="tab"
           aria-selected="true">
@@ -45,14 +45,6 @@
         <button type="button" class="auth-tab" data-auth-tab="register" id="tab-btn-register" role="tab"
           aria-selected="false">
           Kayıt Ol
-        </button>
-        <button type="button" class="auth-tab" data-auth-tab="forgot" id="tab-btn-forgot" role="tab"
-          aria-selected="false">
-          Şifre Sıfırla
-        </button>
-        <button type="button" class="auth-tab auth-tab-admin" data-auth-tab="admin" id="tab-btn-admin" role="tab"
-          aria-selected="false">
-          🛡️ Yönetici Girişi
         </button>
       </div>
 
@@ -81,7 +73,7 @@
         <hr style="flex: 1; border: none; border-top: 1px solid rgba(255, 255, 255, 0.1);" />
       </div>
 
-      <!-- 1. GİRİŞ YAP FORMU (Lisans Kodu Yok) -->
+      <!-- 1. GİRİŞ YAP FORMU (Tüm Oyuncular, Moderatörler ve Yöneticiler Buradan Giriş Yapar) -->
       <form id="access-login-form" class="gate-form" novalidate>
         <div class="input-group">
           <label for="gate-login-username">KULLANICI ADI</label>
@@ -92,6 +84,11 @@
           <label for="gate-login-password">ŞİFRE</label>
           <input type="password" id="gate-login-password" placeholder="Şifrenizi girin..."
             autocomplete="current-password" required />
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 4px; margin-bottom: 8px;">
+          <button type="button" id="btn-goto-forgot" style="background: none; border: none; color: #94a3b8; font-size: 0.78rem; text-decoration: underline; cursor: pointer;">
+            Şifremi Unuttum?
+          </button>
         </div>
         <div id="gate-login-error" class="gate-error hidden" role="alert"></div>
         <button type="submit" id="btn-login-submit" class="mc-btn mc-btn-primary mc-btn-lg gate-submit-btn">
@@ -134,7 +131,7 @@
         </button>
       </form>
 
-      <!-- 3. ŞİFREMİ UNUTTUM FORMU (Lisans Kodu Yok) -->
+      <!-- 3. ŞİFREMİ UNUTTUM FORMU (Giriş Yap Formundaki Bağlantıdan Açılır) -->
       <form id="access-forgot-form" class="gate-form hidden" novalidate>
         <div class="input-group">
           <label for="gate-forgot-username">KULLANICI ADINIZ</label>
@@ -155,27 +152,11 @@
         <button type="submit" class="mc-btn mc-btn-primary mc-btn-lg gate-submit-btn">
           🔄 ŞİFREMİ GÜNCELLE
         </button>
-      </form>
-
-      <!-- 4. YÖNETİCİ GİRİŞİ FORMU (#2: Ayrı Admin Girişi) -->
-      <form id="access-admin-form" class="gate-form hidden" novalidate>
-        <div class="admin-auth-banner">
-          🛡️ <strong>Yönetici Girişi</strong> — Bu bölüm yalnızca yetkili sistem yöneticisi içindir.
+        <div style="text-align: center; margin-top: 10px;">
+          <button type="button" id="btn-back-to-login" style="background: none; border: none; color: #60a5fa; font-size: 0.8rem; cursor: pointer; text-decoration: underline;">
+            ← Giriş Yap Ekranına Dön
+          </button>
         </div>
-        <div class="input-group">
-          <label for="gate-admin-username">Kullanıcı Adı</label>
-          <input type="text" id="gate-admin-username" placeholder="Yönetici kullanıcı adı" autocomplete="username"
-            required />
-        </div>
-        <div class="input-group">
-          <label for="gate-admin-password">Şifre</label>
-          <input type="password" id="gate-admin-password" placeholder="Yönetici şifresi"
-            autocomplete="current-password" required />
-        </div>
-        <div id="gate-admin-error" class="gate-error hidden" role="alert"></div>
-        <button type="submit" id="btn-admin-login-submit" class="mc-btn mc-btn-gold mc-btn-lg gate-submit-btn">
-          🛡️ Giriş Yap
-        </button>
       </form>
     </div>
   </div>

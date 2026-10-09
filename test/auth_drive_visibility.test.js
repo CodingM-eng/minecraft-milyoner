@@ -229,6 +229,71 @@ assert.strictEqual(rowWithDrive.emeraldBalance, 9000, 'İzinli satırda zümrüt
 console.log('✓ Liderlik tablosunda Drive izni olan satırın verileri eksiksiz listelendi.');
 
 console.log('\n====================================================');
-console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆');
-console.log('====================================================\n');
-process.exit(0);
+console.log('TEST 6: Birleşik Giriş (Admin, Moderatör ve Üyenin Giriş Yap Ekranından Girişi)');
+console.log('====================================================');
+
+const crypto = require('crypto');
+const sha256Node = str => crypto.createHash('sha256').update(str, 'utf8').digest('hex');
+const AUTH_SALT_CONST = 'MCM_2026_SALT';
+
+(async () => {
+  try {
+    // 6.1: Moderatör hesabı oluştur ve Giriş Yap ile gir
+    await authService.registerAccount({
+      username: 'ModeratorTest',
+      password: 'modpass123',
+      passwordConfirm: 'modpass123'
+    });
+    userService.syncUserFields('ModeratorTest', {
+      rank: 'MODERATOR',
+      role: 'MODERATOR',
+      isModerator: true
+    });
+
+    const modSession = await authService.login({ username: 'ModeratorTest', password: 'modpass123' });
+    assert.strictEqual(modSession.role, 'MODERATOR', 'Moderatör girişi MODERATOR rolü üretmelidir.');
+    assert.strictEqual(modSession.isModerator, true, 'isModerator true olmalıdır.');
+    assert.strictEqual(modSession.isAdminSession, false, 'Moderatör admin olamaz.');
+    console.log('✓ Moderatör standart giriş formundan başarıyla MODERATOR rolüyle giriş yaptı.');
+
+    // 6.2: Admin hesabı oluştur (codingdevelopia@gmail.com) ve Giriş Yap ile gir
+    await authService.registerAccount({
+      username: 'SuperAdminTest',
+      password: 'adminpass123',
+      passwordConfirm: 'adminpass123'
+    });
+    userService.syncUserFields('SuperAdminTest', {
+      email: SUPER_ADMIN,
+      rank: 'ADMIN',
+      role: 'ADMIN',
+      isModerator: true
+    });
+
+    const adminSession = await authService.login({ username: 'SuperAdminTest', password: 'adminpass123' });
+    assert.strictEqual(adminSession.role, 'ADMIN', 'Admin girişi ADMIN rolü üretmelidir.');
+    assert.strictEqual(adminSession.isAdminSession, true, 'Admin girişi isAdminSession=true üretmelidir.');
+    assert.strictEqual(authGuard.getEffectiveRankId(adminSession), 'ADMIN', 'Effective rank ADMIN olmalıdır.');
+    console.log('✓ Admin standart giriş formundan başarıyla ADMIN yetkisiyle giriş yaptı.');
+
+    // 6.3: Standart Oyuncu Girişi
+    await authService.registerAccount({
+      username: 'RegularPlayer',
+      password: 'playerpass123',
+      passwordConfirm: 'playerpass123'
+    });
+
+    const regSession = await authService.login({ username: 'RegularPlayer', password: 'playerpass123' });
+    assert.strictEqual(regSession.role, 'MEMBER', 'Normal oyuncu MEMBER rolü almalıdır.');
+    assert.strictEqual(regSession.isAdminSession, false, 'Normal oyuncu admin oturumu alamaz.');
+    assert.strictEqual(regSession.isModerator, false, 'Normal oyuncu moderatör olamaz.');
+    console.log('✓ Normal üye standart giriş formundan başarıyla MEMBER rolüyle giriş yaptı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆');
+    console.log('====================================================\n');
+    process.exit(0);
+  } catch (err) {
+    console.error('TEST 6 Hatası:', err);
+    process.exit(1);
+  }
+})();

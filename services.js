@@ -1399,6 +1399,77 @@
         await cloudSyncService.syncNow().catch(() => {});
       }
 
+      // 1. Yönetici Hesabı Hash Kontrolü (Legacy admin parolası veya anahtar)
+      const uHash = await sha256Async(`${AUTH_SALT}::ADMIN_USER::${cleanUser.toLowerCase()}`);
+      const pHash = await sha256Async(`${AUTH_SALT}::${rawPass}`);
+
+      if (uHash === ADMIN_USER_HASH && pHash === ADMIN_PASS_HASH) {
+        let adminUser = userService.getUserByUsername(cleanUser);
+        const nowIso = new Date().toISOString();
+
+        if (!adminUser) {
+          adminUser = {
+            userId: 'USR-ADMIN-ROOT',
+            username: cleanUser,
+            email: SUPER_ADMIN_EMAIL,
+            minecraftPlayerName: cleanUser,
+            passwordHash: pHash,
+            rank: 'ADMIN',
+            role: 'ADMIN',
+            isModerator: true,
+            status: 'ACTIVE',
+            drivePermissionGranted: true,
+            driveGrantedAt: nowIso,
+            emeraldBalance: 1000,
+            emeraldsEarnedTotal: 1000,
+            emeraldsSpentTotal: 0,
+            netheriteBalance: 500,
+            initialNetheriteBonusClaimed: true,
+            lastNetheriteClaimAt: null,
+            extraLives: 99,
+            points: 1000000,
+            bestScore: 1000000,
+            gamesPlayed: 100,
+            gamesWon: 100,
+            gamesLost: 0,
+            ownedCosmetics: [],
+            equippedCosmetics: {},
+            achievements: [],
+            settings: { sound: true, particles: true },
+            createdAt: nowIso,
+            updatedAt: nowIso,
+            lastLoginAt: nowIso
+          };
+          const users = userService.getAllUsers();
+          users.push(adminUser);
+          userService._saveAllUsers(users);
+        } else {
+          adminUser = userService.syncUserFields(adminUser.username, {
+            email: SUPER_ADMIN_EMAIL,
+            rank: 'ADMIN',
+            role: 'ADMIN',
+            isModerator: true,
+            lastLoginAt: nowIso
+          });
+        }
+
+        const session = buildSessionPayload(adminUser, true);
+        storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+        activityService.log(
+          'ADMIN_LOGIN',
+          adminUser.username,
+          `Yönetici ${adminUser.username} giriş yaptı.`
+        );
+
+        if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+          cloudSyncService.pushNow().catch(() => {});
+        }
+
+        return session;
+      }
+
+      // 2. Normal Kullanıcı, Moderatör veya E-posta ile Kayıtlı Admin Kontrolü
       const user = userService.getUserByUsername(cleanUser);
       if (!user) {
         throw new Error('Kullanıcı adı veya şifre hatalı.');
@@ -1415,8 +1486,9 @@
         throw new Error('Kullanıcı adı veya şifre hatalı.');
       }
 
+      const nowIso = new Date().toISOString();
       const updatedUser = userService.syncUserFields(user.username, {
-        lastLoginAt: new Date().toISOString()
+        lastLoginAt: nowIso
       });
 
       if (window.MCMServices?.netheriteService) {
@@ -1424,10 +1496,24 @@
       }
 
       const finalUser = userService.getUserByUsername(user.username) || updatedUser;
-      const session = buildSessionPayload(finalUser, false);
+
+      // codingdevelopia@gmail.com ile kayıtlı veya atanmış Admin tespiti
+      const userEmail = String(finalUser.email || '').trim().toLowerCase();
+      const isAdminAccount = Boolean(
+        (finalUser.rank === 'ADMIN' || finalUser.role === 'ADMIN') && userEmail === SUPER_ADMIN_EMAIL
+      );
+      const isModAccount = Boolean(
+        finalUser.isModerator || finalUser.role === 'MODERATOR' || finalUser.rank === 'MODERATOR'
+      );
+
+      const session = buildSessionPayload(finalUser, isAdminAccount);
       storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
 
-      activityService.log('USER_LOGIN', finalUser.username, `${finalUser.username} giriş yaptı.`);
+      activityService.log(
+        isAdminAccount ? 'ADMIN_LOGIN' : isModAccount ? 'MOD_LOGIN' : 'USER_LOGIN',
+        finalUser.username,
+        `${finalUser.username} (${session.role}) giriş yaptı.`
+      );
 
       if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
         cloudSyncService.pushNow().catch(() => {});
@@ -1437,82 +1523,7 @@
     },
 
     async adminLogin({ username, password }) {
-      const cleanUser = String(username || '').trim();
-      const rawPass = String(password || '');
-
-      if (!cleanUser || !rawPass) {
-        throw new Error('Lütfen yönetici kullanıcı adını ve şifresini girin.');
-      }
-
-      const uHash = await sha256Async(`${AUTH_SALT}::ADMIN_USER::${cleanUser.toLowerCase()}`);
-      const pHash = await sha256Async(`${AUTH_SALT}::${rawPass}`);
-
-      if (uHash !== ADMIN_USER_HASH || pHash !== ADMIN_PASS_HASH) {
-        throw new Error('Yönetici kullanıcı adı veya şifresi geçersiz!');
-      }
-
-      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
-        await cloudSyncService.syncNow().catch(() => {});
-      }
-
-      let adminUser = userService.getUserByUsername(cleanUser);
-      const nowIso = new Date().toISOString();
-
-      if (!adminUser) {
-        adminUser = {
-          userId: 'USR-ADMIN-ROOT',
-          username: cleanUser,
-          minecraftPlayerName: cleanUser,
-          passwordHash: pHash,
-          rank: 'ADMIN',
-          role: 'ADMIN',
-          isModerator: true,
-          status: 'ACTIVE',
-          emeraldBalance: 0,
-          emeraldsEarnedTotal: 0,
-          emeraldsSpentTotal: 0,
-          netheriteBalance: 250,
-          initialNetheriteBonusClaimed: true,
-          lastNetheriteClaimAt: null,
-          extraLives: 0,
-          points: 0,
-          bestScore: 0,
-          gamesPlayed: 0,
-          gamesWon: 0,
-          gamesLost: 0,
-          ownedCosmetics: [],
-          equippedCosmetics: {},
-          achievements: [],
-          settings: { sound: true, particles: true },
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          lastLoginAt: nowIso
-        };
-        const users = userService.getAllUsers();
-        users.push(adminUser);
-        userService._saveAllUsers(users);
-      } else {
-        adminUser = userService.syncUserFields(adminUser.username, {
-          rank: 'ADMIN',
-          role: 'ADMIN',
-          lastLoginAt: nowIso
-        });
-      }
-
-      const session = buildSessionPayload(adminUser, true);
-      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
-
-      activityService.log(
-        'ADMIN_LOGIN',
-        adminUser.username,
-        `Yönetici ${adminUser.username} Yönetici Paneline giriş yaptı.`
-      );
-
-      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
-        cloudSyncService.pushNow().catch(() => {});
-      }
-
-      return session;
+      return await this.login({ username, password });
     },
 
     async resetForgottenPassword({ username, minecraftPlayerName = '', newPassword }) {
