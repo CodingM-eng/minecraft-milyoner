@@ -9,6 +9,7 @@ world_the_end/
 *.yml
 *.txt
 *.json
+!manifest.json
 *.properties
 *.bat
 SUNUCU.md

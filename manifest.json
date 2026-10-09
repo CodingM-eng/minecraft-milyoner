@@ -1,0 +1,24 @@
+{
+  "name": "MC Milyoner | Bilgini Sına",
+  "short_name": "MC Milyoner",
+  "description": "MC Milyoner! Minecraft bilgi yarışması, Zümrüt ve Netherite ekonomisi, rütbeler ve turnuva platformu.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0f19",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
