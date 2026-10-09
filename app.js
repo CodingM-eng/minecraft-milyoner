@@ -1193,10 +1193,25 @@
 
       startOtpCountdown(otpData.expiresAt);
 
-      window.MCMPlatform?.showToast(
-        `📬 Doğrulama kodunuz ${currentOtpEmail} adresine gönderildi! Lütfen mail.google.com gelen kutunuzu kontrol edin.`,
-        'success'
-      );
+      const tipEl = document.getElementById('gate-otp-status-tip');
+      if (otpData?.activationNeeded) {
+        if (tipEl) {
+          tipEl.innerHTML = '⚠️ <strong style="color:#fde047;">İlk Kullanım:</strong> mail.google.com gelen kutunuzdaki veya Spam klasörünüzdeki <strong>"Activate Form"</strong> bağlantısına bir defa tıklayarak teslimatı onaylayın.';
+        }
+        window.MCMPlatform?.showToast(
+          `⚠️ FormSubmit aktivasyon e-postası ${currentOtpEmail} adresine gönderildi! Lütfen mail.google.com gelen kutunuzu açıp 'Activate Form' bağlantısına tıklayın (Spam klasörünü de kontrol edin).`,
+          'warning',
+          9000
+        );
+      } else {
+        if (tipEl) {
+          tipEl.innerHTML = '(E-posta 1-2 saniye içinde ulaşır. Bulamazsanız Spam / İstenmeyen klasörünü de kontrol edin.)';
+        }
+        window.MCMPlatform?.showToast(
+          `📬 Doğrulama kodunuz ${currentOtpEmail} adresine gönderildi! Lütfen mail.google.com gelen kutunuzu veya Spam klasörünü kontrol edin.`,
+          'success'
+        );
+      }
     }
 
     window.launchGmailEmailPrompt = function () {

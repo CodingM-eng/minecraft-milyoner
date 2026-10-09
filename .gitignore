@@ -16,3 +16,5 @@ node_modules/
 *.properties
 *.bat
 SUNUCU.md
+.env
+!.env.example

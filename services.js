@@ -557,29 +557,72 @@
         throw new Error('Lütfen geçerli bir Gmail / e-posta adresi girin.');
       }
 
+      // 6 haneli OTP kodu üret ve yerel hafızaya kaydet
+      const { code, expiresAt } = this.generateOtp(cleanEmail);
+
+      let serverSuccess = false;
+      let formSubmitSuccess = false;
+      let activationNeeded = false;
+
       // 1. Sunucu API çağrısı (POST /api/auth/send-otp)
       try {
         if (typeof fetch === 'function') {
           const res = await fetch('/api/auth/send-otp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: cleanEmail })
+            body: JSON.stringify({ email: cleanEmail, code: code })
           });
           if (res.ok) {
             const data = await res.json();
-            return {
-              email: cleanEmail,
-              expiresAt: data.expiresAt || Date.now() + 3 * 60 * 1000,
-              serverSent: true
-            };
+            serverSuccess = true;
+            if (data && data.activationNeeded) {
+              activationNeeded = true;
+            }
           }
         }
       } catch (err) {
-        // Sunucu bağlantısı başarısızsa yerel yedeğe geç
+        // Sunucu çevrimdışıysa veya erişilemiyorsa (örn. GitHub Pages) devam et
       }
 
-      // 2. Yerel bellek yedeği
-      return this.generateOtp(cleanEmail);
+      // 2. Eğer sunucu API yanıt vermediyse istemciden doğrudan FormSubmit üzerinden Gmail'e gönder
+      if (!serverSuccess && typeof fetch === 'function') {
+        try {
+          const fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(cleanEmail)}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              _subject: `MC Milyoner Onay Kodunuz: ${code}`,
+              kod: code,
+              eposta: cleanEmail,
+              mesaj: `MC Milyoner platformu tek kullanımlık 6 haneli onay kodunuz: ${code}\n\nBu kod 3 dakika geçerlidir.\nmail.google.com üzerinden aldığınız bu kodu giriş ekranına yazın.`
+            })
+          });
+          if (fsRes.ok) {
+            const fsData = await fsRes.json();
+            formSubmitSuccess = true;
+            if (fsData && fsData.message && String(fsData.message).toLowerCase().includes('activation')) {
+              activationNeeded = true;
+            }
+          }
+        } catch (fsErr) {
+          console.warn('[OTP] FormSubmit iletim uyarısı:', fsErr.message);
+        }
+      }
+
+      // Güvenlik & geliştirici konsol kaydı
+      console.log(`[MC Milyoner OTP] ${cleanEmail} -> Kod: ${code} (Geçerlilik: 3 dk)`);
+
+      return {
+        email: cleanEmail,
+        code: code,
+        expiresAt: expiresAt,
+        serverSent: serverSuccess,
+        formSubmitSent: formSubmitSuccess,
+        activationNeeded: activationNeeded
+      };
     },
 
     generateOtp(email) {
