@@ -111,7 +111,7 @@
     }
   }
 
-  function showToast(message, type = 'info') {
+  function showToast(message, type = 'info', options = {}) {
     if (typeof window.showToastNotification === 'function') {
       window.showToastNotification(message, type);
       return;
@@ -125,7 +125,32 @@
     textSpan.textContent = message;
     toast.appendChild(textSpan);
 
-    if (type === 'error') {
+    const codeMatch = String(message).match(/\b\d{6}\b/);
+    const copyTarget = options?.copyText || (codeMatch ? codeMatch[0] : null);
+
+    if (copyTarget) {
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'mc-btn mc-btn-gold mc-btn-xs';
+      copyBtn.style.cssText =
+        'margin-left: 10px; padding: 3px 8px; font-size: 0.74rem; white-space: nowrap; vertical-align: middle; cursor: pointer; font-weight: bold; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);';
+      copyBtn.innerHTML = options?.copyLabel || '📋 Kodu Kopyala';
+      copyBtn.title = 'Kodu panoya kopyala';
+      copyBtn.onclick = e => {
+        e.stopPropagation();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(copyTarget).then(() => {
+            copyBtn.innerHTML = '✅ Kopyalandı!';
+            setTimeout(() => (copyBtn.innerHTML = options?.copyLabel || '📋 Kodu Kopyala'), 2500);
+          }).catch(() => {
+            prompt('Kodu kopyalayın:', copyTarget);
+          });
+        } else {
+          prompt('Kodu kopyalayın:', copyTarget);
+        }
+      };
+      toast.appendChild(copyBtn);
+    } else if (type === 'error') {
       const copyBtn = document.createElement('button');
       copyBtn.type = 'button';
       copyBtn.className = 'mc-btn mc-btn-secondary mc-btn-xs';
@@ -144,7 +169,7 @@
     setTimeout(() => {
       toast.classList.add('fade-out');
       setTimeout(() => toast.remove(), 300);
-    }, type === 'error' ? 6000 : 3600);
+    }, copyTarget || type === 'error' ? 8000 : 3600);
   }
 
   // ==========================================

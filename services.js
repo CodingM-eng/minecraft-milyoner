@@ -3404,10 +3404,7 @@
         lastResetAt: new Date().toISOString(),
         lastResetBy: 'SYSTEM_RESET'
       });
-      const active = storage.get(STORAGE_KEYS.ACTIVE_SESSION, null);
-      if (active && !active.isAdminSession) {
-        storage.remove(STORAGE_KEYS.ACTIVE_SESSION);
-      }
+      storage.remove(STORAGE_KEYS.ACTIVE_SESSION);
     },
 
     _mergeAndSave(remoteData) {

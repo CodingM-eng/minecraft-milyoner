@@ -1137,12 +1137,31 @@
       otpCountdownInterval = setInterval(update, 1000);
     }
 
+    let currentOtpCode = '';
+
+    function copyCodeToClipboard(code) {
+      if (!code) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard
+          .writeText(code)
+          .then(() => {
+            window.MCMPlatform?.showToast('📋 Onay kodu panoya kopyalandı!', 'success');
+          })
+          .catch(() => {
+            prompt('Lütfen kodu kopyalayın:', code);
+          });
+      } else {
+        prompt('Lütfen kodu kopyalayın:', code);
+      }
+    }
+
     function launchOtpScreen(email, driveScope = true, photoUrl = '') {
       currentOtpEmail = String(email || '').trim().toLowerCase();
       currentOtpDriveScope = Boolean(driveScope);
       currentOtpPhotoUrl = photoUrl || '';
 
       const otpData = svc().authService.generateOtp(currentOtpEmail);
+      currentOtpCode = otpData.code;
 
       hideAllGateForms();
       otpForm?.classList.remove('hidden');
@@ -1152,7 +1171,10 @@
       if (targetEmailEl) targetEmailEl.textContent = currentOtpEmail;
 
       const codeDisplayEl = document.getElementById('gate-otp-code-display');
-      if (codeDisplayEl) codeDisplayEl.textContent = otpData.code;
+      if (codeDisplayEl) {
+        codeDisplayEl.textContent = otpData.code;
+        codeDisplayEl.onclick = () => copyCodeToClipboard(currentOtpCode);
+      }
 
       const inputEl = document.getElementById('gate-otp-input');
       if (inputEl) {
@@ -1165,9 +1187,15 @@
 
       startOtpCountdown(otpData.expiresAt);
 
+      // Kodu panoya otomatik kopyalamayı da dene
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(otpData.code).catch(() => {});
+      }
+
       window.MCMPlatform?.showToast(
         `📬 [Gmail Gelen Kutusu]: Doğrulama kodunuz: ${otpData.code}`,
-        'info'
+        'info',
+        { copyText: otpData.code, copyLabel: '📋 Kodu Kopyala' }
       );
     }
 
@@ -1369,6 +1397,32 @@
     document.getElementById('btn-resend-otp')?.addEventListener('click', () => {
       if (!currentOtpEmail) return;
       launchOtpScreen(currentOtpEmail, currentOtpDriveScope, currentOtpPhotoUrl);
+    });
+
+    // OTP Kodu Doğrudan Kopyalama Butonu
+    document.getElementById('btn-copy-otp-code')?.addEventListener('click', () => {
+      if (!currentOtpCode) return;
+      copyCodeToClipboard(currentOtpCode);
+      const btn = document.getElementById('btn-copy-otp-code');
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span>✅</span> <span>Kopyalandı!</span>';
+        setTimeout(() => (btn.innerHTML = orig), 2500);
+      }
+    });
+
+    // OTP Kodu Hemen Doldur Butonu
+    document.getElementById('btn-autofill-otp-code')?.addEventListener('click', () => {
+      if (!currentOtpCode) return;
+      const inputEl = document.getElementById('gate-otp-input');
+      if (inputEl) {
+        inputEl.value = currentOtpCode;
+        inputEl.focus();
+        window.MCMPlatform?.showToast(
+          '⚡ Kod kutuya otomatik yazıldı! "Kodu Onayla" butonuna basabilirsiniz.',
+          'success'
+        );
+      }
     });
 
     // 6. Kullanıcı Adı ve Şifre Belirleme Formu Submit
