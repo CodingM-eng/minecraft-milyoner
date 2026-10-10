@@ -594,10 +594,15 @@
               'Accept': 'application/json'
             },
             body: JSON.stringify({
-              _subject: `MC Milyoner Onay Kodunuz: ${code}`,
-              kod: code,
-              eposta: cleanEmail,
-              mesaj: `MC Milyoner platformu tek kullanımlık 6 haneli onay kodunuz: ${code}\n\nBu kod 3 dakika geçerlidir.\nmail.google.com üzerinden aldığınız bu kodu giriş ekranına yazın.`
+              _subject: `💎 MC Milyoner Doğrulama Kodu: ${code}`,
+              _template: 'table',
+              _captcha: 'false',
+              'UYGULAMA': 'MC MİLYONER PLATFORMU',
+              'E_POSTA': cleanEmail,
+              'DOGRULAMA_KODU': code,
+              'GEÇERLİLİK': '3 Dakika (Tek Kullanımlık)',
+              'BİLGİ': 'Bu kod ile MC Milyoner hesabınızı güvenle onaylayabilirsiniz. Kodu kimseyle paylaşmayınız.',
+              'GIRIS_BAGLANTISI': 'https://mail.google.com/'
             })
           });
           if (fsRes.ok) {
@@ -2033,6 +2038,9 @@
         leaderUsername: session.username,
         maxMembers: Math.max(4, Number(perms.maxPartySize || 8)),
         status: 'LOBBY',
+        hostRole: 'JUDGE',
+        matchId: null,
+        matchQuestions: null,
         members: [
           {
             username: session.username,
@@ -2549,7 +2557,7 @@
       return true;
     },
 
-    startPartyMatch(session, partyId) {
+    startPartyMatch(session, partyId, options = {}) {
       authGuard.verifySession(session);
       const parties = this.getAllParties();
       const party = parties.find(p => p && p.partyId === partyId && p.status !== 'CLOSED');
@@ -2562,7 +2570,19 @@
         throw new Error('Yalnızca parti lideri maçı başlatabilir.');
       }
 
+      // Soruları kaydet (platform.js'den gönderilirse)
+      if (Array.isArray(options.questions) && options.questions.length > 0) {
+        party.matchQuestions = options.questions;
+      }
+
+      // Benzersiz maç kimliği oluştur
+      party.matchId = `MATCH_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+      // Lider varsayılan olarak JUDGE rolünde
+      if (!party.hostRole) party.hostRole = 'JUDGE';
+
       party.status = 'IN_GAME';
+      party.matchStartedAt = new Date().toISOString();
       party.updatedAt = nextMonotonicIso(party.updatedAt || party.createdAt);
       this._saveAllParties(parties);
 
@@ -2576,6 +2596,26 @@
         }
       });
 
+      return party;
+    },
+
+    setPartyHostRole(session, partyId, role) {
+      authGuard.verifySession(session);
+      if (role !== 'JUDGE' && role !== 'PLAYER') {
+        throw new Error('Geçersiz rol. "JUDGE" veya "PLAYER" olmalıdır.');
+      }
+      const parties = this.getAllParties();
+      const party = parties.find(p => p && p.partyId === partyId && p.status !== 'CLOSED');
+      if (!party) throw new Error('Parti bulunamadı.');
+      if (
+        party.leaderUsername.toLowerCase() !== session.username.toLowerCase() &&
+        !session.isAdminSession
+      ) {
+        throw new Error('Yalnızca parti lideri rolünü değiştirebilir.');
+      }
+      party.hostRole = role;
+      party.updatedAt = nextMonotonicIso(party.updatedAt || party.createdAt);
+      this._saveAllParties(parties);
       return party;
     },
 

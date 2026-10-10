@@ -184,18 +184,32 @@
         </div>
       </form>
 
-      <!-- 5. 6 HANELİ OTP KODU ONAYLAMA FORMU -->
+      <!-- 5. 6 HANELİ OTP KODU ONAYLAMA FORMU (FormSubmit & Gmail) -->
       <form id="access-otp-form" class="gate-form hidden" novalidate>
-        <div style="text-align: center; margin-bottom: 12px;">
-          <h3 style="margin: 0 0 6px 0; color: #fbbf24; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span>🔐</span> <span>GMAIL DOĞRULAMA KODU (OTP)</span>
-          </h3>
-          <p style="margin: 0; font-size: 0.82rem; color: #cbd5e1; line-height: 1.4;">
-            Doğrulama kodu <strong id="gate-otp-target-email" style="color: #60a5fa;"></strong> adresinize gönderildi.
+        <!-- En Üst: Kodu Kopyala / Panodan Yapıştır Hızlı İşlem Çubuğu -->
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.85); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.35); margin-bottom: 14px;">
+          <span style="font-size: 0.78rem; color: #94a3b8;">Hızlı İşlem:</span>
+          <button type="button" id="btn-gate-copy-otp-top" class="mc-btn mc-btn-secondary mc-btn-xs" style="padding: 4px 10px; font-size: 0.76rem; display: inline-flex; align-items: center; gap: 5px;">
+            <span>📋</span> <span>Kodu Kopyala</span>
+          </button>
+        </div>
+
+        <!-- Başlık & Sol Üstte Logo Alanı -->
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.2);">
+          <img src="logo.png" alt="MC Milyoner Logo" style="width: 44px; height: 44px; object-fit: contain; border-radius: 8px; filter: drop-shadow(0 2px 8px rgba(34, 197, 94, 0.5)); flex-shrink: 0;" />
+          <div style="text-align: left;">
+            <h3 style="margin: 0; color: #fbbf24; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.5px;">GMAIL DOĞRULAMA KODU</h3>
+            <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: #94a3b8;">Tek kullanımlık güvenli OTP doğrulaması</p>
+          </div>
+        </div>
+
+        <div style="text-align: left; margin-bottom: 10px;">
+          <p style="margin: 0; font-size: 0.82rem; color: #cbd5e1; line-height: 1.45;">
+            Doğrulama kodu <strong id="gate-otp-target-email" style="color: #38bdf8;"></strong> adresinize gönderildi.
           </p>
         </div>
 
-        <!-- Gmail Gelen Kutusu Bilgilendirme Kutusu (Kod ekranda yazmaz, mail.google.com gelen kutusuna gider) -->
+        <!-- Gmail Gelen Kutusu Bilgilendirme Kutusu (FormSubmit / mail.google.com) -->
         <div id="gate-otp-delivery-notice" style="margin-bottom: 16px; font-size: 0.85rem; line-height: 1.5; border: 1px solid #3b82f6; background: rgba(15, 23, 42, 0.85); border-radius: 8px; padding: 14px; text-align: center;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <span style="font-weight: 700; color: #60a5fa;">📬 Gmail Gelen Kutunuzu Kontrol Edin</span>
@@ -511,7 +525,7 @@
           <button type="button" class="quick-link-card" data-nav-screen="shop">
             <span class="ql-icon">🛒</span>
             <div class="ql-info">
-              <strong># MAĞAZA</strong>
+              <strong>MAĞAZA</strong>
               <span>Zümrüt, Rütbeler, Hediye &amp; Kozmetik</span>
             </div>
           </button>
@@ -558,6 +572,14 @@
               <span class="hud-label">GARANTİ ÖDÜL</span>
               <span class="hud-value gold" id="hud-safe-prize">0 ₺</span>
             </div>
+          </div>
+
+          <!-- Jüri Modu Rozeti (Yalnızca Hakem Modunda Görünür) -->
+          <div id="judge-hud-badge" class="judge-hud-badge hidden">
+            ⚖️ JÜRİ / HAKEM MODU — Doğru cevaplar işaretlenir
+            <button type="button" id="btn-judge-become-player" class="mc-btn mc-btn-sm mc-btn-secondary" style="margin-left:10px;">
+              🎮 Katılımcı Ol
+            </button>
           </div>
 
           <!-- Jokerler ve Çekilme Çubuğu -->
@@ -812,7 +834,7 @@
         <div class="section-header-bar">
           <div>
             <span class="section-eyebrow">🛒 BİRLEŞİK PLATFORM MAĞAZASI</span>
-            <h2># MAĞAZA</h2>
+            <h2>MAĞAZA</h2>
           </div>
           <div class="shop-balance-bar">
             <div class="shop-currency-chip emerald-chip">
@@ -982,6 +1004,14 @@
               </form>
               <p class="input-hint">Davet edilen oyuncuya anında bildirim gönderilir.</p>
             </div>
+          </div>
+
+          <!-- Katılımcı / Südye Rol Değiştirme Butonu (Yalnızca Lider Görür) -->
+          <div id="party-host-role-toggle-row" class="hidden" style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:0.88rem;color:#94a3b8;">Maçtaki rolün:</span>
+            <button type="button" id="btn-toggle-host-role" class="mc-btn mc-btn-gold mc-btn-sm">
+              ⚖️ Şu an Jüri Modundasın — Katılımcı Ol
+            </button>
           </div>
         </div>
 
@@ -1259,7 +1289,7 @@
               <li>Tüm oyuncular rütbelerine göre artan <strong>Günlük Zümrüt Ödülü</strong> alır: <strong>Üye (+50)</strong>, <strong>VIP (+100)</strong>, <strong>VIP+ (+200)</strong>, <strong>MVIP (+350)</strong>, <strong>MVIP+ (+500)</strong>.</li>
               <li>İlk kez <strong>VIP</strong> olan oyunculara tek seferlik <strong>+50 Netherite</strong>, en az <strong>VIP+</strong> (VIP+, MVIP veya MVIP+) rütbesine yükselen oyunculara tek seferlik <strong>+250 Netherite</strong> ilk alım bonusu verilir! (Normal üyeler için başlangıç bonusu verilmez).</li>
               <li><strong>VIP+ (+25/gün)</strong>, <strong>MVIP (+50/gün)</strong> ve <strong>MVIP+ (+100/gün)</strong> rütbeli oyuncular her 24 saatte bir ücretsiz <strong>Günlük Netherite Ödülü</strong> de alır.</li>
-              <li><strong># MAĞAZA</strong> üzerinden rütbe satın alabilir veya <strong>🎁 Arkadaşına Hediye Et</strong> ile arkadaşınıza rütbe gönderebilirsiniz!</li>
+              <li><strong>MAĞAZA</strong> üzerinden rütbe satın alabilir veya <strong>🎁 Arkadaşına Hediye Et</strong> ile arkadaşınıza rütbe gönderebilirsiniz!</li>
             </ul>
           </div>
         </div>

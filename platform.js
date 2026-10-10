@@ -686,6 +686,12 @@
     targetEl.classList.add('active');
     state.currentScreen = screenKey;
 
+    if (screenKey === 'game') {
+      document.body.classList.add('screen-game-active');
+    } else {
+      document.body.classList.remove('screen-game-active');
+    }
+
     // Çekmecedeki aktif öğeyi işaretle
     document.querySelectorAll('.drawer-item[data-nav-screen]').forEach(btn => {
       btn.classList.toggle('active', btn.getAttribute('data-nav-screen') === screenKey);
@@ -1897,6 +1903,29 @@
         startBtn.innerHTML = isLeader
           ? `${mcIcon('SWORD', 16)} Parti Maçını Başlat`
           : '⏳ Parti Liderinin Başlatması Bekleniyor';
+      }
+
+      // Rol toggle butonu: Yalnızca lider görür
+      const roleToggleRow = document.getElementById('party-host-role-toggle-row');
+      const roleToggleBtn = document.getElementById('btn-toggle-host-role');
+      if (roleToggleRow) {
+        if (isLeader) {
+          roleToggleRow.classList.remove('hidden');
+          roleToggleRow.style.display = 'flex';
+        } else {
+          roleToggleRow.classList.add('hidden');
+          roleToggleRow.style.display = 'none';
+        }
+      }
+      const currentHostRole = activeParty.hostRole || 'JUDGE';
+      if (roleToggleBtn) {
+        if (currentHostRole === 'JUDGE') {
+          roleToggleBtn.innerHTML = '⚖️ Şu an Jüri Modundasın — Katılımcı Ol';
+          roleToggleBtn.title = 'Katılımcı olarak maça gir';
+        } else {
+          roleToggleBtn.innerHTML = '🎮 Şu an Katılımcısın — Jüri Ol';
+          roleToggleBtn.title = 'Jüri/hakem moduna geç (doğru cevapları görürsün)';
+        }
       }
 
       const membersList = document.getElementById('party-members-list');
@@ -3828,19 +3857,91 @@
       }
     });
 
+    // Lider: Katılımcı Ol / Jüri Ol Geçiş Butonu
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('#btn-toggle-host-role');
+      if (!btn) return;
+      const session = getSession();
+      if (!session) return;
+      const activeParty = svc().partyService.getActivePartyForUser(session.username);
+      if (!activeParty) return;
+      const isLeader =
+        activeParty.leaderUsername.toLowerCase() === session.username.toLowerCase() ||
+        session.isAdminSession;
+      if (!isLeader) return;
+      const currentRole = activeParty.hostRole || 'JUDGE';
+      const newRole = currentRole === 'JUDGE' ? 'PLAYER' : 'JUDGE';
+      try {
+        svc().partyService.setPartyHostRole(session, activeParty.partyId, newRole);
+        svc().cloudSyncService?.pushNow();
+        showToast(
+          newRole === 'JUDGE'
+            ? '⚖️ Jüri moduna geçildi. Doğru cevapları göreceksiniz.'
+            : '🎮 Katılımcı moduna geçildi. Diğer oyuncular gibi yarışacaksınız.',
+          'success'
+        );
+        renderParty();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Oyun sırasında: Jüri modundan Katılımcı moduna geç butonu
+    document.addEventListener('click', e => {
+      if (e.target.closest('#btn-judge-become-player')) {
+        const session = getSession();
+        if (!session) return;
+        const activeParty = svc().partyService.getActivePartyForUser(session.username);
+        if (!activeParty) return;
+        try {
+          svc().partyService.setPartyHostRole(session, activeParty.partyId, 'PLAYER');
+          svc().cloudSyncService?.pushNow();
+          // Jüri rozetini gizle
+          document.getElementById('judge-hud-badge')?.classList.add('hidden');
+          // Cevap butonlarını tekrar etkinleştir
+          for (let i = 0; i < 4; i++) {
+            const ab = document.getElementById(`ans-${i}`);
+            if (ab) {
+              ab.disabled = false;
+              ab.classList.remove('judge-correct-ans');
+            }
+          }
+          showToast('🎮 Artık katılımcı olarak oynuyorsunuz!', 'success');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      }
+    });
+
     document.getElementById('btn-party-start-match')?.addEventListener('click', () => {
       const session = getSession();
       if (!session) return;
       const activeParty = svc().partyService.getActivePartyForUser(session.username);
       if (!activeParty) return;
       try {
-        svc().partyService.startPartyMatch(session, activeParty.partyId);
+        // Soruları üret ve servise ilet
+        const questions = typeof window.buildMatchQuestions === 'function'
+          ? window.buildMatchQuestions()
+          : null;
+        svc().partyService.startPartyMatch(session, activeParty.partyId, { questions: questions || [] });
         svc().cloudSyncService?.pushNow();
         showToast('⚔️ Parti maçı başlatıldı!', 'success');
-        if (typeof window.startNewGameSession === 'function') {
-          window.startNewGameSession(true);
+
+        // Lider jüri modunda mı, yoksa katılımcı olarak mı?
+        const updatedParty = svc().partyService.getActivePartyForUser(session.username);
+        const hostRole = updatedParty?.hostRole || 'JUDGE';
+        if (hostRole === 'JUDGE') {
+          // Jüri modu: sorular açık, lider cevap veremez
+          if (typeof window.startPartyJudgeSession === 'function') {
+            window.startPartyJudgeSession(updatedParty);
+          } else if (typeof window.startNewGameSession === 'function') {
+            window.startNewGameSession(true);
+          }
         } else {
-          document.getElementById('btn-start-game')?.click();
+          // Katılımcı modu: normal oyun gibi başlat
+          if (typeof window.startNewGameSession === 'function') {
+            window.startNewGameSession(true);
+          }
         }
       } catch (err) {
         showToast(err.message, 'error');
@@ -4784,6 +4885,55 @@
         if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && activeTag !== 'SELECT') {
           renderAdmin();
         }
+      }
+
+      // ======================================================
+      // PARTİ MAÇ SENKRONİZASYONU: Lider maçı başlattığında
+      // diğer oyuncuların ekranında da otomatik başlat
+      // ======================================================
+      if (!currentSess) return;
+      try {
+        const activeParty = svc().partyService?.getActivePartyForUser(currentSess.username);
+        if (activeParty && activeParty.status === 'IN_GAME' && activeParty.matchId) {
+          const isLeader =
+            activeParty.leaderUsername.toLowerCase() === currentSess.username.toLowerCase() ||
+            currentSess.isAdminSession;
+
+          // Şu an bir oyun oynuyor mu kontrol et
+          const gameAlreadyActive = window.MCMGameState?.active === true;
+          const lastStartedMatchId = window._lastStartedMatchId || '';
+
+          if (!gameAlreadyActive && lastStartedMatchId !== activeParty.matchId) {
+            // Bu maç henüz başlatılmamış
+            window._lastStartedMatchId = activeParty.matchId;
+
+            if (isLeader && activeParty.hostRole === 'JUDGE') {
+              // Lider + Jüri modu: Jüri oturumu başlat
+              if (typeof window.startPartyJudgeSession === 'function') {
+                window.startPartyJudgeSession(activeParty);
+              } else if (typeof window.startNewGameSession === 'function') {
+                window.startNewGameSession(true);
+              }
+            } else if (!isLeader) {
+              // Katılımcı: Parti sorularını kullanarak oyunu başlat
+              if (typeof window.startPartyGameSession === 'function') {
+                window.startPartyGameSession(activeParty);
+              } else if (typeof window.startNewGameSession === 'function') {
+                showToast('⚔️ Parti maçı başladı! Oyuna giriyorsunuz...', 'success', 2000);
+                setTimeout(() => {
+                  window.startNewGameSession(true);
+                }, 800);
+              }
+            } else if (isLeader && activeParty.hostRole === 'PLAYER') {
+              // Lider + Katılımcı modu
+              if (typeof window.startNewGameSession === 'function') {
+                window.startNewGameSession(true);
+              }
+            }
+          }
+        }
+      } catch (_e) {
+        // Senkronizasyon hatası sessizce yutulur
       }
     });
 

@@ -397,6 +397,60 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
       console.log('✓ VIP+ rütbesine yükselen kullanıcı toplam 250 Netherite bonusuna ulaştı.');
     }
 
+    // ====================================================
+    // TEST 9: Parti Maçı Eşzamanlı Başlatma & Jüri / Katılımcı Rolü
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 9: Parti Maçı Senkronizasyonu & Jüri/Katılımcı Rolü');
+    console.log('====================================================');
+
+    const partyService = window.MCMServices.partyService;
+
+    // 9.1: Lider parti kurar
+    const pLeaderSession = await authService.login({ username: 'RegularPlayer', password: 'playerpass123' });
+    const createdParty = partyService.createParty(pLeaderSession, 'Turnuva Odası 1');
+    assert.strictEqual(createdParty.leaderUsername, 'RegularPlayer', 'Lider RegularPlayer olmalıdır.');
+    assert.strictEqual(createdParty.hostRole, 'JUDGE', 'Yeni partide lider varsayılan olarak JUDGE (Jüri) rolünde olmalıdır.');
+    console.log('✓ Lider partiyi kurdu ve varsayılan rolü JUDGE (Jüri) olarak atandı.');
+
+    // 9.2: Lider rolünü PLAYER (Katılımcı) olarak değiştirir, sonra tekrar JUDGE yapar
+    partyService.setPartyHostRole(pLeaderSession, createdParty.partyId, 'PLAYER');
+    let fetchedParty = partyService.getAllParties().find(p => p.partyId === createdParty.partyId);
+    assert.strictEqual(fetchedParty.hostRole, 'PLAYER', 'Rol PLAYER olarak güncellenmelidir.');
+    console.log('✓ Lider başarıyla Katılımcı (PLAYER) rolüne geçiş yaptı.');
+
+    partyService.setPartyHostRole(pLeaderSession, createdParty.partyId, 'JUDGE');
+    fetchedParty = partyService.getAllParties().find(p => p.partyId === createdParty.partyId);
+    assert.strictEqual(fetchedParty.hostRole, 'JUDGE', 'Rol tekrar JUDGE olarak güncellenmelidir.');
+    console.log('✓ Lider başarıyla tekrar Jüri (JUDGE) rolüne geçiş yaptı.');
+
+    // 9.3: İkinci oyuncu partiye katılır
+    const pMemberSession = await authService.login({ username: 'ModeratorTest', password: 'modpass123' });
+    partyService.joinPartyByCode(pMemberSession, createdParty.partyCode);
+    fetchedParty = partyService.getAllParties().find(p => p.partyId === createdParty.partyId);
+    assert.strictEqual(fetchedParty.members.length, 2, 'Partide 2 üye bulunmalıdır.');
+    console.log('✓ İkinci oyuncu partiye başarıyla katıldı.');
+
+    // 9.4: Normal üye maçı başlatamaz
+    let throwCount = 0;
+    try {
+      partyService.startPartyMatch(pMemberSession, createdParty.partyId);
+    } catch (e) {
+      throwCount++;
+    }
+    assert.strictEqual(throwCount, 1, 'Lider olmayan oyuncunun maç başlatması engellenmelidir.');
+    console.log('✓ Lider olmayan oyuncunun maçı başlatması başarıyla engellendi.');
+
+    // 9.5: Lider maçı ortak sorularla başlatır
+    const sampleQuestions = [{ q: 'Soru 1', options: ['A','B','C','D'], answer: 0 }];
+    const startedMatch = partyService.startPartyMatch(pLeaderSession, createdParty.partyId, {
+      questions: sampleQuestions
+    });
+    assert.strictEqual(startedMatch.status, 'IN_GAME', 'Parti durumu IN_GAME olmalıdır.');
+    assert(startedMatch.matchId, 'Parti için benzersiz matchId üretilmelidir.');
+    assert.strictEqual(startedMatch.matchQuestions.length, 1, 'Ortak sorular partiye kaydedilmelidir.');
+    console.log('✓ Lider maçı başlattı: Ortak sorular, benzersiz matchId ve IN_GAME durumu tüm katılımcılara sunuldu.');
+
     console.log('\n====================================================');
     console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆');
     console.log('====================================================\n');

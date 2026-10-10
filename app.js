@@ -282,50 +282,112 @@
       }
     },
 
+    playNoise(duration = 0.3, filterFreq = 1000, gainVal = 0.1, filterType = 'lowpass') {
+      const toggle = document.getElementById('setting-sound-toggle');
+      if (toggle && !toggle.checked) return;
+      try {
+        this.init();
+        if (!this.ctx) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const bufferSize = this.ctx.sampleRate * duration;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = filterType;
+        filter.frequency.setValueAtTime(filterFreq, this.ctx.currentTime);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        noise.start();
+      } catch (e) {
+        // ignore
+      }
+    },
+
+    // 1. Minecraft Ahşap Düğme Tıklaması (Wood Button Click)
     click() {
-      this.playTone(520, 0.06, 'triangle', 0.06);
+      this.playTone(480, 0.04, 'triangle', 0.09);
+      setTimeout(() => this.playTone(280, 0.05, 'square', 0.06), 25);
     },
 
+    // 2. Minecraft XP Küresi Alma & Doğru Cevap (XP Orb Pickup)
     correct() {
-      this.playTone(587.33, 0.12, 'sine', 0.09);
-      setTimeout(() => this.playTone(880, 0.22, 'sine', 0.1), 110);
+      // Yükselen ışıltılı XP küresi tınısı
+      this.playTone(659.25, 0.09, 'triangle', 0.1);
+      setTimeout(() => this.playTone(880.00, 0.11, 'sine', 0.11), 80);
+      setTimeout(() => this.playTone(1318.51, 0.18, 'sine', 0.12), 170);
     },
 
+    // 3. Minecraft Hasar & Tok Blok Kırılması (Damage Hit / Block Break)
     wrong() {
-      this.playTone(220, 0.25, 'sawtooth', 0.08);
-      setTimeout(() => this.playTone(165, 0.35, 'sawtooth', 0.08), 160);
+      this.playTone(160, 0.18, 'sawtooth', 0.12);
+      this.playNoise(0.22, 450, 0.14, 'lowpass');
+      setTimeout(() => {
+        this.playTone(95, 0.28, 'square', 0.1);
+      }, 90);
     },
 
+    // 4. Minecraft Level Up (Seviye Atlama Zafer Efekti)
     win() {
-      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-        setTimeout(() => this.playTone(f, 0.18, 'triangle', 0.1), i * 110);
-      });
-    },
-
-    creeperHissAndBoom() {
-      // Tsssss fuse + explosion
-      [380, 440, 520, 620].forEach((f, i) => {
-        setTimeout(() => this.playTone(f, 0.08, 'sawtooth', 0.045), i * 75);
+      const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98];
+      notes.forEach((f, i) => {
+        setTimeout(() => this.playTone(f, 0.22, 'triangle', 0.12), i * 95);
       });
       setTimeout(() => {
-        this.playTone(110, 0.32, 'square', 0.11);
-        this.playTone(75, 0.38, 'sawtooth', 0.1);
-      }, 340);
+        this.playTone(2093.00, 0.55, 'sine', 0.15);
+      }, 620);
     },
 
+    // 5. Gerçekçi Minecraft Creeper Tıslaması + Patlaması (Hiss + Boom)
+    creeperHissAndBoom() {
+      // Tsssssssss (Yüksek frekanslı beyaz gürültü tıslaması)
+      this.playNoise(0.65, 4200, 0.12, 'highpass');
+      [1200, 1600, 2100].forEach((f, i) => {
+        setTimeout(() => this.playTone(f, 0.15, 'sawtooth', 0.035), i * 140);
+      });
+
+      // BOOM! (Düşük frekanslı derin patlama gürültüsü)
+      setTimeout(() => {
+        this.playNoise(0.55, 300, 0.25, 'lowpass');
+        this.playTone(60, 0.48, 'square', 0.2);
+        this.playTone(45, 0.65, 'sawtooth', 0.16);
+      }, 550);
+    },
+
+    // 6. Gerçekçi Minecraft Enderman Işınlanması (Portal Vwooop & Stare)
     endermanTeleport() {
-      // Ender pearl / Enderman vwoop
-      this.playTone(740, 0.09, 'sine', 0.08);
-      setTimeout(() => this.playTone(310, 0.12, 'triangle', 0.09), 70);
-      setTimeout(() => this.playTone(590, 0.14, 'sine', 0.08), 160);
+      // Rezonanslı warp frekans kayması
+      this.playTone(240, 0.18, 'sine', 0.1);
+      setTimeout(() => this.playTone(850, 0.14, 'sawtooth', 0.08), 60);
+      setTimeout(() => this.playTone(420, 0.22, 'triangle', 0.09), 160);
+      this.playNoise(0.35, 1800, 0.06, 'bandpass');
     },
 
+    // 7. Gerçekçi Minecraft Köylü "Huuuuurmm!" Homurtusu + Zümrüt Çınlaması
     villagerHrmmm() {
-      // Iconic Villager "Hrmmm!" + emerald chime
-      this.playTone(235, 0.14, 'triangle', 0.09);
-      setTimeout(() => this.playTone(275, 0.18, 'triangle', 0.09), 110);
-      setTimeout(() => this.playTone(220, 0.16, 'sine', 0.08), 240);
-      setTimeout(() => this.playTone(987.77, 0.15, 'sine', 0.07), 380);
+      // Burundan gelen karakteristik "Huuuuurmm"
+      this.playTone(185, 0.22, 'sawtooth', 0.11);
+      setTimeout(() => this.playTone(150, 0.26, 'triangle', 0.12), 120);
+      setTimeout(() => this.playTone(125, 0.18, 'sawtooth', 0.08), 260);
+
+      // Zümrüt takas çınlaması (Ding!)
+      setTimeout(() => {
+        this.playTone(1174.66, 0.25, 'sine', 0.1);
+      }, 380);
     }
   };
 
@@ -335,6 +397,8 @@
   const gameState = {
     active: false,
     isPartyMatch: false,
+    isJudgeMode: false,
+    activeMatchId: null,
     questions: [],
     currentIndex: 0,
     currentPrize: 0,
@@ -350,6 +414,9 @@
       villager: true
     }
   };
+
+  // Parti senkronizasyonu için gameState'i global'e aktar
+  window.MCMGameState = gameState;
 
   function svc() {
     return window.MCMServices || {};
@@ -512,6 +579,8 @@
 
     gameState.active = true;
     gameState.isPartyMatch = Boolean(isParty);
+    gameState.isJudgeMode = false;
+    gameState.activeMatchId = null;
     gameState.questions = buildMatchQuestions();
     gameState.currentIndex = 0;
     gameState.currentPrize = 0;
@@ -536,9 +605,104 @@
       }
     });
 
+    // Jüri HUD badge gizle
+    document.getElementById('judge-hud-badge')?.classList.add('hidden');
+
+    document.body.classList.add('screen-game-active');
     window.MCMPlatform?.navigateToScreen('game');
     loadQuestionOnStage();
   }
+
+  // Parti Jüri (Hakem) Oturumu: Lider doğru cevapları görür, cevap veremez
+  function startPartyJudgeSession(party) {
+    const session = svc().authService?.getActiveSession();
+    if (!session) return;
+
+    soundEngine.click();
+    stopQuestionTimer();
+
+    const matchQs = Array.isArray(party?.matchQuestions) && party.matchQuestions.length > 0
+      ? party.matchQuestions
+      : buildMatchQuestions();
+
+    gameState.active = true;
+    gameState.isPartyMatch = true;
+    gameState.isJudgeMode = true;
+    gameState.activeMatchId = party?.matchId || null;
+    gameState.questions = matchQs;
+    gameState.currentIndex = 0;
+    gameState.currentPrize = 0;
+    gameState.safePrize = 0;
+    gameState.emeraldEarnedThisMatch = 0;
+    gameState.streak = 0;
+    gameState.extraLifeUsedInMatch = false;
+    gameState.lifelines = { fifty: false, audience: false, villager: false };
+
+    // Jokerler hakem modunda kullanılamaz
+    ['lifeline-5050', 'lifeline-audience', 'lifeline-villager'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('used');
+      }
+    });
+
+    // Jüri HUD badge göster
+    document.getElementById('judge-hud-badge')?.classList.remove('hidden');
+
+    document.body.classList.add('screen-game-active');
+    window.MCMPlatform?.navigateToScreen('game');
+    loadQuestionOnStage();
+  }
+
+  // Parti Katılımcı Oturumu: Diğer oyuncular ortak sorularla oynar
+  function startPartyGameSession(party) {
+    const session = svc().authService?.getActiveSession();
+    if (!session) return;
+
+    soundEngine.click();
+    stopQuestionTimer();
+
+    const matchQs = Array.isArray(party?.matchQuestions) && party.matchQuestions.length > 0
+      ? party.matchQuestions
+      : buildMatchQuestions();
+
+    gameState.active = true;
+    gameState.isPartyMatch = true;
+    gameState.isJudgeMode = false;
+    gameState.activeMatchId = party?.matchId || null;
+    gameState.questions = matchQs;
+    gameState.currentIndex = 0;
+    gameState.currentPrize = 0;
+    gameState.safePrize = 0;
+    gameState.emeraldEarnedThisMatch = 0;
+    gameState.streak = 0;
+    gameState.extraLifeUsedInMatch = false;
+    gameState.lifelines = { fifty: true, audience: true, villager: true };
+
+    svc().aiQuestionService?.ensureFreshQuestionsForMatch?.(gameState);
+
+    ['lifeline-5050', 'lifeline-audience', 'lifeline-villager'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('used');
+      }
+    });
+
+    // Jüri HUD badge gizle
+    document.getElementById('judge-hud-badge')?.classList.add('hidden');
+
+    document.body.classList.add('screen-game-active');
+    window.MCMPlatform?.navigateToScreen('game');
+    loadQuestionOnStage();
+  }
+
+  // Global erişim
+  window.startNewGameSession = startNewGameSession;
+  window.startPartyJudgeSession = startPartyJudgeSession;
+  window.startPartyGameSession = startPartyGameSession;
+  window.buildMatchQuestions = buildMatchQuestions;
 
   function loadQuestionOnStage() {
     stopQuestionTimer();
@@ -587,6 +751,21 @@
       btn.className = 'answer-btn';
       const txtSpan = btn.querySelector('.ans-text');
       if (txtSpan) txtSpan.textContent = qObj.options[i];
+    }
+
+    // Jüri Modu: Doğru cevabı işaretle, tüm butonları devre dışı bırak
+    if (gameState.isJudgeMode) {
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`ans-${i}`);
+        if (!btn) continue;
+        btn.disabled = true;
+        if (i === qObj.answer) {
+          btn.classList.add('judge-correct-ans');
+        }
+      }
+      renderPrizeLadder();
+      // Jüri modunda timer yoktur; otomatik ilerle
+      return;
     }
 
     renderPrizeLadder();
@@ -804,6 +983,7 @@
     if (emEl) emEl.textContent = `+${gameState.emeraldEarnedThisMatch.toLocaleString('tr-TR')} 🟢`;
     if (expEl) expEl.textContent = explanation || '';
 
+    document.body.classList.remove('screen-game-active');
     window.MCMPlatform?.syncHeaderAndDrawer();
     window.MCMPlatform?.navigateToScreen('gameover');
   }
@@ -1191,6 +1371,7 @@
         otpData = svc().authService.generateOtp(currentOtpEmail);
       }
 
+      currentOtpCode = otpData?.code || '';
       startOtpCountdown(otpData.expiresAt);
 
       const tipEl = document.getElementById('gate-otp-status-tip');
@@ -1405,6 +1586,17 @@
         }
       } catch (err) {
         renderGateErrorWithCopyButton(errEl, err.message);
+      }
+    });
+
+    // En Üst Kodu Kopyala Butonu (#btn-gate-copy-otp-top)
+    document.getElementById('btn-gate-copy-otp-top')?.addEventListener('click', () => {
+      const inputVal = document.getElementById('gate-otp-input')?.value || '';
+      const toCopy = currentOtpCode || inputVal;
+      if (toCopy) {
+        copyCodeToClipboard(toCopy);
+      } else {
+        window.MCMPlatform?.showToast('⚠️ Henüz kopyalanacak onay kodu oluşmadı.', 'info');
       }
     });
 
