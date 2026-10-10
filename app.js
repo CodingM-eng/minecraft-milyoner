@@ -2298,7 +2298,7 @@
     },
     creeper: {
       badge: '💥 CREEPER MEYDAN OKUMASI',
-      title: 'CREEPER SORULARI HAZIRDIR! GÖRƏK, NƏ QƏDƏR BİLİRSƏN!',
+      title: 'CREEPER SORULARI HAZIR! BAKALIM NE KADAR BİLİYORSUN!',
       subtitle: 'Tssss... Yanlış cevap verirsen patlayabilirsin! Hazır mısın?',
       themeClass: 'theme-creeper',
       actionText: '💥 MEYDAN OKUMAYI KABUL ET',
@@ -2318,7 +2318,7 @@
     },
     allay: {
       badge: '🧚 ALLAY YARDIM MELEĞİ',
-      title: 'ALLAY YARDIMA HAZIRDIR! SUNUCUYA SOR VE YARDIM AL!',
+      title: 'ALLAY YARDIMA HAZIR! SUNUCUYA SOR VE YARDIM AL!',
       subtitle: 'Allay senin için sunucudaki en popüler cevapları toplayacak ve ipucu getirecek!',
       themeClass: 'theme-allay',
       actionText: '👥 YARDIM AL & YARIŞMAYA GİR',
