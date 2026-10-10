@@ -1464,31 +1464,65 @@
       }
     });
 
-    // 2. Normal Kullanıcı Kaydı (#1: Lisans Kodu Yok, #4: İsteğe Bağlı MC Adı, #14: +250 Netherite)
+    // 2. Normal Kullanıcı Kaydı (E-posta ile OTP Doğrulaması)
+    let pendingRegistrationData = null;
+
     regForm?.addEventListener('submit', async e => {
       e.preventDefault();
       const errEl = document.getElementById('gate-reg-error');
       errEl?.classList.add('hidden');
 
       const username = document.getElementById('gate-reg-username')?.value || '';
+      const email = document.getElementById('gate-reg-email')?.value || '';
       const minecraftPlayerName = document.getElementById('gate-reg-mc-name')?.value || '';
       const password = document.getElementById('gate-reg-password')?.value || '';
       const passwordConfirm = document.getElementById('gate-reg-password-confirm')?.value || '';
 
+      const cleanUser = String(username || '').trim();
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const rawPass = String(password || '');
+      const rawConfirm = String(passwordConfirm || '');
+
+      if (!cleanUser || cleanUser.length < 3 || cleanUser.length > 20) {
+        renderGateErrorWithCopyButton(errEl, 'Kullanıcı adı 3 ile 20 karakter arasında olmalıdır.');
+        return;
+      }
+      if (!/^[a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]+$/.test(cleanUser)) {
+        renderGateErrorWithCopyButton(errEl, 'Kullanıcı adı yalnızca harf, rakam ve alt çizgi (_) içerebilir.');
+        return;
+      }
+      if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+        renderGateErrorWithCopyButton(errEl, 'Lütfen geçerli bir e-posta adresi girin.');
+        return;
+      }
+      if (svc().userService.getUserByUsername(cleanUser)) {
+        renderGateErrorWithCopyButton(errEl, 'Bu kullanıcı adı zaten alınmış. Lütfen başka bir ad seçin.');
+        return;
+      }
+      if (svc().userService.getUserByEmail(cleanEmail)) {
+        renderGateErrorWithCopyButton(errEl, 'Bu e-posta adresi ile zaten kayıtlı bir hesap bulunmaktadır.');
+        return;
+      }
+      if (rawPass.length < 4) {
+        renderGateErrorWithCopyButton(errEl, 'Şifreniz en az 4 karakter olmalıdır.');
+        return;
+      }
+      if (rawPass !== rawConfirm) {
+        renderGateErrorWithCopyButton(errEl, 'Girdiğiniz şifreler birbiriyle eşleşmiyor.');
+        return;
+      }
+
+      // Kayıt verilerini sakla ve OTP ekranını aç
+      pendingRegistrationData = {
+        username: cleanUser,
+        email: cleanEmail,
+        minecraftPlayerName,
+        password: rawPass,
+        passwordConfirm: rawConfirm
+      };
+
       try {
-        const session = await svc().authService.registerAccount({
-          username,
-          password,
-          passwordConfirm,
-          minecraftPlayerName
-        });
-        gate?.classList.add('hidden');
-        window.MCMPlatform?.syncHeaderAndDrawer();
-        window.MCMPlatform?.navigateToScreen('welcome');
-        window.MCMPlatform?.showToast(
-          `🎉 Hoş geldin ${session.username}! Günlük ücretsiz Zümrüt ödülünü Ana Sayfadan hemen alabilirsin!`,
-          'success'
-        );
+        await launchOtpScreen(cleanEmail, true, '');
       } catch (err) {
         renderGateErrorWithCopyButton(errEl, err.message);
       }
@@ -1550,7 +1584,28 @@
       try {
         await svc().authService.verifyOtp(currentOtpEmail, inputCode);
 
-        // Kullanıcı bu Gmail ile daha önce kayıt olmuş mu?
+        // Eğer klasik kayıt formundan gelinmişse bekleyen kayıt verilerini kullanarak doğrudan kaydet
+        if (pendingRegistrationData && pendingRegistrationData.email === currentOtpEmail) {
+          const session = await svc().authService.registerAccount({
+            username: pendingRegistrationData.username,
+            email: pendingRegistrationData.email,
+            password: pendingRegistrationData.password,
+            passwordConfirm: pendingRegistrationData.passwordConfirm,
+            minecraftPlayerName: pendingRegistrationData.minecraftPlayerName,
+            emailVerified: true
+          });
+          pendingRegistrationData = null;
+          gate?.classList.add('hidden');
+          window.MCMPlatform?.syncHeaderAndDrawer();
+          window.MCMPlatform?.navigateToScreen('welcome');
+          window.MCMPlatform?.showToast(
+            `🎉 Hesabınız başarıyla doğrulandı ve oluşturuldu! Hoş geldin, ${session.username}!`,
+            'success'
+          );
+          return;
+        }
+
+        // Kullanıcı bu e-posta ile daha önce kayıt olmuş mu?
         const existingUser = svc().userService.getUserByEmail(currentOtpEmail);
         if (existingUser) {
           // Zaten kayıtlı kullanıcı -> Doğrudan oturum aç
@@ -1862,10 +1917,161 @@
     }
   }
 
+  // ==========================================
+  // FAZ 8: 4 MOB ÖZEL YARIŞMA TANITIM SAHNESİ
+  // ==========================================
+  const MOB_INTRO_CONFIG = {
+    enderman: {
+      badge: '🔮 ENDER YARIŞMA REHBERİ',
+      title: 'YARIŞMA BAŞLADI! İYİ EĞLENCELER!',
+      subtitle: 'Enderman gözlerini dikti ve soruları ışınladı! Dikkatini topla ve zümrütleri topla!',
+      themeClass: 'theme-enderman',
+      actionText: '🔮 YARIŞMAYA BAŞLA',
+      sound: () => soundEngine.endermanTeleport(),
+      svg: `<svg class="mob-pixel-svg enderman-svg" viewBox="0 0 16 30" style="width:120px;height:210px;" shape-rendering="crispEdges">
+              <rect x="4" y="1" width="8" height="8" fill="#111118" />
+              <rect x="4" y="4" width="3" height="1" fill="#f5d0fe" />
+              <rect x="5" y="4" width="1" height="1" fill="#d946ef" />
+              <rect x="9" y="4" width="3" height="1" fill="#f5d0fe" />
+              <rect x="10" y="4" width="1" height="1" fill="#d946ef" />
+              <rect x="5" y="9" width="6" height="8" fill="#161622" />
+              <rect class="mob-arm-l" x="3" y="9" width="2" height="13" fill="#0d0d14" />
+              <rect class="mob-arm-r" x="11" y="9" width="2" height="13" fill="#0d0d14" />
+              <rect class="mob-leg-l" x="6" y="17" width="1.8" height="12" fill="#0d0d14" />
+              <rect class="mob-leg-r" x="8.2" y="17" width="1.8" height="12" fill="#0d0d14" />
+            </svg>`,
+      onAction: () => startNewGameSession(false)
+    },
+    villager: {
+      badge: '📖 BİLGE KÖYLÜ KARŞILAMASI',
+      title: 'KÖYLÜ SİZİ BEKLİYOR! HAYDİ, YARIŞMAYA BAŞLAYALIM!',
+      subtitle: 'Bilge Köylü zümrütlerini hazırladı! Her doğru cevap seni büyük zümrüt ödülüne yaklaştıracak.',
+      themeClass: 'theme-villager',
+      actionText: '📖 KÖYLÜYLE YARIŞMAYA BAŞLA',
+      sound: () => soundEngine.villagerHrmmm(),
+      svg: `<svg class="mob-pixel-svg villager-svg" viewBox="0 0 16 24" style="width:120px;height:180px;" shape-rendering="crispEdges">
+              <rect x="3" y="0" width="10" height="3" fill="#991b1b" />
+              <rect x="4" y="2" width="8" height="1" fill="#fbbf24" />
+              <rect x="4" y="3" width="8" height="7" fill="#d4946a" />
+              <rect x="4" y="5" width="8" height="1" fill="#78350f" />
+              <rect x="5" y="6" width="2" height="2" fill="#16a34a" />
+              <rect x="9" y="6" width="2" height="2" fill="#16a34a" />
+              <rect x="7" y="7" width="2" height="5" fill="#b5764e" />
+              <rect x="4" y="10" width="8" height="10" fill="#78350f" />
+              <rect x="3" y="11" width="10" height="4" fill="#a16207" />
+              <rect x="5" y="20" width="2" height="4" fill="#451a03" />
+              <rect x="9" y="20" width="2" height="4" fill="#451a03" />
+            </svg>`,
+      onAction: () => startNewGameSession(false)
+    },
+    creeper: {
+      badge: '💥 CREEPER MEYDAN OKUMASI',
+      title: 'CREEPER SORULARI HAZIRDIR! GÖRƏK, NƏ QƏDƏR BİLİRSƏN!',
+      subtitle: 'Tssss... Yanlış cevap verirsen patlayabilirsin! Hazır mısın?',
+      themeClass: 'theme-creeper',
+      actionText: '💥 MEYDAN OKUMAYI KABUL ET',
+      sound: () => soundEngine.creeperHissAndBoom(),
+      svg: `<svg class="mob-pixel-svg creeper-svg" viewBox="0 0 16 24" style="width:120px;height:180px;" shape-rendering="crispEdges">
+              <rect x="4" y="1" width="8" height="8" fill="#22c55e" />
+              <rect x="5" y="3" width="2" height="2" fill="#0f172a" />
+              <rect x="9" y="3" width="2" height="2" fill="#0f172a" />
+              <rect x="7" y="5" width="2" height="3" fill="#0f172a" />
+              <rect x="6" y="6" width="1" height="3" fill="#0f172a" />
+              <rect x="9" y="6" width="1" height="3" fill="#0f172a" />
+              <rect x="5" y="9" width="6" height="9" fill="#16a34a" />
+              <rect x="3" y="18" width="4" height="5" fill="#15803d" />
+              <rect x="9" y="18" width="4" height="5" fill="#15803d" />
+            </svg>`,
+      onAction: () => startNewGameSession(false)
+    },
+    allay: {
+      badge: '🧚 ALLAY YARDIM MELEĞİ',
+      title: 'ALLAY YARDIMA HAZIRDIR! SUNUCUYA SOR VE YARDIM AL!',
+      subtitle: 'Allay senin için sunucudaki en popüler cevapları toplayacak ve ipucu getirecek!',
+      themeClass: 'theme-allay',
+      actionText: '👥 YARDIM AL & YARIŞMAYA GİR',
+      sound: () => soundEngine.win(),
+      svg: `<svg class="mob-pixel-svg allay-svg" viewBox="0 0 16 18" style="width:110px;height:165px;" shape-rendering="crispEdges">
+              <rect class="mob-wing-l" x="1" y="6" width="4" height="5" fill="#7dd3fc" opacity="0.85" />
+              <rect class="mob-wing-r" x="11" y="6" width="4" height="5" fill="#7dd3fc" opacity="0.85" />
+              <rect x="5" y="2" width="6" height="6" fill="#38bdf8" />
+              <rect x="6" y="5" width="1" height="2" fill="#ffffff" />
+              <rect x="9" y="5" width="1" height="2" fill="#ffffff" />
+              <rect x="6" y="8" width="4" height="6" fill="#0284c7" />
+              <rect x="7" y="14" width="2" height="2" fill="#38bdf8" />
+            </svg>`,
+      onAction: () => {
+        startNewGameSession(false);
+        setTimeout(() => {
+          useAskAudience();
+        }, 600);
+      }
+    }
+  };
+
+  let activeMobIntroKey = null;
+
+  function openMobIntro(mobKey) {
+    const cfg = MOB_INTRO_CONFIG[mobKey] || MOB_INTRO_CONFIG.enderman;
+    activeMobIntroKey = mobKey;
+
+    const modal = document.getElementById('mob-intro-modal');
+    const card = document.getElementById('mob-intro-card');
+    const badgeEl = document.getElementById('mob-intro-badge');
+    const titleEl = document.getElementById('mob-intro-title');
+    const subEl = document.getElementById('mob-intro-subtitle');
+    const charSlot = document.getElementById('mob-intro-character-slot');
+    const actBtn = document.getElementById('btn-mob-intro-action');
+
+    if (badgeEl) badgeEl.textContent = cfg.badge;
+    if (titleEl) titleEl.textContent = cfg.title;
+    if (subEl) subEl.textContent = cfg.subtitle;
+    if (charSlot) charSlot.innerHTML = cfg.svg;
+    if (actBtn) actBtn.innerHTML = cfg.actionText;
+
+    if (card) {
+      card.className = `mob-intro-card ${cfg.themeClass}`;
+    }
+
+    try {
+      cfg.sound();
+    } catch (_e) {}
+
+    modal?.classList.remove('hidden');
+  }
+
+  function closeMobIntro() {
+    const modal = document.getElementById('mob-intro-modal');
+    modal?.classList.add('hidden');
+    activeMobIntroKey = null;
+  }
+
+  function initMobIntroEvents() {
+    document.querySelectorAll('[data-mob-intro]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-mob-intro');
+        openMobIntro(key);
+      });
+    });
+
+    document.getElementById('btn-close-mob-intro')?.addEventListener('click', closeMobIntro);
+
+    document.getElementById('btn-mob-intro-action')?.addEventListener('click', () => {
+      const cfg = MOB_INTRO_CONFIG[activeMobIntroKey];
+      closeMobIntro();
+      if (cfg && typeof cfg.onAction === 'function') {
+        cfg.onAction();
+      } else {
+        startNewGameSession(false);
+      }
+    });
+  }
+
   function initApp() {
     initAccessGate();
     bindGameControls();
     initAmbientMobs();
+    initMobIntroEvents();
     renderPrizeLadder();
   }
 
@@ -1877,6 +2083,8 @@
 
   window.startNewGameSession = startNewGameSession;
   window.handleUserLogout = handleUserLogout;
+  window.openMobIntro = openMobIntro;
+  window.closeMobIntro = closeMobIntro;
   window.refreshWelcomeScreen = function () {
     window.MCMPlatform?.syncHeaderAndDrawer();
   };

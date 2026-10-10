@@ -451,6 +451,72 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.strictEqual(startedMatch.matchQuestions.length, 1, 'Ortak sorular partiye kaydedilmelidir.');
     console.log('✓ Lider maçı başlattı: Ortak sorular, benzersiz matchId ve IN_GAME durumu tüm katılımcılara sunuldu.');
 
+    // ====================================================
+    // TEST 10: E-posta ile Kayıt & Kullanıcı Adı/E-posta ile Giriş
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 10: E-posta ile Kayıt & Kullanıcı Adı/E-posta ile Giriş');
+    console.log('====================================================');
+
+    const emailRegSession = await authService.registerAccount({
+      username: 'EmailPlayer',
+      email: 'player@example.org',
+      password: 'mypassword123',
+      passwordConfirm: 'mypassword123',
+      minecraftPlayerName: 'Alex'
+    });
+    assert.strictEqual(emailRegSession.username, 'EmailPlayer');
+    assert.strictEqual(emailRegSession.email, 'player@example.org');
+    console.log('✓ E-posta ile kullanıcı kaydı başarıyla oluşturuldu.');
+
+    // E-posta ile oturum açma (login with email)
+    const loginWithEmailSession = await authService.login({
+      username: 'player@example.org',
+      password: 'mypassword123'
+    });
+    assert.strictEqual(loginWithEmailSession.username, 'EmailPlayer');
+    console.log('✓ E-posta adresi ile giriş başarıyla doğrulandı.');
+
+    // ====================================================
+    // TEST 11: Profil Kullanıcı Adı Değiştirme
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 11: Profil Kullanıcı Adı Değiştirme');
+    console.log('====================================================');
+
+    await userService.changeUsername(loginWithEmailSession, 'RenamedPlayer');
+    const renamedUser = userService.getUserByUsername('RenamedPlayer');
+    assert(renamedUser, 'Kullanıcı adı RenamedPlayer olarak güncellenmelidir.');
+    assert.strictEqual(userService.getUserByUsername('EmailPlayer'), null, 'Eski ad bulunmamalıdır.');
+    console.log('✓ Kullanıcı adı başarıyla güncellendi (EmailPlayer -> RenamedPlayer).');
+
+    // ====================================================
+    // TEST 12: Bakım Modu (Faz 6) & Günlük Soru Rotasyonu (Faz 5)
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 12: Bakım Modu & Günlük Soru Rotasyonu');
+    console.log('====================================================');
+
+    const maintenanceService = window.MCMServices.maintenanceService;
+    const dailyQuestionService = window.MCMServices.dailyQuestionService;
+
+    assert.strictEqual(maintenanceService.isMaintenanceActive(), false, 'Başlangıçta bakım modu kapalı olmalıdır.');
+    maintenanceService.setMaintenanceMode(adminSession, true, {
+      message: 'Özel test bakımı devam ediyor.'
+    });
+    assert.strictEqual(maintenanceService.isMaintenanceActive(), true, 'Bakım modu aktif olmalıdır.');
+    console.log('✓ Bakım modu ADMIN yetkisiyle başarıyla aktif edildi.');
+
+    maintenanceService.setMaintenanceMode(adminSession, false);
+    assert.strictEqual(maintenanceService.isMaintenanceActive(), false, 'Bakım modu kapatılabilmelidir.');
+    console.log('✓ Bakım modu ADMIN yetkisiyle başarıyla kapatıldı.');
+
+    const dateKey = dailyQuestionService.getTodayDateKey();
+    assert(dateKey && dateKey.includes('-'), 'Türkiye saati bazlı tarih anahtarı dönmelidir.');
+    const midnightCountdown = dailyQuestionService.getTimeUntilMidnight();
+    assert(midnightCountdown && midnightCountdown.formatted, 'Gece yarısı geri sayımı hesaplanmalıdır.');
+    console.log(`✓ Günlük soru tarihi (${dateKey}) ve geri sayım (${midnightCountdown.formatted}) başarıyla hesaplandı.`);
+
     console.log('\n====================================================');
     console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆');
     console.log('====================================================\n');

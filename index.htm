@@ -51,8 +51,11 @@
         </button>
       </div>
 
-      <!-- 🌐 FIREBASE & GOOGLE DRIVE KİMLİK DOĞRULAMA -->
-      <div class="firebase-auth-section" style="margin-bottom: 16px; padding: 14px; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 8px; text-align: center;">
+      <!-- 🌐 GOOGLE KİMLİK DOĞRULAMA (İsteğe Bağlı & Açık Tıklama) -->
+      <div id="gate-google-login-box" class="firebase-auth-section" style="margin-bottom: 16px; padding: 14px; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 8px; text-align: center;">
+        <p id="gate-google-prompt" style="margin: 0 0 10px 0; font-size: 0.88rem; color: #f8fafc; font-weight: 700;">
+          Google hesabınızla giriş yapabilirsiniz.
+        </p>
         <button type="button" id="btn-firebase-google-login" class="mc-btn mc-btn-primary mc-btn-lg" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem; padding: 12px 16px;">
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -60,24 +63,24 @@
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
           </svg>
-          <span>Google ile Giriş Yap &amp; Drive Senkronize Et</span>
+          <span id="btn-google-auth-text">Google ile Giriş Yap</span>
         </button>
         <p style="margin: 8px 0 0 0; font-size: 0.78rem; color: #94a3b8; line-height: 1.4;">
-          🔒 <strong>Google Drive Erişimi:</strong> Oyuncu verilerinizi Drive'da güvenle depolar ve profilinizin liderlik tablosunda herkese açık görüntülenmesini sağlar.
+          🔒 İsteğe bağlıdır. Google ile oturum açabilir veya aşağıdaki formu doldurabilirsiniz.
         </p>
       </div>
 
       <div class="auth-divider" style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px; color: #64748b; font-size: 0.8rem;">
         <hr style="flex: 1; border: none; border-top: 1px solid rgba(255, 255, 255, 0.1);" />
-        <span>VEYA KLASİK HESAP İLE</span>
+        <span id="gate-divider-label">VEYA HESAP BİLGİLERİNİZ İLE</span>
         <hr style="flex: 1; border: none; border-top: 1px solid rgba(255, 255, 255, 0.1);" />
       </div>
 
-      <!-- 1. GİRİŞ YAP FORMU (Tüm Oyuncular, Moderatörler ve Yöneticiler Buradan Giriş Yapar) -->
+      <!-- 1. GİRİŞ YAP FORMU (Kullanıcı Adı veya E-posta + Şifre) -->
       <form id="access-login-form" class="gate-form" novalidate>
         <div class="input-group">
-          <label for="gate-login-username">KULLANICI ADI</label>
-          <input type="text" id="gate-login-username" placeholder="Örn: DiamondKing" maxlength="20"
+          <label for="gate-login-username">KULLANICI ADI VEYA E-POSTA ADRESİ</label>
+          <input type="text" id="gate-login-username" placeholder="Kullanıcı adınız veya e-posta adresiniz" maxlength="50"
             autocomplete="username" required />
         </div>
         <div class="input-group">
@@ -96,12 +99,18 @@
         </button>
       </form>
 
-      <!-- 2. KAYIT OL FORMU (Lisans Kodu Yok + İsteğe Bağlı Minecraft Oyuncu Adı + Günlük Zümrüt & İlk VIP+ +250 Netherite) -->
+      <!-- 2. KAYIT OL FORMU (Kullanıcı Adı, E-posta, Şifre, Şifre Tekrarı + OTP) -->
       <form id="access-register-form" class="gate-form hidden" novalidate>
         <div class="input-group">
           <label for="gate-reg-username">KULLANICI ADI</label>
           <input type="text" id="gate-reg-username" placeholder="Örn: SteveMaster (3-20 karakter)" maxlength="20"
             autocomplete="username" required />
+        </div>
+        <div class="input-group">
+          <label for="gate-reg-email">E-POSTA ADRESİ</label>
+          <input type="email" id="gate-reg-email" placeholder="ornek@alanadi.com (Gmail, Outlook, vb.)" maxlength="60"
+            autocomplete="email" required />
+          <span class="input-hint">Kayıt sonrası onay kodu (OTP) bu adrese gönderilecektir.</span>
         </div>
         <div class="input-group">
           <label for="gate-reg-mc-name">İSTEĞE BAĞLI MINECRAFT OYUNCU ADI</label>
@@ -127,7 +136,7 @@
         </div>
         <div id="gate-reg-error" class="gate-error hidden" role="alert"></div>
         <button type="submit" id="btn-reg-submit" class="mc-btn mc-btn-gold mc-btn-lg gate-submit-btn">
-          ✨ ÜCRETSİZ KAYIT OL VE BAŞLA
+          ✨ E-POSTA DOĞRULAMASI İLE KAYIT OL
         </button>
       </form>
 
@@ -476,10 +485,10 @@
         <!-- Günlük Ödül Kutusu (Tüm üyeler için Zümrüt + VIP+, MVIP, MVIP+ için Netherite) -->
         <div id="welcome-daily-netherite-card" class="daily-netherite-banner">
           <div class="daily-netherite-left">
-            <span class="currency-svg-wrap currency-svg-lg" data-mc-icon="netherite"></span>
+            <span id="welcome-daily-reward-icon-wrap" class="currency-svg-wrap currency-svg-lg" data-mc-icon="emerald"></span>
             <div>
               <strong id="welcome-netherite-title">Günlük Rütbe Ödülü (Zümrüt &amp; Netherite)</strong>
-              <p id="welcome-netherite-desc">Tüm üyeler her gün rütbelerine göre ücretsiz Zümrüt, VIP ilk alımda +50 ⬛, VIP+ ve üzeri üyeler ek olarak ilk alımda +250 ⬛ ve günlük Netherite (25 / 50 / 100 ⬛) kazanır!</p>
+              <p id="welcome-netherite-desc">Tüm üyeler her gün rütbelerine göre ücretsiz Zümrüt, VIP ilk alımda +50 Netherite, VIP+ ve üzeri üyeler ek olarak ilk alımda +250 Netherite ve günlük Netherite kazanır!</p>
             </div>
           </div>
           <div class="daily-netherite-right">
@@ -518,6 +527,100 @@
             data-nav-screen="party">
             <span class="btn-icon">🎉</span> PARTİYE KATIL
           </button>
+        </div>
+
+        <!-- 👾 4 MINECRAFT MOB YARIŞMA MODU SEÇİMİ (Enderman, Villager, Creeper, Allay) -->
+        <div class="mob-adventure-selector-section" style="margin: 20px 0 10px;">
+          <div class="mob-adventure-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;">
+            <div style="text-align:left;">
+              <span class="section-eyebrow" style="color:#10b981;font-size:0.76rem;letter-spacing:1px;font-weight:700;">🎮 MINECRAFT JAVA EDITION 1.21.11 ÖZEL ETKİNLİKLERİ</span>
+              <h3 style="margin:2px 0 0;font-size:1.1rem;color:#f8fafc;">YARIŞMA REHBERİ MOB SEÇİMİ</h3>
+            </div>
+            <span style="font-size:0.78rem;color:#94a3b8;">Bir moba tıklayarak özel yarışma sahnesini başlat!</span>
+          </div>
+
+          <div class="mob-adventure-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
+            <!-- 1. Enderman -->
+            <button type="button" class="mob-adventure-card mob-card-enderman" data-mob-intro="enderman" style="background:rgba(24, 16, 38, 0.9);border:2px solid #a855f7;border-radius:8px;padding:14px;cursor:pointer;text-align:center;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;">
+              <div class="mob-card-badge" style="font-size:0.72rem;background:#581c87;color:#f5d0fe;padding:2px 8px;border-radius:4px;font-weight:bold;">🔮 ENDER TANITIMI</div>
+              <div class="mob-card-svg-wrap" style="width:54px;height:72px;display:flex;align-items:center;justify-content:center;">
+                <svg class="mob-pixel-svg enderman-svg" viewBox="0 0 16 30" style="width:48px;height:70px;" shape-rendering="crispEdges">
+                  <rect x="4" y="1" width="8" height="8" fill="#111118" />
+                  <rect x="4" y="4" width="3" height="1" fill="#f5d0fe" />
+                  <rect x="5" y="4" width="1" height="1" fill="#d946ef" />
+                  <rect x="9" y="4" width="3" height="1" fill="#f5d0fe" />
+                  <rect x="10" y="4" width="1" height="1" fill="#d946ef" />
+                  <rect x="5" y="9" width="6" height="8" fill="#161622" />
+                  <rect class="mob-arm-l" x="3" y="9" width="2" height="13" fill="#0d0d14" />
+                  <rect class="mob-arm-r" x="11" y="9" width="2" height="13" fill="#0d0d14" />
+                  <rect class="mob-leg-l" x="6" y="17" width="1.8" height="12" fill="#0d0d14" />
+                  <rect class="mob-leg-r" x="8.2" y="17" width="1.8" height="12" fill="#0d0d14" />
+                </svg>
+              </div>
+              <strong style="color:#e9d5ff;font-size:0.95rem;">Enderman İle Başla</strong>
+              <span style="font-size:0.78rem;color:#c084fc;">"YARIŞMA BAŞLADI!"</span>
+            </button>
+
+            <!-- 2. Villager -->
+            <button type="button" class="mob-adventure-card mob-card-villager" data-mob-intro="villager" style="background:rgba(43, 29, 14, 0.9);border:2px solid #ca8a04;border-radius:8px;padding:14px;cursor:pointer;text-align:center;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;">
+              <div class="mob-card-badge" style="font-size:0.72rem;background:#713f12;color:#fef08a;padding:2px 8px;border-radius:4px;font-weight:bold;">📖 KÖYLÜ KARŞILAMASI</div>
+              <div class="mob-card-svg-wrap" style="width:54px;height:72px;display:flex;align-items:center;justify-content:center;">
+                <svg class="mob-pixel-svg villager-svg" viewBox="0 0 16 24" style="width:48px;height:70px;" shape-rendering="crispEdges">
+                  <rect x="3" y="0" width="10" height="3" fill="#991b1b" />
+                  <rect x="4" y="2" width="8" height="1" fill="#fbbf24" />
+                  <rect x="4" y="3" width="8" height="7" fill="#d4946a" />
+                  <rect x="4" y="5" width="8" height="1" fill="#78350f" />
+                  <rect x="5" y="6" width="2" height="2" fill="#16a34a" />
+                  <rect x="9" y="6" width="2" height="2" fill="#16a34a" />
+                  <rect x="7" y="7" width="2" height="5" fill="#b5764e" />
+                  <rect x="4" y="10" width="8" height="10" fill="#78350f" />
+                  <rect x="3" y="11" width="10" height="4" fill="#a16207" />
+                  <rect x="5" y="20" width="2" height="4" fill="#451a03" />
+                  <rect x="9" y="20" width="2" height="4" fill="#451a03" />
+                </svg>
+              </div>
+              <strong style="color:#fef08a;font-size:0.95rem;">Bilge Köylü İle Başla</strong>
+              <span style="font-size:0.78rem;color:#fde047;">"KÖYLÜ SİZİ BEKLİYOR!"</span>
+            </button>
+
+            <!-- 3. Creeper -->
+            <button type="button" class="mob-adventure-card mob-card-creeper" data-mob-intro="creeper" style="background:rgba(12, 38, 20, 0.9);border:2px solid #22c55e;border-radius:8px;padding:14px;cursor:pointer;text-align:center;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;">
+              <div class="mob-card-badge" style="font-size:0.72rem;background:#14532d;color:#bbf7d0;padding:2px 8px;border-radius:4px;font-weight:bold;">💥 CREEPER MEYDAN OKUMASI</div>
+              <div class="mob-card-svg-wrap" style="width:54px;height:72px;display:flex;align-items:center;justify-content:center;">
+                <svg class="mob-pixel-svg creeper-svg" viewBox="0 0 16 24" style="width:48px;height:70px;" shape-rendering="crispEdges">
+                  <rect x="4" y="1" width="8" height="8" fill="#22c55e" />
+                  <rect x="5" y="3" width="2" height="2" fill="#0f172a" />
+                  <rect x="9" y="3" width="2" height="2" fill="#0f172a" />
+                  <rect x="7" y="5" width="2" height="3" fill="#0f172a" />
+                  <rect x="6" y="6" width="1" height="3" fill="#0f172a" />
+                  <rect x="9" y="6" width="1" height="3" fill="#0f172a" />
+                  <rect x="5" y="9" width="6" height="9" fill="#16a34a" />
+                  <rect x="3" y="18" width="4" height="5" fill="#15803d" />
+                  <rect x="9" y="18" width="4" height="5" fill="#15803d" />
+                </svg>
+              </div>
+              <strong style="color:#bbf7d0;font-size:0.95rem;">Creeper İle Başla</strong>
+              <span style="font-size:0.78rem;color:#86efac;">"CREEPER SORULARI HAZIRDIR!"</span>
+            </button>
+
+            <!-- 4. Allay -->
+            <button type="button" class="mob-adventure-card mob-card-allay" data-mob-intro="allay" style="background:rgba(12, 32, 54, 0.9);border:2px solid #38bdf8;border-radius:8px;padding:14px;cursor:pointer;text-align:center;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;">
+              <div class="mob-card-badge" style="font-size:0.72rem;background:#0c4a6e;color:#bae6fd;padding:2px 8px;border-radius:4px;font-weight:bold;">🧚 YARDIM PERİSİ</div>
+              <div class="mob-card-svg-wrap" style="width:54px;height:72px;display:flex;align-items:center;justify-content:center;">
+                <svg class="mob-pixel-svg allay-svg" viewBox="0 0 16 18" style="width:48px;height:65px;" shape-rendering="crispEdges">
+                  <rect class="mob-wing-l" x="1" y="6" width="4" height="5" fill="#7dd3fc" opacity="0.85" />
+                  <rect class="mob-wing-r" x="11" y="6" width="4" height="5" fill="#7dd3fc" opacity="0.85" />
+                  <rect x="5" y="2" width="6" height="6" fill="#38bdf8" />
+                  <rect x="6" y="5" width="1" height="2" fill="#ffffff" />
+                  <rect x="9" y="5" width="1" height="2" fill="#ffffff" />
+                  <rect x="6" y="8" width="4" height="6" fill="#0284c7" />
+                  <rect x="7" y="14" width="2" height="2" fill="#38bdf8" />
+                </svg>
+              </div>
+              <strong style="color:#bae6fd;font-size:0.95rem;">Allay İle Yardım Al</strong>
+              <span style="font-size:0.78rem;color:#7dd3fc;">"ALLAY YARDIMA HAZIRDIR!"</span>
+            </button>
+          </div>
         </div>
 
         <!-- Hızlı Erişim Kartları -->
@@ -719,10 +822,22 @@
                 <h3 id="profile-username-display">Oyuncu</h3>
                 <span id="profile-rank-badge" class="role-badge role-member">🌱 Üye</span>
               </div>
+              <p id="profile-email-display" class="profile-meta-line" style="margin:4px 0;font-size:0.82rem;color:#94a3b8;">
+                📧 E-posta: <strong id="profile-email-val" style="color:#60a5fa;">-</strong> <span id="profile-email-verified-tag" class="role-badge role-member" style="font-size:0.68rem;padding:2px 6px;">✓ Doğrulandı</span>
+              </p>
               <p id="profile-mc-player-display" class="profile-mc-tag">🎮 Bağlı Minecraft Hesabı: Yok</p>
               <p id="profile-custom-badge" class="profile-custom-badge"></p>
               <p class="profile-meta-line">Kayıt Tarihi: <strong id="profile-created-at">-</strong></p>
             </div>
+
+            <!-- Kullanıcı Adı Değiştirme Formu (Faz 2) -->
+            <form id="profile-change-username-form" class="profile-mcname-box" style="margin-top:10px;">
+              <label for="profile-username-input">✏️ Kullanıcı Adını Değiştir</label>
+              <div class="inline-form-row">
+                <input type="text" id="profile-username-input" placeholder="Yeni kullanıcı adı (3-20 karakter)" maxlength="20" required />
+                <button type="submit" class="mc-btn mc-btn-sm mc-btn-gold">Güncelle</button>
+              </div>
+            </form>
 
             <!-- Minecraft Oyuncu Adı Bağlama / Güncelleme (#4) -->
             <form id="profile-mcname-form" class="profile-mcname-box">
@@ -733,6 +848,16 @@
               </div>
               <span class="input-hint">Minecraft oyuncu adınızı girdiğinizde avatarınız otomatik olarak skin yüzünüz olur.</span>
             </form>
+
+            <!-- Güvenli Çıkış Yap Butonu -->
+            <div style="margin: 8px 0 12px; display: flex; gap: 8px;">
+              <button type="button" id="btn-profile-signout" class="mc-btn mc-btn-danger mc-btn-sm" style="flex:1;">
+                🚪 Güvenli Çıkış Yap
+              </button>
+              <button type="button" class="mc-btn mc-btn-secondary mc-btn-sm" data-nav-screen="settings" style="flex:1;">
+                ⚙️ Şifremi Değiştir
+              </button>
+            </div>
 
             <!-- Profil İstatistik Kutuları -->
             <div class="profile-metrics-grid">
@@ -1549,6 +1674,67 @@
             Kapat
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       🚨 BAKIM MODU TAM EKRAN ARAYÜZÜ (Faz 6 - ADMIN/MOD HARİÇ HERKESE KİLİTLİ)
+       ======================================================== -->
+  <div id="maintenance-overlay" class="maintenance-overlay hidden" role="alertdialog" aria-modal="true" aria-labelledby="maintenance-title">
+    <div class="maintenance-card">
+      <div class="maintenance-icon-wrap">
+        <svg class="maintenance-hazard-icon" viewBox="0 0 24 24" width="72" height="72" shape-rendering="crispEdges">
+          <rect x="2" y="2" width="20" height="20" fill="#7f1d1d" stroke="#ef4444" stroke-width="2" />
+          <rect x="11" y="6" width="2" height="8" fill="#fef08a" />
+          <rect x="11" y="16" width="2" height="2" fill="#fef08a" />
+        </svg>
+      </div>
+      <h1 id="maintenance-title" class="maintenance-title">BAKIM MODU AKTİF</h1>
+      <div class="maintenance-banner-strip">⚠️ SUNUCU GÜNCELLEMESİ YAPILIYOR ⚠️</div>
+      <p id="maintenance-desc-text" class="maintenance-text">
+        Sunucumuz şu anda bakımda. Daha iyi bir deneyim sunabilmek için çalışmalarımız devam ediyor. Lütfen daha sonra tekrar deneyin.
+      </p>
+      <div class="maintenance-footer-note">
+        <span>🛡️ Yalnızca Yetkili Yönetici ve Moderatörler Giriş Yapabilir</span>
+      </div>
+      <div style="margin-top:16px;">
+        <button type="button" id="btn-maintenance-admin-login" class="mc-btn mc-btn-secondary mc-btn-sm">
+          🔑 Yönetici Olarak Giriş Yap
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       👾 4 MOB ÖZEL YARIŞMA TANITIM SAHNESİ (Faz 8 - Enderman, Villager, Creeper, Allay)
+       ======================================================== -->
+  <div id="mob-intro-modal" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="mob-intro-title">
+    <div id="mob-intro-card" class="mob-intro-card">
+      <button type="button" id="btn-close-mob-intro" class="drawer-close-btn" aria-label="Kapat">✕</button>
+      
+      <!-- Üst: Hareketli Parçacıklar ve Dev Mob Modeli -->
+      <div class="mob-intro-visual-stage" id="mob-intro-visual-stage">
+        <div id="mob-intro-particles" class="mob-intro-particles"></div>
+        <div id="mob-intro-character-slot" class="mob-intro-character-slot"></div>
+      </div>
+
+      <!-- Orta: Yüzen Minecraft Mesaj Panosu -->
+      <div id="mob-intro-dialog-panel" class="mob-intro-dialog-panel">
+        <div class="mob-intro-badge-row">
+          <span id="mob-intro-badge" class="mob-intro-badge">MOB TANITIMI</span>
+        </div>
+        <h2 id="mob-intro-title" class="mob-intro-headline">YARIŞMA BAŞLADI! İYİ EĞLENCELER!</h2>
+        <p id="mob-intro-subtitle" class="mob-intro-subtitle">
+          Minecraft Milyoner yarışma arenasına hoş geldin!
+        </p>
+      </div>
+
+      <!-- Alt Eylem Butonları -->
+      <div class="mob-intro-actions">
+        <button type="button" id="btn-mob-intro-action" class="mc-btn mc-btn-lg mc-btn-gold">
+          ⚔️ YARIŞMAYA DEVAM ET
+        </button>
       </div>
     </div>
   </div>

@@ -1113,6 +1113,70 @@
       return this.getAllUsers().find(u => u && u.email && String(u.email).trim().toLowerCase() === clean) || null;
     },
 
+    getUserByUsernameOrEmail(identifier) {
+      if (!identifier) return null;
+      const clean = String(identifier).trim().toLowerCase();
+      return (
+        this.getAllUsers().find(
+          u =>
+            (u && u.username && u.username.toLowerCase() === clean) ||
+            (u && u.email && String(u.email).trim().toLowerCase() === clean)
+        ) || null
+      );
+    },
+
+    async changeUsername(session, newUsername) {
+      authGuard.verifySession(session);
+      const cleanOld = String(session.username || '').trim();
+      const cleanNew = String(newUsername || '').trim();
+
+      if (!cleanNew || cleanNew.length < 3 || cleanNew.length > 20) {
+        throw new Error('Kullanıcı adı 3 ile 20 karakter arasında olmalıdır.');
+      }
+      if (!/^[a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]+$/.test(cleanNew)) {
+        throw new Error('Kullanıcı adı yalnızca harf, rakam ve alt çizgi (_) içerebilir.');
+      }
+      if (cleanOld.toLowerCase() === cleanNew.toLowerCase()) {
+        throw new Error('Yeni kullanıcı adı mevcut adınız ile aynı olamaz.');
+      }
+
+      if (this.getUserByUsername(cleanNew)) {
+        throw new Error('Bu kullanıcı adı başka bir oyuncu tarafından kullanılıyor.');
+      }
+
+      const users = this.getAllUsers();
+      const user = users.find(u => u && u.username && u.username.toLowerCase() === cleanOld.toLowerCase());
+      if (!user) throw new Error('Kullanıcı hesabı bulunamadı.');
+
+      const oldUsername = user.username;
+      user.username = cleanNew;
+      user.updatedAt = new Date().toISOString();
+      this._saveAllUsers(users);
+
+      // Oturumu güncelle
+      if (session && session.username && session.username.toLowerCase() === cleanOld.toLowerCase()) {
+        session.username = cleanNew;
+        session.signature = computeTokenSignature(session);
+        storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+      }
+
+      // Tombstone temizle ve faaliyet günlüğüne yaz
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.clearTombstone) {
+        cloudSyncService.clearTombstone('deletedUsers', cleanNew.toLowerCase());
+      }
+      activityService.log(
+        'USERNAME_CHANGED',
+        cleanNew,
+        `Kullanıcı adını "${oldUsername}" yerine "${cleanNew}" olarak güncelledi.`
+      );
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        await cloudSyncService.pushNow().catch(() => {});
+      }
+
+      return user;
+    },
+
     /**
      * Görünürlük Kuralı (Data Access Layer):
      * Drive izni verilmemişse yalnızca leaderboard'da görünen adları ve temel profil bilgileri döner.
@@ -1418,8 +1482,16 @@
       return storage.get(STORAGE_KEYS.ACTIVE_SESSION, null);
     },
 
-    async registerAccount({ username, password, passwordConfirm, minecraftPlayerName = '' }) {
+    async registerAccount({
+      username,
+      email = '',
+      password,
+      passwordConfirm,
+      minecraftPlayerName = '',
+      emailVerified = true
+    }) {
       const cleanUser = String(username || '').trim();
+      const cleanEmail = String(email || '').trim().toLowerCase();
       const cleanMc = String(minecraftPlayerName || '').trim();
       const rawPass = String(password || '');
       const rawConfirm = String(passwordConfirm ?? rawPass);
@@ -1429,6 +1501,15 @@
       }
       if (!/^[a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]+$/.test(cleanUser)) {
         throw new Error('Kullanıcı adı yalnızca harf, rakam ve alt çizgi (_) içerebilir.');
+      }
+
+      if (cleanEmail) {
+        if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+          throw new Error('Lütfen geçerli bir e-posta adresi girin.');
+        }
+        if (userService.getUserByEmail(cleanEmail)) {
+          throw new Error('Bu e-posta adresi ile zaten kayıtlı bir hesap bulunmaktadır.');
+        }
       }
 
       if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
@@ -1464,6 +1545,8 @@
       const newUser = {
         userId: generateId('USR'),
         username: cleanUser,
+        email: cleanEmail,
+        emailVerified: Boolean(emailVerified),
         minecraftPlayerName: cleanMc,
         passwordHash,
         rank: 'MEMBER',
@@ -1532,15 +1615,15 @@
       const rawPass = String(password || '');
 
       if (!cleanUser || !rawPass) {
-        throw new Error('Lütfen kullanıcı adınızı ve şifrenizi girin.');
+        throw new Error('Lütfen kullanıcı adınızı veya e-posta adresinizi ve şifrenizi girin.');
       }
 
       if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
         await cloudSyncService.syncNow().catch(() => {});
       }
 
-      // Kullanıcı / Moderatör / Admin Giriş Doğrulaması (Tek Birleşik Giriş Kapısı)
-      const user = userService.getUserByUsername(cleanUser);
+      // Kullanıcı / Moderatör / Admin Giriş Doğrulaması (Kullanıcı Adı veya E-posta)
+      const user = userService.getUserByUsernameOrEmail(cleanUser);
       if (!user) {
         throw new Error('Kullanıcı adı veya şifre hatalı.');
       }
@@ -3045,6 +3128,98 @@
   // ==========================================
   // YEDEKLEME VE PLATFORM AYARLARI SERVİSİ (backupService)
   // ==========================================
+  // ==========================================
+  // BAKIM MODU SERVİSİ (maintenanceService — Faz 6)
+  // Kalıcı bayrak (PLATFORM_SETTINGS), ADMIN açıp kapatabilir,
+  // ADMIN ve MODERATOR rolleri hariç tüm kullanıcılar tam ekran bloklanır.
+  // ==========================================
+  const maintenanceService = {
+    getMaintenanceStatus() {
+      const settings = storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {});
+      return {
+        enabled: Boolean(settings.maintenanceMode),
+        title: settings.maintenanceTitle || 'BAKIM MODU',
+        message:
+          settings.maintenanceMessage ||
+          'Sunucularımız şu anda Minecraft Java 1.21.11 güncellemesi ve teknik bakım sebebiyle geçici olarak hizmet dışıdır. Lütfen daha sonra tekrar deneyiniz.',
+        startedAt: settings.maintenanceStartedAt || null,
+        estimatedDuration: settings.maintenanceDuration || '30 Dakika'
+      };
+    },
+
+    isMaintenanceActive() {
+      const status = this.getMaintenanceStatus();
+      return Boolean(status.enabled);
+    },
+
+    setMaintenanceMode(session, enabled, options = {}) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const current = storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {});
+      const next = {
+        ...current,
+        maintenanceMode: Boolean(enabled),
+        maintenanceStartedAt: enabled ? new Date().toISOString() : null,
+        maintenanceTitle: options.title || 'BAKIM MODU',
+        maintenanceMessage:
+          options.message ||
+          'Sunucularımız şu anda Minecraft Java 1.21.11 güncellemesi ve teknik bakım sebebiyle geçici olarak hizmet dışıdır. Lütfen daha sonra tekrar deneyiniz.',
+        maintenanceDuration: options.estimatedDuration || '30 Dakika'
+      };
+      storage.set(STORAGE_KEYS.PLATFORM_SETTINGS, next);
+      activityService.log(
+        'MAINTENANCE_TOGGLE',
+        session.username,
+        `Yönetici ${session.username} bakım modunu ${enabled ? 'AKTİF' : 'DEVRE DIŞI'} yaptı.`
+      );
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
+      return next;
+    }
+  };
+
+  // ==========================================
+  // GÜNLÜK SORU ROTASYON SERVİSİ (dailyQuestionService — Faz 5)
+  // Türkiye Saati (UTC+3) ve yerel gece yarısı rotasyonu, geri sayım ve deterministik günlük tohum
+  // ==========================================
+  const dailyQuestionService = {
+    getTodayDateKey() {
+      // UTC+3 (Türkiye Saati) tabanlı YYYY-MM-DD
+      const now = new Date();
+      const trTime = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+      return trTime.toISOString().split('T')[0];
+    },
+
+    getTimeUntilMidnight() {
+      const now = new Date();
+      const trTime = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+      const tomorrowTr = new Date(trTime);
+      tomorrowTr.setUTCHours(24, 0, 0, 0); // Bir sonraki gece yarısı
+      const msLeft = Math.max(0, tomorrowTr.getTime() - trTime.getTime());
+
+      const hours = Math.floor(msLeft / (1000 * 60 * 60));
+      const mins = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((msLeft % (1000 * 60)) / 1000);
+      return {
+        msLeft,
+        hours,
+        mins,
+        secs,
+        formatted: `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+      };
+    },
+
+    getDailySeed() {
+      const key = this.getTodayDateKey();
+      let hash = 0;
+      for (let i = 0; i < key.length; i++) {
+        hash = (hash << 5) - hash + key.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    }
+  };
+
   const backupService = {
     getPlatformSettings() {
       return storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {
@@ -4657,7 +4832,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     backupService,
     cloudSyncService,
     aiQuestionService,
-    otpService
+    otpService,
+    maintenanceService,
+    dailyQuestionService
   });
 })(window);
 

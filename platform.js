@@ -671,6 +671,32 @@
       }
     }
 
+    // Faz 6: BAKIM MODU KONTROLÜ
+    // Kalıcı bayrak PLATFORM_SETTINGS altında tutulur.
+    // Yalnızca ADMIN (codingdevelopia@gmail.com) ve MODERATOR rolleri hariç tüm kullanıcılar tam ekran bloklanır.
+    const maintenanceStatus = svc().maintenanceService?.getMaintenanceStatus?.() || { enabled: false };
+    const maintenanceOverlay = document.getElementById('maintenance-overlay');
+    const sessionEmail = String(session.email || '').trim().toLowerCase();
+    const isMaintenanceExempt = Boolean(
+      (session.isAdminSession || session.role === 'ADMIN' || session.rank === 'ADMIN') &&
+      sessionEmail === 'codingdevelopia@gmail.com'
+    ) || Boolean(session.isModerator || session.role === 'MODERATOR' || session.rank === 'MODERATOR');
+
+    if (maintenanceStatus.enabled && !isMaintenanceExempt) {
+      if (maintenanceOverlay) {
+        maintenanceOverlay.classList.remove('hidden');
+        const descEl = document.getElementById('maintenance-desc-text');
+        if (descEl && maintenanceStatus.message) {
+          descEl.textContent = maintenanceStatus.message;
+        }
+      }
+      return;
+    } else {
+      if (maintenanceOverlay) {
+        maintenanceOverlay.classList.add('hidden');
+      }
+    }
+
     const targetId = `screen-${screenKey}`;
     const targetEl = document.getElementById(targetId);
     if (!targetEl) {
@@ -829,6 +855,22 @@
     if (rBadge) {
       rBadge.className = getRankBadgeClass(rank.id);
       rBadge.innerHTML = `${mcIcon(rank.badge, 14)} ${escapeHtml(rank.name)}`;
+    }
+
+    const emailValEl = document.getElementById('profile-email-val');
+    if (emailValEl) {
+      emailValEl.textContent = user.email || 'Belirtilmedi';
+    }
+
+    const verifiedTagEl = document.getElementById('profile-email-verified-tag');
+    if (verifiedTagEl) {
+      verifiedTagEl.textContent = user.emailVerified ? '✓ Doğrulandı' : '⚠️ Doğrulanmadı';
+      verifiedTagEl.className = user.emailVerified ? 'role-badge role-member' : 'role-badge role-muted';
+    }
+
+    const usernameInputEl = document.getElementById('profile-username-input');
+    if (usernameInputEl) {
+      usernameInputEl.value = user.username || '';
     }
 
     const mcDisplay = document.getElementById('profile-mc-player-display');
@@ -3561,7 +3603,7 @@
             </button>
           </div>
 
-          <h3>⚙️ Platform Genel Ayarları</h3>
+          <h3>⚙️ Platform Genel Ayarları &amp; Bakım Modu (Faz 6)</h3>
           <form id="admin-platform-settings-form" class="platform-form">
             <div class="input-group">
               <label>PLATFORM BAŞLIĞI</label>
@@ -3573,7 +3615,20 @@
                 pSettings.announcementText
               )}" />
             </div>
-            <button type="submit" class="mc-btn mc-btn-primary">Ayarları Kaydet</button>
+            <div class="settings-toggle-list" style="margin: 12px 0 16px;">
+              <label class="setting-row" style="border: 2px solid #ef4444; background: rgba(127, 29, 29, 0.25); padding: 12px; border-radius: 6px;">
+                <div>
+                  <strong style="color: #fca5a5;">🚨 BAKIM MODU (TÜM OYUNCULARI BLOKLAR)</strong>
+                  <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: #cbd5e1;">
+                    Aktif edildiğinde sadece Admin (codingdevelopia@gmail.com) ve Moderatörler girebilir, diğer oyuncular kırmızı piksel sanatlı bakım ekranıyla kilitlenir.
+                  </p>
+                </div>
+                <input type="checkbox" id="adm-set-maintenance" ${
+                  pSettings.maintenanceMode ? 'checked' : ''
+                } style="transform: scale(1.4); cursor: pointer;" />
+              </label>
+            </div>
+            <button type="submit" class="mc-btn mc-btn-primary">Ayarları &amp; Bakım Modunu Kaydet</button>
           </form>
         </div>
       `;
@@ -3738,6 +3793,39 @@
         renderProfile();
       } catch (err) {
         showToast(err.message, 'error');
+      }
+    });
+
+    // Profil: Kullanıcı Adı Değiştirme (Faz 2)
+    document.getElementById('profile-change-username-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const newName = document.getElementById('profile-username-input')?.value || '';
+      try {
+        await svc().userService.changeUsername(session, newName);
+        showToast(`✓ Kullanıcı adınız "${newName.trim()}" olarak başarıyla güncellendi!`, 'success');
+        syncHeaderAndDrawer();
+        renderProfile();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Profil: Güvenli Çıkış Yap Butonu
+    document.getElementById('btn-profile-signout')?.addEventListener('click', () => {
+      if (typeof window.handleUserLogout === 'function') {
+        window.handleUserLogout();
+      }
+    });
+
+    // Bakım Modu: Yönetici Girişi Butonu
+    document.getElementById('btn-maintenance-admin-login')?.addEventListener('click', () => {
+      document.getElementById('maintenance-overlay')?.classList.add('hidden');
+      const gate = document.getElementById('access-gate');
+      if (gate) {
+        gate.classList.remove('hidden');
+        document.getElementById('tab-btn-login')?.click();
       }
     });
 
@@ -4852,11 +4940,16 @@
       } else if (e.target.id === 'admin-platform-settings-form') {
         e.preventDefault();
         try {
+          const maintenanceActive = document.getElementById('adm-set-maintenance')?.checked || false;
           svc().backupService.updatePlatformSettings(session, {
             siteTitle: document.getElementById('adm-set-title')?.value || 'Minecraft Milyoner',
-            announcementText: document.getElementById('adm-set-announcement')?.value || ''
+            announcementText: document.getElementById('adm-set-announcement')?.value || '',
+            maintenanceMode: Boolean(maintenanceActive)
           });
-          showToast('Platform ayarları güncellendi.', 'success');
+          if (svc().maintenanceService) {
+            svc().maintenanceService.setMaintenanceMode(session, maintenanceActive);
+          }
+          showToast('Platform ayarları ve Bakım Modu başarıyla güncellendi.', 'success');
         } catch (err) {
           showToast(err.message, 'error');
         }

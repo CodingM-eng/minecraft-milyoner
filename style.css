@@ -7272,5 +7272,215 @@ body.screen-game-active #screen-game {
   }
 }
 
+/* =========================================================
+   🚨 FAZ 6: TAM EKRAN BAKIM MODU (MAINTENANCE OVERLAY)
+   ========================================================= */
+.maintenance-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: radial-gradient(circle at center, #1a0808 0%, #080303 85%, #000000 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.maintenance-card {
+  max-width: 560px;
+  width: 100%;
+  background: rgba(26, 10, 10, 0.95);
+  border: 4px solid #ef4444;
+  box-shadow: 0 0 35px rgba(239, 68, 68, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.8);
+  padding: 36px 24px;
+  text-align: center;
+  position: relative;
+}
+
+.maintenance-hazard-icon {
+  animation: hazardPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes hazardPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px #ef4444);
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 24px #f87171);
+    transform: scale(1.08);
+  }
+}
+
+.maintenance-title {
+  font-family: var(--font-pixel), monospace;
+  font-size: 1.6rem;
+  color: #ef4444;
+  letter-spacing: 2px;
+  margin: 16px 0 10px;
+  text-shadow: 2px 2px 0 #000, 0 0 12px rgba(239, 68, 68, 0.7);
+}
+
+.maintenance-banner-strip {
+  background: #7f1d1d;
+  color: #fef08a;
+  font-weight: 800;
+  font-size: 0.82rem;
+  padding: 6px 12px;
+  border-radius: 4px;
+  display: inline-block;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  border: 1px solid #dc2626;
+}
+
+.maintenance-text {
+  font-size: 0.98rem;
+  color: #e2e8f0;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.maintenance-footer-note {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  border-top: 1px solid rgba(239, 68, 68, 0.3);
+  padding-top: 14px;
+}
+
+/* =========================================================
+   👾 FAZ 8: 4 MOB ÖZEL YARIŞMA TANITIM SAHNESİ STİLLERİ
+   ========================================================= */
+.mob-intro-card {
+  max-width: 620px;
+  width: 95%;
+  background: rgba(15, 23, 42, 0.98);
+  border: 3px solid #38bdf8;
+  border-radius: 12px;
+  padding: 28px 22px;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85);
+  animation: mobCardEntrance 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes mobCardEntrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.mob-intro-visual-stage {
+  position: relative;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+  border-radius: 8px;
+}
+
+.mob-intro-character-slot svg {
+  width: 110px;
+  height: 150px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.8));
+  transition: transform 0.4s ease;
+}
+
+/* Mob Özel Arka Plan ve Panel Renkleri */
+.mob-intro-card.theme-enderman {
+  border-color: #a855f7;
+  box-shadow: 0 0 35px rgba(168, 85, 247, 0.45);
+}
+.mob-intro-card.theme-enderman .mob-intro-dialog-panel {
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.45), rgba(15, 23, 42, 0.95));
+  border: 2px solid #c084fc;
+}
+.mob-intro-card.theme-enderman .mob-intro-headline {
+  color: #f5d0fe;
+}
+.mob-intro-card.theme-enderman .mob-intro-character-slot svg {
+  animation: endermanTeleportIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mob-intro-card.theme-villager {
+  border-color: #eab308;
+  box-shadow: 0 0 35px rgba(234, 179, 8, 0.45);
+}
+.mob-intro-card.theme-villager .mob-intro-dialog-panel {
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.45), rgba(15, 23, 42, 0.95));
+  border: 2px solid #facc15;
+}
+.mob-intro-card.theme-villager .mob-intro-headline {
+  color: #fef08a;
+}
+.mob-intro-card.theme-villager .mob-intro-character-slot svg {
+  animation: villagerWalkStep 0.35s ease-in-out 3, villagerBobIdle 2s ease-in-out infinite;
+}
+
+.mob-intro-card.theme-creeper {
+  border-color: #22c55e;
+  box-shadow: 0 0 35px rgba(34, 197, 94, 0.45);
+}
+.mob-intro-card.theme-creeper .mob-intro-dialog-panel {
+  background: linear-gradient(135deg, rgba(20, 83, 45, 0.45), rgba(15, 23, 42, 0.95));
+  border: 2px solid #4ade80;
+}
+.mob-intro-card.theme-creeper .mob-intro-headline {
+  color: #bbf7d0;
+}
+.mob-intro-card.theme-creeper .mob-intro-character-slot svg {
+  animation: creeperSwellAndFlash 0.75s ease-in-out;
+}
+
+.mob-intro-card.theme-allay {
+  border-color: #38bdf8;
+  box-shadow: 0 0 35px rgba(56, 189, 248, 0.45);
+}
+.mob-intro-card.theme-allay .mob-intro-dialog-panel {
+  background: linear-gradient(135deg, rgba(12, 74, 110, 0.45), rgba(15, 23, 42, 0.95));
+  border: 2px solid #7dd3fc;
+}
+.mob-intro-card.theme-allay .mob-intro-headline {
+  color: #bae6fd;
+}
+.mob-intro-card.theme-allay .mob-intro-character-slot svg {
+  animation: allayHover 2.2s ease-in-out infinite;
+}
+
+.mob-intro-dialog-panel {
+  padding: 18px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.mob-intro-headline {
+  font-family: var(--font-display), sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin: 8px 0;
+  letter-spacing: 0.5px;
+}
+
+.mob-intro-subtitle {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.mob-adventure-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  filter: brightness(1.15);
+}
+
 
 
