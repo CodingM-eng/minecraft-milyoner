@@ -2722,6 +2722,147 @@
       if (updated) this._saveAllParties(parties);
     },
 
+    /**
+     * Parti Maçı Canlı Oyuncu İlerlemesi (Jüri Denetimi & Senkronizasyon İçin)
+     */
+    updateMemberProgress(username, progressData = {}) {
+      const parties = this.getAllParties();
+      const clean = String(username || '').trim().toLowerCase();
+      let updated = false;
+      const nowIso = new Date().toISOString();
+
+      parties.forEach(p => {
+        if (p && p.status !== 'CLOSED' && Array.isArray(p.members)) {
+          const member = p.members.find(m => m && m.username && m.username.toLowerCase() === clean);
+          if (member) {
+            if (!p.matchProgress) p.matchProgress = {};
+            const prev = p.matchProgress[clean] || {};
+            p.matchProgress[clean] = {
+              username: member.username,
+              questionIndex: typeof progressData.questionIndex === 'number' ? progressData.questionIndex : (prev.questionIndex || 0),
+              currentPrize: typeof progressData.currentPrize === 'number' ? progressData.currentPrize : (prev.currentPrize || 0),
+              status: progressData.status || prev.status || 'THINKING',
+              chosenAnswer: progressData.chosenAnswer !== undefined ? progressData.chosenAnswer : prev.chosenAnswer,
+              timeLeft: typeof progressData.timeLeft === 'number' ? progressData.timeLeft : prev.timeLeft,
+              isEliminated: progressData.isEliminated !== undefined ? Boolean(progressData.isEliminated) : Boolean(prev.isEliminated),
+              didWin: progressData.didWin !== undefined ? Boolean(progressData.didWin) : Boolean(prev.didWin),
+              updatedAt: nowIso
+            };
+
+            if (typeof progressData.currentPrize === 'number') {
+              member.score = Math.max(Number(member.score || 0), Number(progressData.currentPrize));
+            }
+            p.updatedAt = nowIso;
+            updated = true;
+          }
+        }
+      });
+
+      if (updated) this._saveAllParties(parties);
+    },
+
+    getPartyMatchProgress(partyId) {
+      const parties = this.getAllParties();
+      const party = parties.find(p => p && p.partyId === partyId && p.status !== 'CLOSED');
+      return party ? (party.matchProgress || {}) : {};
+    },
+
+    /**
+     * Parti Sesli Sohbet Durumu (Mikrofon Açık/Kapalı, Konuşuyor mu)
+     */
+    updateVoiceState(username, { isMuted = true, isSpeaking = false } = {}) {
+      const parties = this.getAllParties();
+      const clean = String(username || '').trim().toLowerCase();
+      let updated = false;
+      const now = Date.now();
+
+      parties.forEach(p => {
+        if (p && p.status !== 'CLOSED' && Array.isArray(p.members)) {
+          const member = p.members.find(m => m && m.username && m.username.toLowerCase() === clean);
+          if (member) {
+            if (!p.voiceStates) p.voiceStates = {};
+            p.voiceStates[clean] = {
+              username: member.username,
+              isMuted: Boolean(isMuted),
+              isSpeaking: Boolean(isSpeaking),
+              lastActive: now
+            };
+            p.updatedAt = new Date().toISOString();
+            updated = true;
+          }
+        }
+      });
+
+      if (updated) this._saveAllParties(parties);
+    },
+
+    /**
+     * Parti İçi Hızlı Mesaj & Sesli Reaksiyon (Zil, Boru, Örs, Alkış)
+     */
+    sendPartyChatMessage(username, text, soundEffect = null) {
+      const parties = this.getAllParties();
+      const clean = String(username || '').trim().toLowerCase();
+      let updated = false;
+      const nowIso = new Date().toISOString();
+
+      parties.forEach(p => {
+        if (p && p.status !== 'CLOSED' && Array.isArray(p.members)) {
+          const member = p.members.find(m => m && m.username && m.username.toLowerCase() === clean);
+          if (member) {
+            if (!Array.isArray(p.chatMessages)) p.chatMessages = [];
+            p.chatMessages.push({
+              id: 'pmsg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+              username: member.username,
+              text: String(text || '').slice(0, 100),
+              soundEffect: soundEffect || null,
+              timestamp: nowIso
+            });
+            if (p.chatMessages.length > 30) {
+              p.chatMessages = p.chatMessages.slice(-30);
+            }
+            p.updatedAt = nowIso;
+            updated = true;
+          }
+        }
+      });
+
+      if (updated) this._saveAllParties(parties);
+    },
+
+    /**
+     * Jüri Canlı Reaksiyonu (Oyuncuyu Uyar / Tebrik Et / Zil Çal)
+     */
+    sendJudgeReaction(username, targetUsername, reactionType, message = '') {
+      const parties = this.getAllParties();
+      const clean = String(username || '').trim().toLowerCase();
+      let updated = false;
+      const nowIso = new Date().toISOString();
+
+      parties.forEach(p => {
+        if (p && p.status !== 'CLOSED' && Array.isArray(p.members)) {
+          const isJudge = p.leaderUsername.toLowerCase() === clean || p.hostRole === 'JUDGE';
+          if (isJudge) {
+            if (!Array.isArray(p.judgeReactions)) p.judgeReactions = [];
+            p.judgeReactions.push({
+              id: 'jr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+              judgeUsername: username,
+              targetUsername: targetUsername,
+              reactionType: reactionType || 'BELL',
+              message: message || '',
+              timestamp: nowIso
+            });
+            if (p.judgeReactions.length > 20) {
+              p.judgeReactions = p.judgeReactions.slice(-20);
+            }
+            p.updatedAt = nowIso;
+            updated = true;
+          }
+        }
+      });
+
+      if (updated) this._saveAllParties(parties);
+    },
+
     adminCloseParty(session, partyId) {
       authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
       const parties = this.getAllParties();

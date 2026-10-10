@@ -677,12 +677,46 @@
             </div>
           </div>
 
-          <!-- Jüri Modu Rozeti (Yalnızca Hakem Modunda Görünür) -->
-          <div id="judge-hud-badge" class="judge-hud-badge hidden">
-            ⚖️ JÜRİ / HAKEM MODU — Doğru cevaplar işaretlenir
-            <button type="button" id="btn-judge-become-player" class="mc-btn mc-btn-sm mc-btn-secondary" style="margin-left:10px;">
-              🎮 Katılımcı Ol
-            </button>
+          <!-- Jüri Canlı İzleme & Denetim Paneli (Yalnızca Hakem/Jüri Modunda Görünür) -->
+          <div id="judge-spectator-dashboard" class="judge-spectator-dashboard hidden">
+            <div class="judge-spectator-top">
+              <div class="judge-spectator-title">
+                <span>⚖️</span>
+                <span>JÜRİ CANLI YARIŞMA MERKEZİ</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <button type="button" id="btn-judge-become-player" class="mc-btn mc-btn-sm mc-btn-gold">
+                  🎮 Katılımcı Olarak Oyna
+                </button>
+              </div>
+            </div>
+
+            <!-- Canlı Oyuncu Sekmeleri (Her oyuncunun soru aşaması ve durumu) -->
+            <div id="judge-player-tabs-bar" class="judge-player-tabs-bar">
+              <!-- JS ile dinamik doldurulur -->
+            </div>
+
+            <!-- İncelenen Oyuncu Detay Bandı -->
+            <div id="judge-inspected-player-info" class="judge-inspected-player-info">
+              <div class="judge-inspect-left">
+                <span>👁️ İncelenen:</span>
+                <strong id="judge-inspected-username">Tüm Maç</strong>
+                <span id="judge-inspected-qstep" class="judge-tab-badge">Soru 1/15</span>
+                <span id="judge-inspected-prize" class="judge-tab-badge gold-text">100 ₺</span>
+                <span id="judge-inspected-status" class="judge-inspect-status-pill status-playing">🟢 Oynuyor</span>
+              </div>
+              <div class="judge-inspect-actions">
+                <button type="button" id="btn-judge-send-bell" class="party-sfx-btn" title="Oyuncuya zil sesiyle dikkat çek!">
+                  🔔 Zil Çal
+                </button>
+                <button type="button" id="btn-judge-send-horn" class="party-sfx-btn" title="Savaş borusu ile coşku ver!">
+                  📯 Boru
+                </button>
+                <button type="button" id="btn-judge-send-cheer" class="party-sfx-btn" title="Tebrik et / Alkış!">
+                  👏 Alkış
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Jokerler ve Çekilme Çubuğu -->
@@ -1137,6 +1171,52 @@
             <button type="button" id="btn-toggle-host-role" class="mc-btn mc-btn-gold mc-btn-sm">
               ⚖️ Şu an Jüri Modundasın — Katılımcı Ol
             </button>
+          </div>
+
+          <!-- 🎙️ Parti Sesli Sohbet (Voice Chat) & Hızlı Sohbet/Reaksiyon Paneli -->
+          <div id="party-voice-panel" class="party-voice-panel">
+            <div class="party-voice-header">
+              <h4>🎙️ Parti Sesli Sohbet & Reaksiyonlar</h4>
+              <span id="party-voice-status" class="voice-status-text">Mikrofon: Kapalı</span>
+            </div>
+
+            <div class="party-voice-controls">
+              <button type="button" id="btn-toggle-party-mic" class="btn-party-mic">
+                🎙️ Mikrofonu Aç
+              </button>
+              <div class="voice-level-meter-wrap" title="Mikrofon Ses Seviyesi">
+                <span style="font-size:0.75rem;color:#64748b;">Düzey:</span>
+                <div class="voice-level-bar">
+                  <div id="party-mic-level-fill" class="voice-level-fill"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Minecraft Ses Efektleri / Canlı Tepkiler -->
+            <div class="party-quick-sfx-row">
+              <span style="font-size:0.78rem;color:#94a3b8;margin-right:4px;">🔊 Ses Tepkileri:</span>
+              <button type="button" class="party-sfx-btn" data-party-sfx="BELL">🔔 Minecraft Zili</button>
+              <button type="button" class="party-sfx-btn" data-party-sfx="HORN">📯 Keçi Borusu</button>
+              <button type="button" class="party-sfx-btn" data-party-sfx="ANVIL">🔨 Örs Vuruşu</button>
+              <button type="button" class="party-sfx-btn" data-party-sfx="CHEER">👏 Tezahürat</button>
+            </div>
+
+            <!-- Hızlı Mesajlar -->
+            <div class="party-quick-chat-pills">
+              <span style="font-size:0.78rem;color:#94a3b8;margin-right:4px;">💬 Hızlı Mesaj:</span>
+              <button type="button" class="party-pill-btn" data-party-msg="Hazırım! ⚔️">Hazırım! ⚔️</button>
+              <button type="button" class="party-pill-btn" data-party-msg="Hadi başlayalım! 🔥">Hadi başlayalım! 🔥</button>
+              <button type="button" class="party-pill-btn" data-party-msg="Bol şans herkese! 🍀">Bol şans! 🍀</button>
+              <button type="button" class="party-pill-btn" data-party-msg="Ben hazırım, bekliyorum! ⏳">Bekliyorum ⏳</button>
+              <button type="button" class="party-pill-btn" data-party-msg="İyi oyunlar! 🎮">İyi oyunlar! 🎮</button>
+            </div>
+
+            <!-- Mesaj Akışı -->
+            <div id="party-chat-messages" class="party-chat-messages-box">
+              <div class="party-chat-msg-row" style="color:#64748b;font-style:italic;">
+                Parti içi sesli ve yazılı reaksiyonlar burada görünür...
+              </div>
+            </div>
           </div>
         </div>
 

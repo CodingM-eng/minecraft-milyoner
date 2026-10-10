@@ -517,6 +517,51 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert(midnightCountdown && midnightCountdown.formatted, 'Gece yarısı geri sayımı hesaplanmalıdır.');
     console.log(`✓ Günlük soru tarihi (${dateKey}) ve geri sayım (${midnightCountdown.formatted}) başarıyla hesaplandı.`);
 
+    // ------------------------------------------------------------------
+    // TEST 13: Parti Canlı İlerleme, Sesli Sohbet Durumu & Jüri Canlı Ekran İnceleme
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 13: Parti Canlı İlerleme, Sesli Sohbet & Jüri İncelemesi');
+    console.log('====================================================');
+    const pService = window.MCMServices.partyService;
+
+    // 1. Sesli Sohbet durumu kaydı
+    pService.updateVoiceState('ModeratorTest', { isMuted: false, isSpeaking: true });
+    let partyState = pService.getActivePartyForUser('ModeratorTest');
+    assert(partyState, 'ModeratorTest için aktif parti bulunmalıdır.');
+    assert.strictEqual(partyState.voiceStates['moderatortest'].isSpeaking, true, 'Ses durumu konuşuyor olarak güncellenmelidir.');
+    assert.strictEqual(partyState.voiceStates['moderatortest'].isMuted, false, 'Mikrofon açık olmalıdır.');
+    console.log('✓ Parti sesli sohbet konuşma ve mikrofon durumu başarıyla kaydedildi.');
+
+    // 2. Parti hızlı mesaj ve ses efekti
+    pService.sendPartyChatMessage('ModeratorTest', 'Hadi başlayalım! 🔥', 'HORN');
+    partyState = pService.getActivePartyForUser('ModeratorTest');
+    assert.strictEqual(partyState.chatMessages.length >= 1, true, 'Sohbet mesajı eklenmelidir.');
+    assert.strictEqual(partyState.chatMessages[partyState.chatMessages.length - 1].soundEffect, 'HORN');
+    console.log('✓ Parti hızlı mesaj ve ses efekti (HORN) başarıyla kaydedildi.');
+
+    // 3. Oyuncu maçı ilerlemesi (Soru 4, 3000 ₺, Şık B)
+    pService.updateMemberProgress('ModeratorTest', {
+      questionIndex: 3,
+      currentPrize: 3000,
+      status: 'ANSWERED',
+      chosenAnswer: 1,
+      timeLeft: 22
+    });
+    const matchProgress = pService.getPartyMatchProgress(partyState.partyId);
+    assert(matchProgress['moderatortest'], 'Oyuncu ilerlemesi bulunmalıdır.');
+    assert.strictEqual(matchProgress['moderatortest'].questionIndex, 3, 'Soru indeksi 3 olmalıdır.');
+    assert.strictEqual(matchProgress['moderatortest'].currentPrize, 3000, 'Ödül 3000 ₺ olmalıdır.');
+    assert.strictEqual(matchProgress['moderatortest'].chosenAnswer, 1, 'Seçilen şık B (1) olmalıdır.');
+    console.log('✓ Oyuncunun anlık sorusu (Soru 4), ödülü (3.000 ₺) ve seçtiği şık başarıyla kaydedildi.');
+
+    // 4. Jüri canlı reaksiyonu (Zil Çalma)
+    pService.sendJudgeReaction('RegularPlayer', 'ModeratorTest', 'BELL', 'Dikkat et!');
+    partyState = pService.getActivePartyForUser('ModeratorTest');
+    assert.strictEqual(partyState.judgeReactions.length >= 1, true, 'Jüri reaksiyonu kaydedilmelidir.');
+    assert.strictEqual(partyState.judgeReactions[partyState.judgeReactions.length - 1].reactionType, 'BELL');
+    console.log('✓ Jürinin oyuncuya canlı sesli uyarısı (BELL) başarıyla iletildi.');
+
     console.log('\n====================================================');
     console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆');
     console.log('====================================================\n');

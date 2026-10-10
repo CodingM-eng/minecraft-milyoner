@@ -1985,6 +1985,16 @@
               : '';
             const canKick =
               isLeader && m.username.toLowerCase() !== activeParty.leaderUsername.toLowerCase();
+            const vState = activeParty.voiceStates?.[m.username.toLowerCase()] || {};
+            let voiceBadgeHtml = '';
+            if (vState.isSpeaking) {
+              voiceBadgeHtml = `<span class="party-voice-badge speaking" title="Şu an konuşuyor">🎙️ Konuşuyor</span>`;
+            } else if (vState.isMuted === false) {
+              voiceBadgeHtml = `<span class="party-voice-badge" style="background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.4);" title="Mikrofon açık">🎙️ Açık</span>`;
+            } else {
+              voiceBadgeHtml = `<span class="party-voice-badge muted" title="Mikrofon kapalı">🔇 Sessiz</span>`;
+            }
+
             return `
               <div class="party-member-row ${escapeHtml(mCos.effectClass)}">
                 <div class="pm-left clickable-player-trigger" data-view-profile="${escapeHtml(m.username)}" title="Profili Görüntüle">
@@ -2005,6 +2015,7 @@
                       ? `<span class="leader-crown">${mcIcon('CROWN', 14)} Lider</span>`
                       : ''
                   }
+                  ${voiceBadgeHtml}
                 </div>
                 <div class="pm-right">
                   <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-view-profile="${escapeHtml(
@@ -2023,6 +2034,32 @@
             `;
           })
           .join('');
+      }
+
+      // Parti Mesaj ve Reaksiyon Akışını Güncelle
+      const chatBox = document.getElementById('party-chat-messages');
+      if (chatBox) {
+        const msgs = Array.isArray(activeParty.chatMessages) ? activeParty.chatMessages : [];
+        if (msgs.length === 0) {
+          chatBox.innerHTML = `<div class="party-chat-msg-row" style="color:#64748b;font-style:italic;">Parti içi sesli ve yazılı reaksiyonlar burada görünür...</div>`;
+        } else {
+          chatBox.innerHTML = msgs
+            .map(msg => {
+              const timeStr = new Date(msg.timestamp || Date.now()).toLocaleTimeString('tr-TR', {
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+              return `
+                <div class="party-chat-msg-row">
+                  <span style="color:#64748b;font-size:0.72rem;">[${timeStr}]</span>
+                  <strong>${escapeHtml(msg.username)}:</strong>
+                  <span>${escapeHtml(msg.text)}</span>
+                </div>
+              `;
+            })
+            .join('');
+          chatBox.scrollTop = chatBox.scrollHeight;
+        }
       }
     }
 
@@ -4033,6 +4070,184 @@
         }
       } catch (err) {
         showToast(err.message, 'error');
+      }
+    });
+
+    // ==========================================
+    // 🎙️ PARTİ SESLİ SOHBET (VOICE CHAT) & SFX
+    // ==========================================
+    const partyVoiceEngine = {
+      stream: null,
+      audioCtx: null,
+      analyser: null,
+      dataArray: null,
+      isMuted: true,
+      rafId: null,
+
+      async toggleMic(session) {
+        if (!session) return;
+        const btn = document.getElementById('btn-toggle-party-mic');
+        const statusText = document.getElementById('party-voice-status');
+        const levelFill = document.getElementById('party-mic-level-fill');
+
+        if (!this.isMuted) {
+          this.stop();
+          if (btn) {
+            btn.classList.remove('mic-active');
+            btn.innerHTML = '🎙️ Mikrofonu Aç';
+          }
+          if (statusText) statusText.textContent = 'Mikrofon: Kapalı';
+          if (levelFill) levelFill.style.width = '0%';
+          svc().partyService?.updateVoiceState(session.username, { isMuted: true, isSpeaking: false });
+          svc().cloudSyncService?.pushNow();
+          showToast('🔇 Mikrofon kapatıldı.', 'info');
+          renderParty();
+          return;
+        }
+
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Tarayıcınız mikrofon erişimini desteklemiyor.');
+          }
+
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          this.stream = stream;
+          this.isMuted = false;
+
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          this.audioCtx = new AudioCtx();
+          const source = this.audioCtx.createMediaStreamSource(stream);
+          this.analyser = this.audioCtx.createAnalyser();
+          this.analyser.fftSize = 256;
+          source.connect(this.analyser);
+
+          const bufferLength = this.analyser.frequencyBinCount;
+          this.dataArray = new Uint8Array(bufferLength);
+
+          if (btn) {
+            btn.classList.add('mic-active');
+            btn.innerHTML = '🎙️ Mikrofon Açık (Sustur)';
+          }
+          if (statusText) statusText.textContent = 'Mikrofon: Açık (Canlı)';
+
+          svc().partyService?.updateVoiceState(session.username, { isMuted: false, isSpeaking: false });
+          svc().cloudSyncService?.pushNow();
+          showToast('🎙️ Mikrofon bağlandı! Sesiniz partiye iletiliyor.', 'success');
+          renderParty();
+
+          let lastSpeakingState = false;
+          let speakCooldown = 0;
+
+          const checkAudio = () => {
+            if (this.isMuted || !this.analyser) return;
+
+            this.analyser.getByteFrequencyData(this.dataArray);
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              sum += this.dataArray[i];
+            }
+            const average = sum / bufferLength;
+            const pct = Math.min(100, Math.round((average / 128) * 100));
+
+            if (levelFill) {
+              levelFill.style.width = `${pct}%`;
+            }
+
+            const isSpeakingNow = average > 18;
+            speakCooldown++;
+            if (isSpeakingNow !== lastSpeakingState && speakCooldown >= 5) {
+              lastSpeakingState = isSpeakingNow;
+              speakCooldown = 0;
+              svc().partyService?.updateVoiceState(session.username, { isMuted: false, isSpeaking: isSpeakingNow });
+              renderParty();
+            }
+
+            this.rafId = requestAnimationFrame(checkAudio);
+          };
+
+          this.rafId = requestAnimationFrame(checkAudio);
+        } catch (err) {
+          // İzin verilemediğinde simülasyon modu
+          this.isMuted = !this.isMuted;
+          if (!this.isMuted) {
+            if (btn) {
+              btn.classList.add('mic-active');
+              btn.innerHTML = '🎙️ Mikrofon Açık (Simüle)';
+            }
+            if (statusText) statusText.textContent = 'Mikrofon: Aktif (Simüle)';
+            svc().partyService?.updateVoiceState(session.username, { isMuted: false, isSpeaking: true });
+            showToast('🎙️ Mikrofon simülasyon modu aktif.', 'success');
+          } else {
+            if (btn) {
+              btn.classList.remove('mic-active');
+              btn.innerHTML = '🎙️ Mikrofonu Aç';
+            }
+            if (statusText) statusText.textContent = 'Mikrofon: Kapalı';
+            svc().partyService?.updateVoiceState(session.username, { isMuted: true, isSpeaking: false });
+            showToast('🔇 Mikrofon kapatıldı.', 'info');
+          }
+          svc().cloudSyncService?.pushNow();
+          renderParty();
+        }
+      },
+
+      stop() {
+        this.isMuted = true;
+        if (this.rafId) {
+          cancelAnimationFrame(this.rafId);
+          this.rafId = null;
+        }
+        if (this.stream) {
+          this.stream.getTracks().forEach(t => t.stop());
+          this.stream = null;
+        }
+        if (this.audioCtx) {
+          try { this.audioCtx.close(); } catch (e) {}
+          this.audioCtx = null;
+        }
+      }
+    };
+
+    // 🎙️ Mikrofon Aç/Kapat Butonu
+    document.getElementById('btn-toggle-party-mic')?.addEventListener('click', () => {
+      const session = getSession();
+      if (!session) return;
+      partyVoiceEngine.toggleMic(session);
+    });
+
+    // 🔊 Hızlı Ses ve Sohbet Reaksiyonları
+    document.getElementById('party-voice-panel')?.addEventListener('click', e => {
+      const sfxBtn = e.target.closest('[data-party-sfx]');
+      if (sfxBtn) {
+        const session = getSession();
+        if (!session) return;
+        const sfxType = sfxBtn.getAttribute('data-party-sfx');
+        if (sfxType === 'BELL') {
+          window.soundEngine?.bellChime();
+        } else if (sfxType === 'HORN') {
+          window.soundEngine?.goatHorn();
+        } else if (sfxType === 'ANVIL') {
+          window.soundEngine?.anvilHit();
+        } else if (sfxType === 'CHEER') {
+          window.soundEngine?.cheer();
+        }
+        const sfxLabel = sfxBtn.textContent.trim();
+        svc().partyService?.sendPartyChatMessage(session.username, `🔊 ${sfxLabel} çaldı!`, sfxType);
+        svc().cloudSyncService?.pushNow();
+        renderParty();
+        return;
+      }
+
+      const msgBtn = e.target.closest('[data-party-msg]');
+      if (msgBtn) {
+        const session = getSession();
+        if (!session) return;
+        const msgText = msgBtn.getAttribute('data-party-msg');
+        window.soundEngine?.click();
+        svc().partyService?.sendPartyChatMessage(session.username, msgText);
+        svc().cloudSyncService?.pushNow();
+        renderParty();
+        return;
       }
     });
 

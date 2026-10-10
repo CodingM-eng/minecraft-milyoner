@@ -388,8 +388,39 @@
       setTimeout(() => {
         this.playTone(1174.66, 0.25, 'sine', 0.1);
       }, 380);
+    },
+
+    // 8. Minecraft Zil Çanı (Village / Raid Bell Ring)
+    bellChime() {
+      this.playTone(1760.00, 0.45, 'sine', 0.14);
+      setTimeout(() => this.playTone(880.00, 0.55, 'triangle', 0.12), 15);
+      setTimeout(() => this.playTone(2637.02, 0.25, 'sine', 0.08), 35);
+    },
+
+    // 9. Minecraft Keçi / Savaş Borusu (Goat Horn War Call)
+    goatHorn() {
+      this.playTone(220.00, 0.35, 'sawtooth', 0.14);
+      setTimeout(() => this.playTone(277.18, 0.40, 'sawtooth', 0.15), 180);
+      setTimeout(() => this.playTone(329.63, 0.65, 'sawtooth', 0.16), 420);
+    },
+
+    // 10. Minecraft Örs Vuruşu (Anvil Metal Clang)
+    anvilHit() {
+      this.playTone(330, 0.15, 'sawtooth', 0.18);
+      this.playNoise(0.25, 2400, 0.15, 'highpass');
+      setTimeout(() => this.playTone(180, 0.35, 'triangle', 0.14), 40);
+    },
+
+    // 11. Minecraft Zafer / Tezahürat (Cheer & Fanfare)
+    cheer() {
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => {
+        setTimeout(() => this.playTone(f, 0.22, 'triangle', 0.1), idx * 70);
+      });
+      this.playNoise(0.4, 1200, 0.08, 'bandpass');
     }
   };
+
+  window.soundEngine = soundEngine;
 
   // ==========================================
   // OYUN DURUMU
@@ -613,7 +644,32 @@
     loadQuestionOnStage();
   }
 
-  // Parti Jüri (Hakem) Oturumu: Lider doğru cevapları görür, cevap veremez
+  let _lastHandledJudgeReactionId = null;
+
+  function checkAndPlayJudgeReactions(currentUsername) {
+    if (!currentUsername) return;
+    const party = svc().partyService?.getActivePartyForUser(currentUsername);
+    if (!party || !Array.isArray(party.judgeReactions)) return;
+    const clean = currentUsername.toLowerCase();
+    const latestReaction = party.judgeReactions[party.judgeReactions.length - 1];
+    if (!latestReaction || latestReaction.id === _lastHandledJudgeReactionId) return;
+
+    if (latestReaction.targetUsername && latestReaction.targetUsername.toLowerCase() === clean) {
+      _lastHandledJudgeReactionId = latestReaction.id;
+      if (latestReaction.reactionType === 'BELL') {
+        soundEngine.bellChime();
+        window.MCMPlatform?.showToast('🔔 Jüri dikkatini çekmek için zil çaldı!', 'warning');
+      } else if (latestReaction.reactionType === 'HORN') {
+        soundEngine.goatHorn();
+        window.MCMPlatform?.showToast('📯 Jüri savaş borusu çaldı: Coşkuyla devam!', 'info');
+      } else if (latestReaction.reactionType === 'CHEER') {
+        soundEngine.cheer();
+        window.MCMPlatform?.showToast('👏 Jüri seni alkışladı!', 'success');
+      }
+    }
+  }
+
+  // Parti Jüri (Hakem) Oturumu: Lider doğru cevapları görür, oyuncuların ekranını inceler
   function startPartyJudgeSession(party) {
     const session = svc().authService?.getActiveSession();
     if (!session) return;
@@ -638,6 +694,12 @@
     gameState.extraLifeUsedInMatch = false;
     gameState.lifelines = { fifty: false, audience: false, villager: false };
 
+    // Hedef oyuncuyu belirle (Kendisi haricindeki ilk oyuncu, yoksa ilk oyuncu)
+    const otherMembers = (party?.members || []).filter(
+      m => m && m.username && m.username.toLowerCase() !== session.username.toLowerCase()
+    );
+    gameState.judgeTargetPlayer = (otherMembers[0] || party?.members?.[0])?.username || session.username;
+
     // Jokerler hakem modunda kullanılamaz
     ['lifeline-5050', 'lifeline-audience', 'lifeline-villager'].forEach(id => {
       const btn = document.getElementById(id);
@@ -647,12 +709,161 @@
       }
     });
 
-    // Jüri HUD badge göster
-    document.getElementById('judge-hud-badge')?.classList.remove('hidden');
+    // Jüri Kontrol Paneli Göster
+    document.getElementById('judge-spectator-dashboard')?.classList.remove('hidden');
+    document.getElementById('judge-hud-badge')?.classList.add('hidden');
+
+    if (window._judgeSpectatorInterval) clearInterval(window._judgeSpectatorInterval);
+    window._judgeSpectatorInterval = setInterval(() => {
+      if (!gameState.active || !gameState.isJudgeMode) {
+        clearInterval(window._judgeSpectatorInterval);
+        window._judgeSpectatorInterval = null;
+        return;
+      }
+      renderJudgeSpectatorDashboard();
+    }, 1200);
 
     document.body.classList.add('screen-game-active');
     window.MCMPlatform?.navigateToScreen('game');
     loadQuestionOnStage();
+    renderJudgeSpectatorDashboard();
+  }
+
+  // Jüri Canlı Oyuncu İzleme Fonksiyonu
+  function renderJudgeSpectatorDashboard() {
+    if (!gameState.active || !gameState.isJudgeMode) return;
+    const session = svc().authService?.getActiveSession();
+    if (!session) return;
+
+    const dashEl = document.getElementById('judge-spectator-dashboard');
+    if (dashEl) dashEl.classList.remove('hidden');
+
+    const party = svc().partyService?.getActivePartyForUser(session.username);
+    if (!party || !Array.isArray(party.members)) return;
+
+    const members = party.members;
+    const progressMap = party.matchProgress || {};
+
+    if (!gameState.judgeTargetPlayer || !members.some(m => m.username.toLowerCase() === gameState.judgeTargetPlayer.toLowerCase())) {
+      const otherMember = members.find(m => m.username.toLowerCase() !== session.username.toLowerCase());
+      gameState.judgeTargetPlayer = (otherMember || members[0])?.username || session.username;
+    }
+
+    // Oyuncu Sekmelerini Çiz
+    const tabsBar = document.getElementById('judge-player-tabs-bar');
+    if (tabsBar) {
+      tabsBar.innerHTML = members
+        .map(m => {
+          const uName = m.username;
+          const clean = uName.toLowerCase();
+          const p = progressMap[clean] || {};
+          const qNum = (typeof p.questionIndex === 'number' ? p.questionIndex : 0) + 1;
+          const prize = p.currentPrize || m.score || 0;
+          const isActive = clean === (gameState.judgeTargetPlayer || '').toLowerCase();
+
+          let statusDotClass = 'playing';
+          let statusText = `Soru ${qNum}/15`;
+          if (p.didWin) {
+            statusDotClass = 'won';
+            statusText = '🏆 Kazandı';
+          } else if (p.isEliminated) {
+            statusDotClass = 'eliminated';
+            statusText = '💀 Elendi';
+          } else if (p.status === 'ANSWERED') {
+            statusText = `Soru ${qNum} (Cevapladı)`;
+          }
+
+          return `
+            <button type="button" class="judge-player-tab ${isActive ? 'active' : ''}" data-judge-target="${escapeHtml(uName)}">
+              <span class="judge-tab-dot ${statusDotClass}"></span>
+              <span class="judge-tab-name">${escapeHtml(uName)}</span>
+              <span class="judge-tab-badge">${statusText}</span>
+              <span class="judge-tab-badge gold-text">${formatCurrencyTRY(prize)}</span>
+            </button>
+          `;
+        })
+        .join('');
+    }
+
+    // İncelenen oyuncunun soru ve durumunu ekrana yansıt
+    const targetClean = (gameState.judgeTargetPlayer || session.username).toLowerCase();
+    const targetProg = progressMap[targetClean] || {};
+    const targetQIndex = Math.min(14, Math.max(0, typeof targetProg.questionIndex === 'number' ? targetProg.questionIndex : 0));
+    const targetPrize = targetProg.currentPrize || 0;
+
+    const uNameEl = document.getElementById('judge-inspected-username');
+    const qStepEl = document.getElementById('judge-inspected-qstep');
+    const prizeEl = document.getElementById('judge-inspected-prize');
+    const statusEl = document.getElementById('judge-inspected-status');
+
+    if (uNameEl) uNameEl.textContent = gameState.judgeTargetPlayer;
+    if (qStepEl) qStepEl.textContent = `Soru ${targetQIndex + 1} / 15`;
+    if (prizeEl) prizeEl.textContent = formatCurrencyTRY(targetPrize);
+    if (statusEl) {
+      if (targetProg.didWin) {
+        statusEl.className = 'judge-inspect-status-pill status-won';
+        statusEl.textContent = '🏆 1.000.000 ₺ KAZANDI!';
+      } else if (targetProg.isEliminated) {
+        statusEl.className = 'judge-inspect-status-pill status-eliminated';
+        statusEl.textContent = `💀 Soru ${targetQIndex + 1}'de Elendi`;
+      } else if (targetProg.status === 'ANSWERED') {
+        const letters = ['A', 'B', 'C', 'D'];
+        const chosenLetter = targetProg.chosenAnswer !== undefined ? letters[targetProg.chosenAnswer] : '?';
+        statusEl.className = 'judge-inspect-status-pill status-playing';
+        statusEl.textContent = `🟡 Şık Seçti: [${chosenLetter}]`;
+      } else {
+        statusEl.className = 'judge-inspect-status-pill status-playing';
+        statusEl.textContent = `🟢 Düşünüyor (Kalan: ${targetProg.timeLeft ?? 30}s)`;
+      }
+    }
+
+    // Sahnedeki soruyu hedeflenen oyuncunun sorusuna senkronize et
+    const qObj = gameState.questions[targetQIndex];
+    if (!qObj) return;
+
+    const stepInfo = PRIZE_LADDER[targetQIndex];
+    const numEl = document.getElementById('hud-question-num');
+    const safeEl = document.getElementById('hud-safe-prize');
+    const diffEl = document.getElementById('question-difficulty');
+    const prizeTagEl = document.getElementById('question-prize-tag');
+    const qTextEl = document.getElementById('question-text');
+    const walkAmtEl = document.getElementById('walk-away-amount');
+
+    if (numEl) numEl.textContent = `${targetQIndex + 1} / 15 (${gameState.judgeTargetPlayer})`;
+    if (safeEl) safeEl.textContent = `${(stepInfo?.safe ? stepInfo.amount : 0).toLocaleString('tr-TR')} ₺`;
+    if (diffEl) {
+      diffEl.textContent =
+        qObj.difficulty === 'easy'
+          ? 'KOLAY SEVİYE'
+          : qObj.difficulty === 'medium'
+          ? 'ORTA SEVİYE'
+          : 'ZOR SEVİYE';
+    }
+    if (prizeTagEl) prizeTagEl.textContent = `${stepInfo?.label || '100 ₺'} DEĞERİNDE SORU [İNCELENİYOR]`;
+    if (qTextEl) qTextEl.textContent = qObj.q;
+    if (walkAmtEl) walkAmtEl.textContent = `${targetPrize.toLocaleString('tr-TR')} ₺`;
+
+    for (let i = 0; i < 4; i++) {
+      const btn = document.getElementById(`ans-${i}`);
+      if (!btn) continue;
+      btn.disabled = true;
+      btn.className = 'answer-btn';
+      const txtSpan = btn.querySelector('.ans-text');
+      if (txtSpan) txtSpan.textContent = qObj.options[i];
+
+      // Doğru cevabı yeşil göster
+      if (i === qObj.answer) {
+        btn.classList.add('judge-correct-ans');
+      }
+      // Oyuncunun seçtiği cevabı sarı/altın göster
+      if (targetProg.chosenAnswer === i) {
+        btn.classList.add('judge-chosen-ans');
+      }
+    }
+
+    // Basamak merdiveninde incelenen oyuncunun basamağını işaretle
+    gameState.currentIndex = targetQIndex;
+    renderPrizeLadder();
   }
 
   // Parti Katılımcı Oturumu: Diğer oyuncular ortak sorularla oynar
@@ -662,6 +873,11 @@
 
     soundEngine.click();
     stopQuestionTimer();
+
+    if (window._judgeSpectatorInterval) {
+      clearInterval(window._judgeSpectatorInterval);
+      window._judgeSpectatorInterval = null;
+    }
 
     const matchQs = Array.isArray(party?.matchQuestions) && party.matchQuestions.length > 0
       ? party.matchQuestions
@@ -690,7 +906,8 @@
       }
     });
 
-    // Jüri HUD badge gizle
+    // Jüri panellerini gizle
+    document.getElementById('judge-spectator-dashboard')?.classList.add('hidden');
     document.getElementById('judge-hud-badge')?.classList.add('hidden');
 
     document.body.classList.add('screen-game-active');
@@ -702,6 +919,7 @@
   window.startNewGameSession = startNewGameSession;
   window.startPartyJudgeSession = startPartyJudgeSession;
   window.startPartyGameSession = startPartyGameSession;
+  window.renderJudgeSpectatorDashboard = renderJudgeSpectatorDashboard;
   window.buildMatchQuestions = buildMatchQuestions;
 
   function loadQuestionOnStage() {
@@ -753,19 +971,25 @@
       if (txtSpan) txtSpan.textContent = qObj.options[i];
     }
 
-    // Jüri Modu: Doğru cevabı işaretle, tüm butonları devre dışı bırak
+    // Jüri Modu: Oyuncunun sorusunu göster ve denetle
     if (gameState.isJudgeMode) {
-      for (let i = 0; i < 4; i++) {
-        const btn = document.getElementById(`ans-${i}`);
-        if (!btn) continue;
-        btn.disabled = true;
-        if (i === qObj.answer) {
-          btn.classList.add('judge-correct-ans');
-        }
-      }
-      renderPrizeLadder();
-      // Jüri modunda timer yoktur; otomatik ilerle
+      renderJudgeSpectatorDashboard();
       return;
+    }
+
+    // Parti maçıysa oyuncunun güncel ilerlemesini kaydet
+    if (gameState.isPartyMatch) {
+      const session = svc().authService?.getActiveSession();
+      if (session && svc().partyService) {
+        svc().partyService.updateMemberProgress(session.username, {
+          questionIndex: gameState.currentIndex,
+          currentPrize: gameState.currentPrize,
+          status: 'THINKING',
+          chosenAnswer: null,
+          timeLeft: gameState.timeLeft
+        });
+        svc().cloudSyncService?.pushNow();
+      }
     }
 
     renderPrizeLadder();
@@ -780,6 +1004,15 @@
     gameState.timer = setInterval(() => {
       gameState.timeLeft--;
       updateTimerUI();
+
+      // Parti maçında jüriden gelen ses/tepki kontrolü
+      if (gameState.isPartyMatch && !gameState.isJudgeMode) {
+        const session = svc().authService?.getActiveSession();
+        if (session) {
+          checkAndPlayJudgeReactions(session.username);
+        }
+      }
+
       if (gameState.timeLeft <= 0) {
         stopQuestionTimer();
         handleWrongOrTimeout(-1, 'Süre doldu!');
@@ -823,6 +1056,21 @@
     const chosenBtn = document.getElementById(`ans-${chosenIndex}`);
     chosenBtn?.classList.add('selected');
     soundEngine.click();
+
+    // Parti maçıysa seçilen cevabı ve durumu anında kaydet
+    if (gameState.isPartyMatch && !gameState.isJudgeMode) {
+      const session = svc().authService?.getActiveSession();
+      if (session && svc().partyService) {
+        svc().partyService.updateMemberProgress(session.username, {
+          questionIndex: gameState.currentIndex,
+          currentPrize: gameState.currentPrize,
+          status: 'ANSWERED',
+          chosenAnswer: chosenIndex,
+          timeLeft: gameState.timeLeft
+        });
+        svc().cloudSyncService?.pushNow();
+      }
+    }
 
     setTimeout(() => {
       chosenBtn?.classList.remove('selected');
@@ -887,6 +1135,17 @@
       }
     }
 
+    // Elenme durumunu partiye bildir
+    if (gameState.isPartyMatch && !gameState.isJudgeMode && session && svc().partyService) {
+      svc().partyService.updateMemberProgress(session.username, {
+        questionIndex: gameState.currentIndex,
+        currentPrize: gameState.safePrize,
+        status: 'ELIMINATED',
+        isEliminated: true
+      });
+      svc().cloudSyncService?.pushNow();
+    }
+
     const qObj = gameState.questions[gameState.currentIndex];
     if (qObj) {
       const correctBtn = document.getElementById(`ans-${qObj.answer}`);
@@ -906,6 +1165,11 @@
     stopQuestionTimer();
     gameState.active = false;
 
+    if (window._judgeSpectatorInterval) {
+      clearInterval(window._judgeSpectatorInterval);
+      window._judgeSpectatorInterval = null;
+    }
+
     const finalPrize = didWin
       ? 1000000
       : walkedAway
@@ -916,6 +1180,17 @@
 
     const session = svc().authService?.getActiveSession();
     if (session) {
+      // Parti ilerleme durumunu nihai olarak güncelle
+      if (gameState.isPartyMatch && !gameState.isJudgeMode && svc().partyService) {
+        svc().partyService.updateMemberProgress(session.username, {
+          questionIndex: gameState.currentIndex,
+          currentPrize: finalPrize,
+          status: didWin ? 'WON' : (walkedAway ? 'WALKED_AWAY' : 'ELIMINATED'),
+          isEliminated: !didWin && !walkedAway,
+          didWin: Boolean(didWin)
+        });
+        svc().cloudSyncService?.pushNow();
+      }
       // Kullanıcı istatistiklerini ve gerçek liderlik puanını güncelle
       svc().userService?.recordGameResult(session.username, {
         scoreEarned: finalPrize,
@@ -1838,6 +2113,63 @@
         walkedAway: false,
         explanation: qObj?.explanation || ''
       });
+    });
+
+    // Jüri Canlı Oyuncu Sekme Geçişi
+    document.getElementById('judge-player-tabs-bar')?.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-judge-target]');
+      if (!tab) return;
+      const targetUser = tab.getAttribute('data-judge-target');
+      if (targetUser) {
+        soundEngine.click();
+        gameState.judgeTargetPlayer = targetUser;
+        renderJudgeSpectatorDashboard();
+      }
+    });
+
+    // Jüri -> Katılımcı Rol Değişimi
+    document.getElementById('btn-judge-become-player')?.addEventListener('click', async () => {
+      const session = svc().authService?.getActiveSession();
+      if (!session) return;
+      const party = svc().partyService?.getActivePartyForUser(session.username);
+      if (!party) return;
+      try {
+        soundEngine.click();
+        svc().partyService.setPartyHostRole(session, party.partyId, 'PLAYER');
+        svc().cloudSyncService?.pushNow();
+        window.MCMPlatform?.showToast('🎮 Jüri modundan çıkıp katılımcı olarak maça katıldınız!', 'success');
+        startPartyGameSession(party);
+      } catch (err) {
+        window.MCMPlatform?.showToast(err.message, 'error');
+      }
+    });
+
+    // Jüri Reaksiyon Butonları (Zil, Boru, Alkış)
+    document.getElementById('btn-judge-send-bell')?.addEventListener('click', () => {
+      const session = svc().authService?.getActiveSession();
+      if (!session || !gameState.judgeTargetPlayer) return;
+      soundEngine.bellChime();
+      svc().partyService?.sendJudgeReaction(session.username, gameState.judgeTargetPlayer, 'BELL', '🔔 Dikkat et!');
+      svc().cloudSyncService?.pushNow();
+      window.MCMPlatform?.showToast(`🔔 ${gameState.judgeTargetPlayer} için Minecraft zili çalındı!`, 'info');
+    });
+
+    document.getElementById('btn-judge-send-horn')?.addEventListener('click', () => {
+      const session = svc().authService?.getActiveSession();
+      if (!session || !gameState.judgeTargetPlayer) return;
+      soundEngine.goatHorn();
+      svc().partyService?.sendJudgeReaction(session.username, gameState.judgeTargetPlayer, 'HORN', '📯 Coşkuyla devam!');
+      svc().cloudSyncService?.pushNow();
+      window.MCMPlatform?.showToast(`📯 ${gameState.judgeTargetPlayer} için savaş borusu çalındı!`, 'info');
+    });
+
+    document.getElementById('btn-judge-send-cheer')?.addEventListener('click', () => {
+      const session = svc().authService?.getActiveSession();
+      if (!session || !gameState.judgeTargetPlayer) return;
+      soundEngine.cheer();
+      svc().partyService?.sendJudgeReaction(session.username, gameState.judgeTargetPlayer, 'CHEER', '👏 Tebrikler!');
+      svc().cloudSyncService?.pushNow();
+      window.MCMPlatform?.showToast(`👏 ${gameState.judgeTargetPlayer} alkışlandı!`, 'success');
     });
   }
 

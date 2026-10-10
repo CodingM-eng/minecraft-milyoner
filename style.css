@@ -7482,5 +7482,479 @@ body.screen-game-active #screen-game {
   filter: brightness(1.15);
 }
 
+/* ========================================================
+   👤 1. OYUNCU PROFİL KARTI DÜZELTMESİ (MODAL PROFILE CARD FIX)
+   ======================================================== */
+.player-profile-modal-card {
+  max-width: 540px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.player-profile-modal-card .profile-hero-card,
+#modal-player-profile-hero {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 16px !important;
+  background: rgba(15, 23, 42, 0.9) !important;
+  border: 2px solid #25304d !important;
+  border-top: 4px solid var(--emerald) !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.player-profile-modal-card .profile-avatar-wrapper,
+#modal-player-profile-frame {
+  width: 84px !important;
+  height: 84px !important;
+  min-width: 84px !important;
+  min-height: 84px !important;
+  max-width: 84px !important;
+  max-height: 84px !important;
+  border: 3px solid #17dd62 !important;
+  background: #090d16 !important;
+  padding: 2px !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 4px !important;
+}
+
+.player-profile-modal-card .profile-avatar-wrapper img,
+.profile-avatar-lg,
+#modal-player-profile-avatar {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+  image-rendering: pixelated !important;
+  flex-shrink: 0 !important;
+  border-radius: 2px !important;
+}
+
+.player-profile-modal-card .profile-identity,
+.player-profile-modal-card .profile-identity-info {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  overflow: hidden !important;
+}
+
+.player-profile-modal-card .profile-name-row {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.player-profile-modal-card .profile-name-row h3,
+#modal-player-profile-username {
+  margin: 0 !important;
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  color: #fff !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.player-profile-modal-card .profile-mc-sub {
+  color: #94a3b8 !important;
+  font-size: 0.85rem !important;
+  margin: 2px 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.player-profile-modal-card .profile-joined-sub {
+  color: #64748b !important;
+  font-size: 0.78rem !important;
+  margin: 0 !important;
+}
+
+/* ========================================================
+   🎙️ 2. PARTİ SESLİ SOHBET (VOICE CHAT) & HIZLI REAKSİYONLAR
+   ======================================================== */
+.party-voice-panel {
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid #334155;
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 16px;
+  box-sizing: border-box;
+}
+
+.party-voice-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.party-voice-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.party-voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-party-mic {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid #475569;
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.btn-party-mic.mic-active {
+  background: #15803d !important;
+  border-color: #22c55e !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+}
+
+.btn-party-mic.mic-active:hover {
+  background: #16a34a !important;
+}
+
+.voice-level-meter-wrap {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-level-bar {
+  flex: 1;
+  height: 12px;
+  background: #090d16;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.voice-level-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #22c55e, #10b981, #eab308, #ef4444);
+  transition: width 0.08s ease;
+}
+
+.voice-status-text {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.party-voice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.party-voice-badge.speaking {
+  background: rgba(34, 197, 94, 0.25);
+  color: #86efac;
+  border: 1px solid #22c55e;
+  animation: voicePulse 1s infinite alternate;
+}
+
+.party-voice-badge.muted {
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+  border: 1px solid #475569;
+}
+
+@keyframes voicePulse {
+  0% { box-shadow: 0 0 2px rgba(34, 197, 94, 0.4); transform: scale(1); }
+  100% { box-shadow: 0 0 10px rgba(34, 197, 94, 0.8); transform: scale(1.05); }
+}
+
+.party-quick-sfx-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+.party-sfx-btn {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.party-sfx-btn:hover {
+  background: #334155;
+  border-color: var(--gold);
+  color: #ffffff;
+}
+
+.party-chat-messages-box {
+  max-height: 120px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  padding: 8px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.party-chat-msg-row {
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #cbd5e1;
+}
+
+.party-chat-msg-row strong {
+  color: var(--gold);
+}
+
+.party-quick-chat-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.party-pill-btn {
+  padding: 3px 8px;
+  font-size: 0.76rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.party-pill-btn:hover {
+  background: #334155;
+  color: #fff;
+  border-color: #64748b;
+}
+
+/* ========================================================
+   📺 3. JÜRİ CANLI OYUNCU İZLEME PANELİ (JUDGE SPECTATOR DASHBOARD)
+   ======================================================== */
+.judge-spectator-dashboard {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(9, 13, 22, 0.96));
+  border: 2px solid #f59e0b;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(245, 158, 11, 0.3);
+}
+
+.judge-spectator-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.judge-spectator-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fde68a;
+  letter-spacing: 0.5px;
+}
+
+.judge-player-tabs-bar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+.judge-player-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 2px solid #334155;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.judge-player-tab:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #60a5fa;
+}
+
+.judge-player-tab.active {
+  background: rgba(245, 158, 11, 0.18) !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+}
+
+.judge-tab-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.judge-tab-dot.playing {
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+}
+
+.judge-tab-dot.eliminated {
+  background: #ef4444;
+}
+
+.judge-tab-dot.won {
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+
+.judge-tab-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #ffffff;
+}
+
+.judge-tab-badge {
+  font-size: 0.76rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #0f172a;
+  color: #94a3b8;
+  border: 1px solid #334155;
+}
+
+.judge-inspected-player-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  margin-top: 4px;
+}
+
+.judge-inspect-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: #e2e8f0;
+}
+
+.judge-inspect-left strong {
+  color: var(--gold);
+}
+
+.judge-inspect-status-pill {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.judge-inspect-status-pill.status-playing {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid #22c55e;
+}
+
+.judge-inspect-status-pill.status-eliminated {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid #ef4444;
+}
+
+.judge-inspect-status-pill.status-won {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fde68a;
+  border: 1px solid #f59e0b;
+}
+
+.judge-inspect-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.judge-correct-ans {
+  border-color: #22c55e !important;
+  background: rgba(34, 197, 94, 0.25) !important;
+  color: #86efac !important;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5) !important;
+}
+
+.judge-chosen-ans {
+  border-color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.25) !important;
+  color: #fde68a !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.5) !important;
+}
+
 
 
