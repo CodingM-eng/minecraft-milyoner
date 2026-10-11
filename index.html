@@ -51,22 +51,30 @@
         </button>
       </div>
 
-      <!-- 🌐 GOOGLE KİMLİK DOĞRULAMA (İsteğe Bağlı & Açık Tıklama) -->
+      <!-- 🌐 GOOGLE & TELEGRAM KİMLİK DOĞRULAMA (İsteğe Bağlı) -->
       <div id="gate-google-login-box" class="firebase-auth-section" style="margin-bottom: 16px; padding: 14px; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 8px; text-align: center;">
         <p id="gate-google-prompt" style="margin: 0 0 10px 0; font-size: 0.88rem; color: #f8fafc; font-weight: 700;">
-          Google hesabınızla giriş yapabilirsiniz.
+          Hızlı ve Güvenli Giriş Seçenekleri
         </p>
-        <button type="button" id="btn-firebase-google-login" class="mc-btn mc-btn-primary mc-btn-lg" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem; padding: 12px 16px;">
-          <svg width="20" height="20" viewBox="0 0 24 24">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-          </svg>
-          <span id="btn-google-auth-text">Google ile Giriş Yap</span>
-        </button>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button type="button" id="btn-firebase-google-login" class="mc-btn mc-btn-primary mc-btn-lg" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem; padding: 10px 16px;">
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+            </svg>
+            <span id="btn-google-auth-text">Google ile Giriş Yap</span>
+          </button>
+          <button type="button" id="btn-telegram-login-auth" class="mc-btn mc-btn-secondary mc-btn-lg" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem; padding: 10px 16px; background: #229ED9; border-color: #1783b5; color: #ffffff;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/>
+            </svg>
+            <span>Telegram ile Giriş Yap</span>
+          </button>
+        </div>
         <p style="margin: 8px 0 0 0; font-size: 0.78rem; color: #94a3b8; line-height: 1.4;">
-          🔒 İsteğe bağlıdır. Google ile oturum açabilir veya aşağıdaki formu doldurabilirsiniz.
+          🔒 İsteğe bağlıdır. Google / Telegram ile bağlanabilir veya aşağıdaki klasik formu doldurabilirsiniz.
         </p>
       </div>
 
@@ -258,14 +266,14 @@
         </div>
       </form>
 
-      <!-- 6. KULLANICI ADI VE ŞİFRE BELİRLEME FORMU (Yeni Gmail Girişleri İçin) -->
+      <!-- 6. KULLANICI ADI, ŞİFRE & 3 SEÇENEKLİ AVATAR FORMU (Yeni Kayıt / Onboarding) -->
       <form id="access-gmail-setup-form" class="gate-form hidden" novalidate>
         <div style="text-align: center; margin-bottom: 12px;">
           <h3 style="margin: 0 0 6px 0; color: #34d399; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span>🛡️</span> <span>HESAP BİLGİLERİNİZİ BELİRLEYİN</span>
+            <span>🛡️</span> <span>HESAP BİLGİLERİNİZİ VE AVATARINIZI BELİRLEYİN</span>
           </h3>
           <p style="margin: 0; font-size: 0.82rem; color: #94a3b8; line-height: 1.4;">
-            Gmail adresiniz (<strong id="gate-setup-verified-email" style="color: #60a5fa;"></strong>) başarıyla doğrulandı! Platformda kullanacağınız kullanıcı adı ve şifrenizi belirleyin:
+            E-posta adresiniz (<strong id="gate-setup-verified-email" style="color: #60a5fa;"></strong>) başarıyla doğrulandı! Kullanıcı adı, şifre ve Minecraft avatar tercihinizi belirleyin:
           </p>
         </div>
 
@@ -274,9 +282,47 @@
           <input type="text" id="gate-setup-username" placeholder="Örn: EnderHero (3-20 karakter)" maxlength="20" autocomplete="username" required />
         </div>
 
-        <div class="input-group">
-          <label for="gate-setup-mc-name">İSTEĞE BAĞLI MINECRAFT OYUNCU ADI</label>
-          <input type="text" id="gate-setup-mc-name" placeholder="Örn: Steve (Avatarınız için)" maxlength="16" autocomplete="off" />
+        <!-- 3 Seçenekli Avatar Belirleme Alanı (#9) -->
+        <div style="margin-bottom: 14px; text-align: left;">
+          <label style="display: block; font-size: 0.8rem; color: #facc15; font-weight: bold; margin-bottom: 6px;">
+            🎨 PROFİL AVATARI SEÇİMİ (3 SEÇENEK)
+          </label>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px;">
+            <button type="button" class="mc-btn mc-btn-secondary mc-btn-xs avatar-opt-btn active" data-avatar-type="pixel" id="btn-avatar-opt-pixel" style="padding: 6px 4px; font-size: 0.75rem; text-align: center;">
+              🔤 Harf / Piksel
+            </button>
+            <button type="button" class="mc-btn mc-btn-secondary mc-btn-xs avatar-opt-btn" data-avatar-type="minecraft" id="btn-avatar-opt-mc" style="padding: 6px 4px; font-size: 0.75rem; text-align: center;">
+              🎮 Skin Yüzü
+            </button>
+            <button type="button" class="mc-btn mc-btn-secondary mc-btn-xs avatar-opt-btn" data-avatar-type="upload" id="btn-avatar-opt-upload" style="padding: 6px 4px; font-size: 0.75rem; text-align: center;">
+              🖼️ Görsel Yükle
+            </button>
+          </div>
+
+          <!-- Seçenek 1: Otomatik Minecraft Font / Piksel Avatar Önizleme -->
+          <div id="avatar-section-pixel" class="avatar-sub-section" style="background: rgba(15, 23, 42, 0.6); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; gap: 10px;">
+            <div id="setup-avatar-preview-pixel" style="width: 44px; height: 44px; background: #16a34a; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: bold; color: #ffffff; border: 2px solid #22c55e;">
+              M
+            </div>
+            <span style="font-size: 0.76rem; color: #cbd5e1;">Minecraft piksel tarzında baş harfinizden oluşturulan özel profil ikonu.</span>
+          </div>
+
+          <!-- Seçenek 2: Minecraft Skin Yüzü -->
+          <div id="avatar-section-mc" class="avatar-sub-section hidden" style="background: rgba(15, 23, 42, 0.6); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div class="input-group" style="margin-bottom: 6px;">
+              <input type="text" id="gate-setup-mc-name" placeholder="Minecraft Kullanıcı Adı (Örn: Notch, Steve)" maxlength="16" autocomplete="off" style="font-size: 0.85rem; padding: 6px 8px;" />
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <img id="setup-avatar-preview-mc" src="https://mc-heads.net/avatar/Steve/64" alt="Skin Önizleme" style="width: 40px; height: 40px; border-radius: 6px; border: 2px solid #38bdf8;" />
+              <span style="font-size: 0.74rem; color: #94a3b8;">Orijinal Minecraft oyuncu adınızı yazarak kafa kaplamanızı otomatik yükleyin.</span>
+            </div>
+          </div>
+
+          <!-- Seçenek 3: Cihazdan Görsel Yükle -->
+          <div id="avatar-section-upload" class="avatar-sub-section hidden" style="background: rgba(15, 23, 42, 0.6); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <input type="file" id="gate-setup-file-input" accept="image/png,image/jpeg,image/webp" style="font-size: 0.78rem; color: #cbd5e1; width: 100%;" />
+            <span style="display: block; font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">PNG, JPG veya WEBP (Maks 2 MB). Otomatik kırpılır.</span>
+          </div>
         </div>
 
         <div class="input-row-2">
@@ -436,6 +482,10 @@
           <button type="button" class="drawer-item" data-nav-screen="how-to-play">
             <span class="drawer-item-icon">📖</span>
             <span class="drawer-item-text">Nasıl Oynanır?</span>
+          </button>
+          <button type="button" class="drawer-item" data-nav-screen="sponsors">
+            <span class="drawer-item-icon">💎</span>
+            <span class="drawer-item-text">Sponsorlar</span>
           </button>
           <button type="button" class="drawer-item" data-nav-screen="settings">
             <span class="drawer-item-icon">⚙️</span>
@@ -1410,7 +1460,32 @@
     </main>
 
     <!-- ========================================================
-         14. EKRAN: AYARLAR (screen-settings)
+         14. EKRAN: SPONSORLAR VE ÖZEL KOZMETİKLER (screen-sponsors)
+         ======================================================== -->
+    <main id="screen-sponsors" class="screen platform-screen hidden">
+      <div class="platform-container">
+        <div class="section-header-bar">
+          <div>
+            <span class="section-eyebrow">💎 DESTEKÇİLERİMİZ &amp; AYRICALIKLAR</span>
+            <h2>SPONSORLAR VE KOZMETİK ÖDÜLLER</h2>
+          </div>
+          <button type="button" class="mc-btn mc-btn-secondary" data-nav-screen="welcome">← Ana Sayfa</button>
+        </div>
+
+        <div class="platform-card" style="margin-bottom: 16px;">
+          <p style="margin: 0; font-size: 0.9rem; color: #cbd5e1; line-height: 1.5;">
+            Minecraft Milyoner turnuvasını ve altyapımızı destekleyen resmi sponsorlarımız! Sponsorluk süresi boyunca oyuncularımıza özel çerçeve, ad efekti ve kozmetikler sunulmaktadır.
+          </p>
+        </div>
+
+        <div id="sponsors-grid-container" class="platform-grid-2">
+          <!-- Dinamik sponsor kartları platform.js tarafından doldurulur -->
+        </div>
+      </div>
+    </main>
+
+    <!-- ========================================================
+         15. EKRAN: AYARLAR (screen-settings)
          ======================================================== -->
     <main id="screen-settings" class="screen platform-screen hidden">
       <div class="platform-container">
@@ -1456,7 +1531,7 @@
     </main>
 
     <!-- ========================================================
-         15. EKRAN: TAM TÜRKÇE 15 BÖLÜMLÜ YÖNETİCİ PANELİ (screen-admin — #21)
+         16. EKRAN: TAM TÜRKÇE YÖNETİCİ PANELİ (screen-admin)
          ======================================================== -->
     <main id="screen-admin" class="screen platform-screen hidden">
       <div class="platform-container admin-container">
@@ -1476,7 +1551,7 @@
         </div>
 
         <div class="admin-layout">
-          <!-- 15 Bölümlü Sol Menü (#21) -->
+          <!-- Yönetici Menüsü -->
           <nav class="admin-sidebar" aria-label="Yönetici Paneli Bölümleri">
             <button type="button" class="admin-nav-btn active" data-admin-tab="dashboard">📊 Gösterge Paneli</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="players">👥 Oyuncular</button>
@@ -1487,6 +1562,7 @@
             <button type="button" class="admin-nav-btn" data-admin-tab="shop">🛒 Mağaza</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="payments">💳 Ödemeler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="discounts">🎟️ İndirim &amp; Kuponlar</button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="sponsors">💎 Sponsorlar</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="telegram">🤖 Telegram Bot</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="notifications">🔔 Bildirimler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="support">🎧 Destek</button>
@@ -1496,6 +1572,7 @@
             <button type="button" class="admin-nav-btn" data-admin-tab="activities">📜 Aktiviteler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="settings">⚙️ Ayarlar</button>
           </nav>
+
 
           <!-- Sağ İçerik Alanı -->
           <div class="admin-content-area" id="admin-content-area"></div>
@@ -1981,6 +2058,87 @@
       </svg>
     </div>
   </div>
+
+  <!-- ========================================================
+       🎧 24/7 MINECRAFT TEMALI YÜZEN DESTEK BUTONU (Sağ Alt Köşe)
+       ======================================================== -->
+  <div id="floating-support-btn" class="floating-support-btn" title="7/24 Minecraft Destek Hattı">
+    <div class="support-btn-pulse"></div>
+    <span class="support-btn-icon">🎧</span>
+    <span class="support-btn-badge hidden" id="support-unread-badge">1</span>
+  </div>
+
+  <!-- 🎧 24/7 Destek Modalı / Canlı Sohbet Paneli -->
+  <div id="modal-support-widget" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-support-title">
+    <div class="mc-modal-card support-widget-card" style="max-width: 520px; height: 85vh; max-height: 620px; display: flex; flex-direction: column;">
+      <div class="mc-modal-header" style="background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.3rem;">🎧</span>
+          <div>
+            <h3 id="modal-support-title" style="margin: 0; font-size: 1rem; color: #ffffff;">24/7 MINECRAFT DESTEK MERKEZİ</h3>
+            <span style="font-size: 0.72rem; color: #a7f3d0;">Telegram Yetkili Ekibi &amp; Canlı Yanıt Hattı</span>
+          </div>
+        </div>
+        <button type="button" id="btn-close-support-modal" class="drawer-close-btn" aria-label="Kapat">✕</button>
+      </div>
+
+      <div class="mc-modal-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 12px;">
+        <!-- Sekmeler: Yeni Talep Aç / Taleplerim -->
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <button type="button" id="tab-support-create" class="mc-btn mc-btn-gold mc-btn-xs" style="flex: 1;">
+            ➕ Yeni Talep Aç
+          </button>
+          <button type="button" id="tab-support-list" class="mc-btn mc-btn-secondary mc-btn-xs" style="flex: 1;">
+            📋 Taleplerim &amp; Yanıtlar
+          </button>
+        </div>
+
+        <!-- 1. Yeni Destek Talebi Oluşturma Formu -->
+        <div id="support-view-create" style="flex: 1; overflow-y: auto;">
+          <form id="support-ticket-form">
+            <div class="input-group" style="margin-bottom: 8px;">
+              <label for="support-category-select" style="font-size: 0.78rem;">KATEGORİ</label>
+              <select id="support-category-select" class="form-input" style="font-size: 0.85rem; padding: 6px 8px;">
+                <option value="Ödeme ve Rütbeler">💳 Ödeme ve Rütbeler (Stripe / Kod)</option>
+                <option value="Hesap ve Giriş">👤 Hesap ve Giriş (Google / OTP)</option>
+                <option value="Zümrüt ve Netherite">🟢 Zümrüt &amp; Netherite Ekonomisi</option>
+                <option value="Parti ve Turnuva">🎉 Parti, Sesli Sohbet ve Turnuvalar</option>
+                <option value="Teknik Sorun">⚙️ Teknik Sorun &amp; Bağlantı</option>
+                <option value="Diğer">❓ Diğer Konular</option>
+              </select>
+            </div>
+            <div class="input-group" style="margin-bottom: 8px;">
+              <label for="support-subject-input" style="font-size: 0.78rem;">KONU BAŞLIĞI</label>
+              <input type="text" id="support-subject-input" placeholder="Örn: VIP+ rütbem tanımlanmadı" maxlength="60" required style="font-size: 0.85rem; padding: 6px 8px;" />
+            </div>
+            <div class="input-group" style="margin-bottom: 10px;">
+              <label for="support-message-input" style="font-size: 0.78rem;">MESAJINIZ (DETAYLI AÇIKLAYIN)</label>
+              <textarea id="support-message-input" rows="5" placeholder="Yaşadığınız durumu veya sorunuzu yazın. Telegram destek ekibimize anında iletilecektir." required style="font-size: 0.85rem; padding: 6px 8px; resize: none;"></textarea>
+            </div>
+            <button type="submit" id="btn-submit-support-ticket" class="mc-btn mc-btn-primary mc-btn-block" style="padding: 10px;">
+              📨 DESTEK TALEBİNİ İLET
+            </button>
+          </form>
+        </div>
+
+        <!-- 2. Taleplerim ve Canlı Sohbet Görünümü -->
+        <div id="support-view-list" class="hidden" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+          <div id="support-tickets-history" style="flex: 1; overflow-y: auto; margin-bottom: 8px; display: flex; flex-direction: column; gap: 8px;">
+            <!-- Dinamik Bilet Listesi / Sohbet Mesajları -->
+          </div>
+
+          <!-- Seçili Bilette Cevap Yazma Alanı -->
+          <div id="support-reply-box" class="hidden" style="display: flex; gap: 6px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <input type="text" id="support-reply-input" placeholder="Yetkiliye yanıt yazın..." style="flex: 1; font-size: 0.85rem; padding: 6px 8px;" />
+            <button type="button" id="btn-send-support-reply" class="mc-btn mc-btn-primary mc-btn-xs" style="white-space: nowrap;">
+              Gönder
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Firebase SDK Compat & Yapılandırma -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>

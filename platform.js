@@ -806,6 +806,9 @@
       case 'settings':
         renderSettings();
         break;
+      case 'sponsors':
+        renderSponsors();
+        break;
       case 'admin':
         renderAdmin();
         break;
@@ -2379,48 +2382,195 @@
   }
 
   // ==========================================
-  // 10. DESTEK SİSTEMİ (renderSupport)
+  // 10. DESTEK SİSTEMİ (renderSupport & Floating Modal Widget)
   // ==========================================
+  let activeSelectedSupportTicketId = null;
+
   function renderSupport() {
     const session = getSession();
     if (!session) return;
     const listEl = document.getElementById('support-tickets-list');
-    if (!listEl) return;
+    const widgetHistoryEl = document.getElementById('support-tickets-history');
 
     const tickets = svc().supportService.getUserTickets(session.username);
-    if (tickets.length === 0) {
-      listEl.innerHTML = `<div class="empty-state-box">Henüz destek talebiniz bulunmuyor.</div>`;
-      return;
+
+    // 1. Ekrandaki destek listesi (#support-tickets-list)
+    if (listEl) {
+      if (tickets.length === 0) {
+        listEl.innerHTML = `<div class="empty-state-box">Henüz destek talebiniz bulunmuyor. Sağ alttaki 🎧 butonundan veya formdan talep oluşturabilirsiniz.</div>`;
+      } else {
+        listEl.innerHTML = tickets
+          .map(
+            t => `
+            <div class="ticket-card" style="cursor:pointer;" onclick="window.MCMPlatform?.openSupportWidgetWithTicket?.('${escapeHtml(t.id)}')">
+              <div class="ticket-header">
+                <strong>#${escapeHtml(t.id)} — ${escapeHtml(t.subject)}</strong>
+                <span class="status-pill status-${escapeHtml(t.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(
+              t.status
+            )}</span>
+              </div>
+              <p class="ticket-meta">Kategori: ${escapeHtml(t.category)} • ${t.claimedBy ? `Yetkili: <strong>${escapeHtml(t.claimedBy)}</strong> • ` : ''}${formatDateTR(t.createdAt)}</p>
+              <div class="ticket-messages">
+                ${(t.messages || [])
+                  .slice(-2)
+                  .map(
+                    m => `
+                    <div class="ticket-msg ${m.senderRole === 'ADMIN' ? 'msg-admin' : 'msg-user'}">
+                      <strong>${escapeHtml(m.sender)} (${m.senderRole === 'ADMIN' ? 'Yönetici' : 'Siz'}):</strong>
+                      <p>${escapeHtml(m.text)}</p>
+                    </div>
+                  `
+                  )
+                  .join('')}
+              </div>
+            </div>
+          `
+          )
+          .join('');
+      }
     }
 
-    listEl.innerHTML = tickets
-      .map(
-        t => `
-        <div class="ticket-card">
-          <div class="ticket-header">
-            <strong>#${escapeHtml(t.id)} — ${escapeHtml(t.subject)}</strong>
-            <span class="status-pill status-${escapeHtml(t.status.toLowerCase())}">${escapeHtml(
-          t.status
-        )}</span>
+    // 2. Yüzen Destek Modalı (#support-tickets-history)
+    if (widgetHistoryEl) {
+      if (tickets.length === 0) {
+        widgetHistoryEl.innerHTML = `
+          <div class="empty-state-box" style="padding: 20px; text-align: center; color: #94a3b8;">
+            Henüz açık bir destek talebiniz yok.<br />
+            Yukarıdaki <strong>"➕ Yeni Talep Aç"</strong> butonuna tıklayarak ilk talebinizi oluşturabilirsiniz.
           </div>
-          <p class="ticket-meta">Kategori: ${escapeHtml(t.category)} • Öncelik: ${escapeHtml(
-          t.priority
-        )} • ${formatDateTR(t.createdAt)}</p>
-          <div class="ticket-messages">
-            ${(t.messages || [])
+        `;
+        const replyBox = document.getElementById('support-reply-box');
+        if (replyBox) replyBox.classList.add('hidden');
+      } else {
+        // Eğer seçili bilet yoksa ilk bileti varsayılan yap
+        if (!activeSelectedSupportTicketId || !tickets.find(t => t.id === activeSelectedSupportTicketId)) {
+          activeSelectedSupportTicketId = tickets[0].id;
+        }
+
+        const selectedTicket = tickets.find(t => t.id === activeSelectedSupportTicketId) || tickets[0];
+        const replyBox = document.getElementById('support-reply-box');
+        if (replyBox) replyBox.classList.remove('hidden');
+
+        let ticketSelectorHtml = `
+          <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1);">
+            ${tickets
               .map(
-                m => `
-                <div class="ticket-msg ${m.senderRole === 'ADMIN' ? 'msg-admin' : 'msg-user'}">
-                  <strong>${escapeHtml(m.sender)} (${m.senderRole === 'ADMIN' ? 'Yönetici' : 'Siz'}):</strong>
-                  <p>${escapeHtml(m.text)}</p>
-                </div>
-              `
+                t => `
+              <button type="button" class="mc-btn mc-btn-xs ${t.id === selectedTicket.id ? 'mc-btn-primary' : 'mc-btn-secondary'}" data-select-ticket="${escapeHtml(t.id)}" style="white-space:nowrap;">
+                #${escapeHtml(t.id)} (${escapeHtml(t.status)})
+              </button>
+            `
               )
               .join('')}
           </div>
+        `;
+
+        let convoHeader = `
+          <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:6px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong style="color:#6ee7b7; font-size:0.88rem;">#${escapeHtml(selectedTicket.id)}: ${escapeHtml(selectedTicket.subject)}</strong>
+              <span class="status-pill status-${escapeHtml(selectedTicket.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(selectedTicket.status)}</span>
+            </div>
+            <div style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">
+              Kategori: <strong>${escapeHtml(selectedTicket.category)}</strong> ${selectedTicket.claimedBy ? `• Yetkili: <strong style="color:#fde047;">${escapeHtml(selectedTicket.claimedBy)}</strong>` : '• <em>Yetkili atanması bekleniyor</em>'}
+            </div>
+          </div>
+        `;
+
+        let messagesHtml = (selectedTicket.messages || [])
+          .map(m => {
+            const isAdmin = m.senderRole === 'ADMIN';
+            return `
+              <div class="chat-bubble ${isAdmin ? 'bubble-admin' : 'bubble-user'}" style="margin-bottom:8px; max-width:85%; align-self:${isAdmin ? 'flex-start' : 'flex-end'}; background:${isAdmin ? 'rgba(30,58,138,0.7)' : 'rgba(5,150,105,0.7)'}; border:1px solid ${isAdmin ? '#3b82f6' : '#10b981'}; border-radius:8px; padding:8px 12px;">
+                <div style="display:flex; justify-content:space-between; gap:12px; margin-bottom:2px; font-size:0.75rem; color:${isAdmin ? '#93c5fd' : '#a7f3d0'};">
+                  <strong>${escapeHtml(m.sender)} ${isAdmin ? '🛡️ (Yetkili)' : '👤'}</strong>
+                  <span>${formatDateTR(m.timestamp || m.createdAt)}</span>
+                </div>
+                <div style="font-size:0.86rem; color:#f8fafc; line-height:1.4; word-break:break-word;">
+                  ${escapeHtml(m.text)}
+                </div>
+              </div>
+            `;
+          })
+          .join('');
+
+        widgetHistoryEl.innerHTML = ticketSelectorHtml + convoHeader + messagesHtml;
+        widgetHistoryEl.scrollTop = widgetHistoryEl.scrollHeight;
+      }
+    }
+  }
+
+  function openSupportWidgetWithTicket(ticketId) {
+    activeSelectedSupportTicketId = ticketId;
+    const modal = document.getElementById('modal-support-widget');
+    if (modal) {
+      modal.classList.remove('hidden');
+      const tabList = document.getElementById('tab-support-list');
+      if (tabList) tabList.click();
+      renderSupport();
+    }
+  }
+
+  // ==========================================
+  // SPONSORLAR VE KOZMETİKLER (renderSponsors)
+  // ==========================================
+  function renderSponsors() {
+    const container = document.getElementById('sponsors-grid-container');
+    if (!container) return;
+
+    const sponsors = svc().sponsorService?.getActiveSponsors?.() || [];
+    if (sponsors.length === 0) {
+      container.innerHTML = `
+        <div class="platform-card" style="grid-column: 1 / -1; text-align: center; padding: 30px 20px;">
+          <h3 style="color: #cbd5e1; margin-bottom: 8px;">💎 Aktif Sponsor Bulunmuyor</h3>
+          <p style="color: #94a3b8; font-size: 0.88rem; margin: 0;">
+            Şu anda süresi devam eden resmi sponsorluk bulunmamaktadır. Yeni turnuva sponsorlukları için destek ekibimizle iletişime geçebilirsiniz.
+          </p>
         </div>
-      `
-      )
+      `;
+      return;
+    }
+
+    container.innerHTML = sponsors
+      .map(sp => {
+        const cosmeticList = (sp.cosmetics || []).map(c => `
+          <li style="margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+            <span>✨</span> <strong>${escapeHtml(c.name || c.id)}</strong> (${escapeHtml(c.type || 'Kozmetik')})
+          </li>
+        `).join('');
+
+        return `
+          <div class="platform-card" style="display: flex; flex-direction: column; justify-content: space-between; border: 1px solid rgba(56, 189, 248, 0.35); background: linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(30,41,59,0.7) 100%);">
+            <div>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 1.8rem;">💎</span>
+                  <div>
+                    <h3 style="margin: 0; color: #38bdf8; font-size: 1.15rem;">${escapeHtml(sp.name)}</h3>
+                    <span style="font-size: 0.75rem; color: #94a3b8;">Resmi Platform Destekçisi</span>
+                  </div>
+                </div>
+                <span class="status-pill status-open" style="background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.4);">✓ Aktif</span>
+              </div>
+              <p style="font-size: 0.86rem; color: #e2e8f0; line-height: 1.5; margin-bottom: 14px;">
+                ${escapeHtml(sp.description || '')}
+              </p>
+              ${sp.cosmetics && sp.cosmetics.length > 0 ? `
+                <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 10px 12px; margin-bottom: 14px;">
+                  <span style="display: block; font-size: 0.78rem; color: #fde047; font-weight: bold; margin-bottom: 6px;">🎁 ÖZEL SPONSORLUK KOZMETİKLERİ:</span>
+                  <ul style="margin: 0; padding-left: 14px; font-size: 0.82rem; color: #cbd5e1;">
+                    ${cosmeticList}
+                  </ul>
+                </div>
+              ` : ''}
+            </div>
+            <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px; display: flex; align-items: center; justify-content: space-between; font-size: 0.76rem; color: #94a3b8;">
+              <span>🗓️ Başlangıç: ${formatDateTR(sp.startDate)}</span>
+              <span>⏳ Bitiş: ${formatDateTR(sp.endDate)}</span>
+            </div>
+          </div>
+        `;
+      })
       .join('');
   }
 
@@ -3455,6 +3605,74 @@
       return;
     }
 
+    // 8.1.1 SPONSORLAR YÖNETİMİ (sponsors — Sponsorlar ve Süreli Kozmetikler)
+    if (state.adminTab === 'sponsors') {
+      const allSponsors = svc().sponsorService ? svc().sponsorService.getAllSponsors() : [];
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>💎 Yeni Sponsor Ekle / Düzenle</h3>
+          <form id="admin-create-sponsor-form" class="platform-form" style="margin-bottom:24px;">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>SPONSOR ADI</label>
+                <input type="text" id="adm-sp-name" placeholder="Örn: CraftTurk Sunucu Sağlayıcı" required />
+              </div>
+              <div class="input-group">
+                <label>SPONSORLUK SÜRESİ (GÜN)</label>
+                <input type="number" id="adm-sp-duration" value="30" min="1" max="365" required />
+              </div>
+            </div>
+            <div class="input-group">
+              <label>AÇIKLAMA / PROMOSYON METNİ</label>
+              <textarea id="adm-sp-desc" rows="2" placeholder="Sponsor hakkında kısa tanıtım..." required></textarea>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>ÖZEL KOZMETİK ADI (İSTEĞE BAĞLI)</label>
+                <input type="text" id="adm-sp-cosmetic-name" placeholder="Örn: CraftTurk Parıltılı Çerçevesi" />
+              </div>
+              <div class="input-group">
+                <label>KOZMETİK TÜRÜ</label>
+                <select id="adm-sp-cosmetic-type">
+                  <option value="avatarFrame">Çerçeve (Avatar Frame)</option>
+                  <option value="nameColor">İsim Rengi (Name Color)</option>
+                  <option value="badge">Rozet (Badge)</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="mc-btn mc-btn-gold">💎 Sponsoru Kaydet ve Yayınla</button>
+          </form>
+
+          <h3>📋 Mevcut Sponsorlar (${allSponsors.length})</h3>
+          <div class="table-responsive">
+            <table class="mc-table">
+              <thead>
+                <tr>
+                  <th>Sponsor</th>
+                  <th>Kozmetik</th>
+                  <th>Başlangıç</th>
+                  <th>Bitiş</th>
+                  <th>Durum</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${allSponsors.length === 0 ? `<tr><td colspan="5" style="text-align:center;">Henüz sponsor eklenmedi.</td></tr>` : allSponsors.map(sp => `
+                  <tr>
+                    <td><strong>${escapeHtml(sp.name)}</strong></td>
+                    <td>${(sp.cosmetics || []).map(c => escapeHtml(c.name || c.id)).join(', ') || '-'}</td>
+                    <td>${formatDateTR(sp.startDate)}</td>
+                    <td>${formatDateTR(sp.endDate)}</td>
+                    <td><span style="color:${sp.active !== false ? '#22c55e' : '#ef4444'};font-weight:bold;">${sp.active !== false ? '✓ Aktif' : 'Pasif/Süresi Doldu'}</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
     // 8.2 TELEGRAM BOT YAPILANDIRMASI (telegram — Sunucu Oylaması Bot Ayarları #8)
     if (state.adminTab === 'telegram') {
       const tgCfg = svc().telegramService.getConfig();
@@ -3526,32 +3744,74 @@
       return;
     }
 
-    // 10. DESTEK (support)
+    // 10. DESTEK (support — 24/7 Destek, Telegram Bağlantısı, Sahiplenme & AI Yanıt Önizleme)
     if (state.adminTab === 'support') {
       const tickets = supportService.getAllTickets();
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>🎧 Destek Talepleri (${tickets.length})</h3>
+          <h3>🎧 24/7 Destek Talepleri &amp; Telegram Hattı (${tickets.length})</h3>
           ${
             tickets.length === 0
               ? `<div class="empty-state-box">Kayıtlı destek talebi bulunmuyor.</div>`
               : tickets
                   .map(
                     t => `
-                    <div class="ticket-card">
+                    <div class="ticket-card" style="border: 1px solid ${t.claimedBy ? '#3b82f6' : '#f59e0b'};">
                       <div class="ticket-header">
                         <strong>#${escapeHtml(t.id)} — ${escapeHtml(t.subject)} (${escapeHtml(
                       t.username
                     )} • ${escapeHtml(t.category)})</strong>
-                        <span class="status-pill">${escapeHtml(t.status)}</span>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                          <span class="status-pill status-${escapeHtml(t.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(t.status)}</span>
+                          ${
+                            t.claimedBy
+                              ? `<span class="profile-mini-tag" style="background:rgba(59,130,246,0.2);color:#93c5fd;border:1px solid #3b82f6;">👤 Yetkili: ${escapeHtml(t.claimedBy)}</span>`
+                              : `<button type="button" class="mc-btn mc-btn-xs mc-btn-gold" data-admin-claim-ticket="${escapeHtml(t.id)}">🎯 Talebi Sahiplen</button>`
+                          }
+                        </div>
                       </div>
-                      <div class="inline-form-row" style="margin-top:8px;">
-                        <input type="text" id="adm-sup-reply-${escapeHtml(
-                          t.id
-                        )}" placeholder="Oyuncuya yanıt yazın..." />
-                        <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-reply-ticket="${escapeHtml(
-                          t.id
-                        )}">Yanıtla</button>
+                      <p class="ticket-meta">
+                        Kullanıcı: <strong>${escapeHtml(t.username)}</strong>
+                        ${t.userMinecraft ? ` (MC: ${escapeHtml(t.userMinecraft)})` : ''} •
+                        Rütbe: <strong>${escapeHtml(t.userRank || 'MEMBER')}</strong> •
+                        Bakiye: <strong>${Number(t.userEmeralds || 0)} 🟢 / ${Number(t.userNetherite || 0)} ⬛</strong> •
+                        Tarih: ${formatDateTR(t.createdAt)}
+                      </p>
+                      <div class="ticket-messages" style="margin:8px 0;max-height:160px;overflow-y:auto;background:rgba(0,0,0,0.25);padding:8px;border-radius:6px;">
+                        ${(t.messages || []).map(m => `
+                          <div style="font-size:0.82rem;margin-bottom:4px;color:${m.senderRole === 'ADMIN' ? '#93c5fd' : '#cbd5e1'};">
+                            <strong>${escapeHtml(m.sender)} (${m.senderRole === 'ADMIN' ? 'Yetkili' : 'Kullanıcı'}):</strong> ${escapeHtml(m.text)}
+                          </div>
+                        `).join('')}
+                      </div>
+
+                      <!-- Yönetici Yanıt & AI İyileştirme Alanı -->
+                      <div style="margin-top:10px;">
+                        <div style="display:flex;gap:6px;margin-bottom:6px;">
+                          <select id="adm-sup-status-${escapeHtml(t.id)}" class="admin-inline-select" style="font-size:0.8rem;padding:4px 8px;">
+                            <option value="AÇIK" ${t.status === 'AÇIK' ? 'selected' : ''}>AÇIK</option>
+                            <option value="İŞLENİYOR" ${t.status === 'İŞLENİYOR' ? 'selected' : ''}>İŞLENİYOR</option>
+                            <option value="KULLANICI_BEKLENİYOR" ${t.status === 'KULLANICI_BEKLENİYOR' ? 'selected' : ''}>KULLANICI BEKLENİYOR</option>
+                            <option value="ÇÖZÜLDÜ" ${t.status === 'ÇÖZÜLDÜ' ? 'selected' : ''}>ÇÖZÜLDÜ</option>
+                          </select>
+                          <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary" data-admin-update-ticket-status="${escapeHtml(t.id)}">Durumu Güncelle</button>
+                        </div>
+                        <textarea id="adm-sup-reply-${escapeHtml(t.id)}" rows="2" placeholder="Oyuncuya yanıt yazın..." style="width:100%;box-sizing:border-box;font-size:0.84rem;padding:6px;margin-bottom:6px;"></textarea>
+
+                        <!-- AI İyileştirme Önizleme Alanı -->
+                        <div id="adm-ai-preview-box-${escapeHtml(t.id)}" class="hidden" style="margin-bottom:8px;padding:8px;background:rgba(16,185,129,0.15);border:1px solid #10b981;border-radius:6px;">
+                          <div style="font-size:0.75rem;color:#86efac;font-weight:bold;margin-bottom:4px;">🤖 AI İLE DÜZENLENMİŞ ÖNERİLEN YANIT (ÖNİZLEME):</div>
+                          <div id="adm-ai-preview-text-${escapeHtml(t.id)}" style="font-size:0.82rem;color:#f8fafc;line-height:1.4;margin-bottom:6px;"></div>
+                          <div style="display:flex;gap:6px;">
+                            <button type="button" class="mc-btn mc-btn-xs mc-btn-emerald" data-admin-send-ai-reply="${escapeHtml(t.id)}">✅ AI ile Düzenlenmiş Mesajı Gönder</button>
+                            <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary" data-admin-cancel-ai-preview="${escapeHtml(t.id)}">Vazgeç</button>
+                          </div>
+                        </div>
+
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                          <button type="button" class="mc-btn mc-btn-sm mc-btn-primary" data-admin-reply-ticket="${escapeHtml(t.id)}">Orijinal Mesajı Gönder</button>
+                          <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-admin-ai-improve-ticket="${escapeHtml(t.id)}">🤖 AI ile İyileştir (Önizle)</button>
+                        </div>
                       </div>
                     </div>
                   `
@@ -3677,12 +3937,26 @@
       return;
     }
 
-    // 13. YEDEKLER (backups)
+    // 13. YEDEKLER (backups — Otomatik Bulut Yedekleme & Canlı Veriyi Etkilemeyen Test Restore Bütünlüğü)
     if (state.adminTab === 'backups') {
       const snapshots = backupService.getSnapshots();
+      const lastAutoBackup = localStorage.getItem('MCM_LAST_AUTO_BACKUP');
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>💾 Veri Yedekleme ve Geri Yükleme</h3>
+          <h3>💾 Veri Yedekleme ve Otomatik Bulut Güvenliği</h3>
+          <div style="margin-bottom:14px;padding:12px 14px;background:rgba(15,23,42,0.8);border:1px solid #38bdf8;border-radius:6px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div>
+              <span style="display:block;font-size:0.8rem;color:#94a3b8;">Otomatik Bulut Yedekleme Durumu:</span>
+              <strong style="color:#22c55e;">✓ Aktif (Her Değişiklikte ve Periyodik Olarak Alınır)</strong>
+              <div style="font-size:0.75rem;color:#cbd5e1;margin-top:2px;">
+                Son Yedekleme Zamanı: <strong>${formatDateTR(lastAutoBackup)}</strong>
+              </div>
+            </div>
+            <button type="button" id="btn-admin-verify-restore" class="mc-btn mc-btn-sm mc-btn-gold">
+              🔍 Test Restore &amp; Bütünlük Doğrula
+            </button>
+          </div>
+
           <div class="header-bar-actions" style="margin-bottom:16px;">
             <button type="button" id="btn-admin-create-snapshot" class="mc-btn mc-btn-primary">📸 Yeni Anlık Yedek Oluştur</button>
             <button type="button" id="btn-admin-export-json" class="mc-btn mc-btn-gold">⬇️ JSON Olarak İndir</button>
@@ -3699,9 +3973,14 @@
                           <strong>${escapeHtml(sn.label)}</strong>
                           <span class="tx-date">${formatDateTR(sn.createdAt)}</span>
                         </div>
-                        <button type="button" class="mc-btn mc-btn-sm mc-btn-secondary" data-admin-restore-snap="${escapeHtml(
-                          sn.id
-                        )}">Geri Yükle</button>
+                        <div style="display:flex;gap:6px;">
+                          <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary" data-admin-test-restore-snap="${escapeHtml(
+                            sn.id
+                          )}">🔍 Test Doğrula</button>
+                          <button type="button" class="mc-btn mc-btn-xs mc-btn-primary" data-admin-restore-snap="${escapeHtml(
+                            sn.id
+                          )}">Geri Yükle</button>
+                        </div>
                       </div>
                     `
                     )
@@ -4550,8 +4829,90 @@
       modal?.classList.remove('hidden');
     }
 
+    // 🎧 24/7 Destek Butonu ve Modalı Eylemleri
+    document.getElementById('floating-support-btn')?.addEventListener('click', () => {
+      const modal = document.getElementById('modal-support-widget');
+      if (modal) {
+        modal.classList.remove('hidden');
+        renderSupport();
+      }
+    });
+
+    document.getElementById('btn-close-support-modal')?.addEventListener('click', () => {
+      document.getElementById('modal-support-widget')?.classList.add('hidden');
+    });
+
+    document.getElementById('tab-support-create')?.addEventListener('click', () => {
+      document.getElementById('tab-support-create')?.classList.add('mc-btn-gold');
+      document.getElementById('tab-support-create')?.classList.remove('mc-btn-secondary');
+      document.getElementById('tab-support-list')?.classList.remove('mc-btn-gold');
+      document.getElementById('tab-support-list')?.classList.add('mc-btn-secondary');
+      document.getElementById('support-view-create')?.classList.remove('hidden');
+      document.getElementById('support-view-list')?.classList.add('hidden');
+    });
+
+    document.getElementById('tab-support-list')?.addEventListener('click', () => {
+      document.getElementById('tab-support-list')?.classList.add('mc-btn-gold');
+      document.getElementById('tab-support-list')?.classList.remove('mc-btn-secondary');
+      document.getElementById('tab-support-create')?.classList.remove('mc-btn-gold');
+      document.getElementById('tab-support-create')?.classList.add('mc-btn-secondary');
+      document.getElementById('support-view-create')?.classList.add('hidden');
+      document.getElementById('support-view-list')?.classList.remove('hidden');
+      renderSupport();
+    });
+
+    // Destek Talebi Oluşturma Formu (Widget)
+    document.getElementById('support-ticket-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const cat = document.getElementById('support-category-select')?.value || 'Diğer';
+      const sub = document.getElementById('support-subject-input')?.value || '';
+      const msg = document.getElementById('support-message-input')?.value || '';
+      const submitBtn = document.getElementById('btn-submit-support-ticket');
+      try {
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ İletiliyor...'; }
+        const created = await svc().supportService.createTicket(session, {
+          category: cat,
+          subject: sub,
+          message: msg
+        });
+        showToast('✓ Destek talebiniz oluşturuldu ve Telegram destek ekibimize iletildi!', 'success');
+        e.target.reset();
+        activeSelectedSupportTicketId = created.id;
+        document.getElementById('tab-support-list')?.click();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '📨 DESTEK TALEBİNİ İLET'; }
+      }
+    });
+
+    // Destek Talebine Oyuncu Yanıtı Gönderme (Widget)
+    document.getElementById('btn-send-support-reply')?.addEventListener('click', async () => {
+      const session = getSession();
+      if (!session || !activeSelectedSupportTicketId) return;
+      const inputEl = document.getElementById('support-reply-input');
+      const text = String(inputEl?.value || '').trim();
+      if (!text) return;
+      try {
+        await svc().supportService.replyToTicket(session, activeSelectedSupportTicketId, text);
+        if (inputEl) inputEl.value = '';
+        renderSupport();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
     // Genel Tıklama Delegasyonu (Navigasyon, Oyuncu Profili, Mağaza, Bildirimler, Parti Daveti, Admin İşlemleri)
     document.addEventListener('click', async e => {
+      // Destek bilet seçimi widget içi ([data-select-ticket])
+      const ticketSelectBtn = e.target.closest('[data-select-ticket]');
+      if (ticketSelectBtn) {
+        activeSelectedSupportTicketId = ticketSelectBtn.getAttribute('data-select-ticket');
+        renderSupport();
+        return;
+      }
       // 0. Oyuncu Profili Görüntüle ([data-view-profile])
       const viewProfileTrigger = e.target.closest('[data-view-profile]');
       if (viewProfileTrigger) {
@@ -5327,6 +5688,112 @@
         return;
       }
 
+      const claimTicketBtn = e.target.closest('[data-admin-claim-ticket]');
+      if (claimTicketBtn) {
+        const tId = claimTicketBtn.getAttribute('data-admin-claim-ticket');
+        try {
+          svc().supportService.claimTicket(session, tId);
+          showToast(`🎯 #${tId} numaralı destek talebini sahiplendiniz!`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const updateTicketStatusBtn = e.target.closest('[data-admin-update-ticket-status]');
+      if (updateTicketStatusBtn) {
+        const tId = updateTicketStatusBtn.getAttribute('data-admin-update-ticket-status');
+        const statusVal = document.getElementById(`adm-sup-status-${tId}`)?.value || 'İŞLENİYOR';
+        try {
+          svc().supportService.updateTicketStatus(session, tId, statusVal);
+          showToast(`#${tId} bilet durumu "${statusVal}" olarak güncellendi.`, 'info');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const aiImproveBtn = e.target.closest('[data-admin-ai-improve-ticket]');
+      if (aiImproveBtn) {
+        const tId = aiImproveBtn.getAttribute('data-admin-ai-improve-ticket');
+        const draftText = String(document.getElementById(`adm-sup-reply-${tId}`)?.value || '').trim();
+        if (!draftText) {
+          showToast('Lütfen önce bir yanıt taslağı yazın.', 'warning');
+          return;
+        }
+        try {
+          aiImproveBtn.disabled = true;
+          aiImproveBtn.textContent = '⏳ Düzenleniyor...';
+          const improved = await svc().supportService.getAiSuggestedReply(tId, draftText);
+          const previewBox = document.getElementById(`adm-ai-preview-box-${tId}`);
+          const previewText = document.getElementById(`adm-ai-preview-text-${tId}`);
+          if (previewBox && previewText) {
+            previewText.textContent = improved;
+            previewBox.classList.remove('hidden');
+          }
+        } catch (err) {
+          showToast(err.message, 'error');
+        } finally {
+          aiImproveBtn.disabled = false;
+          aiImproveBtn.textContent = '🤖 AI ile İyileştir (Önizle)';
+        }
+        return;
+      }
+
+      const cancelAiPreviewBtn = e.target.closest('[data-admin-cancel-ai-preview]');
+      if (cancelAiPreviewBtn) {
+        const tId = cancelAiPreviewBtn.getAttribute('data-admin-cancel-ai-preview');
+        const previewBox = document.getElementById(`adm-ai-preview-box-${tId}`);
+        if (previewBox) previewBox.classList.add('hidden');
+        return;
+      }
+
+      const sendAiReplyBtn = e.target.closest('[data-admin-send-ai-reply]');
+      if (sendAiReplyBtn) {
+        const tId = sendAiReplyBtn.getAttribute('data-admin-send-ai-reply');
+        const improvedText = document.getElementById(`adm-ai-preview-text-${tId}`)?.textContent || '';
+        try {
+          svc().supportService.replyToTicket(session, tId, improvedText);
+          showToast('✅ AI ile düzenlenmiş yanıt başarıyla gönderildi!', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-admin-verify-restore')) {
+        try {
+          const res = svc().backupService.verifyRestoreIntegrity();
+          if (res.valid) {
+            showToast(`✓ Bütünlük doğrulandı! Canlı veri etkilenmeden ${res.accountCount} hesap ve ${res.ticketCount} bilet başarıyla test edildi.`, 'success');
+          } else {
+            showToast(`⚠️ Doğrulama hatası: ${res.error}`, 'error');
+          }
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      const testRestoreBtn = e.target.closest('[data-admin-test-restore-snap]');
+      if (testRestoreBtn) {
+        const snId = testRestoreBtn.getAttribute('data-admin-test-restore-snap');
+        try {
+          const res = svc().backupService.verifyRestoreIntegrity(snId);
+          if (res.valid) {
+            showToast(`✓ Yedek (${snId}) başarıyla test edildi! Canlı veri etkilenmedi.`, 'success');
+          } else {
+            showToast(`⚠️ Yedek testi başarısız: ${res.error}`, 'error');
+          }
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
       const restoreSnapBtn = e.target.closest('[data-admin-restore-snap]');
       if (restoreSnapBtn) {
         try {
@@ -5494,6 +5961,29 @@
             maxUses
           });
           showToast(`🎟️ "${code.toUpperCase()}" indirim kuponu oluşturuldu!`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-create-sponsor-form') {
+        e.preventDefault();
+        try {
+          const name = document.getElementById('adm-sp-name')?.value || '';
+          const durationDays = Number(document.getElementById('adm-sp-duration')?.value || 30);
+          const description = document.getElementById('adm-sp-desc')?.value || '';
+          const cosmeticName = document.getElementById('adm-sp-cosmetic-name')?.value || '';
+          const cosmeticType = document.getElementById('adm-sp-cosmetic-type')?.value || 'avatarFrame';
+          const cosmetics = cosmeticName
+            ? [{ id: `sp_${Date.now()}`, name: cosmeticName, type: cosmeticType }]
+            : [];
+
+          svc().sponsorService.saveSponsor(session, {
+            name,
+            durationDays,
+            description,
+            cosmetics
+          });
+          showToast(`💎 "${name}" sponsoru kaydedildi ve yayınlandı!`, 'success');
           renderAdmin();
         } catch (err) {
           showToast(err.message, 'error');
