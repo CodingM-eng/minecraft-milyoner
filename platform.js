@@ -1213,6 +1213,114 @@
       </div>
     `;
 
+  function renderRankComparisonModal() {
+    const container = document.getElementById('dynamic-rank-comp-container');
+    if (!container) return;
+
+    const ranks = svc().rankService.getAllRanks();
+    const displayRanks = ranks.filter(r => ['MEMBER', 'VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(r.id));
+
+    const tableHtml = `
+      <div class="rank-comp-card-wrap">
+        <table class="mc-table rank-comp-table" style="width:100%;font-size:0.86rem;">
+          <thead>
+            <tr>
+              <th style="text-align:left;min-width:140px;">Özellik / Ayrıcalık</th>
+              ${displayRanks
+                .map(
+                  r => `
+                <th style="color:${r.color};text-align:center;">
+                  <div style="font-size:1.1rem;">${r.badge || ''}</div>
+                  <div>${r.name}</div>
+                </th>`
+                )
+                .join('')}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Fiyat (Stripe / TRY)</strong></td>
+              ${displayRanks
+                .map(r => `<td>${r.priceTry ? `${Number(r.priceTry).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺` : 'Ücretsiz'}</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td><strong>Netherite Fiyatı</strong></td>
+              ${displayRanks
+                .map(r => `<td>${r.netheritePrice ? `${Number(r.netheritePrice).toLocaleString('tr-TR')} ⬛` : '-'}</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td><strong>İlk Satın Alma Bonusu</strong></td>
+              ${displayRanks
+                .map(r => `<td>${r.id === 'VIP' ? '+50 ⬛' : ['VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(r.id) ? '+250 ⬛' : '-'}</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td><strong>Günlük Zümrüt Ödülü</strong></td>
+              ${displayRanks
+                .map(r => `<td><strong>+${r.dailyEmerald || 50}</strong> 🟢</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td><strong>Günlük Netherite Ödülü</strong></td>
+              ${displayRanks
+                .map(r => `<td>${r.dailyNetherite > 0 ? `<strong>+${r.dailyNetherite}</strong> ⬛` : '-'}</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td><strong>Zümrüt Çarpanı</strong></td>
+              ${displayRanks
+                .map(r => `<td>${r.permissions?.emeraldMultiplier || '1.0'}x</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td><strong>Maksimum Parti Kapasitesi</strong></td>
+              ${displayRanks
+                .map(r => `<td>${r.permissions?.maxPartySize || 4} Kişi</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td><strong>Destek / Hata Bildirim Önceliği</strong></td>
+              ${displayRanks
+                .map(r => {
+                  const prioMap = { NORMAL: 'Normal', HIGH: 'Yüksek', VERY_HIGH: 'Çok Yüksek', CRITICAL: 'Kritik / Anında' };
+                  return `<td>${prioMap[r.permissions?.supportPriority || 'NORMAL'] || 'Normal'}</td>`;
+                })
+                .join('')}
+            </tr>
+            <tr>
+              <td><strong>Sohbet & İsim Efektleri</strong></td>
+              <td>Standart Beyaz</td>
+              <td>VIP Gökyüzü Mavisi</td>
+              <td>VIP+ Eflatun Işıltı</td>
+              <td>MVIP Altın Gradyan</td>
+              <td>MVIP+ Canlı RGB Gökkuşağı</td>
+            </tr>
+            <tr>
+              <td><strong>Özel Rozetler & Çerçeveler</strong></td>
+              <td>Standart Çerçeve</td>
+              <td>Altın Muhafız Çerçevesi</td>
+              <td>Elmas Kristal Çerçeve</td>
+              <td>Antik Netherite Çerçeve</td>
+              <td>Ender Ejderhası & Ametist Çerçeve</td>
+            </tr>
+            <tr>
+              <td><strong>Soru Temaları & Zafer Efekti</strong></td>
+              <td>Klasik Taş Teması</td>
+              <td>Obsidyen & Kızıltaş Odası</td>
+              <td>Havai Fişek Şovu</td>
+              <td>Nether Kalesi Teması</td>
+              <td>Ölümsüzlük Totemi Patlaması</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    container.innerHTML = tableHtml;
+  }
+
     container.innerHTML = compHeaderHtml + purchasableRanks
       .map(rank => {
         const isOwnedOrHigher = userRank.order >= rank.order;
@@ -1283,8 +1391,114 @@
     const grid = document.getElementById('shop-items-grid');
     if (!grid) return;
 
-    const { shopService, rankService, avatarService } = svc();
-    const items = shopService.getItemsByCategory(category);
+    const { shopService, rankService, avatarService, sponsorService } = svc();
+    const searchQuery = String(document.getElementById('shop-search-input')?.value || '').trim().toLowerCase();
+
+    // Özel Sekme 1: Sponsor Ürünleri
+    if (category === 'Sponsors') {
+      const activeSponsors = sponsorService ? sponsorService.getActiveSponsors() : [];
+      if (activeSponsors.length === 0) {
+        grid.innerHTML = `<div class="empty-state-box" style="grid-column:1/-1;">Şu anda aktif bir sponsorluk kampanyası bulunmamaktadır.</div>`;
+        return;
+      }
+      grid.innerHTML = activeSponsors
+        .map(sp => {
+          const typeNames = {
+            TYPE_A: 'Geçici Sponsor Rütbesi',
+            TYPE_B: 'Kalıcı Ödül & Kozmetik',
+            TYPE_C: 'Sponsor Rütbesi + Kalıcı Ödül Paketi'
+          };
+          return `
+            <div class="shop-item-card" style="border-top: 4px solid #f59e0b;">
+              <div class="shop-item-top">
+                <span class="shop-item-icon">${sp.logo || '🤝'}</span>
+                <span class="shop-item-cat-tag">Resmi Sponsor</span>
+              </div>
+              <h4 class="shop-item-title">${escapeHtml(sp.name)}</h4>
+              <p class="shop-item-desc">${escapeHtml(sp.description || '')}</p>
+              <div class="rank-daily-netherite-pill" style="margin-bottom:10px;">
+                🎁 <strong>Model:</strong> ${typeNames[sp.type] || sp.type}
+              </div>
+              <div class="rank-daily-netherite-pill muted" style="margin-bottom:10px;">
+                ✨ <strong>Özel Eşya:</strong> ${escapeHtml(sp.sponsoredCosmeticName || 'Özel Çerçeve')}
+              </div>
+              <div class="shop-item-actions">
+                <button type="button" class="mc-btn mc-btn-gold mc-btn-block" disabled>
+                  ✓ Aktif Sponsorluk Ortaklığı
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+      return;
+    }
+
+    // Özel Sekme 2: Hediye Gönder
+    if (category === 'Gift') {
+      grid.innerHTML = `
+        <div class="shop-item-card" style="grid-column: 1 / -1; max-width: 600px; margin: 0 auto; text-align: center; padding: 24px;">
+          <div style="font-size: 2.5rem; margin-bottom: 12px;">🎁</div>
+          <h3 style="color:#facc15;margin-bottom:8px;">Arkadaşına Rütbe veya Kozmetik Hediye Et</h3>
+          <p style="color:#94a3b8;font-size:0.9rem;margin-bottom:16px;">
+            Arkadaşlarınızın bilgi yarışması yolculuğuna destek olun! Rütbeler sekmesinden herhangi bir rütbenin altındaki <strong>"🎁 Arkadaşına Hediye Et"</strong> butonuna tıklayarak doğrudan arkadaşınızın adına hediye satın alabilirsiniz.
+          </p>
+          <button type="button" class="mc-btn mc-btn-gold" onclick="document.querySelector('[data-shop-cat=Ranks]')?.click()">
+            👑 Rütbeleri İncele ve Hediye Gönder
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    // Özel Sekme 3: Satın Aldıklarım (Envanter)
+    if (category === 'Inventory') {
+      const ownedList = Array.isArray(user.ownedCosmetics) ? user.ownedCosmetics : [];
+      const purchases = shopService.getUserPurchases(user.username);
+      if (ownedList.length === 0 && purchases.length === 0) {
+        grid.innerHTML = `<div class="empty-state-box" style="grid-column:1/-1;">Henüz satın aldığınız bir eşya veya kozmetik bulunmuyor.</div>`;
+        return;
+      }
+      const allCatalogItems = shopService.getAllItems(true);
+      const userItems = allCatalogItems.filter(i => ownedList.includes(i.id));
+
+      grid.innerHTML = userItems
+        .map(item => {
+          const isEquipped = Object.values(user.equippedCosmetics || {}).includes(item.id);
+          return `
+            <div class="shop-item-card">
+              <div class="shop-item-top">
+                <span class="shop-item-icon">${mcIcon(item.id || item.icon, 28)}</span>
+                <span class="shop-item-cat-tag">Envanterinizde</span>
+              </div>
+              <h4 class="shop-item-title">${escapeHtml(item.name)}</h4>
+              <p class="shop-item-desc">${escapeHtml(item.description)}</p>
+              <div class="rank-daily-netherite-pill" style="margin-bottom:10px;">
+                🛡️ <strong>Kalıcı Sahiplik:</strong> Hesabınıza tanımlıdır.
+              </div>
+              <div class="shop-item-actions">
+                <button type="button" class="mc-btn ${
+                  isEquipped ? 'mc-btn-secondary' : 'mc-btn-primary'
+                } mc-btn-block" data-equip-cosmetic="${escapeHtml(item.id)}">
+                  ${isEquipped ? '✓ Kuşanıldı (Çıkarmak İçin Tıkla)' : '✨ Hemen Kuşan'}
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+      return;
+    }
+
+    let items = shopService.getItemsByCategory(category);
+    if (searchQuery) {
+      items = items.filter(
+        i =>
+          String(i.name || '').toLowerCase().includes(searchQuery) ||
+          String(i.description || '').toLowerCase().includes(searchQuery)
+      );
+    }
+
     const ownedCosmetics = Array.isArray(user.ownedCosmetics) ? user.ownedCosmetics : [];
     const equipped = user.equippedCosmetics || {};
     const avatarSrc = avatarService ? avatarService.getAvatarForUser(user) : '';
@@ -1311,7 +1525,7 @@
     };
 
     if (items.length === 0) {
-      grid.innerHTML = `<div class="empty-state-box">Bu kategoride henüz ürün bulunmuyor.</div>`;
+      grid.innerHTML = `<div class="empty-state-box" style="grid-column:1/-1;">Bu kriterlere uygun ürün bulunamadı.</div>`;
       return;
     }
 
@@ -4805,6 +5019,20 @@
       }
     });
 
+    // Mağaza Arama Çubuğu Canlı Filtreleme (Phase 7)
+    document.getElementById('shop-search-input')?.addEventListener('input', () => {
+      if (state.currentScreen === 'shop') {
+        const session = getSession();
+        if (session) {
+          const user = svc().userService.getUserByUsername(session.username);
+          const userRank = svc().rankService.getUserRank(session.username);
+          if (user && userRank && state.shopCategory !== 'Ranks') {
+            renderShopItemsGrid(user, userRank, state.shopCategory);
+          }
+        }
+      }
+    });
+
     let activeStripeCheckoutData = null;
 
     function openStripeCheckoutModal(rankId, isGift = false, recipient = '') {
@@ -5044,6 +5272,7 @@
 
       // 7.1 Rütbe Karşılaştırma Tablosunu Aç / Kapat (#5)
       if (e.target.closest('#btn-open-rank-comparison')) {
+        renderRankComparisonModal();
         document.getElementById('modal-rank-comparison')?.classList.remove('hidden');
         return;
       }

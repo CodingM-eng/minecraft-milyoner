@@ -2339,7 +2339,19 @@
     getItemsByCategory(category = 'ALL') {
       const items = this.getAllItems(false);
       if (!category || category === 'ALL') return items;
-      return items.filter(i => i.category === category);
+      if (category === 'Badges') {
+        return items.filter(i => i.subCategory === 'Badges' || String(i.id).startsWith('BADGE_'));
+      }
+      if (category === 'ProfileCustom') {
+        return items.filter(i => ['Avatar Frames', 'Name Colors', 'Profile Effects'].includes(i.subCategory));
+      }
+      if (category === 'Cosmetics') {
+        return items.filter(i => i.category === 'Cosmetics');
+      }
+      if (category === 'Special') {
+        return items.filter(i => i.category === 'Special' || i.category === 'Netherite' || i.category === 'Emeralds');
+      }
+      return items.filter(i => i.category === category || i.subCategory === category);
     },
 
     getUserPurchases(username) {

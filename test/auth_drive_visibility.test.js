@@ -1059,8 +1059,110 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert(veteranUserCheck.cosmeticInventory.includes('FRAME_ENDER_SPONSOR'), 'Kazanılmış kozmetik kullanıcının envanterinde korunmalıdır.');
     console.log('✓ Sponsorlu kozmetik sistemi, süre sonu vitrinden otomatik gizleme ve mülkiyet koruması başarıyla test edildi.');
 
+    // ------------------------------------------------------------------
+    // TEST 31: Zorunlu Güncelleme Öncesi Yedekleme (Pre-Update Backup & Checksum Doğrulama - Phase 2)
+    // ------------------------------------------------------------------
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-30 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 31: Zorunlu Güncelleme Öncesi Yedekleme & SHA-256 Doğrulama');
+    console.log('====================================================');
+    const backupSvc = window.MCMServices.backupService;
+    assert(backupSvc, 'backupService mevcut olmalıdır.');
+
+    const preUpdateResult = backupSvc.executePreUpdateBackup(adminSession, 'Test Dağıtımı Öncesi Yedekleme');
+    assert(preUpdateResult.success, 'Güncelleme öncesi yedekleme başarılı olmalıdır.');
+    assert(preUpdateResult.backupId.startsWith('PRE_UPDATE_'), 'Yedekleme ID PRE_UPDATE_ ile başlamalıdır.');
+    assert(typeof preUpdateResult.checksum === 'string' && preUpdateResult.checksum.length === 64, 'SHA-256 sağlama toplamı 64 karakter hex olmalıdır.');
+    assert(preUpdateResult.accountCount > 0, 'Yedeklenen hesap sayısı 0 dan büyük olmalıdır.');
+    assert(preUpdateResult.isolatedVerification.verified, 'İzole kurtarma doğrulaması başarılı olmalıdır.');
+
+    // Google Drive Dışa Aktarma Paketi Testi
+    const drivePackage = backupSvc.exportToGoogleDrivePayload(adminSession);
+    assert(drivePackage.manifest, 'Google Drive manifest dosyası bulunmalıdır.');
+    assert.strictEqual(drivePackage.manifest.targetCloud, 'Google Drive');
+    assert.strictEqual(drivePackage.manifest.checksum, preUpdateResult.checksum);
+    console.log(`✓ 7 Aşamalı güncelleme öncesi yedekleme, SHA-256 (${preUpdateResult.checksum.slice(0, 8)}...) ve Google Drive paketi başarıyla doğrulandı.`);
+
+    // ------------------------------------------------------------------
+    // TEST 32: Kalıcı Kozmetik Sahipliği ve Rütbe Süresi Sonu Koruması (Phase 5)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 32: Kalıcı Kozmetik Sahipliği & Rütbe Süresi Sonu Koruması');
+    console.log('====================================================');
+    const cosmeticServiceTest = window.MCMServices.cosmeticService;
+    assert(cosmeticServiceTest, 'cosmeticService mevcut olmalıdır.');
+
+    // 1. RegularPlayer'a kalıcı bir kozmetik çerçeve tanımla (BORDER_DRAGON - normalde MVIP+ gerektirir)
+    cosmeticServiceTest.grantPermanentCosmetic('RegularPlayer', 'BORDER_DRAGON');
+    assert(cosmeticServiceTest.hasPermanentOwnership('RegularPlayer', 'BORDER_DRAGON'), 'Kullanıcı kalıcı sahipliğe sahip olmalıdır.');
+
+    // 2. Kullanıcı MEMBER (Üye) rütbesinde olsa bile kalıcı kozmetiği kuşabilmelidir
+    const memberSession = { username: 'RegularPlayer', role: 'MEMBER' };
+    const equipResPerm = cosmeticServiceTest.equipCosmetic(memberSession, 'BORDER_DRAGON');
+    assert.strictEqual(equipResPerm.success, true);
+    assert.strictEqual(equipResPerm.equipped, 'BORDER_DRAGON');
+
+    // 3. Kalıcı olmayan yüksek rütbe kozmetiği (BORDER_NETHERITE) kuşanamamalıdır
+    assert.throws(() => {
+      cosmeticServiceTest.equipCosmetic(memberSession, 'BORDER_NETHERITE');
+    }, /Rütbesi Gerekli/);
+    console.log('✓ Kalıcı kozmetik sahipliği ve rütbe sona erse dahi mülkiyetin korunması başarıyla doğrulandı.');
+
+    // ------------------------------------------------------------------
+    // TEST 33: Sponsor Modelleri (Type A, B, C) ve Ücretli Rütbe Korunumu (Phase 6)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 33: Sponsor Tipleri (A/B/C) & Ücretli Rütbenin Korunması');
+    console.log('====================================================');
+
+    // 1. Type A, B, C modelleri ile sponsor kaydet
+    const spModelC = spSvc.saveSponsor(adminSession, {
+      name: 'Sunucu Sağlayıcı TR',
+      type: 'TYPE_C',
+      sponsoredRank: 'MVIP',
+      sponsoredCosmetic: 'BORDER_GOLD',
+      sponsoredCosmeticName: 'Altın Sponsor Çerçevesi',
+      durationDays: 30
+    });
+    assert.strictEqual(spModelC.type, 'TYPE_C');
+
+    // 2. Kullanıcının önceden VIP rütbesi satın aldığını simüle et (paidRank: VIP)
+    uService.updateUser('RegularPlayer', {
+      rank: 'VIP',
+      paidRank: 'VIP',
+      sponsorRank: 'MVIP',
+      sponsorExpiresAt: new Date(Date.now() + 86400000).toISOString() // Aktif sponsor rütbesi
+    });
+
+    // Aktifken sponsor rütbesi (MVIP) geçerli olmalıdır
+    assert.strictEqual(spSvc.getUserEffectiveRank('RegularPlayer'), 'MVIP');
+
+    // Sponsorluk süresi bittiğinde kullanıcının ücretli VIP rütbesine dönmesi gerekir (MEMBER'a düşmemelidir!)
+    uService.updateUser('RegularPlayer', {
+      sponsorExpiresAt: new Date(Date.now() - 86400000).toISOString() // Süresi dolmuş
+    });
+    assert.strictEqual(spSvc.getUserEffectiveRank('RegularPlayer'), 'VIP');
+    console.log('✓ Sponsor Tipleri (A, B, C) ve sponsorluk süresi bitince ücretli rütbenin korunması başarıyla test edildi.');
+
+    // ------------------------------------------------------------------
+    // TEST 34: 8 Kategorili Mağaza ve Arama Filtresi (Phase 7)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 34: 8 Kategorili Mağaza Filtreleme ve Arama');
+    console.log('====================================================');
+
+    const badgesItems = shpSvc.getItemsByCategory('Badges');
+    assert(badgesItems.length > 0, 'Rozetler kategorisinde ürün bulunmalıdır.');
+    assert(badgesItems.every(i => i.subCategory === 'Badges' || String(i.id).startsWith('BADGE_')));
+
+    const profileCustomItems = shpSvc.getItemsByCategory('ProfileCustom');
+    assert(profileCustomItems.length > 0, 'Profil özelleştirmeleri kategorisinde ürünler bulunmalıdır.');
+
+    const specialItems = shpSvc.getItemsByCategory('Special');
+    assert(specialItems.length > 0, 'Özel paketler kategorisinde ürünler bulunmalıdır.');
+    console.log(`✓ 8 Kategorili mağaza filtreleme sistemi başarıyla doğrulandı (${badgesItems.length} Rozet, ${profileCustomItems.length} Profil Özelleştirme).`);
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-34 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

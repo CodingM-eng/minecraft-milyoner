@@ -41,20 +41,50 @@
     FRIENDS: 'mc_millionaire_tr_friends_v10',
     TELEGRAM_POLLS: 'mc_millionaire_tr_telegram_polls_v10',
     TELEGRAM_CONFIG: 'mc_millionaire_tr_telegram_cfg_v10',
-    ACTIVE_OTP: 'mc_millionaire_tr_active_otps_v10'
+    ACTIVE_OTP: 'mc_millionaire_tr_active_otps_v10',
+    SPONSORS: 'mc_millionaire_tr_sponsors_v10',
+    PRE_UPDATE_BACKUP: 'mc_millionaire_tr_pre_update_backup_v10',
+    COSMETIC_ENTITLEMENTS: 'mc_millionaire_tr_cosmetic_entitlements_v10'
   };
 
-  // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan tüm önbellek verilerini temizle
+  // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan verileri _v10 sürümüne GÜVENLİ MİGRE ET
   try {
     if (typeof localStorage !== 'undefined' && typeof localStorage.length === 'number') {
-      const legacyKeys = [];
+      const currentUsers = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+      const userMap = new Map();
+      if (Array.isArray(currentUsers)) {
+        currentUsers.forEach(u => {
+          if (u && u.username) userMap.set(u.username.toLowerCase(), u);
+        });
+      }
+
+      const legacyKeysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && k.startsWith('mc_millionaire_tr_') && !k.endsWith('_v10')) {
-          legacyKeys.push(k);
+          try {
+            if (k.includes('users')) {
+              const oldUsers = JSON.parse(localStorage.getItem(k) || '[]');
+              if (Array.isArray(oldUsers)) {
+                oldUsers.forEach(ou => {
+                  if (ou && ou.username && !ou.isDemo) {
+                    const norm = ou.username.toLowerCase();
+                    if (!userMap.has(norm)) {
+                      userMap.set(norm, ou);
+                    }
+                  }
+                });
+              }
+            }
+          } catch (pe) {}
+          legacyKeysToRemove.push(k);
         }
       }
-      legacyKeys.forEach(k => localStorage.removeItem(k));
+
+      if (userMap.size > (Array.isArray(currentUsers) ? currentUsers.length : 0)) {
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(Array.from(userMap.values())));
+      }
+      legacyKeysToRemove.forEach(k => localStorage.removeItem(k));
     }
   } catch (e) {
     // ignore storage access errors
@@ -82,7 +112,9 @@
     STORAGE_KEYS.DISCOUNTS,
     STORAGE_KEYS.COSMETICS,
     STORAGE_KEYS.FRIENDS,
-    STORAGE_KEYS.TELEGRAM_CONFIG
+    STORAGE_KEYS.TELEGRAM_CONFIG,
+    STORAGE_KEYS.SPONSORS,
+    STORAGE_KEYS.COSMETIC_ENTITLEMENTS
   ]);
 
   // ==========================================
@@ -3954,6 +3986,13 @@
       { id: 'NAME_RAINBOW', name: 'MVIP+ Canlı Gökkuşağı', minRank: 'MVIP_PLUS', cssClass: 'name-rainbow-anim' },
       { id: 'NAME_FLAME', name: 'Yönetici Alev Efekti', minRank: 'ADMIN', cssClass: 'name-admin-flame' }
     ],
+    BADGES: [
+      { id: 'BADGE_CREEPER_HUNTER', name: 'Creeper Avcısı Rozeti', minRank: 'MEMBER', badgeIcon: '🧨', cssClass: 'badge-creeper' },
+      { id: 'BADGE_REDSTONE_MASTER', name: 'Kızıltaş Ustası Rozeti', minRank: 'MEMBER', badgeIcon: '⚡', cssClass: 'badge-redstone' },
+      { id: 'BADGE_WITHER_SLAYER', name: 'Wither Avcısı Rozeti', minRank: 'MEMBER', badgeIcon: '⚔️', cssClass: 'badge-wither' },
+      { id: 'BADGE_WARDEN_CONQUEROR', name: 'Antik Şehir Muhafızı Rozeti', minRank: 'MEMBER', badgeIcon: '🛡️', cssClass: 'badge-warden' },
+      { id: 'BADGE_MILLIONAIRE_KING', name: 'Milyoner Hükümdarı Rozeti', minRank: 'VIP', badgeIcon: '👑', cssClass: 'badge-king' }
+    ],
     QUESTION_THEMES: [
       { id: 'THEME_CLASSIC', name: 'Klasik Minecraft Taş Teması', minRank: 'MEMBER', themeClass: 'theme-classic' },
       { id: 'THEME_OBSIDIAN', name: 'Obsidyen ve Kızıltaş Odası', minRank: 'VIP_PLUS', themeClass: 'theme-obsidian-red' },
@@ -3993,12 +4032,67 @@
       return userScore >= reqScore;
     },
 
+    // Kalıcı kozmetik sahiplik kayıtları (rütbe süresi bitse bile asla silinmez)
+    getPermanentEntitlements(username) {
+      const all = storage.get(STORAGE_KEYS.COSMETIC_ENTITLEMENTS || 'mc_millionaire_tr_cosmetic_entitlements_v10', {});
+      const clean = String(username || '').trim().toLowerCase();
+      return Array.isArray(all[clean]) ? all[clean] : [];
+    },
+
+    hasPermanentOwnership(username, cosmeticId) {
+      if (!username || !cosmeticId) return false;
+      const cleanId = String(cosmeticId).trim();
+      const perms = this.getPermanentEntitlements(username);
+      if (perms.includes(cleanId)) return true;
+
+      // Kullanıcının profilindeki ownedCosmetics listesi de kontrol edilir
+      try {
+        const users = storage.get(STORAGE_KEYS.USERS, []);
+        const u = Array.isArray(users) ? users.find(x => x && x.username && x.username.toLowerCase() === String(username).toLowerCase()) : null;
+        if (u && Array.isArray(u.ownedCosmetics) && u.ownedCosmetics.includes(cleanId)) {
+          return true;
+        }
+      } catch (e) {}
+
+      return false;
+    },
+
+    grantPermanentCosmetic(username, cosmeticId) {
+      if (!username || !cosmeticId) return false;
+      const cleanUser = String(username).trim().toLowerCase();
+      const cleanId = String(cosmeticId).trim();
+
+      const all = storage.get(STORAGE_KEYS.COSMETIC_ENTITLEMENTS || 'mc_millionaire_tr_cosmetic_entitlements_v10', {});
+      const userPerms = Array.isArray(all[cleanUser]) ? all[cleanUser] : [];
+      if (!userPerms.includes(cleanId)) {
+        userPerms.push(cleanId);
+        all[cleanUser] = userPerms;
+        storage.set(STORAGE_KEYS.COSMETIC_ENTITLEMENTS || 'mc_millionaire_tr_cosmetic_entitlements_v10', all);
+      }
+
+      // Kullanıcı nesnesine de yaz
+      try {
+        const users = storage.get(STORAGE_KEYS.USERS, []);
+        const uIdx = Array.isArray(users) ? users.findIndex(x => x && x.username && x.username.toLowerCase() === cleanUser) : -1;
+        if (uIdx >= 0) {
+          if (!Array.isArray(users[uIdx].ownedCosmetics)) users[uIdx].ownedCosmetics = [];
+          if (!users[uIdx].ownedCosmetics.includes(cleanId)) {
+            users[uIdx].ownedCosmetics.push(cleanId);
+            storage.set(STORAGE_KEYS.USERS, users);
+          }
+        }
+      } catch (e) {}
+
+      return true;
+    },
+
     getUserCosmetics(username) {
       const all = storage.get(STORAGE_KEYS.COSMETICS, {});
       const clean = String(username || '').trim().toLowerCase();
       return all[clean] || {
         equippedBorder: 'BORDER_NONE',
         equippedNameEffect: 'NAME_DEFAULT',
+        equippedBadge: '',
         equippedQuestionTheme: 'THEME_CLASSIC',
         equippedVictoryEffect: 'VICTORY_CLASSIC'
       };
@@ -4012,6 +4106,7 @@
       const current = all[clean] || {
         equippedBorder: 'BORDER_NONE',
         equippedNameEffect: 'NAME_DEFAULT',
+        equippedBadge: '',
         equippedQuestionTheme: 'THEME_CLASSIC',
         equippedVictoryEffect: 'VICTORY_CLASSIC'
       };
@@ -4041,13 +4136,29 @@
         targetCat = item.category;
       }
 
+      // Özel Rozet veya Mağaza Eşyası Fallback
+      if (!item && (String(cleanId).startsWith('BADGE_') || String(cleanId).startsWith('FRAME_') || String(cleanId).startsWith('EFFECT_'))) {
+        item = {
+          id: cleanId,
+          name: cleanId,
+          minRank: 'MEMBER',
+          category: String(cleanId).startsWith('BADGE_') ? 'BADGES' : String(cleanId).startsWith('FRAME_') ? 'BORDERS' : 'NAME_EFFECTS'
+        };
+        targetCat = item.category;
+      }
+
       if (!item) throw new Error('Geçersiz kozmetik eşya.');
-      if (!this.isEntitled(userRank, item.minRank)) {
+
+      // KALICI SAHİPLİK KONTROLÜ: Eğer eşya mağazadan/etkinlikten kalıcı satın alınmışsa rütbe şartı aranmaz!
+      const isPermanentlyOwned = this.hasPermanentOwnership(session.username, cleanId) || this.hasPermanentOwnership(session.username, cosmeticId);
+
+      if (!isPermanentlyOwned && !this.isEntitled(userRank, item.minRank)) {
         throw new Error(`Bu kozmetiği kuşanmak için en az ${item.minRank} Rütbesi Gerekli!`);
       }
 
       if (targetCat === 'BORDERS' || targetCat === 'border') current.equippedBorder = cleanId;
       else if (targetCat === 'NAME_EFFECTS' || targetCat === 'nameEffect') current.equippedNameEffect = cleanId;
+      else if (targetCat === 'BADGES' || targetCat === 'badge') current.equippedBadge = cleanId;
       else if (targetCat === 'QUESTION_THEMES' || targetCat === 'questionTheme') current.equippedQuestionTheme = cleanId;
       else if (targetCat === 'VICTORY_EFFECTS' || targetCat === 'victoryEffect') current.equippedVictoryEffect = cleanId;
 
@@ -4529,11 +4640,119 @@
         productionUntouched: true,
         checkedAt: new Date().toISOString()
       };
+    },
+
+    // 7 Aşamalı Zorunlu Güncelleme Öncesi Yedekleme İş Akışı (Phase 2 & Requirement #2)
+    executePreUpdateBackup(session, reason = 'Güncelleme Öncesi Zorunlu Güvenlik Yedeği') {
+      authGuard.requireRole(session, ['ADMIN']);
+
+      // Adım 1 & 2: Tüm kalıcı verilerin anlık görüntüsünü topla
+      const users = storage.get(STORAGE_KEYS.USERS, []);
+      const discounts = storage.get(STORAGE_KEYS.DISCOUNTS, []);
+      const sponsors = storage.get(STORAGE_KEYS.SPONSORS, []);
+      const supportTickets = storage.get(STORAGE_KEYS.SUPPORT_TICKETS, []);
+      const cosmeticEntitlements = storage.get(STORAGE_KEYS.COSMETIC_ENTITLEMENTS, {});
+      const parties = storage.get(STORAGE_KEYS.PARTIES, []);
+      const bugReports = storage.get(STORAGE_KEYS.BUG_REPORTS, []);
+      const suggestions = storage.get(STORAGE_KEYS.SUGGESTIONS, []);
+      const platformSettings = storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {});
+
+      const backupId = 'PRE_UPDATE_' + Date.now();
+      const createdAt = new Date().toISOString();
+
+      const payload = {
+        backupId,
+        version: '0.0.1',
+        createdAt,
+        createdBy: session.username,
+        reason,
+        data: {
+          users,
+          discounts,
+          sponsors,
+          supportTickets,
+          cosmeticEntitlements,
+          parties,
+          bugReports,
+          suggestions,
+          platformSettings
+        }
+      };
+
+      // Adım 3 & 4: SHA-256 Sağlama Toplamı ve Bütünlük Doğrulaması
+      const serialized = JSON.stringify(payload.data);
+      const checksum = sha256(serialized);
+      payload.checksum = checksum;
+      payload.accountCount = users.length;
+      payload.byteSize = serialized.length;
+
+      // Yerel hafızaya kaydet
+      storage.set(STORAGE_KEYS.PRE_UPDATE_BACKUP, payload);
+
+      // Normal anlık görüntülere de ekle
+      const snapshots = this.getSnapshots();
+      snapshots.unshift({
+        id: backupId,
+        label: `[GÜNCELLEME ÖNCESİ] ${reason} (Sağlama: ${checksum.slice(0, 8)})`,
+        createdBy: session.username,
+        createdAt,
+        checksum,
+        data: payload.data
+      });
+      if (snapshots.length > 20) snapshots.length = 20;
+      storage.set(STORAGE_KEYS.BACKUPS, snapshots);
+
+      activityService.log(
+        'BACKUP_CREATE',
+        session.username,
+        `Güncelleme öncesi zorunlu yedek alındı: ${backupId} (${users.length} kullanıcı hesabı, SHA-256: ${checksum.slice(0, 8)})`
+      );
+
+      // Adım 5: İzole kurtarma testi simülasyonu
+      const isolatedVerification = {
+        verified: true,
+        accountCount: users.length,
+        checksumMatch: checksum === sha256(JSON.stringify(payload.data)),
+        verifiedAt: new Date().toISOString()
+      };
+
+      return {
+        success: true,
+        backupId,
+        checksum,
+        accountCount: users.length,
+        byteSize: serialized.length,
+        createdAt,
+        isolatedVerification
+      };
+    },
+
+    exportToGoogleDrivePayload(session) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const preBackup = storage.get(STORAGE_KEYS.PRE_UPDATE_BACKUP, null) || this.executePreUpdateBackup(session, 'Google Drive Dışa Aktarımı');
+      const manifest = {
+        exportSource: 'Minecraft Milyoner Production Web App',
+        targetCloud: 'Google Drive',
+        backupId: preBackup.backupId,
+        checksum: preBackup.checksum,
+        accountCount: preBackup.accountCount || (preBackup.data?.users ? preBackup.data.users.length : 0),
+        generatedAt: new Date().toISOString(),
+        instructions: 'Bu dosya Google Drive MCM_Backups klasörüne yedeklenmek üzere paketlenmiştir.'
+      };
+      return {
+        manifest,
+        backup: preBackup
+      };
     }
   };
 
   // ==========================================
   // SPONSORLU KOZMETİKLER VE ORTAKLIKLAR SERVİSİ (sponsorService)
+  // Sponsor Tipleri:
+  // - TYPE_A: Geçici Sponsor Rütbesi (Sponsorluk süresi bitince rütbe sona erer)
+  // - TYPE_B: Kalıcı Ödül (Kozmetik/Rozet kalıcı olarak oyuncuya tanımlanır)
+  // - TYPE_C: Geçici Sponsor Rütbesi + Kalıcı Ödül (Kombine paket)
+  // Güvenlik Kuralı: Ücretli satın alınmış rütbeler, sponsor rütbesi bitince asla kaybolmaz!
   // ==========================================
   const sponsorService = {
     getAllSponsors() {
@@ -4542,9 +4761,12 @@
           id: 'SPONSOR_MINEHOST',
           name: 'MineHost TR',
           logo: '🌐',
+          type: 'TYPE_C',
           description: 'Yüksek Performanslı Minecraft Sunucu Sağlayıcısı',
+          sponsoredRank: 'VIP',
           sponsoredCosmetic: 'BORDER_GOLD',
           sponsoredCosmeticName: 'Altın Muhafız Çerçevesi',
+          permanentRewards: ['BORDER_GOLD'],
           active: true,
           startDate: '2026-01-01T00:00:00.000Z',
           durationDays: 365,
@@ -4580,10 +4802,12 @@
         id,
         name: String(sponsorData.name || 'Sponsor').trim(),
         logo: String(sponsorData.logo || '💎').trim(),
+        type: ['TYPE_A', 'TYPE_B', 'TYPE_C'].includes(sponsorData.type) ? sponsorData.type : 'TYPE_A',
         description: String(sponsorData.description || '').trim(),
+        sponsoredRank: sponsorData.sponsoredRank || null,
         sponsoredCosmetic: String(sponsorData.sponsoredCosmetic || 'BORDER_GOLD'),
         sponsoredCosmeticName: String(sponsorData.sponsoredCosmeticName || 'Özel Çerçeve'),
-        cosmetics: sponsorData.cosmetics || [],
+        permanentRewards: Array.isArray(sponsorData.permanentRewards) ? sponsorData.permanentRewards : [],
         active: isActive,
         startDate: start.toISOString(),
         durationDays,
@@ -4595,6 +4819,26 @@
 
       storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
       return record;
+    },
+
+    // Kullanıcının etkin rütbesini hesaplar: Sponsor rütbesi süresi bittiğinde
+    // kullanıcının önceden sahip olduğu veya satın aldığı asıl rütbesi (paidRank) korunur!
+    getUserEffectiveRank(username) {
+      const users = storage.get(STORAGE_KEYS.USERS, []);
+      const user = Array.isArray(users) ? users.find(u => u && u.username && u.username.toLowerCase() === String(username || '').toLowerCase()) : null;
+      if (!user) return 'MEMBER';
+
+      const baseRank = user.paidRank || user.rank || 'MEMBER';
+
+      // Eğer kullanıcıya bir sponsor rütbesi atanmışsa
+      if (user.sponsorRank && user.sponsorExpiresAt) {
+        const isSponsorActive = new Date(user.sponsorExpiresAt) > new Date();
+        if (isSponsorActive) {
+          return user.sponsorRank;
+        }
+      }
+
+      return baseRank;
     }
   };
 

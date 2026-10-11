@@ -1043,22 +1043,37 @@
           </button>
         </div>
 
-        <!-- Birleşik Mağaza Kategori Sekmeleri (#8: Rütbeler, Netherite Bakiye, Zümrüt Bakiye, Özel Ürünler, Kozmetikler) -->
+        <!-- Birleşik Mağaza Kategori Sekmeleri (8 Temel Kategori & Arama Çubuğu - Phase 7) -->
+        <div class="shop-filter-bar" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div style="flex:1;min-width:220px;position:relative;">
+            <input type="text" id="shop-search-input" placeholder="🔍 Mağazada ürün veya rütbe ara..." class="mc-input" style="width:100%;padding:8px 12px;background:rgba(15,23,42,0.8);border:1px solid #475569;border-radius:6px;color:#fff;" />
+          </div>
+        </div>
+
         <div class="shop-category-tabs" id="unified-shop-tabs">
           <button type="button" class="shop-tab active" data-shop-cat="Ranks">
-            👑 Rütbeler (Sadece Netherite)
+            👑 Rütbeler
           </button>
-          <button type="button" class="shop-tab" data-shop-cat="Netherite">
-            ⬛ Netherite Bakiye Yükle
-          </button>
-          <button type="button" class="shop-tab" data-shop-cat="Emeralds">
-            🟢 Zümrüt Bakiye Yükle
-          </button>
-          <button type="button" class="shop-tab" data-shop-cat="Special">
-            ❤️ Özel Ürünler &amp; Paketler
+          <button type="button" class="shop-tab" data-shop-cat="Badges">
+            🎖️ Rozetler
           </button>
           <button type="button" class="shop-tab" data-shop-cat="Cosmetics">
             🎨 Kozmetikler
+          </button>
+          <button type="button" class="shop-tab" data-shop-cat="ProfileCustom">
+            ✨ Profil Özelleştirmeleri
+          </button>
+          <button type="button" class="shop-tab" data-shop-cat="Special">
+            📦 Özel Paketler
+          </button>
+          <button type="button" class="shop-tab" data-shop-cat="Sponsors">
+            🤝 Sponsor Ürünleri
+          </button>
+          <button type="button" class="shop-tab" data-shop-cat="Gift">
+            🎁 Hediye Gönder
+          </button>
+          <button type="button" class="shop-tab" data-shop-cat="Inventory">
+            🎒 Satın Aldıklarım
           </button>
         </div>
 
@@ -1798,86 +1813,8 @@
         <button type="button" id="btn-close-rank-comparison" class="drawer-close-btn" aria-label="Kapat">✕</button>
       </div>
       <div class="mc-modal-body" id="modal-rank-comp-body">
-        <div class="rank-comp-table-wrap" style="overflow-x:auto;">
-          <table class="mc-table rank-comp-table" style="width:100%;font-size:0.86rem;">
-            <thead>
-              <tr>
-                <th style="text-align:left;">Özellik / Ayrıcalık</th>
-                <th>Üye (Free)</th>
-                <th style="color:#38bdf8;">VIP</th>
-                <th style="color:#22c55e;">VIP+</th>
-                <th style="color:#a855f7;">MVIP</th>
-                <th style="color:#f59e0b;">MVIP+</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Fiyat (Stripe / TRY)</strong></td>
-                <td>Ücretsiz</td>
-                <td>89,90 ₺</td>
-                <td>159,90 ₺</td>
-                <td>299,90 ₺</td>
-                <td>449,90 ₺</td>
-              </tr>
-              <tr>
-                <td><strong>Netherite Fiyatı</strong></td>
-                <td>-</td>
-                <td>500 N</td>
-                <td>950 N</td>
-                <td>1.850 N</td>
-                <td>2.750 N</td>
-              </tr>
-              <tr>
-                <td><strong>İlk Satın Alma Bonusu</strong></td>
-                <td>-</td>
-                <td>+50 N</td>
-                <td>+250 N</td>
-                <td>+250 N</td>
-                <td>+250 N</td>
-              </tr>
-              <tr>
-                <td><strong>Günlük Zümrüt Ödülü</strong></td>
-                <td>50 🟢</td>
-                <td>100 🟢</td>
-                <td>200 🟢</td>
-                <td>350 🟢</td>
-                <td>500 🟢</td>
-              </tr>
-              <tr>
-                <td><strong>Günlük Netherite Ödülü</strong></td>
-                <td>-</td>
-                <td>-</td>
-                <td>5 ⬛</td>
-                <td>12 ⬛</td>
-                <td>25 ⬛</td>
-              </tr>
-              <tr>
-                <td><strong>Sohbet İsim Rengi</strong></td>
-                <td>Beyaz</td>
-                <td>Açık Mavi</td>
-                <td>Yeşil Parıltı</td>
-                <td>Mor Neon</td>
-                <td>RGB Gökkuşağı</td>
-              </tr>
-              <tr>
-                <td><strong>Özel Emojiler &amp; Rozetler</strong></td>
-                <td>Standart</td>
-                <td>VIP Rozeti</td>
-                <td>VIP+ Alev</td>
-                <td>MVIP Kristal</td>
-                <td>MVIP+ Taç &amp; Ejder</td>
-              </tr>
-              <tr>
-                <td><strong>Parti &amp; Jüri Oluşturma</strong></td>
-                <td>Katılımcı</td>
-                <td>Oda Açabilir</td>
-                <td>Jüri &amp; Oda</td>
-                <td>Jüri &amp; Sesli</td>
-                <td>Özel Turnuva</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <!-- Dinamik Rütbe Karşılaştırma Tablosu (platform.js tarafından authoritative economyService verileriyle doldurulur) -->
+        <div id="dynamic-rank-comp-container" class="rank-comp-table-wrap"></div>
       </div>
     </div>
   </div>
