@@ -604,6 +604,13 @@
               <span>Minecraft Skin &amp; Başarımlar</span>
             </div>
           </button>
+          <button type="button" class="quick-link-card" id="btn-welcome-open-end-guide">
+            <span class="ql-icon">🔮</span>
+            <div class="ql-info">
+              <strong>End Rehberi</strong>
+              <span>Yarışma Kuralları &amp; Jokerler</span>
+            </div>
+          </button>
         </div>
       </div>
     </main>
@@ -678,7 +685,7 @@
           </div>
 
           <!-- Jokerler ve Çekilme Çubuğu -->
-          <div class="lifelines-bar">
+          <div class="lifelines-bar" id="lifelines-bar">
             <button type="button" class="lifeline-btn" id="lifeline-5050" title="İki yanlış şıkkı eler">
               <span class="ll-icon">✂️</span>
               <span class="ll-name">50:50</span>
@@ -693,11 +700,61 @@
               <span class="ll-icon">🧙‍♂️</span>
               <span class="ll-name">Bilge Köylü</span>
             </button>
+            <button type="button" class="lifeline-btn" id="btn-toggle-enderman-rules"
+              title="End Boyutu Yarışma Rehberi ve Kurallarını İncele">
+              <span class="ll-icon">🔮</span>
+              <span class="ll-name">End Rehberi</span>
+            </button>
             <button type="button" class="lifeline-btn walk-away-btn" id="btn-walk-away"
               title="Mevcut ödülü alıp yarışmadan çekil">
               <span class="ll-icon">💰</span>
               <span class="ll-name">Çekil (<span id="walk-away-amount">0 ₺</span>)</span>
             </button>
+          </div>
+
+          <!-- 🔮 Enderman Ön-Yarışma Kuralları Tanıtımı (End Boyutu Rehberi) (#7) -->
+          <div id="enderman-rules-overlay" class="enderman-rules-overlay">
+            <div class="enderman-rules-card enderman-portal-glow">
+              <div class="enderman-rules-header">
+                <div class="enderman-rules-avatar">
+                  <svg viewBox="0 0 16 24" class="stage-mob-svg" shape-rendering="crispEdges">
+                    <rect x="2" y="1" width="1" height="1" fill="#d946ef"/>
+                    <rect x="13" y="3" width="1" height="1" fill="#a855f7"/>
+                    <rect x="1" y="12" width="1" height="1" fill="#e879f9"/>
+                    <rect x="14" y="15" width="1" height="1" fill="#c084fc"/>
+                    <rect x="4" y="2" width="8" height="7" fill="#111827"/>
+                    <rect x="4" y="5" width="3" height="1" fill="#f5d0fe"/>
+                    <rect x="5" y="5" width="1" height="1" fill="#d946ef"/>
+                    <rect x="9" y="5" width="3" height="1" fill="#f5d0fe"/>
+                    <rect x="10" y="5" width="1" height="1" fill="#d946ef"/>
+                    <rect x="5" y="9" width="6" height="6" fill="#0f172a"/>
+                    <rect x="3" y="9" width="1" height="10" fill="#1e293b"/>
+                    <rect x="12" y="9" width="1" height="10" fill="#1e293b"/>
+                    <rect x="6" y="15" width="1" height="8" fill="#0f172a"/>
+                    <rect x="9" y="15" width="1" height="8" fill="#0f172a"/>
+                  </svg>
+                </div>
+                <div style="flex:1;">
+                  <span class="enderman-rules-eyebrow">🔮 END BOYUTU REHBERİ</span>
+                  <h2 class="enderman-rules-title">YARIŞMA KURALLARI</h2>
+                </div>
+                <button type="button" id="btn-enderman-close-rules" class="drawer-close-btn" style="background:#2e1065;border:1px solid #c084fc;color:#f5d0fe;" title="Rehberi Kapat">✕</button>
+              </div>
+              <div class="enderman-rules-body">
+                <p class="enderman-rules-lead">Vwoop! Minecraft Milyoner arenasına hoş geldin! Sorular End boyutundan ışınlanmadan önce kuralları dikkatle incele:</p>
+                <ul class="enderman-rules-list">
+                  <li><span>💎</span> <strong>15 Zorlu Soru:</strong> Büyük ödül tam <strong>1.000.000 ₺</strong> ve bolca zümrüt!</li>
+                  <li><span>⏱️</span> <strong>30 Saniye Süre:</strong> Her soru için süren kısıtlı, dikkatli ve hızlı ol!</li>
+                  <li><span>💥</span> <strong>3 Güçlü Joker:</strong> 50:50 Creeper Patlaması, Telegram Destekli Sunucu Oylaması ve Bilge Köylü İpucu!</li>
+                  <li><span>🛡️</span> <strong>Ölümsüzlük Totemi:</strong> Elinde Ekstra Can varsa yanlış cevap versen bile elenmezsin!</li>
+                </ul>
+              </div>
+              <div class="enderman-rules-footer">
+                <button type="button" id="btn-enderman-start-quiz" class="mc-btn mc-btn-lg mc-btn-gold">
+                  ⚔️ KURALLARI ANLADIM, SORULARI IŞINLA!
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Soru Kutusu -->

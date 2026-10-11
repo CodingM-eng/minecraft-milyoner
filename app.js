@@ -1018,65 +1018,24 @@
     stopQuestionTimer();
     const qBox = document.getElementById('question-box');
     const aGrid = document.getElementById('answers-grid');
-    const lBar = document.querySelector('.lifelines-bar') || document.getElementById('lifelines-bar');
     if (qBox) qBox.classList.add('hidden');
     if (aGrid) aGrid.classList.add('hidden');
-    if (lBar) lBar.classList.add('hidden');
 
-    let overlay = document.getElementById('enderman-rules-overlay');
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.id = 'enderman-rules-overlay';
-      overlay.className = 'enderman-rules-overlay';
+    const overlay = document.getElementById('enderman-rules-overlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
     }
+  }
 
-    const qStage = document.querySelector('.question-stage') || document.querySelector('.quiz-stage');
-    if (qStage && qBox) {
-      qStage.insertBefore(overlay, qBox);
-    } else if (qStage) {
-      qStage.prepend(overlay);
-    } else {
-      (document.getElementById('screen-game') || document.body).appendChild(overlay);
-    }
-
-    overlay.classList.remove('hidden');
-    overlay.innerHTML = `
-      <div class="enderman-rules-card enderman-portal-glow">
-        <div class="enderman-rules-header">
-          <div class="enderman-rules-avatar">
-            ${STAGE_MOB_SVGS.ENDERMAN}
-          </div>
-          <div>
-            <span class="enderman-rules-eyebrow">🔮 END BOYUTU REHBERİ</span>
-            <h2 class="enderman-rules-title">YARIŞMA KURALLARI</h2>
-          </div>
-        </div>
-        <div class="enderman-rules-body">
-          <p class="enderman-rules-lead">Vwoop! Minecraft Milyoner arenasına hoş geldin! Sorular End boyutundan ışınlanmadan önce kuralları dikkatle incele:</p>
-          <ul class="enderman-rules-list">
-            <li><span>💎</span> <strong>15 Zorlu Soru:</strong> Büyük ödül tam <strong>1.000.000 ₺</strong> ve bolca zümrüt!</li>
-            <li><span>⏱️</span> <strong>30 Saniye Süre:</strong> Her soru için süren kısıtlı, dikkatli ve hızlı ol!</li>
-            <li><span>💥</span> <strong>3 Güçlü Joker:</strong> 50:50 Creeper Patlaması, Telegram Destekli Sunucu Oylaması ve Bilge Köylü İpucu!</li>
-            <li><span>🛡️</span> <strong>Ölümsüzlük Totemi:</strong> Elinde Ekstra Can varsa yanlış cevap versen bile elenmezsin!</li>
-          </ul>
-        </div>
-        <div class="enderman-rules-footer">
-          <button type="button" id="btn-enderman-start-quiz" class="mc-btn mc-btn-lg mc-btn-gold">
-            ⚔️ KURALLARI ANLADIM, SORULARI IŞINLA!
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('btn-enderman-start-quiz')?.addEventListener('click', () => {
-      soundEngine.endermanTeleport();
-      gameState._endermanIntroAcknowledged = true;
+  function hideEndermanRulesIntro() {
+    const overlay = document.getElementById('enderman-rules-overlay');
+    if (overlay) {
       overlay.classList.add('hidden');
-      if (qBox) qBox.classList.remove('hidden');
-      if (aGrid) aGrid.classList.remove('hidden');
-      if (lBar) lBar.classList.remove('hidden');
-      startQuestionTimer();
-    });
+    }
+    const qBox = document.getElementById('question-box');
+    const aGrid = document.getElementById('answers-grid');
+    if (qBox) qBox.classList.remove('hidden');
+    if (aGrid) aGrid.classList.remove('hidden');
   }
 
   function startQuestionTimer() {
@@ -2412,6 +2371,44 @@
     document.getElementById('btn-walk-away')?.addEventListener('click', () => {
       if (!gameState.active) return;
       finishGameSession({ didWin: false, walkedAway: true });
+    });
+
+    // Enderman Ön-Yarışma Kuralları & End Boyutu Rehberi Dinleyicileri
+    document.getElementById('btn-toggle-enderman-rules')?.addEventListener('click', () => {
+      const overlay = document.getElementById('enderman-rules-overlay');
+      if (!overlay) return;
+      if (overlay.classList.contains('hidden')) {
+        soundEngine.endermanTeleport();
+        showEndermanRulesIntro();
+      } else {
+        soundEngine.click();
+        hideEndermanRulesIntro();
+      }
+    });
+
+    document.getElementById('btn-enderman-close-rules')?.addEventListener('click', () => {
+      soundEngine.click();
+      hideEndermanRulesIntro();
+      if (gameState.active && !gameState.timer) {
+        startQuestionTimer();
+      }
+    });
+
+    document.getElementById('btn-enderman-start-quiz')?.addEventListener('click', () => {
+      soundEngine.endermanTeleport();
+      gameState._endermanIntroAcknowledged = true;
+      hideEndermanRulesIntro();
+      if (gameState.active) {
+        startQuestionTimer();
+      } else {
+        startNewGameSession(false);
+      }
+    });
+
+    document.getElementById('btn-welcome-open-end-guide')?.addEventListener('click', () => {
+      soundEngine.endermanTeleport();
+      window.MCMPlatform?.navigateToScreen('game');
+      showEndermanRulesIntro();
     });
 
     // Ekstra Can İkinci Şans Modalı
