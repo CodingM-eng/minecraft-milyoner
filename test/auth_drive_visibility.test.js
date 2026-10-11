@@ -727,6 +727,22 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     const tgSvc = window.MCMServices.telegramService;
     assert(tgSvc, 'telegramService mevcut olmalıdır.');
 
+    const tgCfg = tgSvc.getConfig();
+    assert(typeof tgCfg === 'object', 'getConfig bir nesne döndürmelidir.');
+    assert('botToken' in tgCfg, 'botToken alanı bulunmalıdır.');
+    assert('chatId' in tgCfg, 'chatId alanı bulunmalıdır.');
+
+    const tgCfgSession = {
+      username: 'SuperAdminTest',
+      email: 'codingdevelopia@gmail.com',
+      role: 'ADMIN',
+      isAdminSession: true
+    };
+    const updatedCfg = tgSvc.updateConfig(tgCfgSession, { botToken: '123456:ABC-DEF-TEST', chatId: '-1009876543' });
+    assert.strictEqual(updatedCfg.botToken, '123456:ABC-DEF-TEST');
+    assert.strictEqual(updatedCfg.chatId, '-1009876543');
+    console.log('✓ Telegram bot yapılandırması (getConfig & updateConfig) başarıyla doğrulandı.');
+
     const tgPollRes = await tgSvc.createPoll(
       'Minecraftta en dayanıklı zırh hangisidir?',
       ['Elmas', 'Netherite', 'Altın', 'Demir']

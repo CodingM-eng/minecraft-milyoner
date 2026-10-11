@@ -3699,7 +3699,17 @@
                 <input type="text" id="adm-tg-chat-id" value="${escapeHtml(tgCfg.chatId || '')}" placeholder="örn: -1001234567890" />
               </div>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div class="input-row-2" style="margin-top:10px;">
+              <div class="input-group">
+                <label>🎧 24/7 Destek Bot Token (İsteğe Bağlı)</label>
+                <input type="text" id="adm-tg-support-token" value="${escapeHtml(tgCfg.supportBotToken || '')}" placeholder="Destek botu token'ı..." />
+              </div>
+              <div class="input-group">
+                <label>🎧 Destek Yetkili Grubu Chat ID</label>
+                <input type="text" id="adm-tg-support-chat-id" value="${escapeHtml(tgCfg.supportChatId || '')}" placeholder="örn: -1009876543210" />
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px;">
               <button type="submit" class="mc-btn mc-btn-primary">Telegram Ayarlarını Kaydet</button>
               <button type="button" id="btn-admin-test-telegram-poll" class="mc-btn mc-btn-secondary">🧪 Test Anketi Gönder</button>
             </div>
@@ -5993,7 +6003,9 @@
         try {
           const botToken = document.getElementById('adm-tg-token')?.value || '';
           const chatId = document.getElementById('adm-tg-chat-id')?.value || '';
-          svc().telegramService.updateConfig(session, { botToken, chatId });
+          const supportBotToken = document.getElementById('adm-tg-support-token')?.value || '';
+          const supportChatId = document.getElementById('adm-tg-support-chat-id')?.value || '';
+          svc().telegramService.updateConfig(session, { botToken, chatId, supportBotToken, supportChatId });
           showToast('🤖 Telegram Bot ayarları güncellendi!', 'success');
           renderAdmin();
         } catch (err) {

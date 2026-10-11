@@ -39,7 +39,8 @@
     DISCOUNTS: 'mc_millionaire_tr_discounts_v10',
     COSMETICS: 'mc_millionaire_tr_cosmetics_v10',
     FRIENDS: 'mc_millionaire_tr_friends_v10',
-    TELEGRAM_POLLS: 'mc_millionaire_tr_telegram_polls_v10'
+    TELEGRAM_POLLS: 'mc_millionaire_tr_telegram_polls_v10',
+    TELEGRAM_CONFIG: 'mc_millionaire_tr_telegram_cfg_v10'
   };
 
   // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan tüm önbellek verilerini temizle
@@ -79,7 +80,8 @@
     STORAGE_KEYS.RESET_EPOCH,
     STORAGE_KEYS.DISCOUNTS,
     STORAGE_KEYS.COSMETICS,
-    STORAGE_KEYS.FRIENDS
+    STORAGE_KEYS.FRIENDS,
+    STORAGE_KEYS.TELEGRAM_CONFIG
   ]);
 
   // ==========================================
@@ -845,6 +847,10 @@
         );
       }
       return effectiveRole;
+    },
+
+    verifyAdmin(session) {
+      return this.requireRole(session, ['ADMIN']);
     }
   };
 
@@ -3995,9 +4001,43 @@
   };
 
   // ==========================================
-  // TELEGRAM BOT ANKET SERVİSİ (telegramService — "Sunucuya Sor")
+  // TELEGRAM BOT ANKET SERVİSİ (telegramService — "Sunucuya Sor" & Bot Yapılandırması)
   // ==========================================
   const telegramService = {
+    getConfig() {
+      const cfg = storage.get(STORAGE_KEYS.TELEGRAM_CONFIG, {
+        botToken: '',
+        chatId: '',
+        webhookUrl: '',
+        supportBotToken: '',
+        supportChatId: ''
+      });
+      return {
+        botToken: cfg.botToken || '',
+        chatId: cfg.chatId || '',
+        webhookUrl: cfg.webhookUrl || '',
+        supportBotToken: cfg.supportBotToken || '',
+        supportChatId: cfg.supportChatId || ''
+      };
+    },
+
+    updateConfig(session, patch = {}) {
+      authGuard.verifyAdmin(session);
+      const current = this.getConfig();
+      const updated = {
+        ...current,
+        botToken: patch.botToken !== undefined ? String(patch.botToken || '').trim() : current.botToken,
+        chatId: patch.chatId !== undefined ? String(patch.chatId || '').trim() : current.chatId,
+        webhookUrl: patch.webhookUrl !== undefined ? String(patch.webhookUrl || '').trim() : current.webhookUrl,
+        supportBotToken: patch.supportBotToken !== undefined ? String(patch.supportBotToken || '').trim() : current.supportBotToken,
+        supportChatId: patch.supportChatId !== undefined ? String(patch.supportChatId || '').trim() : current.supportChatId,
+        updatedAt: new Date().toISOString(),
+        updatedBy: session.username
+      };
+      storage.set(STORAGE_KEYS.TELEGRAM_CONFIG, updated);
+      return updated;
+    },
+
     async createPoll(questionText, options = ['A', 'B', 'C', 'D']) {
       try {
         if (typeof fetch === 'function') {
