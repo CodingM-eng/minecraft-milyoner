@@ -2245,6 +2245,31 @@
       };
     },
 
+    purchaseExtraLifeWithEmeralds(username) {
+      const { userService } = getServices();
+      const user = userService?.getUserByUsername(username);
+      if (!user) throw new Error('Oyuncu bulunamadı.');
+
+      const price = 200; // Standart ve yarışma kuralı 200 Zümrüt
+      const currentBal = economyService.getBalance(user.username);
+      if (currentBal < price) {
+        throw new Error(`Yetersiz Zümrüt bakiyesi! Ekstra can için en az ${price} Zümrüt gereklidir.`);
+      }
+
+      economyService.spendEmeralds(user.username, price, 'Ekstra Can (Ölümsüzlük Totemi) Satın Alma');
+      const nextLives = Number(user.extraLives || 0) + 1;
+      userService.syncUserFields(user.username, {
+        extraLives: nextLives
+      });
+
+      return {
+        success: true,
+        cost: price,
+        remainingEmeralds: economyService.getBalance(user.username),
+        totalLives: nextLives
+      };
+    },
+
     consumeExtraLifeInMatch(username) {
       const { userService, activityService } = getServices();
       const user = userService?.getUserByUsername(username);

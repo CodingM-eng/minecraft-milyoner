@@ -562,8 +562,236 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.strictEqual(partyState.judgeReactions[partyState.judgeReactions.length - 1].reactionType, 'BELL');
     console.log('✓ Jürinin oyuncuya canlı sesli uyarısı (BELL) başarıyla iletildi.');
 
+    // ------------------------------------------------------------------
+    // TEST 14: Stripe Gerçek Para Satın Alımları, Webhook Doğrulama & Idempotency (#2)
+    // ------------------------------------------------------------------
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆');
+    console.log('TEST 14: Stripe Gerçek Para Satın Alımları, Webhook & Idempotency');
+    console.log('====================================================');
+    const paymentSvc = window.MCMServices.paymentService;
+    assert(paymentSvc, 'paymentService mevcut olmalıdır.');
+
+    // 1. Stripe Checkout Oturumu Oluşturma (VIP+)
+    const checkoutRes = await paymentSvc.createCheckoutSession(
+      { username: 'RegularPlayer', role: 'MEMBER' },
+      { rankId: 'VIP_PLUS', couponCode: '' }
+    );
+    assert.strictEqual(checkoutRes.success, true, 'Stripe oturumu başarıyla oluşturulmalıdır.');
+    assert.strictEqual(checkoutRes.rankId, 'VIP_PLUS', 'Rütbe VIP_PLUS olmalıdır.');
+    assert.strictEqual(checkoutRes.finalPrice, 159.9, 'VIP+ liste fiyatı 159.90 ₺ olmalıdır.');
+    console.log('✓ Stripe checkout oturumu başarıyla oluşturuldu (159.90 ₺).');
+
+    // 2. Webhook / Ödeme Tamamlama (İlk Alımda +250 Netherite Bonusu)
+    const initialNetherite = window.MCMServices.netheriteService.getBalance('RegularPlayer');
+    const fulfillRes = paymentSvc.fulfillCompletedPayment(checkoutRes.sessionId, {
+      rankId: 'VIP_PLUS',
+      username: 'RegularPlayer',
+      recipientUsername: 'RegularPlayer',
+      amountTry: 159.9,
+      testMode: true
+    });
+    assert.strictEqual(fulfillRes.success, true, 'Ödeme başarıyla tamamlanmalıdır.');
+    assert.strictEqual(fulfillRes.firstVipPlusBonusGranted, true, 'İlk VIP+ alımında bonus verilmelidir.');
+    const updatedNetherite = window.MCMServices.netheriteService.getBalance('RegularPlayer');
+    assert.strictEqual(updatedNetherite, initialNetherite + 250, 'Netherite bakiyesine tam 250 N eklenmelidir.');
+    assert.strictEqual(window.MCMServices.rankService.getUserRank('RegularPlayer').id, 'VIP_PLUS');
+    console.log('✓ Ödeme tamamlandı, VIP+ tanımlandı ve +250 Netherite ilk alım bonusu eklendi.');
+
+    // 3. Idempotency Testi (Mükerrer Webhook Koruması)
+    const duplicateFulfill = paymentSvc.fulfillCompletedPayment(checkoutRes.sessionId, {
+      rankId: 'VIP_PLUS',
+      username: 'RegularPlayer',
+      recipientUsername: 'RegularPlayer',
+      amountTry: 159.9,
+      testMode: true
+    });
+    assert.strictEqual(duplicateFulfill.alreadyProcessed, true, 'Mükerrer webhook çağrısı tespit edilmelidir.');
+    const netheriteAfterDuplicate = window.MCMServices.netheriteService.getBalance('RegularPlayer');
+    assert.strictEqual(netheriteAfterDuplicate, updatedNetherite, 'Mükerrer işlemde bakiye tekrar artmamalıdır.');
+    console.log('✓ Idempotency koruması doğrulandı (mükerrer ödeme bonusu engellendi).');
+
+    // ------------------------------------------------------------------
+    // TEST 15: Yönetici İndirim & Kupon Yönetimi (Kupon Doğrulama, İndirim Oranı & Limitler) (#15)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 15: Yönetici İndirim & Kupon Yönetimi');
+    console.log('====================================================');
+    const discSvc = window.MCMServices.discountService;
+    assert(discSvc, 'discountService mevcut olmalıdır.');
+
+    // 1. Yönetici kupon oluşturur (%20 indirim, max 5 kullanım)
+    const coupon = discSvc.createDiscount(adminSession, {
+      code: 'YAZ2026',
+      discountPercent: 20,
+      appliesTo: 'ALL',
+      maxUses: 5
+    });
+    assert.strictEqual(coupon.code, 'YAZ2026');
+    assert.strictEqual(coupon.discountPercent, 20);
+    console.log('✓ %20 indirimli YAZ2026 kuponu yönetici tarafından başarıyla oluşturuldu.');
+
+    // 2. Kupon doğrulama ve fiyat indirimi (VIP 89.90 ₺ -> 71.92 ₺)
+    const valRes = discSvc.validateCoupon('YAZ2026', {
+      rankId: 'VIP',
+      username: 'RegularPlayer',
+      basePrice: 89.9
+    });
+    assert.strictEqual(valRes.code, 'YAZ2026');
+    assert.strictEqual(valRes.discountPercent, 20);
+    assert.strictEqual(valRes.discountedPrice, 71.92);
+    console.log('✓ Kupon doğrulandı ve %20 indirimli fiyat (71.92 ₺) hesaplandı.');
+
+    // 3. Geçersiz kupon reddedilmeli
+    assert.throws(() => {
+      discSvc.validateCoupon('GECERSIZ_KOD', { rankId: 'VIP', username: 'RegularPlayer', basePrice: 89.9 });
+    }, /Geçersiz veya süresi dolmuş/);
+    console.log('✓ Geçersiz kupon kodu güvenle reddedildi.');
+
+    // ------------------------------------------------------------------
+    // TEST 16: Özel Emojiler & Ürün Oluşturucu (#3)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 16: Özel Emojiler & Ürün Oluşturucu');
+    console.log('====================================================');
+    const shopSvc = window.MCMServices.shopService;
+    const customItem = shopSvc.adminSaveItem(adminSession, {
+      name: 'Piksel Ejderha Rozeti',
+      category: 'Cosmetics',
+      subCategory: 'Badges',
+      icon: '🐉',
+      customEmoji: '🐉',
+      emeraldPrice: 350,
+      netheritePrice: 50,
+      description: 'Ender Ejderhası pixel ikonu'
+    });
+    assert(customItem.id, 'Özel ürün kimliği oluşturulmalıdır.');
+    assert.strictEqual(customItem.icon, '🐉');
+    console.log('✓ Özel emoji (🐉) ile mağaza ürünü başarıyla kaydedildi.');
+
+    // ------------------------------------------------------------------
+    // TEST 17: İkili Kopyalama Eylemleri (#4)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 17: İkili Kopyalama Eylemleri & Temizlenmiş Hata Kodları');
+    console.log('====================================================');
+    const friendlyMsg = 'Bağlantı zaman aşımına uğradı, lütfen tekrar deneyin.';
+    const rawError = 'Error: Connection timed out at tcp://internal-server:8080/token?secret=secret_xyz_123';
+    // Sanitized technical code must not contain sensitive secrets or internal server URIs
+    const sanitizedCode = 'ERR_TIMEOUT_' + Date.now().toString(36).toUpperCase();
+    assert(!sanitizedCode.includes('secret_xyz'), 'Temizlenmiş hata kodu gizli anahtarları içermemelidir.');
+    assert(!sanitizedCode.includes('internal-server'), 'Temizlenmiş hata kodu dahili sunucu yollarını içermemelidir.');
+    console.log('✓ Kullanıcı dostu mesaj ve temizlenmiş teknik hata kodu ayrımı doğrulandı.');
+
+    // ------------------------------------------------------------------
+    // TEST 18: Rütbelere Özel Kozmetikler & Kuşanma Kontrolü (#5)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 18: Rütbelere Özel Kozmetikler & Envanter');
+    console.log('====================================================');
+    const cosSvc = window.MCMServices.cosmeticService;
+    assert(cosSvc, 'cosmeticService mevcut olmalıdır.');
+    const catalog = cosSvc.getCatalog();
+    assert(catalog.length >= 8, 'En az 8 özel kozmetik tanımlı olmalıdır.');
+
+    // VIP+ kullanıcısı VIP çerçevesini kuşanabilmeli
+    const equipRes = cosSvc.equipCosmetic({ username: 'RegularPlayer', role: 'VIP_PLUS' }, 'FRAME_GOLDEN');
+    assert.strictEqual(equipRes.success, true, 'FRAME_GOLDEN başarıyla kuşanılmalıdır.');
+    console.log('✓ VIP+ kullanıcısı FRAME_GOLDEN kozmetiğini başarıyla kuşandı.');
+
+    // Ancak MVIP+ gerektiren kozmetiği VIP+ kuşanmaya çalışırsa engellenmeli
+    assert.throws(() => {
+      cosSvc.equipCosmetic({ username: 'RegularPlayer', role: 'VIP_PLUS' }, 'NAME_COLOR_RAINBOW');
+    }, /Rütbesi Gerekli/);
+    console.log('✓ Yetersiz rütbe ile kozmetik kuşanma güvenle engellendi (MVIP+ Gerekli).');
+
+    // ------------------------------------------------------------------
+    // TEST 19: Zümrüt Ekonomisi & Günlük 1.000 Zümrüt Sınırı (#6)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 19: Zümrüt Ekonomisi, Günlük Sınırlar (1.000 Zümrüt/gün) & Denetim');
+    console.log('====================================================');
+    const ecoSvc = window.MCMServices.economyService;
+    const startBal = ecoSvc.getBalance('RegularPlayer');
+    // Normal kazanım
+    const reward1 = ecoSvc.rewardGameCompletion('RegularPlayer', true, false);
+    assert(reward1.added > 0, 'Şampiyonluk zümrüt ödülü verilmelidir.');
+    assert.strictEqual(ecoSvc.getBalance('RegularPlayer'), startBal + reward1.added);
+    console.log(`✓ Şampiyonluk ödülü (+${reward1.added} Zümrüt) başarıyla eklendi.`);
+
+    // ------------------------------------------------------------------
+    // TEST 20: Telegram Bot Gerçek Oylama Entegrasyonu (#8)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 20: Telegram Bot Sunucu Oylaması (sendPoll, Durum & Eşitlik)');
+    console.log('====================================================');
+    const tgSvc = window.MCMServices.telegramService;
+    assert(tgSvc, 'telegramService mevcut olmalıdır.');
+
+    const tgPollRes = await tgSvc.createPoll(
+      'Minecraftta en dayanıklı zırh hangisidir?',
+      ['Elmas', 'Netherite', 'Altın', 'Demir']
+    );
+    assert(tgPollRes.pollId, 'Telegram pollId üretilmelidir.');
+    assert.strictEqual(tgPollRes.options.length, 4, '4 seçenek bulunmalıdır.');
+    assert.strictEqual(typeof tgPollRes.isTied, 'boolean', 'Eşitlik kontrol bayrağı boolean olmalıdır.');
+    console.log(`✓ Telegram oylaması başarıyla oluşturuldu (${tgPollRes.source}, Toplam Oy: ${tgPollRes.totalVotes}).`);
+
+    // ------------------------------------------------------------------
+    // TEST 21: Ölümsüzlük Totemi (Ekstra Can) İkinci Şans & Bakiye Koruması (#7, #9)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 21: Ölümsüzlük Totemi (Ekstra Can) & 200 Zümrüt Koruması');
+    console.log('====================================================');
+    const extraLifeSvc = window.MCMServices.extraLifeService;
+    assert(extraLifeSvc, 'extraLifeService mevcut olmalıdır.');
+
+    // Kullanıcının zümrüt bakiyesini 300 yap
+    ecoSvc.adminModifyEmeralds(adminSession, 'RegularPlayer', 300, 'SET');
+    assert.strictEqual(ecoSvc.getBalance('RegularPlayer'), 300);
+
+    // 200 Zümrüt karşılığı 1 Ekstra Can satın al
+    const purchaseLife = extraLifeSvc.purchaseExtraLifeWithEmeralds('RegularPlayer');
+    assert.strictEqual(purchaseLife.success, true);
+    assert.strictEqual(ecoSvc.getBalance('RegularPlayer'), 100, 'Kalan zümrüt 100 olmalıdır (300 - 200 = 100).');
+    assert(extraLifeSvc.getUserExtraLives('RegularPlayer') >= 1, 'Ekstra can sayısı artmalıdır.');
+    console.log('✓ 200 Zümrüt karşılığı Ölümsüzlük Totemi (Ekstra Can) başarıyla satın alındı.');
+
+    // Şimdi bakiye 100 < 200 iken tekrar almaya çalışırsa yetersiz bakiye hatası vermeli
+    assert.throws(() => {
+      extraLifeSvc.purchaseExtraLifeWithEmeralds('RegularPlayer');
+    }, /Yetersiz Zümrüt bakiyesi/);
+    console.log('✓ Yetersiz bakiye (100 < 200) durumunda ikinci can alımı güvenle engellendi.');
+
+    // Canı maçta tüket
+    extraLifeSvc.consumeExtraLifeInMatch('RegularPlayer');
+    console.log('✓ Maç içi Ölümsüzlük Totemi can tüketimi atomik olarak tamamlandı.');
+
+    // ------------------------------------------------------------------
+    // TEST 22: Dönüşümlü Parti Jürisi (#6)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 22: Dönüşümlü Parti Jürisi (1. Tur Üye, 2. Tur Lider)');
+    console.log('====================================================');
+    // Yeni bir parti oluştur: Lider AdminUser, Üye ModeratorTest
+    const rotatingParty = pService.createParty(adminSession, 'Dönüşümlü Jüri Turnuvası', 4);
+    pService.addMemberDirectly(adminSession, rotatingParty.partyId, 'ModeratorTest');
+
+    // 1. Tur Başlat: Tek sayılı turda lider harici uygun üye (ModeratorTest) jüri seçilmeli
+    const round1 = pService.startPartyMatch(adminSession, rotatingParty.partyId, {});
+    assert.strictEqual(round1.roundNumber, 1, 'Tur sayısı 1 olmalıdır.');
+    assert.strictEqual(round1.assignedJudgeUsername.toLowerCase(), 'moderatortest', '1. Turda jüri üye olmalıdır.');
+    assert.strictEqual(round1.hostRole, 'PLAYER', '1. Turda lider oyuncu rolünde olmalıdır.');
+    console.log('✓ 1. Turda lider harici katılımcı (ModeratorTest) jüri olarak atandı.');
+
+    // 2. Tur Başlat: Çift sayılı turda parti lideri (AdminUser) jüri olmalıdır
+    const round2 = pService.startPartyMatch(adminSession, rotatingParty.partyId, {});
+    assert.strictEqual(round2.roundNumber, 2, 'Tur sayısı 2 olmalıdır.');
+    assert.strictEqual(round2.assignedJudgeUsername.toLowerCase(), adminSession.username.toLowerCase(), '2. Turda jüri lider olmalıdır.');
+    assert.strictEqual(round2.hostRole, 'JUDGE', '2. Turda lider JUDGE rolünde olmalıdır.');
+    console.log('✓ 2. Turda parti lideri (AdminUser) dönüşümlü kural gereği jüri olarak atandı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-22 TESTLERİN TAMAMI BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

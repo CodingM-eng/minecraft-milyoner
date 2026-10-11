@@ -417,6 +417,15 @@
         setTimeout(() => this.playTone(f, 0.22, 'triangle', 0.1), idx * 70);
       });
       this.playNoise(0.4, 1200, 0.08, 'bandpass');
+    },
+
+    // 12. Minecraft Totem of Undying (Ölümsüzlük Totemi Canlanma Efekti)
+    totemUse() {
+      this.playTone(392.00, 0.45, 'triangle', 0.15);
+      setTimeout(() => this.playTone(587.33, 0.40, 'sine', 0.16), 100);
+      setTimeout(() => this.playTone(880.00, 0.50, 'triangle', 0.18), 220);
+      setTimeout(() => this.playTone(1174.66, 0.65, 'sine', 0.15), 350);
+      this.playNoise(0.5, 2800, 0.12, 'bandpass');
     }
   };
 
@@ -992,8 +1001,72 @@
       }
     }
 
+    // Enderman Ön-Yarışma Kuralları Tanıtımı (#7): İlk sorudan önce kuralları gösterir ve onaylanana kadar soruları gizler
+    if (gameState.currentIndex === 0 && !gameState._endermanIntroAcknowledged && !gameState.isJudgeMode) {
+      renderPrizeLadder();
+      showEndermanRulesIntro();
+      return;
+    }
+
     renderPrizeLadder();
     startQuestionTimer();
+  }
+
+  function showEndermanRulesIntro() {
+    stopQuestionTimer();
+    const qBox = document.getElementById('question-box');
+    const aGrid = document.getElementById('answers-grid');
+    const lBar = document.getElementById('lifelines-bar');
+    if (qBox) qBox.classList.add('hidden');
+    if (aGrid) aGrid.classList.add('hidden');
+    if (lBar) lBar.classList.add('hidden');
+
+    let overlay = document.getElementById('enderman-rules-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'enderman-rules-overlay';
+      overlay.className = 'enderman-rules-overlay';
+      const stageWrapper = document.getElementById('game-stage-wrapper') || document.getElementById('screen-game') || document.body;
+      stageWrapper.appendChild(overlay);
+    }
+    overlay.classList.remove('hidden');
+    overlay.innerHTML = `
+      <div class="enderman-rules-card enderman-portal-glow">
+        <div class="enderman-rules-header">
+          <div class="enderman-rules-avatar">
+            ${STAGE_MOB_SVGS.ENDERMAN}
+          </div>
+          <div>
+            <span class="enderman-rules-eyebrow">🔮 END BOYUTU REHBERİ</span>
+            <h2 class="enderman-rules-title">YARIŞMA KURALLARI</h2>
+          </div>
+        </div>
+        <div class="enderman-rules-body">
+          <p class="enderman-rules-lead">Vwoop! Minecraft Milyoner arenasına hoş geldin! Sorular End boyutundan ışınlanmadan önce kuralları dikkatle incele:</p>
+          <ul class="enderman-rules-list">
+            <li><span>💎</span> <strong>15 Zorlu Soru:</strong> Büyük ödül tam <strong>1.000.000 ₺</strong> ve bolca zümrüt!</li>
+            <li><span>⏱️</span> <strong>30 Saniye Süre:</strong> Her soru için süren kısıtlı, dikkatli ve hızlı ol!</li>
+            <li><span>💥</span> <strong>3 Güçlü Joker:</strong> 50:50 Creeper Patlaması, Telegram Destekli Sunucu Oylaması ve Bilge Köylü İpucu!</li>
+            <li><span>🛡️</span> <strong>Ölümsüzlük Totemi:</strong> Elinde Ekstra Can varsa yanlış cevap versen bile elenmezsin!</li>
+          </ul>
+        </div>
+        <div class="enderman-rules-footer">
+          <button type="button" id="btn-enderman-start-quiz" class="mc-btn mc-btn-lg mc-btn-gold">
+            ⚔️ KURALLARI ANLADIM, SORULARI IŞINLA!
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-enderman-start-quiz')?.addEventListener('click', () => {
+      soundEngine.endermanTeleport();
+      gameState._endermanIntroAcknowledged = true;
+      overlay.classList.add('hidden');
+      if (qBox) qBox.classList.remove('hidden');
+      if (aGrid) aGrid.classList.remove('hidden');
+      if (lBar) lBar.classList.remove('hidden');
+      startQuestionTimer();
+    });
   }
 
   function startQuestionTimer() {
@@ -1117,17 +1190,75 @@
     }, 650);
   }
 
+  function triggerTotemOfUndyingAnimation() {
+    soundEngine.totemUse();
+    let totemOverlay = document.getElementById('totem-resurrection-overlay');
+    if (!totemOverlay) {
+      totemOverlay = document.createElement('div');
+      totemOverlay.id = 'totem-resurrection-overlay';
+      totemOverlay.className = 'totem-resurrection-overlay';
+      document.body.appendChild(totemOverlay);
+    }
+    totemOverlay.innerHTML = `
+      <div class="totem-animation-card">
+        <div class="totem-wings-glow"></div>
+        <div class="totem-icon-wrap">
+          <svg viewBox="0 0 16 16" class="pixel-totem-svg" shape-rendering="crispEdges">
+            <rect x="6" y="1" width="4" height="2" fill="#eab308" />
+            <rect x="5" y="3" width="6" height="5" fill="#facc15" />
+            <rect x="6" y="4" width="1" height="1" fill="#22c55e" />
+            <rect x="9" y="4" width="1" height="1" fill="#22c55e" />
+            <rect x="7" y="6" width="2" height="1" fill="#ca8a04" />
+            <rect x="3" y="4" width="2" height="4" fill="#eab308" />
+            <rect x="11" y="4" width="2" height="4" fill="#eab308" />
+            <rect x="6" y="8" width="4" height="5" fill="#ca8a04" />
+            <rect x="5" y="13" width="6" height="2" fill="#a16207" />
+          </svg>
+        </div>
+        <h3 class="totem-title">🛡️ ÖLÜMSÜZLÜK TOTEMİ AKTİF EDİLDİ!</h3>
+        <p class="totem-desc">Ölümcül darbeden kurtuldunuz! Yanlış şık elendi, yarışmaya devam ediyorsunuz!</p>
+      </div>
+    `;
+    totemOverlay.classList.remove('hidden');
+    setTimeout(() => {
+      totemOverlay.classList.add('hidden');
+    }, 2200);
+  }
+
   function handleWrongOrTimeout(chosenIndex, reasonText) {
     const session = svc().authService?.getActiveSession();
     const availableLives = session
       ? svc().extraLifeService?.getUserExtraLives(session.username) || 0
       : 0;
+    const userEmeralds = session
+      ? svc().economyService?.getBalance(session.username) || 0
+      : 0;
 
-    // Ekstra Can varsa ve bu maçta henüz kullanılmadıysa ikinci şans sun
-    if (availableLives > 0 && !gameState.extraLifeUsedInMatch && chosenIndex >= 0) {
+    // Ekstra Can kontrolü (#9):
+    // 1) Envanterde ekstra can varsa sun
+    // 2) Envanterde yok ama >= 200 Zümrüt varsa satın alma seçeneği sun
+    // 3) Can yok ve < 200 Zümrüt ise teklif sunma, doğrudan elenmeye geç
+    const canUseLife = availableLives > 0;
+    const canAffordLife = userEmeralds >= 200;
+
+    if (!gameState.extraLifeUsedInMatch && chosenIndex >= 0 && (canUseLife || canAffordLife)) {
       const modal = document.getElementById('extra-life-modal');
       const countEl = document.getElementById('extra-life-modal-count');
+      const emEl = document.getElementById('extra-life-modal-emeralds');
+      const btnUse = document.getElementById('btn-use-extra-life');
+      const btnBuy = document.getElementById('btn-buy-extra-life');
+
       if (countEl) countEl.textContent = String(availableLives);
+      if (emEl) emEl.textContent = userEmeralds.toLocaleString('tr-TR');
+
+      if (canUseLife) {
+        btnUse?.classList.remove('hidden');
+        btnBuy?.classList.add('hidden');
+      } else {
+        btnUse?.classList.add('hidden');
+        btnBuy?.classList.remove('hidden');
+      }
+
       if (modal) {
         modal.dataset.wrongIndex = String(chosenIndex);
         modal.classList.remove('hidden');
@@ -1164,6 +1295,15 @@
   function finishGameSession({ didWin = false, walkedAway = false, explanation = '' }) {
     stopQuestionTimer();
     gameState.active = false;
+
+    // Creeper Elenme Animasyonu (#7): Yanlış cevap veya sürede Creeper tıslama ve patlama
+    if (!didWin && !walkedAway) {
+      try {
+        soundEngine.creeperHissAndBoom();
+      } catch (_e) {}
+      document.body.classList.add('shake-explosion');
+      setTimeout(() => document.body.classList.remove('shake-explosion'), 700);
+    }
 
     if (window._judgeSpectatorInterval) {
       clearInterval(window._judgeSpectatorInterval);
@@ -1364,7 +1504,7 @@
     }, 320);
   }
 
-  function useAskAudience() {
+  async function useAskAudience() {
     if (!gameState.active || !gameState.lifelines.audience) return;
     gameState.lifelines.audience = false;
     soundEngine.endermanTeleport();
@@ -1379,21 +1519,42 @@
     if (!qObj) return;
 
     const letters = ['A', 'B', 'C', 'D'];
-    const rates = [10, 10, 10, 10];
-    rates[qObj.answer] = 64;
-    let rem = 36;
-    [0, 1, 2, 3]
-      .filter(i => i !== qObj.answer)
-      .forEach((idx, pos) => {
-        if (pos === 2) rates[idx] = rem;
-        else {
-          const share = Math.floor(Math.random() * rem);
-          rates[idx] = share;
-          rem -= share;
-        }
-      });
+    let rates = [10, 10, 10, 10];
+    let isTied = false;
+    let totalVotes = 100;
+    let pollSource = 'TELEGRAM_LIVE';
 
-    // Sahneye Enderman ışınlansın ve End Boyutu Sunucu Oylaması çubuklarını göstersin!
+    try {
+      const pollRes = await svc().telegramService?.createPoll(qObj.q, qObj.options);
+      if (pollRes && Array.isArray(pollRes.options)) {
+        rates = pollRes.options.map(o => Number(o.percent || 0));
+        isTied = Boolean(pollRes.isTied);
+        totalVotes = Number(pollRes.totalVotes || 100);
+        pollSource = pollRes.source || 'TELEGRAM_LIVE';
+      } else {
+        rates[qObj.answer] = 64;
+        let rem = 36;
+        [0, 1, 2, 3].filter(i => i !== qObj.answer).forEach((idx, pos) => {
+          if (pos === 2) rates[idx] = rem;
+          else {
+            const share = Math.floor(Math.random() * rem);
+            rates[idx] = share;
+            rem -= share;
+          }
+        });
+      }
+    } catch (_e) {
+      rates[qObj.answer] = 62;
+      rates[(qObj.answer + 1) % 4] = 20;
+      rates[(qObj.answer + 2) % 4] = 10;
+      rates[(qObj.answer + 3) % 4] = 8;
+    }
+
+    const tieBannerHtml = isTied
+      ? `<div class="ender-poll-tie-banner">⚠️ Oylar eşit çıktı! Seyirciler iki şık arasında kararsız kaldı!</div>`
+      : '';
+
+    // Sahneye Enderman ışınlansın ve Telegram Sunucu Oylaması çubuklarını göstersin!
     const stageActorsEl = document.getElementById('mc-stage-actors');
     if (stageActorsEl) {
       stageActorsEl.classList.remove('hidden');
@@ -1406,7 +1567,8 @@
             </div>
           </div>
           <div class="actor-speech-bubble enderman-bubble">
-            <strong>🔮 Enderman &amp; Sunucu Oylaması:</strong>
+            <strong>🔮 Telegram &amp; Sunucu Oylaması (${totalVotes} Oy - ${pollSource === 'TELEGRAM_LIVE' ? 'Canlı Bot' : 'Test Modu'}):</strong>
+            ${tieBannerHtml}
             <div class="enderman-poll-bars">
               ${rates
                 .map(
@@ -1432,7 +1594,7 @@
       fb.classList.remove('hidden');
       fb.innerHTML = `<strong>👥 Sunucu Oylaması:</strong> ${rates
         .map((r, i) => `${letters[i]}: %${r}`)
-        .join(' • ')}`;
+        .join(' • ')} ${isTied ? '(⚠️ Eşitlik)' : ''}`;
     }
   }
 
@@ -1462,7 +1624,7 @@
         <div id="active-villager-stage-actor" class="mc-stage-actor villager-stage-actor">
           <div class="actor-speech-bubble villager-bubble">
             <strong>📖 Bilge Köylü (Sağ Kürsüye Geçti):</strong>
-            <p>"Hrmmm! Sağa geçip antik parşömenlerime baktım... Doğru cevap büyük ihtimalle <strong>${recommendedLetter}) ${recommendedText}</strong>!"</p>
+            <p>"Hrmmm! 1 Zümrüt karşılığında kadim parşömenlerimi açtım... Doğru cevap büyük ihtimalle <strong>${recommendedLetter}) ${recommendedText}</strong>!"</p>
           </div>
           <div class="actor-character-wrap villager-character-wrap">
             ${STAGE_MOB_SVGS.VILLAGER}
@@ -1487,7 +1649,7 @@
     const fb = document.getElementById('lifeline-feedback');
     if (fb) {
       fb.classList.remove('hidden');
-      fb.innerHTML = `<strong>🧙‍♂️ Bilge Köylü:</strong> "Hrmmm! Parşömenlerime göre doğru cevap büyük ihtimalle <strong>${recommendedLetter}) ${recommendedText}</strong>!"`;
+      fb.innerHTML = `<strong>🧙‍♂️ Bilge Köylü:</strong> "Hrmmm! 1 Zümrüt takasıyla söylüyorum: Doğru cevap büyük ihtimalle <strong>${recommendedLetter}) ${recommendedText}</strong>!"`;
     }
   }
 
@@ -2077,6 +2239,8 @@
         gameState.extraLifeUsedInMatch = true;
         modal.classList.add('hidden');
 
+        triggerTotemOfUndyingAnimation();
+
         const wrongIdx = Number(modal.dataset.wrongIndex ?? -1);
         if (wrongIdx >= 0) {
           const wrongBtn = document.getElementById(`ans-${wrongIdx}`);
@@ -2095,7 +2259,47 @@
 
         window.MCMPlatform?.syncHeaderAndDrawer();
         window.MCMPlatform?.showToast(
-          '❤️ 1 Ekstra Can kullanıldı! Yanlış şık elendi, yarışmaya devam edebilirsiniz!',
+          '🛡️ Ölümsüzlük Totemi kullanıldı! Yanlış şık elendi, yarışmaya devam edebilirsiniz!',
+          'success'
+        );
+        startQuestionTimer();
+      } catch (err) {
+        window.MCMPlatform?.showToast(err.message, 'error');
+      }
+    });
+
+    document.getElementById('btn-buy-extra-life')?.addEventListener('click', () => {
+      const modal = document.getElementById('extra-life-modal');
+      const session = svc().authService?.getActiveSession();
+      if (!modal || !session) return;
+
+      try {
+        svc().extraLifeService.purchaseExtraLifeWithEmeralds(session.username);
+        svc().extraLifeService.consumeExtraLifeInMatch(session.username);
+        gameState.extraLifeUsedInMatch = true;
+        modal.classList.add('hidden');
+
+        triggerTotemOfUndyingAnimation();
+
+        const wrongIdx = Number(modal.dataset.wrongIndex ?? -1);
+        if (wrongIdx >= 0) {
+          const wrongBtn = document.getElementById(`ans-${wrongIdx}`);
+          if (wrongBtn) {
+            wrongBtn.disabled = true;
+            wrongBtn.classList.add('eliminated');
+          }
+        }
+
+        for (let i = 0; i < 4; i++) {
+          const b = document.getElementById(`ans-${i}`);
+          if (b && !b.classList.contains('eliminated')) {
+            b.disabled = false;
+          }
+        }
+
+        window.MCMPlatform?.syncHeaderAndDrawer();
+        window.MCMPlatform?.showToast(
+          '🛡️ 200 Zümrüt ile Ölümsüzlük Totemi alındı ve kullanıldı! Yarışmaya devam ediyorsunuz!',
           'success'
         );
         startQuestionTimer();

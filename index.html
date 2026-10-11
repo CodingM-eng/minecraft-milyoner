@@ -529,99 +529,7 @@
           </button>
         </div>
 
-        <!-- 👾 4 MINECRAFT MOB YARIŞMA MODU SEÇİMİ (Enderman, Villager, Creeper, Allay) -->
-        <div class="mob-adventure-selector-section" style="margin: 20px 0 10px;">
-          <div class="mob-adventure-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;">
-            <div style="text-align:left;">
-              <span class="section-eyebrow" style="color:#10b981;font-size:0.76rem;letter-spacing:1px;font-weight:700;">🎮 MINECRAFT JAVA EDITION 1.21.11 ÖZEL ETKİNLİKLERİ</span>
-              <h3 style="margin:2px 0 0;font-size:1.1rem;color:#f8fafc;">YARIŞMA REHBERİ MOB SEÇİMİ</h3>
-            </div>
-            <span style="font-size:0.78rem;color:#94a3b8;">Bir moba tıklayarak özel yarışma sahnesini başlat!</span>
-          </div>
 
-          <div class="mob-adventure-grid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;">
-            <!-- 1. Enderman -->
-            <button type="button" class="mob-adventure-card mob-card-enderman" data-mob-intro="enderman" style="background:rgba(24, 16, 38, 0.9);border:2px solid #a855f7;border-radius:8px;padding:14px;cursor:pointer;text-align:center;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;">
-              <div class="mob-card-badge" style="font-size:0.72rem;background:#581c87;color:#f5d0fe;padding:2px 8px;border-radius:4px;font-weight:bold;">🔮 ENDER TANITIMI</div>
-              <div class="mob-card-svg-wrap" style="width:54px;height:72px;display:flex;align-items:center;justify-content:center;">
-                <svg class="mob-pixel-svg enderman-svg" viewBox="0 0 16 30" style="width:48px;height:70px;" shape-rendering="crispEdges">
-                  <rect x="4" y="1" width="8" height="8" fill="#111118" />
-                  <rect x="4" y="4" width="3" height="1" fill="#f5d0fe" />
-                  <rect x="5" y="4" width="1" height="1" fill="#d946ef" />
-                  <rect x="9" y="4" width="3" height="1" fill="#f5d0fe" />
-                  <rect x="10" y="4" width="1" height="1" fill="#d946ef" />
-                  <rect x="5" y="9" width="6" height="8" fill="#161622" />
-                  <rect class="mob-arm-l" x="3" y="9" width="2" height="13" fill="#0d0d14" />
-                  <rect class="mob-arm-r" x="11" y="9" width="2" height="13" fill="#0d0d14" />
-                  <rect class="mob-leg-l" x="6" y="17" width="1.8" height="12" fill="#0d0d14" />
-                  <rect class="mob-leg-r" x="8.2" y="17" width="1.8" height="12" fill="#0d0d14" />
-                </svg>
-              </div>
-              <strong style="color:#e9d5ff;font-size:0.95rem;">Enderman İle Başla</strong>
-              <span style="font-size:0.78rem;color:#c084fc;">"YARIŞMA BAŞLADI!"</span>
-            </button>
-
-            <!-- 2. Villager -->
-            <button type="button" class="mob-adventure-card mob-card-villager" data-mob-intro="villager" style="background:rgba(43, 29, 14, 0.9);border:2px solid #ca8a04;border-radius:8px;padding:14px;cursor:pointer;text-align:center;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;">
-              <div class="mob-card-badge" style="font-size:0.72rem;background:#713f12;color:#fef08a;padding:2px 8px;border-radius:4px;font-weight:bold;">📖 KÖYLÜ KARŞILAMASI</div>
-              <div class="mob-card-svg-wrap" style="width:54px;height:72px;display:flex;align-items:center;justify-content:center;">
-                <svg class="mob-pixel-svg villager-svg" viewBox="0 0 16 24" style="width:48px;height:70px;" shape-rendering="crispEdges">
-                  <rect x="3" y="0" width="10" height="3" fill="#991b1b" />
-                  <rect x="4" y="2" width="8" height="1" fill="#fbbf24" />
-                  <rect x="4" y="3" width="8" height="7" fill="#d4946a" />
-                  <rect x="4" y="5" width="8" height="1" fill="#78350f" />
-                  <rect x="5" y="6" width="2" height="2" fill="#16a34a" />
-                  <rect x="9" y="6" width="2" height="2" fill="#16a34a" />
-                  <rect x="7" y="7" width="2" height="5" fill="#b5764e" />
-                  <rect x="4" y="10" width="8" height="10" fill="#78350f" />
-                  <rect x="3" y="11" width="10" height="4" fill="#a16207" />
-                  <rect x="5" y="20" width="2" height="4" fill="#451a03" />
-                  <rect x="9" y="20" width="2" height="4" fill="#451a03" />
-                </svg>
-              </div>
-              <strong style="color:#fef08a;font-size:0.95rem;">Bilge Köylü İle Başla</strong>
-              <span style="font-size:0.78rem;color:#fde047;">"KÖYLÜ SİZİ BEKLİYOR!"</span>
-            </button>
-
-            <!-- 3. Creeper -->
-            <button type="button" class="mob-adventure-card mob-card-creeper" data-mob-intro="creeper" style="background:rgba(12, 38, 20, 0.9);border:2px solid #22c55e;border-radius:8px;padding:14px;cursor:pointer;text-align:center;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;">
-              <div class="mob-card-badge" style="font-size:0.72rem;background:#14532d;color:#bbf7d0;padding:2px 8px;border-radius:4px;font-weight:bold;">💥 CREEPER MEYDAN OKUMASI</div>
-              <div class="mob-card-svg-wrap" style="width:54px;height:72px;display:flex;align-items:center;justify-content:center;">
-                <svg class="mob-pixel-svg creeper-svg" viewBox="0 0 16 24" style="width:48px;height:70px;" shape-rendering="crispEdges">
-                  <rect x="4" y="1" width="8" height="8" fill="#22c55e" />
-                  <rect x="5" y="3" width="2" height="2" fill="#0f172a" />
-                  <rect x="9" y="3" width="2" height="2" fill="#0f172a" />
-                  <rect x="7" y="5" width="2" height="3" fill="#0f172a" />
-                  <rect x="6" y="6" width="1" height="3" fill="#0f172a" />
-                  <rect x="9" y="6" width="1" height="3" fill="#0f172a" />
-                  <rect x="5" y="9" width="6" height="9" fill="#16a34a" />
-                  <rect x="3" y="18" width="4" height="5" fill="#15803d" />
-                  <rect x="9" y="18" width="4" height="5" fill="#15803d" />
-                </svg>
-              </div>
-              <strong style="color:#bbf7d0;font-size:0.95rem;">Creeper İle Başla</strong>
-              <span style="font-size:0.78rem;color:#86efac;">"CREEPER SORULARI HAZIR!"</span>
-            </button>
-
-            <!-- 4. Allay -->
-            <button type="button" class="mob-adventure-card mob-card-allay" data-mob-intro="allay" style="background:rgba(12, 32, 54, 0.9);border:2px solid #38bdf8;border-radius:8px;padding:14px;cursor:pointer;text-align:center;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;">
-              <div class="mob-card-badge" style="font-size:0.72rem;background:#0c4a6e;color:#bae6fd;padding:2px 8px;border-radius:4px;font-weight:bold;">🧚 YARDIM PERİSİ</div>
-              <div class="mob-card-svg-wrap" style="width:54px;height:72px;display:flex;align-items:center;justify-content:center;">
-                <svg class="mob-pixel-svg allay-svg" viewBox="0 0 16 18" style="width:48px;height:65px;" shape-rendering="crispEdges">
-                  <rect class="mob-wing-l" x="1" y="6" width="4" height="5" fill="#7dd3fc" opacity="0.85" />
-                  <rect class="mob-wing-r" x="11" y="6" width="4" height="5" fill="#7dd3fc" opacity="0.85" />
-                  <rect x="5" y="2" width="6" height="6" fill="#38bdf8" />
-                  <rect x="6" y="5" width="1" height="2" fill="#ffffff" />
-                  <rect x="9" y="5" width="1" height="2" fill="#ffffff" />
-                  <rect x="6" y="8" width="4" height="6" fill="#0284c7" />
-                  <rect x="7" y="14" width="2" height="2" fill="#38bdf8" />
-                </svg>
-              </div>
-              <strong style="color:#bae6fd;font-size:0.95rem;">Allay İle Yardım Al</strong>
-              <span style="font-size:0.78rem;color:#7dd3fc;">"ALLAY YARDIMA HAZIR!"</span>
-            </button>
-          </div>
-        </div>
 
         <!-- Hızlı Erişim Kartları -->
         <div class="welcome-quick-links">
@@ -1578,6 +1486,8 @@
             <button type="button" class="admin-nav-btn" data-admin-tab="economy">💎 Ekonomi</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="shop">🛒 Mağaza</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="payments">💳 Ödemeler</button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="discounts">🎟️ İndirim &amp; Kuponlar</button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="telegram">🤖 Telegram Bot</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="notifications">🔔 Bildirimler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="support">🎧 Destek</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="bugs">🐞 Hatalar</button>
@@ -1670,23 +1580,173 @@
     </div>
   </div>
 
-  <!-- 3. ❤️ Ekstra Can İkinci Şans Modalı -->
+  <!-- 3. 🛡️ Ölümsüzlük Totemi (Ekstra Can) İkinci Şans Modalı (#7, #9) -->
   <div id="extra-life-modal" class="mc-modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="mc-modal-card">
       <div class="mc-modal-header">
-        <h3>❤️ İKİNCİ ŞANS: EKSTRA CAN KULLAN!</h3>
+        <h3>🛡️ İKİNCİ ŞANS: ÖLÜMSÜZLÜK TOTEMİ!</h3>
       </div>
       <div class="mc-modal-body">
+        <div style="text-align:center;margin-bottom:12px;">
+          <svg viewBox="0 0 16 16" style="width:48px;height:48px;filter:drop-shadow(0 0 8px rgba(234,179,8,0.6));" shape-rendering="crispEdges">
+            <rect x="6" y="1" width="4" height="2" fill="#eab308" />
+            <rect x="5" y="3" width="6" height="5" fill="#facc15" />
+            <rect x="6" y="4" width="1" height="1" fill="#22c55e" />
+            <rect x="9" y="4" width="1" height="1" fill="#22c55e" />
+            <rect x="7" y="6" width="2" height="1" fill="#ca8a04" />
+            <rect x="3" y="4" width="2" height="4" fill="#eab308" />
+            <rect x="11" y="4" width="2" height="4" fill="#eab308" />
+            <rect x="6" y="8" width="4" height="5" fill="#ca8a04" />
+            <rect x="5" y="13" width="6" height="2" fill="#a16207" />
+          </svg>
+        </div>
         <p id="extra-life-modal-desc">
-          Yanlış cevap verdiniz! Envanterinizdeki <strong>1 Ekstra Canı</strong> kullanarak elenmekten kurtulmak ve soruya devam etmek ister misiniz?
+          Yanlış cevap verdiniz! <strong>Ölümsüzlük Totemi (Ekstra Can)</strong> gücünü kullanarak elenmekten kurtulmak ve soruya devam etmek ister misiniz?
         </p>
-        <p class="card-sub">Kalan Ekstra Canınız: <strong id="extra-life-modal-count">1</strong></p>
+        <p class="card-sub">Envanterdeki Ekstra Can: <strong id="extra-life-modal-count">0</strong> | Zümrüt Bakiyeniz: <strong id="extra-life-modal-emeralds">0</strong> 🟢</p>
         <div class="mc-modal-actions">
           <button type="button" id="btn-skip-extra-life" class="mc-btn mc-btn-secondary">
             Hayır, Yarışmayı Bitir
           </button>
           <button type="button" id="btn-use-extra-life" class="mc-btn mc-btn-gold">
-            ❤️ Ekstra Can Kullan ve Devam Et!
+            🛡️ Totem Kullan ve Devam Et!
+          </button>
+          <button type="button" id="btn-buy-extra-life" class="mc-btn mc-btn-emerald hidden">
+            🟢 200 Zümrüt ile Totem Al &amp; Devam Et
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3.1 👑 Rütbe Karşılaştırma ve Ayrıcalıklar Modalı (#5) -->
+  <div id="modal-rank-comparison" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-rank-comp-title">
+    <div class="mc-modal-card rank-comparison-modal-card" style="max-width: 780px;">
+      <div class="mc-modal-header">
+        <h3 id="modal-rank-comp-title">👑 RÜTBE AYRICALIKLARI &amp; KARŞILAŞTIRMA TABLOSU</h3>
+        <button type="button" id="btn-close-rank-comparison" class="drawer-close-btn" aria-label="Kapat">✕</button>
+      </div>
+      <div class="mc-modal-body" id="modal-rank-comp-body">
+        <div class="rank-comp-table-wrap" style="overflow-x:auto;">
+          <table class="mc-table rank-comp-table" style="width:100%;font-size:0.86rem;">
+            <thead>
+              <tr>
+                <th style="text-align:left;">Özellik / Ayrıcalık</th>
+                <th>Üye (Free)</th>
+                <th style="color:#38bdf8;">VIP</th>
+                <th style="color:#22c55e;">VIP+</th>
+                <th style="color:#a855f7;">MVIP</th>
+                <th style="color:#f59e0b;">MVIP+</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Fiyat (Stripe / TRY)</strong></td>
+                <td>Ücretsiz</td>
+                <td>89,90 ₺</td>
+                <td>159,90 ₺</td>
+                <td>299,90 ₺</td>
+                <td>449,90 ₺</td>
+              </tr>
+              <tr>
+                <td><strong>Netherite Fiyatı</strong></td>
+                <td>-</td>
+                <td>500 N</td>
+                <td>950 N</td>
+                <td>1.850 N</td>
+                <td>2.750 N</td>
+              </tr>
+              <tr>
+                <td><strong>İlk Satın Alma Bonusu</strong></td>
+                <td>-</td>
+                <td>+50 N</td>
+                <td>+250 N</td>
+                <td>+250 N</td>
+                <td>+250 N</td>
+              </tr>
+              <tr>
+                <td><strong>Günlük Zümrüt Ödülü</strong></td>
+                <td>50 🟢</td>
+                <td>100 🟢</td>
+                <td>200 🟢</td>
+                <td>350 🟢</td>
+                <td>500 🟢</td>
+              </tr>
+              <tr>
+                <td><strong>Günlük Netherite Ödülü</strong></td>
+                <td>-</td>
+                <td>-</td>
+                <td>5 ⬛</td>
+                <td>12 ⬛</td>
+                <td>25 ⬛</td>
+              </tr>
+              <tr>
+                <td><strong>Sohbet İsim Rengi</strong></td>
+                <td>Beyaz</td>
+                <td>Açık Mavi</td>
+                <td>Yeşil Parıltı</td>
+                <td>Mor Neon</td>
+                <td>RGB Gökkuşağı</td>
+              </tr>
+              <tr>
+                <td><strong>Özel Emojiler &amp; Rozetler</strong></td>
+                <td>Standart</td>
+                <td>VIP Rozeti</td>
+                <td>VIP+ Alev</td>
+                <td>MVIP Kristal</td>
+                <td>MVIP+ Taç &amp; Ejder</td>
+              </tr>
+              <tr>
+                <td><strong>Parti &amp; Jüri Oluşturma</strong></td>
+                <td>Katılımcı</td>
+                <td>Oda Açabilir</td>
+                <td>Jüri &amp; Oda</td>
+                <td>Jüri &amp; Sesli</td>
+                <td>Özel Turnuva</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3.2 💳 Stripe Güvenli Ödeme & Kupon Doğrulama Modalı (#2, #15) -->
+  <div id="modal-stripe-checkout" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-stripe-title">
+    <div class="mc-modal-card stripe-checkout-modal-card" style="max-width: 500px;">
+      <div class="mc-modal-header">
+        <h3 id="modal-stripe-title">💳 GÜVENLİ STRIPE CHECKOUT</h3>
+        <button type="button" id="btn-close-stripe-checkout" class="drawer-close-btn" aria-label="Kapat">✕</button>
+      </div>
+      <div class="mc-modal-body">
+        <div class="stripe-summary-box" style="background:rgba(15,23,42,0.8);border:2px solid #334155;border-radius:6px;padding:12px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong id="stripe-checkout-rank-name" style="font-size:1.1rem;color:#facc15;">VIP+ Rütbesi</strong>
+            <span id="stripe-checkout-price" style="font-size:1.2rem;font-weight:bold;color:#22c55e;">159,90 ₺</span>
+          </div>
+          <div id="stripe-checkout-test-badge" class="badge-test-mode" style="margin-top:6px;display:inline-block;padding:2px 6px;background:#3b82f6;color:#fff;border-radius:4px;font-size:0.75rem;">
+            🛡️ Stripe Güvenli Test/Canlı Entegrasyonu
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label for="stripe-coupon-code" class="form-label">🎟️ İndirim Kupon Kodu (Varsa):</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="stripe-coupon-code" class="form-input" placeholder="Örn: YAZ2026, VIP10" style="text-transform:uppercase;" />
+            <button type="button" id="btn-apply-stripe-coupon" class="mc-btn mc-btn-secondary" style="white-space:nowrap;">Kupon Uygula</button>
+          </div>
+          <span id="stripe-coupon-status" style="display:block;font-size:0.78rem;margin-top:4px;"></span>
+        </div>
+
+        <div class="form-group" id="stripe-gift-group" style="margin-bottom:12px;display:none;">
+          <label for="stripe-recipient-input" class="form-label">🎁 Hediye Edilecek Oyuncu Adı:</label>
+          <input type="text" id="stripe-recipient-input" class="form-input" placeholder="Alıcı kullanıcı adı" />
+        </div>
+
+        <div class="mc-modal-actions">
+          <button type="button" id="btn-cancel-stripe" class="mc-btn mc-btn-secondary">İptal</button>
+          <button type="button" id="btn-proceed-stripe-checkout" class="mc-btn mc-btn-gold">
+            💳 Stripe ile Güvenli Öde
           </button>
         </div>
       </div>

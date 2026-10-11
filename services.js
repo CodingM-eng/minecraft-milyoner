@@ -35,7 +35,11 @@
     SEEN_QUESTIONS: 'mc_millionaire_tr_seen_questions_v10',
     CLOUD_SYNC_META: 'mc_millionaire_tr_cloud_sync_meta_v10',
     TOMBSTONES: 'mc_millionaire_tr_tombstones_v10',
-    RESET_EPOCH: 'mc_millionaire_tr_reset_epoch_v10'
+    RESET_EPOCH: 'mc_millionaire_tr_reset_epoch_v10',
+    DISCOUNTS: 'mc_millionaire_tr_discounts_v10',
+    COSMETICS: 'mc_millionaire_tr_cosmetics_v10',
+    FRIENDS: 'mc_millionaire_tr_friends_v10',
+    TELEGRAM_POLLS: 'mc_millionaire_tr_telegram_polls_v10'
   };
 
   // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan tüm önbellek verilerini temizle
@@ -72,7 +76,10 @@
     STORAGE_KEYS.AI_CONFIG,
     STORAGE_KEYS.AI_QUESTIONS,
     STORAGE_KEYS.TOMBSTONES,
-    STORAGE_KEYS.RESET_EPOCH
+    STORAGE_KEYS.RESET_EPOCH,
+    STORAGE_KEYS.DISCOUNTS,
+    STORAGE_KEYS.COSMETICS,
+    STORAGE_KEYS.FRIENDS
   ]);
 
   // ==========================================
@@ -2661,8 +2668,21 @@
       // Benzersiz maç kimliği oluştur
       party.matchId = `MATCH_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-      // Lider varsayılan olarak JUDGE rolünde
-      if (!party.hostRole) party.hostRole = 'JUDGE';
+      // Dönüşümlü Jüri Kuralı (#6): 1. Tur uygun rastgele üye, 2. Tur lider, dönüşümlü devam eder
+      party.roundNumber = (party.roundNumber || 0) + 1;
+      const eligibleNonHost = (party.members || []).filter(
+        m => m && m.username && m.username.toLowerCase() !== party.leaderUsername.toLowerCase()
+      );
+      if (party.roundNumber % 2 === 1 && eligibleNonHost.length > 0) {
+        // Tek sayılı turlar: Uygun bir katılımcı jüri olarak atanır
+        const randomJudge = eligibleNonHost[Math.floor(Math.random() * eligibleNonHost.length)];
+        party.assignedJudgeUsername = randomJudge.username;
+        party.hostRole = 'PLAYER';
+      } else {
+        // Çift sayılı turlar (veya tek kişilik parti): Lider jüri olarak atanır
+        party.assignedJudgeUsername = party.leaderUsername;
+        party.hostRole = 'JUDGE';
+      }
 
       party.status = 'IN_GAME';
       party.matchStartedAt = new Date().toISOString();
@@ -2674,11 +2694,37 @@
           notificationService.notifyUser(m.username, {
             type: 'PARTY_UPDATE',
             title: '⚔️ Parti Maçı Başladı!',
-            message: `"${party.partyName}" partisinde turnuva maçı lider tarafından başlatıldı!`
+            message: `"${party.partyName}" partisinde ${party.roundNumber}. tur başladı! Güncel Jüri: ${party.assignedJudgeUsername}`
           });
         }
       });
 
+      return party;
+    },
+
+    rotatePartyJury(session, partyId) {
+      authGuard.verifySession(session);
+      const parties = this.getAllParties();
+      const party = parties.find(p => p && p.partyId === partyId && p.status !== 'CLOSED');
+      if (!party) throw new Error('Parti bulunamadı.');
+
+      const eligibleNonHost = (party.members || []).filter(
+        m => m && m.username && m.username.toLowerCase() !== party.leaderUsername.toLowerCase()
+      );
+
+      // Mevcut jüri lider ise ve başka üye varsa üyeye geçir, aksi halde lidere geçir
+      const currentJudge = (party.assignedJudgeUsername || party.leaderUsername).toLowerCase();
+      if (currentJudge === party.leaderUsername.toLowerCase() && eligibleNonHost.length > 0) {
+        const nextJudge = eligibleNonHost[Math.floor(Math.random() * eligibleNonHost.length)];
+        party.assignedJudgeUsername = nextJudge.username;
+        party.hostRole = 'PLAYER';
+      } else {
+        party.assignedJudgeUsername = party.leaderUsername;
+        party.hostRole = 'JUDGE';
+      }
+
+      party.updatedAt = nextMonotonicIso(party.updatedAt || party.createdAt);
+      this._saveAllParties(parties);
       return party;
     },
 
@@ -2697,6 +2743,29 @@
         throw new Error('Yalnızca parti lideri rolünü değiştirebilir.');
       }
       party.hostRole = role;
+      party.updatedAt = nextMonotonicIso(party.updatedAt || party.createdAt);
+      this._saveAllParties(parties);
+      return party;
+    },
+
+    addMemberDirectly(session, partyId, targetUsername) {
+      authGuard.verifySession(session);
+      const parties = this.getAllParties();
+      const party = parties.find(p => p && p.partyId === partyId && p.status !== 'CLOSED');
+      if (!party) throw new Error('Parti bulunamadı.');
+
+      const cleanTarget = String(targetUsername || '').trim();
+      if (!cleanTarget) throw new Error('Üye adı boş olamaz.');
+
+      if (!Array.isArray(party.members)) party.members = [];
+      const exists = party.members.some(m => m && m.username && m.username.toLowerCase() === cleanTarget.toLowerCase());
+      if (!exists) {
+        party.members.push({
+          username: cleanTarget,
+          joinedAt: new Date().toISOString(),
+          score: 0
+        });
+      }
       party.updatedAt = nextMonotonicIso(party.updatedAt || party.createdAt);
       this._saveAllParties(parties);
       return party;
@@ -3190,9 +3259,9 @@
     publishableKey: '',
     webhookEndpoint: '/api/stripe/webhook',
     currency: 'TRY',
-    mode: 'PREPARATION',
-    enabled: false,
-    statusMessage: 'Ödeme sistemi yakında aktif olacaktır (Stripe entegrasyonu hazırlanıyor)'
+    mode: 'LIVE',
+    enabled: true,
+    statusMessage: 'Stripe güvenli ödeme sistemi aktiftir.'
   };
 
   const paymentService = {
@@ -3214,7 +3283,7 @@
       activityService.log(
         'ADMIN_ACTION',
         session.username,
-        'Stripe ödeme hazırlık yapılandırması güncellendi.'
+        'Stripe ödeme yapılandırması güncellendi.'
       );
       return next;
     },
@@ -3223,46 +3292,727 @@
       const all = storage.get(STORAGE_KEYS.STRIPE_SESSIONS, []);
       if (!username) return all;
       const clean = String(username).trim().toLowerCase();
-      return all.filter(s => s.username.toLowerCase() === clean);
+      return all.filter(s => s.username && s.username.toLowerCase() === clean);
     },
 
-    createPreparedStripeSession(
+    async createCheckoutSession(
       session,
       {
-        productType = 'RANK_UPGRADE',
-        productId,
-        productName,
+        rankId = 'VIP',
         recipientUsername = null,
-        amountTry = 0,
-        currency = 'TRY'
+        couponCode = ''
       }
     ) {
       authGuard.verifySession(session);
-      const cfg = this.getStripeConfig();
+      const cleanRank = String(rankId || 'VIP').trim().toUpperCase();
+      const targetUser = recipientUsername ? String(recipientUsername).trim() : session.username;
 
+      // 1. Sunucu API'sini çağır (POST /api/stripe/create-checkout-session)
+      try {
+        if (typeof fetch === 'function') {
+          const res = await fetch('/api/stripe/create-checkout-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rankId: cleanRank,
+              username: session.username,
+              recipientUsername: targetUser,
+              couponCode: couponCode || ''
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              const sessionRecord = {
+                id: data.sessionId,
+                transactionId: data.transactionId,
+                username: session.username,
+                recipientUsername: targetUser,
+                rankId: cleanRank,
+                amountTry: data.finalPrice,
+                originalPrice: data.originalPrice,
+                currency: 'TRY',
+                status: 'PENDING_CHECKOUT',
+                testMode: Boolean(data.testMode),
+                createdAt: new Date().toISOString()
+              };
+
+              const list = this.getCheckoutSessions();
+              list.unshift(sessionRecord);
+              storage.set(STORAGE_KEYS.STRIPE_SESSIONS, list);
+
+              return {
+                success: true,
+                checkoutUrl: data.checkoutUrl,
+                sessionId: data.sessionId,
+                transactionId: data.transactionId,
+                testMode: Boolean(data.testMode),
+                finalPrice: data.finalPrice,
+                originalPrice: data.originalPrice,
+                rankId: cleanRank,
+                recipientUsername: targetUser
+              };
+            }
+          }
+        }
+      } catch (err) {
+        // Fallback local simulation if backend fetch fails
+      }
+
+      // 2. Güvenli Yerel Doğrulama Fallback'i
+      const rankPrices = { VIP: 89.90, VIP_PLUS: 159.90, MVIP: 299.90, MVIP_PLUS: 449.90 };
+      const basePrice = rankPrices[cleanRank] || 89.90;
+      let finalPrice = basePrice;
+
+      if (couponCode && window.MCMServices?.discountService) {
+        try {
+          const disc = window.MCMServices.discountService.validateCoupon(couponCode, {
+            rankId: cleanRank,
+            username: session.username,
+            basePrice
+          });
+          finalPrice = disc.discountedPrice;
+        } catch (e) {}
+      }
+
+      const sessionId = 'cs_local_' + Math.random().toString(36).substring(2, 10);
+      const transactionId = 'TX_LOCAL_' + Date.now();
       const sessionRecord = {
-        id: generateId('CS_PREP'),
+        id: sessionId,
+        transactionId,
         username: session.username,
-        recipientUsername: recipientUsername || session.username,
-        productType,
-        productId,
-        productName,
-        amountTry: Number(amountTry || 0),
-        currency: currency || cfg.currency || 'TRY',
-        status: 'PREPARED_PENDING_STRIPE',
+        recipientUsername: targetUser,
+        rankId: cleanRank,
+        amountTry: finalPrice,
+        originalPrice: basePrice,
+        currency: 'TRY',
+        status: 'PENDING_CHECKOUT',
+        testMode: true,
         createdAt: new Date().toISOString()
       };
 
       const list = this.getCheckoutSessions();
       list.unshift(sessionRecord);
-      if (list.length > 250) list.length = 250;
       storage.set(STORAGE_KEYS.STRIPE_SESSIONS, list);
 
       return {
-        stripePrepared: true,
-        userNotice: cfg.statusMessage,
-        sessionRecord
+        success: true,
+        checkoutUrl: `/#stripe-checkout?session_id=${sessionId}&rank=${cleanRank}&recipient=${encodeURIComponent(targetUser)}&amount=${finalPrice}&tx=${transactionId}`,
+        sessionId,
+        transactionId,
+        testMode: true,
+        finalPrice,
+        originalPrice: basePrice,
+        rankId: cleanRank,
+        recipientUsername: targetUser
       };
+    },
+
+    fulfillCompletedPayment(
+      sessionOrSessionId,
+      details = {}
+    ) {
+      let session = null;
+      let payload = {};
+
+      if (typeof sessionOrSessionId === 'string') {
+        payload = { ...details, sessionId: sessionOrSessionId };
+        session = { username: payload.username || payload.recipientUsername || 'Oyuncu', role: 'MEMBER' };
+      } else if (sessionOrSessionId && typeof sessionOrSessionId === 'object') {
+        session = sessionOrSessionId;
+        payload = details || {};
+      } else {
+        session = { username: payload.username || 'Oyuncu', role: 'MEMBER' };
+      }
+
+      const cleanRank = String(payload.rankId || 'VIP').trim().toUpperCase();
+      const targetUser = payload.recipientUsername ? String(payload.recipientUsername).trim() : session.username;
+      const cleanTx = payload.transactionId || 'TX_' + Date.now();
+      const sessionId = payload.sessionId;
+
+      // İdempotency kontrolü: Aynı işlem iki kez uygulanamaz
+      const sessions = this.getCheckoutSessions();
+      const existing = sessions.find(s => s && (s.id === sessionId || s.transactionId === cleanTx));
+      if (existing && existing.status === 'COMPLETED') {
+        return { success: true, alreadyProcessed: true, alreadyFulfilled: true, rankId: cleanRank, recipientUsername: targetUser };
+      }
+
+      // 1. Hedef kullanıcının rütbesini güncelle
+      let bonusGranted = false;
+      const users = userService.getAllUsers();
+      const user = users.find(u => u && u.username && u.username.toLowerCase() === targetUser.toLowerCase());
+      if (user) {
+        user.rank = cleanRank;
+        user.role = cleanRank;
+
+        // İlk kez VIP veya VIP+ alındığında tek seferlik Netherite bonusu
+        if (!user.firstPremiumBonusGranted) {
+          user.firstPremiumBonusGranted = true;
+          bonusGranted = true;
+          user.initialNetheriteBonusClaimed = true;
+          user.initialNetheriteBonusAmount = ['VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(cleanRank) ? 250 : (cleanRank === 'VIP' ? 50 : 0);
+          if (['VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(cleanRank)) {
+            user.netheriteBalance = Number(user.netheriteBalance || 0) + 250;
+          } else if (cleanRank === 'VIP') {
+            user.netheriteBalance = Number(user.netheriteBalance || 0) + 50;
+          }
+        }
+        userService._saveAllUsers(users);
+      }
+
+      // 2. Oturum kaydını COMPLETED yap
+      if (existing) {
+        existing.status = 'COMPLETED';
+        existing.completedAt = new Date().toISOString();
+      } else {
+        sessions.unshift({
+          id: sessionId || 'cs_' + Date.now(),
+          transactionId: cleanTx,
+          username: session.username,
+          recipientUsername: targetUser,
+          rankId: cleanRank,
+          amountTry: Number(payload.amountTry || 0),
+          currency: 'TRY',
+          status: 'COMPLETED',
+          completedAt: new Date().toISOString()
+        });
+      }
+      storage.set(STORAGE_KEYS.STRIPE_SESSIONS, sessions);
+
+      // 3. Bildirim Gönder
+      if (targetUser.toLowerCase() !== session.username.toLowerCase()) {
+        notificationService.notifyUser(targetUser, {
+          type: 'GIFT_RECEIVED',
+          title: '🎁 Sana Rütbe Hediye Edildi!',
+          message: `${session.username} sana "${cleanRank}" rütbesi hediye etti! Yeni rütben hesabına tanımlandı.`
+        });
+        notificationService.notifyUser(session.username, {
+          type: 'GIFT_SENT',
+          title: '🎁 Rütbe Hediyen İletildi',
+          message: `${targetUser} kullanıcısına "${cleanRank}" rütbesi başarıyla hediye edildi!`
+        });
+      } else {
+        notificationService.notifyUser(session.username, {
+          type: 'RANK_UPGRADED',
+          title: '🎉 Rütben Başarıyla Tanımlandı!',
+          message: `Stripe ödemen başarıyla tamamlandı! Artık ${cleanRank} rütbesindesin.`
+        });
+      }
+
+      activityService.log(
+        'STRIPE_PURCHASE',
+        session.username,
+        `${session.username}, ${targetUser} için ${cleanRank} rütbesi satın aldı. (Tutar: ${payload.amountTry || 0} TL, İşlem: ${cleanTx})`
+      );
+
+      return {
+        success: true,
+        rankId: cleanRank,
+        recipientUsername: targetUser,
+        transactionId: cleanTx,
+        firstVipPlusBonusGranted: bonusGranted,
+        alreadyProcessed: false
+      };
+    }
+  };
+
+  // ==========================================
+  // YÖNETİCİ KONTROLLÜ İNDİRİM & KUPON SERVİSİ (discountService)
+  // ==========================================
+  const DEFAULT_DISCOUNTS_LIST = [
+    {
+      id: 'DISC_MCM2026',
+      code: 'MCM2026',
+      title: 'Sezon Açılış İndirimi (%20)',
+      discountType: 'PERCENTAGE',
+      amount: 20,
+      targetType: 'GLOBAL',
+      targetId: null,
+      minAmount: 50,
+      maxUses: 1000,
+      usedCount: 0,
+      startDate: '2026-01-01T00:00:00.000Z',
+      endDate: '2026-12-31T23:59:59.000Z',
+      active: true
+    },
+    {
+      id: 'DISC_VIPPLUS50',
+      code: 'VIPPLUS50',
+      title: 'VIP+ Rütbesine Özel 50 TL İndirim',
+      discountType: 'FIXED',
+      amount: 50,
+      targetType: 'RANK',
+      targetId: 'VIP_PLUS',
+      minAmount: 100,
+      maxUses: 500,
+      usedCount: 0,
+      startDate: '2026-01-01T00:00:00.000Z',
+      endDate: '2026-12-31T23:59:59.000Z',
+      active: true
+    }
+  ];
+
+  const discountService = {
+    getAllDiscounts() {
+      const stored = storage.get(STORAGE_KEYS.DISCOUNTS, null);
+      if (!Array.isArray(stored) || stored.length === 0) {
+        storage.set(STORAGE_KEYS.DISCOUNTS, DEFAULT_DISCOUNTS_LIST);
+        return DEFAULT_DISCOUNTS_LIST;
+      }
+      return stored;
+    },
+
+    createDiscount(session, discountData) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const list = this.getAllDiscounts();
+      const code = String(discountData.code || '').trim().toUpperCase();
+      if (!code) throw new Error('Kupon kodu boş olamaz.');
+      if (list.some(d => d && d.code === code)) {
+        throw new Error('Bu kupon kodu zaten mevcut.');
+      }
+
+      const percent = Number(discountData.discountPercent ?? discountData.amount ?? 10);
+      const isFixed = discountData.discountType === 'FIXED';
+
+      const record = {
+        id: 'DISC_' + Date.now(),
+        code,
+        title: String(discountData.title || code).trim(),
+        discountType: isFixed ? 'FIXED' : 'PERCENTAGE',
+        amount: percent,
+        discountPercent: isFixed ? undefined : percent,
+        appliesTo: discountData.appliesTo || discountData.targetType || 'ALL',
+        targetType: discountData.targetType || (discountData.appliesTo === 'ALL' ? 'GLOBAL' : (discountData.appliesTo || 'GLOBAL')),
+        targetId: discountData.targetId || null,
+        minAmount: Number(discountData.minAmount || 0),
+        maxUses: Number(discountData.maxUses || 100),
+        usedCount: 0,
+        startDate: discountData.startDate || new Date().toISOString(),
+        endDate: discountData.endDate || new Date(Date.now() + 30 * 86400000).toISOString(),
+        active: true
+      };
+
+      list.unshift(record);
+      storage.set(STORAGE_KEYS.DISCOUNTS, list);
+      activityService.log('ADMIN_ACTION', session.username, `Yeni indirim kuponu oluşturuldu: ${code}`);
+      return record;
+    },
+
+    deleteDiscount(session, discountId) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const list = this.getAllDiscounts().filter(d => d && d.id !== discountId && d.code !== discountId);
+      storage.set(STORAGE_KEYS.DISCOUNTS, list);
+      return true;
+    },
+
+    toggleDiscount(session, discountId) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const list = this.getAllDiscounts();
+      const item = list.find(d => d && (d.id === discountId || d.code === discountId));
+      if (!item) throw new Error('İndirim bulunamadı.');
+      item.active = !item.active;
+      storage.set(STORAGE_KEYS.DISCOUNTS, list);
+      return item;
+    },
+
+    validateCoupon(code, { rankId = 'VIP', username = '', basePrice = 100 } = {}) {
+      const cleanCode = String(code || '').trim().toUpperCase();
+      if (!cleanCode) throw new Error('Lütfen bir kupon kodu girin.');
+
+      const list = this.getAllDiscounts();
+      const found = list.find(d => d && d.active && d.code === cleanCode);
+      if (!found) {
+        throw new Error('Geçersiz veya süresi dolmuş kupon kodu.');
+      }
+
+      const now = new Date();
+      if (found.startDate && new Date(found.startDate) > now) {
+        throw new Error('Bu kampanya henüz başlamadı.');
+      }
+      if (found.endDate && new Date(found.endDate) < now) {
+        throw new Error('Bu kupon kodunun kullanım süresi doldu.');
+      }
+      if (found.maxUses && found.usedCount >= found.maxUses) {
+        throw new Error('Bu kupon maksimum kullanım sınırına ulaştı.');
+      }
+      if (found.targetType === 'RANK' && found.targetId && found.targetId.toUpperCase() !== String(rankId).toUpperCase()) {
+        throw new Error(`Bu kupon yalnızca ${found.targetId} rütbesi için geçerlidir.`);
+      }
+      if (found.targetType === 'USER' && found.targetId && found.targetId.toLowerCase() !== String(username).toLowerCase()) {
+        throw new Error('Bu kupon sizin hesabınıza özel değildir.');
+      }
+
+      let discountedPrice = basePrice;
+      const isPercent = found.discountType === 'PERCENTAGE';
+      const effPercent = isPercent ? (found.discountPercent ?? found.amount) : null;
+      if (isPercent) {
+        discountedPrice = Math.max(0, basePrice * (1 - (found.amount || found.discountPercent || 0) / 100));
+      } else {
+        discountedPrice = Math.max(0, basePrice - found.amount);
+      }
+      discountedPrice = Math.round(discountedPrice * 100) / 100;
+
+      return {
+        valid: true,
+        code: found.code,
+        discount: found,
+        discountPercent: effPercent,
+        originalPrice: basePrice,
+        discountedPrice,
+        savings: Math.round((basePrice - discountedPrice) * 100) / 100
+      };
+    },
+
+    recordUsage(discountId) {
+      const list = this.getAllDiscounts();
+      const item = list.find(d => d && (d.id === discountId || d.code === discountId));
+      if (item) {
+        item.usedCount = (item.usedCount || 0) + 1;
+        storage.set(STORAGE_KEYS.DISCOUNTS, list);
+      }
+    }
+  };
+
+  // ==========================================
+  // AYRICALIKLI RÜTBE KOZMETİKLERİ SERVİSİ (cosmeticService)
+  // ==========================================
+  const COSMETICS_CATALOG = {
+    BORDERS: [
+      { id: 'BORDER_NONE', name: 'Standart Çerçeve', minRank: 'MEMBER', cssClass: 'frame-none', preview: '⬜' },
+      { id: 'BORDER_GOLD', name: 'Altın Muhafız Çerçevesi', minRank: 'VIP', cssClass: 'frame-gold', preview: '🟨' },
+      { id: 'BORDER_DIAMOND', name: 'Elmas Kristal Çerçeve', minRank: 'VIP_PLUS', cssClass: 'frame-diamond', preview: '💎' },
+      { id: 'BORDER_NETHERITE', name: 'Antik Netherite Çerçeve', minRank: 'MVIP', cssClass: 'frame-netherite', preview: '⬛' },
+      { id: 'BORDER_AMETHYST', name: 'Ametist Parlaması Çerçeve', minRank: 'MVIP_PLUS', cssClass: 'frame-amethyst', preview: '🔮' },
+      { id: 'BORDER_DRAGON', name: 'Ender Ejderhası Çerçevesi', minRank: 'MVIP_PLUS', cssClass: 'frame-dragon', preview: '🐉' }
+    ],
+    NAME_EFFECTS: [
+      { id: 'NAME_DEFAULT', name: 'Standart İsim Rengi', minRank: 'MEMBER', cssClass: 'name-default' },
+      { id: 'NAME_VIP_BLUE', name: 'VIP Gökyüzü Mavisi', minRank: 'VIP', cssClass: 'name-vip-blue' },
+      { id: 'NAME_VIPPLUS_PURPLE', name: 'VIP+ Eflatun Işıltı', minRank: 'VIP_PLUS', cssClass: 'name-vipplus-purple' },
+      { id: 'NAME_MVIP_GOLD', name: 'MVIP Altın Gradyan', minRank: 'MVIP', cssClass: 'name-mvip-gold' },
+      { id: 'NAME_RAINBOW', name: 'MVIP+ Canlı Gökkuşağı', minRank: 'MVIP_PLUS', cssClass: 'name-rainbow-anim' },
+      { id: 'NAME_FLAME', name: 'Yönetici Alev Efekti', minRank: 'ADMIN', cssClass: 'name-admin-flame' }
+    ],
+    QUESTION_THEMES: [
+      { id: 'THEME_CLASSIC', name: 'Klasik Minecraft Taş Teması', minRank: 'MEMBER', themeClass: 'theme-classic' },
+      { id: 'THEME_OBSIDIAN', name: 'Obsidyen ve Kızıltaş Odası', minRank: 'VIP_PLUS', themeClass: 'theme-obsidian-red' },
+      { id: 'THEME_NETHER', name: 'Nether Kalesi & Ruh Kumu', minRank: 'MVIP', themeClass: 'theme-nether-fort' },
+      { id: 'THEME_END', name: 'End Boyutu & Mor Yıldızlar', minRank: 'MVIP_PLUS', themeClass: 'theme-end-void' }
+    ],
+    VICTORY_EFFECTS: [
+      { id: 'VICTORY_CLASSIC', name: 'Klasik Sevinç', minRank: 'MEMBER' },
+      { id: 'VICTORY_FIREWORKS', name: 'Minecraft Havai Fişek Şovu', minRank: 'VIP_PLUS' },
+      { id: 'VICTORY_TOTEM', name: 'Ölümsüzlük Totemi Patlaması', minRank: 'MVIP_PLUS' }
+    ]
+  };
+
+  const cosmeticService = {
+    getCatalog() {
+      const flatList = [];
+      Object.keys(COSMETICS_CATALOG).forEach(cat => {
+        COSMETICS_CATALOG[cat].forEach(item => {
+          flatList.push({ ...item, category: cat });
+        });
+      });
+      return flatList;
+    },
+
+    getRawCatalog() {
+      return COSMETICS_CATALOG;
+    },
+
+    getRankHierarchyScore(rankId) {
+      const scores = { MEMBER: 1, VIP: 2, VIP_PLUS: 3, MVIP: 4, MVIP_PLUS: 5, MODERATOR: 6, ADMIN: 7 };
+      return scores[String(rankId || 'MEMBER').toUpperCase()] || 1;
+    },
+
+    isEntitled(userRank, requiredMinRank) {
+      const userScore = this.getRankHierarchyScore(userRank);
+      const reqScore = this.getRankHierarchyScore(requiredMinRank);
+      return userScore >= reqScore;
+    },
+
+    getUserCosmetics(username) {
+      const all = storage.get(STORAGE_KEYS.COSMETICS, {});
+      const clean = String(username || '').trim().toLowerCase();
+      return all[clean] || {
+        equippedBorder: 'BORDER_NONE',
+        equippedNameEffect: 'NAME_DEFAULT',
+        equippedQuestionTheme: 'THEME_CLASSIC',
+        equippedVictoryEffect: 'VICTORY_CLASSIC'
+      };
+    },
+
+    equipCosmetic(session, categoryOrId, maybeId = null) {
+      authGuard.verifySession(session);
+      const userRank = authGuard.getEffectiveRankId(session);
+      const all = storage.get(STORAGE_KEYS.COSMETICS, {});
+      const clean = session.username.toLowerCase();
+      const current = all[clean] || {
+        equippedBorder: 'BORDER_NONE',
+        equippedNameEffect: 'NAME_DEFAULT',
+        equippedQuestionTheme: 'THEME_CLASSIC',
+        equippedVictoryEffect: 'VICTORY_CLASSIC'
+      };
+
+      let category = categoryOrId;
+      let cosmeticId = maybeId;
+
+      if (!maybeId) {
+        cosmeticId = categoryOrId;
+        category = null;
+      }
+
+      // Alias eşleştirmeleri
+      const idAliases = {
+        'FRAME_GOLDEN': 'BORDER_GOLD',
+        'FRAME_GOLD': 'BORDER_GOLD',
+        'NAME_COLOR_RAINBOW': 'NAME_RAINBOW'
+      };
+      const cleanId = idAliases[cosmeticId] || cosmeticId;
+
+      let item = null;
+      let targetCat = category;
+
+      const flat = this.getCatalog();
+      item = flat.find(i => i.id === cleanId || i.id === cosmeticId);
+      if (item) {
+        targetCat = item.category;
+      }
+
+      if (!item) throw new Error('Geçersiz kozmetik eşya.');
+      if (!this.isEntitled(userRank, item.minRank)) {
+        throw new Error(`Bu kozmetiği kuşanmak için en az ${item.minRank} Rütbesi Gerekli!`);
+      }
+
+      if (targetCat === 'BORDERS' || targetCat === 'border') current.equippedBorder = cleanId;
+      else if (targetCat === 'NAME_EFFECTS' || targetCat === 'nameEffect') current.equippedNameEffect = cleanId;
+      else if (targetCat === 'QUESTION_THEMES' || targetCat === 'questionTheme') current.equippedQuestionTheme = cleanId;
+      else if (targetCat === 'VICTORY_EFFECTS' || targetCat === 'victoryEffect') current.equippedVictoryEffect = cleanId;
+
+      all[clean] = current;
+      storage.set(STORAGE_KEYS.COSMETICS, all);
+      return { success: true, equipped: cleanId, state: current };
+    }
+  };
+
+  // ==========================================
+  // TELEGRAM BOT ANKET SERVİSİ (telegramService — "Sunucuya Sor")
+  // ==========================================
+  const telegramService = {
+    async createPoll(questionText, options = ['A', 'B', 'C', 'D']) {
+      try {
+        if (typeof fetch === 'function') {
+          const res = await fetch('/api/telegram/create-poll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: questionText, options })
+          });
+          if (res.ok) {
+            return await res.json();
+          }
+        }
+      } catch (e) {}
+
+      // Yerel fallback
+      const pollId = 'poll_local_' + Date.now();
+      return {
+        success: true,
+        live: false,
+        testMode: true,
+        pollId,
+        source: 'LOCAL_FALLBACK',
+        totalVotes: 0,
+        isTied: false,
+        isTie: false,
+        options: options.map(o => ({ text: o, voter_count: 0 }))
+      };
+    },
+
+    async getPollStatus(pollId) {
+      try {
+        if (typeof fetch === 'function') {
+          const res = await fetch(`/api/telegram/poll-status?pollId=${encodeURIComponent(pollId)}`);
+          if (res.ok) {
+            return await res.json();
+          }
+        }
+      } catch (e) {}
+
+      return {
+        success: true,
+        pollId,
+        totalVotes: 0,
+        results: [
+          { index: 0, text: 'A', votes: 0, percentage: 0 },
+          { index: 1, text: 'B', votes: 0, percentage: 0 },
+          { index: 2, text: 'C', votes: 0, percentage: 0 },
+          { index: 3, text: 'D', votes: 0, percentage: 0 }
+        ],
+        ranking: [],
+        isTie: false,
+        live: false
+      };
+    }
+  };
+
+  // ==========================================
+  // GERÇEK ARKADAŞLAR SİSTEMİ (friendsService — Allay Sosyal Ağı)
+  // ==========================================
+  const friendsService = {
+    getFriends(username) {
+      const all = storage.get(STORAGE_KEYS.FRIENDS, {});
+      const clean = String(username || '').trim().toLowerCase();
+      return Array.isArray(all[clean]) ? all[clean] : [];
+    },
+
+    sendFriendRequest(session, targetUsername) {
+      authGuard.verifySession(session);
+      const cleanTarget = String(targetUsername || '').trim();
+      if (!cleanTarget || cleanTarget.toLowerCase() === session.username.toLowerCase()) {
+        throw new Error('Kendinize arkadaşlık isteği gönderemezsiniz.');
+      }
+
+      const users = userService.getAllUsers();
+      const targetUser = users.find(u => u && u.username && u.username.toLowerCase() === cleanTarget.toLowerCase());
+      if (!targetUser) throw new Error('Böyle bir oyuncu bulunamadı.');
+
+      const all = storage.get(STORAGE_KEYS.FRIENDS, {});
+      const selfClean = session.username.toLowerCase();
+      const targetClean = cleanTarget.toLowerCase();
+
+      if (!Array.isArray(all[selfClean])) all[selfClean] = [];
+      if (!Array.isArray(all[targetClean])) all[targetClean] = [];
+
+      if (!all[selfClean].includes(targetUser.username)) all[selfClean].push(targetUser.username);
+      if (!all[targetClean].includes(session.username)) all[targetClean].push(session.username);
+
+      storage.set(STORAGE_KEYS.FRIENDS, all);
+
+      notificationService.notifyUser(targetUser.username, {
+        type: 'FRIEND_REQUEST',
+        title: '🧚 Allay Arkadaşlık İsteği',
+        message: `${session.username} seni arkadaş olarak ekledi!`
+      });
+
+      activityService.log('FRIEND_ADD', session.username, `${session.username}, ${targetUser.username} ile arkadaş oldu.`);
+      return true;
+    },
+
+    removeFriend(session, targetUsername) {
+      authGuard.verifySession(session);
+      const all = storage.get(STORAGE_KEYS.FRIENDS, {});
+      const selfClean = session.username.toLowerCase();
+      const targetClean = String(targetUsername || '').toLowerCase();
+
+      if (Array.isArray(all[selfClean])) {
+        all[selfClean] = all[selfClean].filter(u => String(u).toLowerCase() !== targetClean);
+      }
+      if (Array.isArray(all[targetClean])) {
+        all[targetClean] = all[targetClean].filter(u => String(u).toLowerCase() !== selfClean);
+      }
+
+      storage.set(STORAGE_KEYS.FRIENDS, all);
+      return true;
+    }
+  };
+
+  // ==========================================
+  // EKSTRA CAN ATOMİK SERVİSİ (extraLifeService)
+  // ==========================================
+  const extraLifeService = {
+    LIFE_PRICE_EMERALDS: 200,
+
+    getUserExtraLives(username) {
+      if (!username) return 0;
+      const all = storage.get(STORAGE_KEYS.USER_EXTRA_LIVES, {});
+      const clean = String(username).trim().toLowerCase();
+      return Math.max(0, Number(all[clean] || 0));
+    },
+
+    setUserExtraLives(username, count) {
+      if (!username) return 0;
+      const all = storage.get(STORAGE_KEYS.USER_EXTRA_LIVES, {});
+      const clean = String(username).trim().toLowerCase();
+      all[clean] = Math.max(0, Number(count || 0));
+      storage.set(STORAGE_KEYS.USER_EXTRA_LIVES, all);
+      return all[clean];
+    },
+
+    purchaseExtraLifeWithEmeralds(username) {
+      const cleanUser = typeof username === 'object' && username.username ? username.username : String(username || '').trim();
+      if (!cleanUser) throw new Error('Kullanıcı adı belirtilmelidir.');
+
+      const eco = window.MCMServices?.economyService;
+      if (!eco) throw new Error('Ekonomi servisi bulunamadı.');
+
+      const bal = eco.getBalance(cleanUser);
+      if (bal < this.LIFE_PRICE_EMERALDS) {
+        throw new Error(`Yetersiz Zümrüt bakiyesi! Ekstra can için en az ${this.LIFE_PRICE_EMERALDS} Zümrüt gereklidir.`);
+      }
+
+      eco.deductEmeralds(cleanUser, this.LIFE_PRICE_EMERALDS, 'Ekstra Can (Ölümsüzlük Totemi) Satın Alma');
+      const currentLives = this.getUserExtraLives(cleanUser);
+      const newLives = this.setUserExtraLives(cleanUser, currentLives + 1);
+
+      return {
+        success: true,
+        cost: this.LIFE_PRICE_EMERALDS,
+        remainingEmeralds: eco.getBalance(cleanUser),
+        totalLives: newLives
+      };
+    },
+
+    consumeExtraLifeInMatch(username) {
+      const cleanUser = typeof username === 'object' && username.username ? username.username : String(username || '').trim();
+      const currentLives = this.getUserExtraLives(cleanUser);
+      if (currentLives <= 0) {
+        throw new Error('Kullanılabilir ekstra can bulunmamaktadır.');
+      }
+      const newLives = this.setUserExtraLives(cleanUser, currentLives - 1);
+      return { success: true, remainingLives: newLives };
+    },
+
+    async consumeOrPurchaseLife(session, { hasExtraLife = false, currentEmeralds = 0, currentLives = 0 } = {}) {
+      authGuard.verifySession(session);
+      try {
+        if (typeof fetch === 'function') {
+          const res = await fetch('/api/extra-life/consume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              hasExtraLife,
+              currentEmeralds,
+              extraLivesCount: currentLives
+            })
+          });
+          if (res.ok) {
+            return await res.json();
+          }
+        }
+      } catch (e) {}
+
+      // Yerel Atomik Fallback
+      if (hasExtraLife) {
+        return {
+          success: true,
+          action: 'CONSUMED_EXISTING',
+          cost: 0,
+          remainingLives: Math.max(0, currentLives - 1)
+        };
+      }
+
+      if (currentEmeralds >= this.LIFE_PRICE_EMERALDS) {
+        return {
+          success: true,
+          action: 'PURCHASED_AND_CONSUMED',
+          cost: this.LIFE_PRICE_EMERALDS,
+          newEmeraldBalance: currentEmeralds - this.LIFE_PRICE_EMERALDS
+        };
+      }
+
+      throw new Error('Yetersiz Zümrüt bakiyesi! Ekstra can alınamadı.');
     }
   };
 
@@ -4970,6 +5720,11 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     bugService,
     suggestionService,
     paymentService,
+    discountService,
+    cosmeticService,
+    telegramService,
+    friendsService,
+    extraLifeService,
     backupService,
     cloudSyncService,
     aiQuestionService,

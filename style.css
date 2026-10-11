@@ -7956,5 +7956,234 @@ body.screen-game-active #screen-game {
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.5) !important;
 }
 
+/* ========================================================
+   MASTER UPGRADE v2.0 STYLES (#2, #4, #5, #7, #8, #9)
+   ======================================================== */
+
+/* 1. Ölümsüzlük Totemi (Totem of Undying) Dirilme Animasyonu (#9) */
+.totem-resurrection-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 15, 0.88);
+  backdrop-filter: blur(8px);
+  animation: fadeInTotem 0.35s ease-out;
+}
+
+.totem-animation-card {
+  position: relative;
+  text-align: center;
+  background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%);
+  border: 4px solid #facc15;
+  border-radius: 12px;
+  padding: 30px 40px;
+  max-width: 460px;
+  box-shadow: 0 0 50px rgba(250, 204, 21, 0.6), inset 0 0 30px rgba(250, 204, 21, 0.2);
+  animation: totemRise 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.totem-wings-glow {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(250, 204, 21, 0.5) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: totemPulse 1.2s infinite alternate;
+}
+
+.pixel-totem-svg {
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 0 16px rgba(250, 204, 21, 0.9));
+  animation: totemFloat 1s infinite alternate ease-in-out;
+}
+
+.totem-title {
+  margin: 14px 0 8px;
+  font-size: 1.25rem;
+  color: #facc15;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.totem-desc {
+  font-size: 0.92rem;
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+
+@keyframes fadeInTotem {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes totemRise {
+  from { transform: scale(0.6) translateY(40px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes totemFloat {
+  from { transform: translateY(0); }
+  to { transform: translateY(-8px); }
+}
+
+@keyframes totemPulse {
+  from { opacity: 0.4; transform: translateX(-50%) scale(0.9); }
+  to { opacity: 0.9; transform: translateX(-50%) scale(1.15); }
+}
+
+/* 2. Enderman Ön-Yarışma Kuralları Tanıtımı (#7) */
+.enderman-rules-overlay {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  margin: 1rem auto;
+  z-index: 100;
+  animation: enderWarpIn 0.4s ease-out;
+}
+
+.enderman-rules-card {
+  background: rgba(24, 16, 38, 0.96);
+  border: 3px solid #a855f7;
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.35);
+}
+
+.enderman-portal-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.enderman-portal-glow::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.08) 0%, transparent 60%);
+  pointer-events: none;
+  animation: enderRotate 12s linear infinite;
+}
+
+@keyframes enderRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes enderWarpIn {
+  from { opacity: 0; transform: scale(0.95) translateY(15px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.enderman-rules-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(168, 85, 247, 0.3);
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+}
+
+.enderman-rules-avatar {
+  width: 52px;
+  height: 70px;
+}
+
+.enderman-rules-eyebrow {
+  font-size: 0.78rem;
+  color: #c084fc;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.enderman-rules-title {
+  margin: 2px 0 0;
+  font-size: 1.3rem;
+  color: #f5d0fe;
+}
+
+.enderman-rules-lead {
+  font-size: 0.95rem;
+  color: #e9d5ff;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+
+.enderman-rules-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.enderman-rules-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.92rem;
+  color: #f8fafc;
+  background: rgba(46, 16, 75, 0.5);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.enderman-rules-footer {
+  text-align: center;
+}
+
+/* 3. Creeper Ekran Sarsıntısı (Screen Shake) (#7) */
+.shake-explosion {
+  animation: screenShake 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes screenShake {
+  10%, 90% { transform: translate3d(-3px, 2px, 0); }
+  20%, 80% { transform: translate3d(4px, -3px, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 4px, 0); }
+  40%, 60% { transform: translate3d(6px, -4px, 0); }
+}
+
+/* 4. Telegram Oylama Eşitlik Başlığı (#8) */
+.ender-poll-tie-banner {
+  background: rgba(245, 158, 11, 0.25);
+  border: 1px solid #f59e0b;
+  color: #fef08a;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  animation: pulseTie 1.5s infinite alternate;
+}
+
+@keyframes pulseTie {
+  from { opacity: 0.85; }
+  to { opacity: 1; }
+}
+
+/* 5. Rütbe Karşılaştırma Tablosu (#5) */
+.rank-comp-table th,
+.rank-comp-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.rank-comp-table th:first-child,
+.rank-comp-table td:first-child {
+  text-align: left;
+}
+
 
 

@@ -151,18 +151,43 @@
       };
       toast.appendChild(copyBtn);
     } else if (type === 'error') {
-      const copyBtn = document.createElement('button');
-      copyBtn.type = 'button';
-      copyBtn.className = 'mc-btn mc-btn-secondary mc-btn-xs';
-      copyBtn.style.cssText =
-        'margin-left: 8px; padding: 2px 6px; font-size: 0.72rem; white-space: nowrap; vertical-align: middle; cursor: pointer;';
-      copyBtn.innerHTML = '📋 Hatayı Kopyala';
-      copyBtn.title = 'Hata ve sistem detaylarını panoya kopyala';
-      copyBtn.onclick = e => {
+      // İkili Kopyalama Eylemleri (#4): Kullanıcı dostu mesaj ve temizlenmiş teknik hata kodu
+      const btnWrap = document.createElement('span');
+      btnWrap.style.cssText = 'display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle;';
+
+      const copyMsgBtn = document.createElement('button');
+      copyMsgBtn.type = 'button';
+      copyMsgBtn.className = 'mc-btn mc-btn-secondary mc-btn-xs';
+      copyMsgBtn.style.cssText = 'padding: 2px 6px; font-size: 0.72rem; white-space: nowrap; cursor: pointer;';
+      copyMsgBtn.innerHTML = '📋 Mesajı Kopyala';
+      copyMsgBtn.title = 'Kullanıcı dostu hata mesajını kopyala';
+      copyMsgBtn.onclick = e => {
         e.stopPropagation();
-        copyDiagnosticsReport(message);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(String(message)).then(() => {
+            copyMsgBtn.innerHTML = '✅ Kopyalandı!';
+            setTimeout(() => (copyMsgBtn.innerHTML = '📋 Mesajı Kopyala'), 2000);
+          });
+        }
       };
-      toast.appendChild(copyBtn);
+
+      const copyTechBtn = document.createElement('button');
+      copyTechBtn.type = 'button';
+      copyTechBtn.className = 'mc-btn mc-btn-secondary mc-btn-xs';
+      copyTechBtn.style.cssText = 'padding: 2px 6px; font-size: 0.72rem; white-space: nowrap; cursor: pointer;';
+      copyTechBtn.innerHTML = '⚙️ Hata Kodunu Kopyala';
+      copyTechBtn.title = 'Teknik hata ve tanı kodunu kopyala';
+      copyTechBtn.onclick = e => {
+        e.stopPropagation();
+        const techCode = options?.errorCode || `ERR_${String(message).toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 24)}_${Date.now().toString(36)}`;
+        copyDiagnosticsReport(techCode);
+        copyTechBtn.innerHTML = '✅ Kopyalandı!';
+        setTimeout(() => (copyTechBtn.innerHTML = '⚙️ Hata Kodunu Kopyala'), 2000);
+      };
+
+      btnWrap.appendChild(copyMsgBtn);
+      btnWrap.appendChild(copyTechBtn);
+      toast.appendChild(btnWrap);
     }
 
     container.appendChild(toast);
@@ -918,7 +943,7 @@
     if (cosContainer) {
       const ownedIds = Array.isArray(user.ownedCosmetics) ? user.ownedCosmetics : [];
       if (ownedIds.length === 0) {
-        cosContainer.innerHTML = `<div class="empty-state-box">Henüz kozmetik ürününüz yok. <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-nav-screen="shop"># MAĞAZA'ya Git</button></div>`;
+        cosContainer.innerHTML = `<div class="empty-state-box">Henüz kozmetik ürününüz yok. <button type="button" class="mc-btn mc-btn-sm mc-btn-gold" data-nav-screen="shop">Mağaza'ya Git</button></div>`;
       } else {
         const subCatMap = {
           'Avatar Frames': 'Avatar Çerçevesi',
@@ -1166,12 +1191,27 @@
     const container = document.getElementById('ranks-grid-container');
     if (!container) return;
 
+    const rankPricesTry = { VIP: 89.90, VIP_PLUS: 159.90, MVIP: 299.90, MVIP_PLUS: 449.90 };
     const purchasableRanks = svc().rankService.getPurchasableRanks(); // VIP, VIP+, MVIP, MVIP+ ve özel rütbeler
-    container.innerHTML = purchasableRanks
+
+    const compHeaderHtml = `
+      <div class="ranks-compare-banner" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center; background:rgba(30, 41, 59, 0.7); border:1px solid #38bdf8; border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.2rem;">👑</span>
+          <span style="font-size:0.9rem;color:#f8fafc;">Tüm rütbelerin günlük ödüllerini, kozmetiklerini ve ayrıcalıklarını inceleyin:</span>
+        </div>
+        <button type="button" id="btn-open-rank-comparison" class="mc-btn mc-btn-sm mc-btn-gold">
+          👑 Rütbe Karşılaştırma Tablosu
+        </button>
+      </div>
+    `;
+
+    container.innerHTML = compHeaderHtml + purchasableRanks
       .map(rank => {
         const isOwnedOrHigher = userRank.order >= rank.order;
         const isCurrent = userRank.id === rank.id;
         const nPrice = Math.max(500, Number(rank.netheritePrice || 500));
+        const tryPrice = Number(rankPricesTry[rank.id] || 89.90);
         const dailyNetheriteText =
           rank.id === 'VIP'
             ? `<div class="rank-daily-netherite-pill">${mcIcon('NETHERITE', 14)} İlk Alımda +50 ${mcIcon('NETHERITE', 14)} &bull; Günlük +${rank.dailyEmerald || 100} ${mcIcon('EMERALD', 14)}</div>`
@@ -1192,8 +1232,8 @@
             ${dailyNetheriteText}
 
             <div class="rank-pricing-box">
-              <div class="rank-price-main">${nPrice.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 18)} Netherite</div>
-              <div class="rank-price-sub">Yalnızca Netherite Bakiyesi ile satın alınır (En az 500 ${mcIcon('NETHERITE', 13)})</div>
+              <div class="rank-price-main">${tryPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺ <span style="font-size:0.85rem;color:#94a3b8;">/ Stripe</span></div>
+              <div class="rank-price-sub">${nPrice.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 13)} Netherite ile de alınabilir</div>
             </div>
 
             <ul class="rank-features-list">
@@ -1205,21 +1245,25 @@
                 isOwnedOrHigher
                   ? `<button type="button" class="mc-btn mc-btn-secondary mc-btn-block" disabled>✓ Bu Rütbeye Sahipsiniz</button>`
                   : `
-                    <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-buy-rank="${escapeHtml(
+                    <!-- Gerçek Para Stripe Checkout (#2) -->
+                    <button type="button" class="mc-btn mc-btn-gold mc-btn-block" data-stripe-buy-rank="${escapeHtml(
+                      rank.id
+                    )}">
+                      💳 Stripe ile Satın Al (${tryPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺)
+                    </button>
+                    <!-- Netherite Bakiyesi İle Satın Al -->
+                    <button type="button" class="mc-btn mc-btn-primary mc-btn-block" data-buy-rank="${escapeHtml(
                       rank.id
                     )}" data-pay-method="NETHERITE">
                       ${mcIcon('NETHERITE', 15)} ${nPrice.toLocaleString('tr-TR')} Netherite ile Satın Al
                     </button>
-                    <button type="button" class="mc-btn mc-btn-secondary mc-btn-block" data-shop-cat="Netherite">
-                      💳 Netherite Bakiye Yükle
-                    </button>
                   `
               }
-              <!-- #11: Arkadaşına Hediye Et Butonu (Sadece Netherite ile) -->
+              <!-- Arkadaşına Hediye Et Butonu -->
               <button type="button" class="mc-btn mc-btn-gift mc-btn-block" data-gift-rank="${escapeHtml(
                 rank.id
               )}">
-                🎁 Arkadaşına Hediye Et (${nPrice.toLocaleString('tr-TR')} ${mcIcon('NETHERITE', 13)})
+                🎁 Arkadaşına Hediye Et (${tryPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺ / ${nPrice.toLocaleString('tr-TR')} N)
               </button>
             </div>
           </div>
@@ -3084,7 +3128,7 @@
           </form>
 
           <h3>⚙️ Zümrüt &amp; Netherite Ekonomi Ayarları</h3>
-          <form id="admin-economy-settings-form" class="platform-form">
+          <form id="admin-economy-settings-form" class="platform-form" style="margin-bottom:24px;">
             <div class="input-row-2">
               <div class="input-group">
                 <label>Şampiyonluk Tamamlama Bonusu (Zümrüt)</label>
@@ -3109,12 +3153,28 @@
             </div>
             <button type="submit" class="mc-btn mc-btn-primary">Ekonomi Ayarlarını Kaydet</button>
           </form>
+
+          <h3>📊 Platform Ekonomi ve Dolaşım Denetimi (#6)</h3>
+          <div class="stats-kpi-grid" style="margin-bottom:20px;">
+            <div class="kpi-card">
+              <span class="kpi-val">${userService.getAllUsers().reduce((s, u) => s + Number(u.emeraldBalance || 0), 0).toLocaleString('tr-TR')} 🟢</span>
+              <span class="kpi-label">Toplam Dolaşımdaki Zümrüt</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-val">${userService.getAllUsers().reduce((s, u) => s + Number(u.netheriteBalance || 0), 0).toLocaleString('tr-TR')} ⬛</span>
+              <span class="kpi-label">Toplam Dolaşımdaki Netherite</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-val">1.000 🟢</span>
+              <span class="kpi-label">Günlük Zümrüt Limiti (Kişi Başı)</span>
+            </div>
+          </div>
         </div>
       `;
       return;
     }
 
-    // 7. MAĞAZA (shop — Birleşik Mağaza Ürün Yönetimi + Yeni Ürün Ekleme)
+    // 7. MAĞAZA (shop — Birleşik Mağaza Ürün Yönetimi + Yeni Ürün Ekleme + Özel Emojiler #3)
     if (state.adminTab === 'shop') {
       const items = shopService.getAllItems(true);
       container.innerHTML = `
@@ -3136,6 +3196,25 @@
                 </select>
               </div>
             </div>
+
+            <!-- Özel Emojiler & Canlı Önizleme (#3) -->
+            <div class="input-group" style="margin-bottom:12px;">
+              <label>ÖZEL İKON &amp; EMOJİ SEÇİCİ</label>
+              <div class="emoji-picker-row" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+                ${['💎', '🟢', '🛡️', '⚔️', '👑', '💥', '🔮', '🧚', '⛏️', '🏆', '🔥', '🌟', '🐉', '🏹', '🍎', '⚡'].map(em => `
+                  <button type="button" class="mc-btn mc-btn-secondary mc-btn-xs btn-pick-emoji" data-emoji="${em}" style="font-size:1.1rem;padding:4px 8px;">${em}</button>
+                `).join('')}
+              </div>
+              <div class="input-row-2">
+                <input type="text" id="adm-shop-custom-emoji" placeholder="Örn: 💎 veya herhangi bir Unicode karakteri" value="💎" />
+                <input type="text" id="adm-shop-custom-img" placeholder="Özel Piksel Resim URL (opsiyonel)" />
+              </div>
+              <div style="margin-top:6px;display:flex;align-items:center;gap:10px;">
+                <span style="font-size:0.82rem;color:#94a3b8;">Canlı Önizleme:</span>
+                <span id="adm-shop-emoji-preview" style="font-size:1.4rem;display:inline-block;vertical-align:middle;">💎</span>
+              </div>
+            </div>
+
             <div class="input-row-2">
               <div class="input-group">
                 <label>ZÜMRÜT FİYATI</label>
@@ -3301,6 +3380,112 @@
                 </div>
               `
           }
+        </div>
+      `;
+      return;
+    }
+
+    // 8.1 İNDİRİMLER & KUPONLAR (discounts — İndirim & Kupon Yönetimi #15)
+    if (state.adminTab === 'discounts') {
+      const discounts = svc().discountService.getAllDiscounts();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>🎟️ Yeni İndirim Kuponu Oluştur</h3>
+          <form id="admin-create-discount-form" class="platform-form" style="margin-bottom:24px;">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>KUPON KODU</label>
+                <input type="text" id="adm-disc-code" placeholder="Örn: YAZ2026, VIP10" style="text-transform:uppercase;" required />
+              </div>
+              <div class="input-group">
+                <label>İNDİRİM YÜZDESİ (%)</label>
+                <input type="number" id="adm-disc-percent" value="15" min="1" max="90" required />
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>GEÇERLİ OLDUĞU RÜTBE / KAPSAM</label>
+                <select id="adm-disc-applies">
+                  <option value="ALL">Tüm Rütbeler &amp; Ürünler</option>
+                  <option value="VIP">Yalnızca VIP</option>
+                  <option value="VIP_PLUS">Yalnızca VIP+</option>
+                  <option value="MVIP">Yalnızca MVIP</option>
+                  <option value="MVIP_PLUS">Yalnızca MVIP+</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>MAKSİMUM KULLANIM SAYISI</label>
+                <input type="number" id="adm-disc-max-uses" value="100" min="1" />
+              </div>
+            </div>
+            <button type="submit" class="mc-btn mc-btn-gold">🎟️ Kuponu Oluştur ve Yayınla</button>
+          </form>
+
+          <h3>📋 Aktif İndirim Kuponları (${discounts.length} Kupon)</h3>
+          <div class="table-responsive">
+            <table class="mc-table">
+              <thead>
+                <tr>
+                  <th>Kupon Kodu</th>
+                  <th>İndirim</th>
+                  <th>Kapsam</th>
+                  <th>Kullanım</th>
+                  <th>Durum</th>
+                  <th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${discounts.length === 0 ? `<tr><td colspan="6" style="text-align:center;">Henüz indirim kuponu oluşturulmadı.</td></tr>` : discounts.map(d => `
+                  <tr>
+                    <td><strong><code>${escapeHtml(d.code)}</code></strong></td>
+                    <td><span style="color:#22c55e;font-weight:bold;">%${d.discountPercent}</span></td>
+                    <td>${escapeHtml(d.appliesTo || 'Tümü')}</td>
+                    <td>${d.usedCount || 0} / ${d.maxUses || '∞'}</td>
+                    <td>${d.active !== false ? '✓ Aktif' : 'Pasif'}</td>
+                    <td>
+                      <button type="button" class="mc-btn mc-btn-sm mc-btn-danger" data-admin-delete-discount="${escapeHtml(d.code)}">Sil</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 8.2 TELEGRAM BOT YAPILANDIRMASI (telegram — Sunucu Oylaması Bot Ayarları #8)
+    if (state.adminTab === 'telegram') {
+      const tgCfg = svc().telegramService.getConfig();
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <h3>🤖 Telegram Bot &amp; Sunucu Oylaması Ayarları</h3>
+          <p class="card-sub">
+            "Sunucuya Sor" jokeri tıklandığında resmi Telegram Bot API üzerinden Telegram kanal/grubuna canlı <code>sendPoll</code> gönderir.
+          </p>
+          <div style="margin-bottom:14px;padding:10px 14px;background:rgba(15,23,42,0.8);border:1px solid #38bdf8;border-radius:6px;">
+            <strong>Mevcut Durum:</strong>
+            <span style="color:${tgCfg.botToken ? '#22c55e' : '#f59e0b'};font-weight:bold;">
+              ${tgCfg.botToken ? '✓ Canlı Bot Yapılandırıldı (Canlı Oylama Aktif)' : '⚠️ Test Modu (Bot Token Ayarlanmamış, Gerçekçi Simülasyon Aktif)'}
+            </span>
+          </div>
+          <form id="admin-telegram-config-form" class="platform-form">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>Telegram Bot Token (örn: 123456:ABC-DEF...)</label>
+                <input type="text" id="adm-tg-token" value="${escapeHtml(tgCfg.botToken || '')}" placeholder="BotFather'dan alınan token..." />
+              </div>
+              <div class="input-group">
+                <label>Telegram Chat ID (Kanal veya Grup ID'si)</label>
+                <input type="text" id="adm-tg-chat-id" value="${escapeHtml(tgCfg.chatId || '')}" placeholder="örn: -1001234567890" />
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button type="submit" class="mc-btn mc-btn-primary">Telegram Ayarlarını Kaydet</button>
+              <button type="button" id="btn-admin-test-telegram-poll" class="mc-btn mc-btn-secondary">🧪 Test Anketi Gönder</button>
+            </div>
+          </form>
         </div>
       `;
       return;
@@ -4327,6 +4512,44 @@
       }
     });
 
+    let activeStripeCheckoutData = null;
+
+    function openStripeCheckoutModal(rankId, isGift = false, recipient = '') {
+      const session = getSession();
+      if (!session) return;
+      const rankPricesTry = { VIP: 89.90, VIP_PLUS: 159.90, MVIP: 299.90, MVIP_PLUS: 449.90 };
+      const rankNames = { VIP: 'VIP Rütbesi', VIP_PLUS: 'VIP+ Rütbesi', MVIP: 'MVIP Rütbesi', MVIP_PLUS: 'MVIP+ Rütbesi' };
+      const cleanRank = String(rankId || 'VIP').toUpperCase();
+      const basePrice = rankPricesTry[cleanRank] || 89.90;
+
+      activeStripeCheckoutData = {
+        rankId: cleanRank,
+        basePrice,
+        finalPrice: basePrice,
+        isGift: Boolean(isGift),
+        recipientUsername: recipient || '',
+        couponCode: ''
+      };
+
+      const modal = document.getElementById('modal-stripe-checkout');
+      const nameEl = document.getElementById('stripe-checkout-rank-name');
+      const priceEl = document.getElementById('stripe-checkout-price');
+      const couponInp = document.getElementById('stripe-coupon-code');
+      const couponStatus = document.getElementById('stripe-coupon-status');
+      const giftGroup = document.getElementById('stripe-gift-group');
+      const recipientInp = document.getElementById('stripe-recipient-input');
+
+      if (nameEl) nameEl.textContent = rankNames[cleanRank] || `${cleanRank} Rütbesi`;
+      if (priceEl) priceEl.textContent = `${basePrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`;
+      if (couponInp) couponInp.value = '';
+      if (couponStatus) { couponStatus.textContent = ''; couponStatus.style.color = ''; }
+
+      if (giftGroup) giftGroup.style.display = isGift ? 'block' : 'none';
+      if (recipientInp) recipientInp.value = recipient || '';
+
+      modal?.classList.remove('hidden');
+    }
+
     // Genel Tıklama Delegasyonu (Navigasyon, Oyuncu Profili, Mağaza, Bildirimler, Parti Daveti, Admin İşlemleri)
     document.addEventListener('click', async e => {
       // 0. Oyuncu Profili Görüntüle ([data-view-profile])
@@ -4444,7 +4667,144 @@
         return;
       }
 
-      // 8. Bildirim Filtre Sekmesi ([data-notif-filter])
+      // 7.1 Rütbe Karşılaştırma Tablosunu Aç / Kapat (#5)
+      if (e.target.closest('#btn-open-rank-comparison')) {
+        document.getElementById('modal-rank-comparison')?.classList.remove('hidden');
+        return;
+      }
+      if (e.target.closest('#btn-close-rank-comparison')) {
+        document.getElementById('modal-rank-comparison')?.classList.add('hidden');
+        return;
+      }
+
+      // 7.2 Stripe Gerçek Para İle Rütbe Satın Al ([data-stripe-buy-rank]) (#2)
+      const stripeRankBtn = e.target.closest('[data-stripe-buy-rank]');
+      if (stripeRankBtn) {
+        const rankId = stripeRankBtn.getAttribute('data-stripe-buy-rank');
+        openStripeCheckoutModal(rankId, false);
+        return;
+      }
+
+      // 7.3 Stripe Modal Butonları & Kupon Doğrulama
+      if (e.target.closest('#btn-close-stripe-checkout') || e.target.closest('#btn-cancel-stripe')) {
+        document.getElementById('modal-stripe-checkout')?.classList.add('hidden');
+        return;
+      }
+
+      if (e.target.closest('#btn-apply-stripe-coupon')) {
+        if (!activeStripeCheckoutData) return;
+        const code = String(document.getElementById('stripe-coupon-code')?.value || '').trim();
+        const statusEl = document.getElementById('stripe-coupon-status');
+        const priceEl = document.getElementById('stripe-checkout-price');
+        if (!code) {
+          if (statusEl) { statusEl.textContent = 'Lütfen kupon kodu giriniz.'; statusEl.style.color = '#f59e0b'; }
+          return;
+        }
+        try {
+          const disc = svc().discountService.validateCoupon(code, {
+            rankId: activeStripeCheckoutData.rankId,
+            username: getSession()?.username,
+            basePrice: activeStripeCheckoutData.basePrice
+          });
+          activeStripeCheckoutData.finalPrice = disc.discountedPrice;
+          activeStripeCheckoutData.couponCode = disc.code;
+          if (priceEl) priceEl.textContent = `${disc.discountedPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺ (%${disc.discountPercent} İndirim!)`;
+          if (statusEl) { statusEl.textContent = `✓ "${disc.code}" kuponu uygulandı: %${disc.discountPercent} indirim!`; statusEl.style.color = '#22c55e'; }
+        } catch (err) {
+          if (statusEl) { statusEl.textContent = err.message; statusEl.style.color = '#ef4444'; }
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-proceed-stripe-checkout')) {
+        const session = getSession();
+        if (!session || !activeStripeCheckoutData) return;
+        const btn = document.getElementById('btn-proceed-stripe-checkout');
+        const origText = btn?.innerHTML || 'Öde';
+        try {
+          if (btn) { btn.disabled = true; btn.innerHTML = '⏳ İşleniyor...'; }
+          let recipient = activeStripeCheckoutData.isGift
+            ? String(document.getElementById('stripe-recipient-input')?.value || '').trim()
+            : session.username;
+
+          if (activeStripeCheckoutData.isGift && !recipient) {
+            throw new Error('Lütfen hediye edilecek oyuncu adını giriniz.');
+          }
+
+          const res = await svc().paymentService.createCheckoutSession(session, {
+            rankId: activeStripeCheckoutData.rankId,
+            recipientUsername: recipient,
+            couponCode: activeStripeCheckoutData.couponCode
+          });
+
+          document.getElementById('modal-stripe-checkout')?.classList.add('hidden');
+
+          if (res.testMode) {
+            svc().paymentService.fulfillCompletedPayment(res.sessionId, {
+              rankId: activeStripeCheckoutData.rankId,
+              username: session.username,
+              recipientUsername: recipient,
+              amountTry: activeStripeCheckoutData.finalPrice,
+              testMode: true
+            });
+            showToast(
+              `💳 [Test Modu] Stripe Checkout başarıyla tamamlandı! ${recipient} kullanıcısına ${activeStripeCheckoutData.rankId} rütbesi tanımlandı.`,
+              'success'
+            );
+            syncHeaderAndDrawer();
+            renderShop();
+          } else if (res.checkoutUrl) {
+            window.location.href = res.checkoutUrl;
+          }
+        } catch (err) {
+          showToast(err.message, 'error');
+        } finally {
+          if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+        }
+        return;
+      }
+
+      // 7.4 Admin İndirim Kuponu Silme ([data-admin-delete-discount])
+      const delDiscBtn = e.target.closest('[data-admin-delete-discount]');
+      if (delDiscBtn) {
+        const session = getSession();
+        if (!session) return;
+        const code = delDiscBtn.getAttribute('data-admin-delete-discount');
+        try {
+          svc().discountService.deleteDiscount(session, code);
+          showToast(`🎟️ "${code}" kuponu silindi.`, 'info');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 7.5 Admin Telegram Test Anketi Butonu
+      if (e.target.closest('#btn-admin-test-telegram-poll')) {
+        try {
+          const res = await svc().telegramService.createPoll(
+            'Minecraft Milyoner Test Anketi: En sevdiğiniz maden hangisi?',
+            ['Elmas', 'Netherite', 'Zümrüt', 'Altın']
+          );
+          showToast(`🧪 Test anketi başarıyla oluşturuldu! Kaynak: ${res.source}`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 7.6 Admin Mağaza Emojisi Seçici (.btn-pick-emoji)
+      const pickEmojiBtn = e.target.closest('.btn-pick-emoji');
+      if (pickEmojiBtn) {
+        const em = pickEmojiBtn.getAttribute('data-emoji');
+        const inp = document.getElementById('adm-shop-custom-emoji');
+        const prev = document.getElementById('adm-shop-emoji-preview');
+        if (inp) inp.value = em;
+        if (prev) prev.innerHTML = em;
+        return;
+      }
       const notifFilterBtn = e.target.closest('[data-notif-filter]');
       if (notifFilterBtn) {
         state.notifFilter = notifFilterBtn.getAttribute('data-notif-filter');
@@ -4994,6 +5354,18 @@
           searchEl.setSelectionRange(searchEl.value.length, searchEl.value.length);
         }
       }
+      if (e.target.id === 'adm-shop-custom-emoji' || e.target.id === 'adm-shop-custom-img') {
+        const customEmoji = document.getElementById('adm-shop-custom-emoji')?.value || '';
+        const customImg = document.getElementById('adm-shop-custom-img')?.value || '';
+        const prev = document.getElementById('adm-shop-emoji-preview');
+        if (prev) {
+          if (customImg) {
+            prev.innerHTML = `<img src="${escapeHtml(customImg)}" style="width:24px;height:24px;object-fit:contain;" alt="" onerror="this.outerHTML='💎';" />`;
+          } else {
+            prev.innerHTML = escapeHtml(customEmoji || '💎');
+          }
+        }
+      }
     });
 
     // Admin Rütbe Seçimi Değişikliği (Oyuncular Tablosu)
@@ -5088,9 +5460,15 @@
           const emeraldPrice = Number(document.getElementById('adm-shop-emerald')?.value || 0);
           const netheritePrice = Number(document.getElementById('adm-shop-netherite')?.value || 0);
           const description = document.getElementById('adm-shop-desc')?.value || '';
+          const customEmoji = document.getElementById('adm-shop-custom-emoji')?.value || '';
+          const customImg = document.getElementById('adm-shop-custom-img')?.value || '';
+          const icon = customImg || customEmoji || 'CHEST';
+
           svc().shopService.adminSaveItem(session, {
             name,
             category,
+            icon,
+            customEmoji,
             currency: emeraldPrice > 0 ? 'EMERALD' : 'NETHERITE',
             price: emeraldPrice > 0 ? emeraldPrice : netheritePrice,
             emeraldPrice,
@@ -5098,6 +5476,35 @@
             description
           });
           showToast('Yeni mağaza ürünü kaydedildi!', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-create-discount-form') {
+        e.preventDefault();
+        try {
+          const code = document.getElementById('adm-disc-code')?.value || '';
+          const discountPercent = Number(document.getElementById('adm-disc-percent')?.value || 15);
+          const appliesTo = document.getElementById('adm-disc-applies')?.value || 'ALL';
+          const maxUses = Number(document.getElementById('adm-disc-max-uses')?.value || 100);
+          svc().discountService.createDiscount(session, {
+            code,
+            discountPercent,
+            appliesTo,
+            maxUses
+          });
+          showToast(`🎟️ "${code.toUpperCase()}" indirim kuponu oluşturuldu!`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-telegram-config-form') {
+        e.preventDefault();
+        try {
+          const botToken = document.getElementById('adm-tg-token')?.value || '';
+          const chatId = document.getElementById('adm-tg-chat-id')?.value || '';
+          svc().telegramService.updateConfig(session, { botToken, chatId });
+          showToast('🤖 Telegram Bot ayarları güncellendi!', 'success');
           renderAdmin();
         } catch (err) {
           showToast(err.message, 'error');
