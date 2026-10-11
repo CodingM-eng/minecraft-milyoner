@@ -40,7 +40,8 @@
     COSMETICS: 'mc_millionaire_tr_cosmetics_v10',
     FRIENDS: 'mc_millionaire_tr_friends_v10',
     TELEGRAM_POLLS: 'mc_millionaire_tr_telegram_polls_v10',
-    TELEGRAM_CONFIG: 'mc_millionaire_tr_telegram_cfg_v10'
+    TELEGRAM_CONFIG: 'mc_millionaire_tr_telegram_cfg_v10',
+    ACTIVE_OTP: 'mc_millionaire_tr_active_otps_v10'
   };
 
   // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan tüm önbellek verilerini temizle
@@ -564,6 +565,14 @@
   const otpService = {
     _activeOtps: new Map(),
 
+    _getStoredOtps() {
+      return storage.get(STORAGE_KEYS.ACTIVE_OTP, {});
+    },
+
+    _saveStoredOtps(otps) {
+      storage.set(STORAGE_KEYS.ACTIVE_OTP, otps);
+    },
+
     async sendOtpToGmail(email) {
       const cleanEmail = String(email || '').trim().toLowerCase();
       if (!cleanEmail || !cleanEmail.includes('@')) {
@@ -650,36 +659,74 @@
       }
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = Date.now() + 3 * 60 * 1000; // 3 dakika
-      this._activeOtps.set(cleanEmail, { code, expiresAt, attempts: 0 });
+      const record = { code, expiresAt, attempts: 0 };
+      this._activeOtps.set(cleanEmail, record);
+
+      try {
+        const stored = this._getStoredOtps() || {};
+        stored[cleanEmail] = record;
+        this._saveStoredOtps(stored);
+      } catch (e) {}
+
       return { code, expiresAt, email: cleanEmail };
     },
 
     getPendingOtp(email) {
       const cleanEmail = String(email || '').trim().toLowerCase();
-      return this._activeOtps.get(cleanEmail) || null;
+      let record = this._activeOtps.get(cleanEmail);
+      if (!record) {
+        try {
+          const stored = this._getStoredOtps() || {};
+          if (stored && stored[cleanEmail]) {
+            record = stored[cleanEmail];
+            this._activeOtps.set(cleanEmail, record);
+          }
+        } catch (e) {}
+      }
+      return record || null;
     },
 
     verifyOtp(email, inputCode) {
       const cleanEmail = String(email || '').trim().toLowerCase();
-      const cleanInput = String(inputCode || '').trim();
+      const cleanInput = String(inputCode || '').replace(/\D/g, '').trim();
 
-      const record = this._activeOtps.get(cleanEmail);
+      const record = this.getPendingOtp(cleanEmail);
       if (!record) {
         throw new Error('Bu e-posta için aktif bir onay kodu bulunamadı veya süresi doldu.');
       }
       if (Date.now() > record.expiresAt) {
         this._activeOtps.delete(cleanEmail);
+        try {
+          const stored = this._getStoredOtps() || {};
+          delete stored[cleanEmail];
+          this._saveStoredOtps(stored);
+        } catch (e) {}
         throw new Error('Onay kodunun 3 dakikalık süresi doldu. Lütfen tekrar kod isteyin.');
       }
       record.attempts = (record.attempts || 0) + 1;
       if (record.attempts > 5) {
         this._activeOtps.delete(cleanEmail);
+        try {
+          const stored = this._getStoredOtps() || {};
+          delete stored[cleanEmail];
+          this._saveStoredOtps(stored);
+        } catch (e) {}
         throw new Error('Çok fazla hatalı deneme yapıldı. Lütfen yeni kod isteyin.');
       }
       if (cleanInput !== record.code) {
+        try {
+          const stored = this._getStoredOtps() || {};
+          stored[cleanEmail] = record;
+          this._saveStoredOtps(stored);
+        } catch (e) {}
         throw new Error('Girdiğiniz 6 haneli onay kodu hatalı! Lütfen tekrar kontrol edin.');
       }
       this._activeOtps.delete(cleanEmail);
+      try {
+        const stored = this._getStoredOtps() || {};
+        delete stored[cleanEmail];
+        this._saveStoredOtps(stored);
+      } catch (e) {}
       return true;
     }
   };
@@ -1111,6 +1158,10 @@
           }
           u.vipTierBonusRuleMigrated_v2 = true;
         }
+        if (u.email && !u.emailVerified && (u.firebaseUid || String(u.email).toLowerCase() === SUPER_ADMIN_EMAIL || u.drivePermissionGranted)) {
+          u.emailVerified = true;
+          mutated = true;
+        }
       });
       if (mutated) {
         storage.set(STORAGE_KEYS.USERS, cleanList);
@@ -1269,6 +1320,8 @@
       const reconstructed = {
         userId: session.userId || generateId('USR'),
         username: String(session.username).trim(),
+        email: session.email || '',
+        emailVerified: Boolean(session.emailVerified || (session.email && String(session.email).includes('@'))),
         minecraftPlayerName: session.minecraftPlayerName || '',
         passwordHash: '',
         rank: session.isAdminSession ? 'ADMIN' : normalizeRankId(session.rank || 'MEMBER'),
@@ -1483,6 +1536,7 @@
       userId: user.userId || generateId('USR'),
       username: user.username,
       email: userEmail || '',
+      emailVerified: Boolean(user.emailVerified || (userEmail && userEmail.includes('@'))),
       firebaseUid: user.firebaseUid || null,
       drivePermissionGranted: Boolean(user.drivePermissionGranted),
       driveGrantedAt: user.driveGrantedAt || null,
@@ -1839,6 +1893,7 @@
         userId: generateId('USR'),
         username: cleanUser,
         email: cleanEmail,
+        emailVerified: true,
         firebaseUid: 'gmail_' + cleanUser.toLowerCase(),
         minecraftPlayerName: cleanMc || cleanUser,
         avatarUrl: photoUrl || '',
@@ -1908,7 +1963,8 @@
       const isAdmin = Boolean(cleanEmail === SUPER_ADMIN_EMAIL);
       const nowIso = new Date().toISOString();
       const updatedUser = userService.syncUserFields(existingUser.username, {
-        lastLoginAt: nowIso
+        lastLoginAt: nowIso,
+        emailVerified: true
       });
       const session = buildSessionPayload(updatedUser, isAdmin);
       storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
@@ -1958,6 +2014,7 @@
       } else {
         const updates = {
           email: email,
+          emailVerified: true,
           firebaseUid: fUser.uid,
           lastLoginAt: nowIso,
           drivePermissionGranted: Boolean(res.drivePermissionGranted),

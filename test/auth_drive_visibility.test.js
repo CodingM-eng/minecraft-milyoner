@@ -333,7 +333,7 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     // 7.3: Yeni Gmail Kullanıcısının OTP Doğrulaması ve Kullanıcı Adı + Şifre Belirlemesi
     const newGmailSession = await authService.registerWithGmailAndOtp({
       email: testEmail,
-      otpCode: otpResult.code,
+      otpCode: `  ${otpResult.code.slice(0, 3)} - ${otpResult.code.slice(3)}  `, // Boşluklu ve tireli kod temizlenip kabul edilmeli
       username: 'GmailVerifiedHero',
       password: 'mypassword123',
       passwordConfirm: 'mypassword123',
@@ -342,10 +342,13 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     });
     assert.strictEqual(newGmailSession.username, 'GmailVerifiedHero', 'Kullanıcı adı atanmalıdır.');
     assert.strictEqual(newGmailSession.email, testEmail, 'Email doğru atanmalıdır.');
+    assert.strictEqual(newGmailSession.emailVerified, true, 'Kayıtta emailVerified true atanmalıdır.');
+    const savedHero = userService.getUserByUsername('GmailVerifiedHero');
+    assert.strictEqual(savedHero.emailVerified, true, 'Veritabanında kayıtlı kullanıcının emailVerified alanı true olmalıdır.');
     assert.strictEqual(newGmailSession.role, 'MEMBER', 'Normal Gmail üyesi MEMBER rolü almalıdır.');
     assert.strictEqual(newGmailSession.isAdminSession, false, 'Normal Gmail üyesi admin olamaz.');
     assert.strictEqual(newGmailSession.drivePermissionGranted, true, 'Drive izni atanmalıdır.');
-    console.log('✓ Yeni Gmail kullanıcısı OTP onayladı ve Kullanıcı Adı + Şifre belirleyerek kaydoldu.');
+    console.log('✓ Yeni Gmail kullanıcısı boşluklu/tireli OTP onayladı ve emailVerified=true ile kaydoldu.');
 
     // 7.4: Bu kullanıcının daha sonra normal Giriş Formundan Kullanıcı Adı ve Şifre ile girebilmesi
     const directLoginSession = await authService.login({
@@ -354,9 +357,27 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     });
     assert.strictEqual(directLoginSession.username, 'GmailVerifiedHero');
     assert.strictEqual(directLoginSession.email, testEmail);
+    assert.strictEqual(directLoginSession.emailVerified, true, 'Klasik girişte de emailVerified true olarak oturuma yansımalıdır.');
     console.log('✓ Gmail ile kaydolan kullanıcı daha sonra klasik formdan kullanıcı adı ve şifresiyle başarıyla girdi.');
 
-    // 7.5: codingdevelopia@gmail.com'un Gmail & OTP ile kaydı durumunda ADMIN olması
+    // 7.5: Mevcut Gmail Kullanıcısının loginExistingGmailUser ile Girişi ve emailVerified Kontrolü
+    const existingGmailSession = await authService.loginExistingGmailUser({
+      email: testEmail
+    });
+    assert.strictEqual(existingGmailSession.username, 'GmailVerifiedHero');
+    assert.strictEqual(existingGmailSession.emailVerified, true, 'loginExistingGmailUser oturumunda emailVerified true olmalıdır.');
+    console.log('✓ Mevcut Gmail kullanıcısı loginExistingGmailUser ile doğrulandı ve emailVerified=true korundu.');
+
+    // 7.6: OTP Hafıza Yenilemesi ve Yerel Depolamadan (localStorage) Doğrulama
+    const persistEmail = 'persisted_otp@test.com';
+    const pOtp = authService.generateOtp(persistEmail);
+    // Bellek haritasını simüle ederek sıfırla, yalnızca yerel depolama kalsın
+    window.MCMServices.otpService._activeOtps.clear();
+    const verifiedFromStorage = authService.verifyOtp(persistEmail, pOtp.code);
+    assert.strictEqual(verifiedFromStorage, true, 'Hafıza sıfırlansa bile yerel depolamadaki OTP başarıyla doğrulanmalıdır.');
+    console.log('✓ Bellek haritası boşaltıldığında yerel depolamadaki (localStorage) OTP başarıyla doğrulandı.');
+
+    // 7.7: codingdevelopia@gmail.com'un Gmail & OTP ile kaydı durumunda ADMIN olması
     const adminOtp = authService.generateOtp('codingdevelopia@gmail.com');
     const gmailAdminSession = await authService.registerWithGmailAndOtp({
       email: 'codingdevelopia@gmail.com',
@@ -369,8 +390,9 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     });
     assert.strictEqual(gmailAdminSession.role, 'ADMIN', 'codingdevelopia@gmail.com ADMIN rolü almalıdır.');
     assert.strictEqual(gmailAdminSession.isAdminSession, true, 'codingdevelopia@gmail.com isAdminSession=true almalıdır.');
+    assert.strictEqual(gmailAdminSession.emailVerified, true, 'Admin kullanıcının da emailVerified değeri true olmalıdır.');
     assert.strictEqual(authGuard.getEffectiveRankId(gmailAdminSession), 'ADMIN', 'Effective rank ADMIN olmalıdır.');
-    console.log('✓ codingdevelopia@gmail.com Gmail & OTP ile Kullanıcı Adı ve Şifre belirleyip ADMIN olarak kaydoldu.');
+    console.log('✓ codingdevelopia@gmail.com Gmail & OTP ile Kullanıcı Adı ve Şifre belirleyip ADMIN ve emailVerified=true olarak kaydoldu.');
 
     console.log('\n====================================================');
     console.log('TEST 8: Netherite Bonus Kademeleri (Üye: 0, VIP: 50, VIP+: 250)');

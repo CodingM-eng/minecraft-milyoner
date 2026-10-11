@@ -2028,9 +2028,13 @@
       const errEl = document.getElementById('gate-otp-error');
       errEl?.classList.add('hidden');
 
-      const inputCode = document.getElementById('gate-otp-input')?.value || '';
+      const rawInput = document.getElementById('gate-otp-input')?.value || '';
+      const inputCode = String(rawInput || '').replace(/\D/g, '').trim();
 
       try {
+        if (!inputCode || inputCode.length !== 6) {
+          throw new Error('Lütfen 6 haneli onay kodunuzu eksiksiz olarak girin.');
+        }
         await svc().authService.verifyOtp(currentOtpEmail, inputCode);
 
         // Eğer klasik kayıt formundan gelinmişse bekleyen kayıt verilerini kullanarak doğrudan kaydet
@@ -2101,6 +2105,14 @@
         copyCodeToClipboard(toCopy);
       } else {
         window.MCMPlatform?.showToast('⚠️ Henüz kopyalanacak onay kodu oluşmadı.', 'info');
+      }
+    });
+
+    // OTP Giriş Alanı Otomatik Rakam Filtreleme (6 hane sınırı)
+    document.getElementById('gate-otp-input')?.addEventListener('input', e => {
+      const el = e.target;
+      if (el && typeof el.value === 'string') {
+        el.value = el.value.replace(/\D/g, '').slice(0, 6);
       }
     });
 

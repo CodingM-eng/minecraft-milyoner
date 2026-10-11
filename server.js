@@ -458,7 +458,7 @@ const server = http.createServer(async (req, res) => {
       if (!email || !email.includes('@')) {
         return sendJson(res, 400, { success: false, error: 'Lütfen geçerli bir Gmail adresi girin.' });
       }
-      const inputCode = String(body.code || '').trim();
+      const inputCode = String(body.code || '').replace(/\D/g, '').trim();
       const code = (/^\d{6}$/.test(inputCode)) ? inputCode : String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = Date.now() + 3 * 60 * 1000;
       activeOtps.set(email, { code, expiresAt, attempts: 0 });
@@ -481,7 +481,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const { json: body } = await parseRequestBody(req);
       const email = String(body.email || '').trim().toLowerCase();
-      const inputCode = String(body.code || '').trim();
+      const inputCode = String(body.code || '').replace(/\D/g, '').trim();
       const record = activeOtps.get(email);
       if (!record) {
         return sendJson(res, 400, { success: false, error: 'Bu e-posta için aktif onay kodu bulunamadı veya süresi doldu.' });

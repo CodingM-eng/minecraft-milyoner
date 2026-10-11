@@ -892,8 +892,12 @@
 
     const verifiedTagEl = document.getElementById('profile-email-verified-tag');
     if (verifiedTagEl) {
-      verifiedTagEl.textContent = user.emailVerified ? '✓ Doğrulandı' : '⚠️ Doğrulanmadı';
-      verifiedTagEl.className = user.emailVerified ? 'role-badge role-member' : 'role-badge role-muted';
+      const isVerified = Boolean(
+        user.emailVerified ||
+        (user.email && (user.firebaseUid || String(user.email).toLowerCase() === 'codingdevelopia@gmail.com' || user.drivePermissionGranted))
+      );
+      verifiedTagEl.textContent = isVerified ? '✓ Doğrulandı' : '⚠️ Doğrulanmadı';
+      verifiedTagEl.className = isVerified ? 'role-badge role-member' : 'role-badge role-muted';
     }
 
     const usernameInputEl = document.getElementById('profile-username-input');
