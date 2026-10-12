@@ -4720,6 +4720,18 @@
           <h3>⚙️ Platform Genel Ayarları &amp; Bakım Modu (Faz 6)</h3>
           <form id="admin-platform-settings-form" class="platform-form">
             <div class="input-group">
+              <label>CANLI BACKEND API URL (GİTHUB PAGES / NODE.JS SUNUCU ENTEGRASYONU)</label>
+              <div style="display:flex;gap:8px;">
+                <input type="url" id="adm-set-api-url" value="${escapeHtml(
+                  (typeof localStorage !== 'undefined' ? localStorage.getItem('mcm_backend_api_url') : '') || ''
+                )}" placeholder="Örn: https://mc-milyoner-api.onrender.com veya http://localhost:3000" style="flex:1;" />
+                <button type="button" id="btn-admin-test-backend-api" class="mc-btn mc-btn-secondary mc-btn-sm" style="white-space:nowrap;">
+                  🔌 Bağlantıyı Test Et
+                </button>
+              </div>
+              <span class="input-hint">GitHub Pages statik barındırma sunucusudur. Discord OAuth, OTP e-posta gönderimi ve sohbet küfür filtresi gibi sunucu özellikleri için Node.js backend URL adresinizi buraya kaydedin.</span>
+            </div>
+            <div class="input-group">
               <label>PLATFORM BAŞLIĞI</label>
               <input type="text" id="adm-set-title" value="${escapeHtml(pSettings.siteTitle)}" />
             </div>
@@ -7903,6 +7915,13 @@
         e.preventDefault();
         try {
           const maintenanceActive = document.getElementById('adm-set-maintenance')?.checked || false;
+          const apiUrl = String(document.getElementById('adm-set-api-url')?.value || '').trim().replace(/\/+$/, '');
+          if (typeof localStorage !== 'undefined') {
+            if (apiUrl) localStorage.setItem('mcm_backend_api_url', apiUrl);
+            else localStorage.removeItem('mcm_backend_api_url');
+          }
+          if (typeof window !== 'undefined') window.MCM_API_BASE_URL = apiUrl;
+
           svc().backupService.updatePlatformSettings(session, {
             siteTitle: document.getElementById('adm-set-title')?.value || 'Minecraft Milyoner',
             announcementText: document.getElementById('adm-set-announcement')?.value || '',
@@ -7911,9 +7930,39 @@
           if (svc().maintenanceService) {
             svc().maintenanceService.setMaintenanceMode(session, maintenanceActive);
           }
-          showToast('Platform ayarları ve Bakım Modu başarıyla güncellendi.', 'success');
+          showToast('Platform ayarları, Backend API URL ve Bakım Modu başarıyla güncellendi.', 'success');
         } catch (err) {
           showToast(err.message, 'error');
+        }
+      }
+    });
+
+    // Backend API Bağlantı Testi (#btn-admin-test-backend-api)
+    document.addEventListener('click', async e => {
+      const testBtn = e.target.closest('#btn-admin-test-backend-api');
+      if (testBtn) {
+        const inp = document.getElementById('adm-set-api-url');
+        const rawUrl = String(inp?.value || '').trim().replace(/\/+$/, '');
+        if (!rawUrl) {
+          showToast('Lütfen önce test edilecek bir Backend API URL adresi girin.', 'warning');
+          return;
+        }
+        testBtn.disabled = true;
+        testBtn.textContent = '⏳ Test Ediliyor...';
+        try {
+          const targetUrl = rawUrl.startsWith('http') ? `${rawUrl}/api/health` : `https://${rawUrl}/api/health`;
+          const res = await fetch(targetUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+          if (res.ok) {
+            const data = await res.json().catch(() => ({}));
+            showToast(`✓ Backend sunucusuna başarıyla bağlanıldı! (${data.version || 'v10'})`, 'success');
+          } else {
+            showToast(`⚠️ Sunucu yanıt verdi ancak durum kodu: ${res.status}`, 'warning');
+          }
+        } catch (err) {
+          showToast(`❌ Sunucuya erişilemedi: ${err.message}. Lütfen sunucunun (server.js) çalıştığını ve CORS izinlerini kontrol edin.`, 'error');
+        } finally {
+          testBtn.disabled = false;
+          testBtn.textContent = '🔌 Bağlantıyı Test Et';
         }
       }
     });

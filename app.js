@@ -1014,7 +1014,7 @@
     startQuestionTimer();
   }
 
-  function showEndermanRulesIntro() {
+  function showEndermanRulesIntro(asModal = false) {
     stopQuestionTimer();
     const qBox = document.getElementById('question-box');
     const aGrid = document.getElementById('answers-grid');
@@ -1023,6 +1023,11 @@
 
     const overlay = document.getElementById('enderman-rules-overlay');
     if (overlay) {
+      if (asModal || !svc().authService?.getActiveSession()) {
+        overlay.classList.add('modal-mode');
+      } else {
+        overlay.classList.remove('modal-mode');
+      }
       overlay.classList.remove('hidden');
     }
   }
@@ -1031,6 +1036,7 @@
     const overlay = document.getElementById('enderman-rules-overlay');
     if (overlay) {
       overlay.classList.add('hidden');
+      overlay.classList.remove('modal-mode');
     }
     const qBox = document.getElementById('question-box');
     const aGrid = document.getElementById('answers-grid');
@@ -1830,8 +1836,7 @@
         otpData = svc().authService.generateOtp(currentOtpEmail);
       }
 
-      currentOtpCode = otpData?.code || '';
-      startOtpCountdown(otpData.expiresAt);
+      startOtpCountdown(otpData?.expiresAt || (Date.now() + 3 * 60 * 1000));
 
       const tipEl = document.getElementById('gate-otp-status-tip');
       if (otpData?.activationNeeded) {
@@ -2107,16 +2112,6 @@
       }
     });
 
-    // En Üst Kodu Kopyala Butonu (#btn-gate-copy-otp-top)
-    document.getElementById('btn-gate-copy-otp-top')?.addEventListener('click', () => {
-      const inputVal = document.getElementById('gate-otp-input')?.value || '';
-      const toCopy = currentOtpCode || inputVal;
-      if (toCopy) {
-        copyCodeToClipboard(toCopy);
-      } else {
-        window.MCMPlatform?.showToast('⚠️ Henüz kopyalanacak onay kodu oluşmadı.', 'info');
-      }
-    });
 
     // OTP Giriş Alanı Otomatik Rakam Filtreleme (6 hane sınırı)
     document.getElementById('gate-otp-input')?.addEventListener('input', e => {
@@ -2209,10 +2204,15 @@
           return;
         }
 
-        // Firebase canlı yapılandırılmamışsa veya ortam pop-up desteklemiyorsa temiz Gmail OTP ekranını aç
+        // Firebase canlı yapılandırılmamışsa veya ortam pop-up desteklemiyorsa açıkça bildirip Gmail OTP ekranını aç
+        const reasonText = (res && res.reason)
+          ? res.reason
+          : 'Firebase Google Sign-In canlı anahtarları yapılandırılmamış (Demo modu). Güvenli e-posta doğrulama ekranına yönlendiriliyorsunuz.';
+        window.MCMPlatform?.showToast(reasonText, 'info');
         window.launchGmailEmailPrompt();
       } catch (err) {
         console.warn('Google pop-up bağlantısı başarısız, Gmail formuna yönlendiriliyor:', err);
+        window.MCMPlatform?.showToast(err.message || 'Google oturumu açılamadı. E-posta doğrulama akışına yönlendiriliyorsunuz.', 'warning');
         window.launchGmailEmailPrompt();
       } finally {
         googleLoginBtn.disabled = false;
@@ -2500,6 +2500,12 @@
       soundEngine.endermanTeleport();
       gameState._endermanIntroAcknowledged = true;
       hideEndermanRulesIntro();
+      const session = svc().authService?.getActiveSession();
+      if (!session) {
+        document.getElementById('access-gate')?.classList.remove('hidden');
+        window.MCMPlatform?.showToast('🎉 Harika! Şimdi yarışmaya başlamak için lütfen giriş yapın veya ücretsiz kaydolun.', 'info');
+        return;
+      }
       if (gameState.active) {
         startQuestionTimer();
       } else {
@@ -2507,10 +2513,22 @@
       }
     });
 
+    // Giriş Kapısındaki "Kuralları Oku" butonu
+    document.getElementById('btn-gate-open-end-guide')?.addEventListener('click', () => {
+      soundEngine.endermanTeleport();
+      showEndermanRulesIntro(true);
+    });
+
     document.getElementById('btn-welcome-open-end-guide')?.addEventListener('click', () => {
       soundEngine.endermanTeleport();
+      const session = svc().authService?.getActiveSession();
+      if (!session) {
+        showEndermanRulesIntro(true);
+        window.MCMPlatform?.showToast('📖 End Rehberi kuralları açıldı. Yarışmaya başlamak için hesap girişi gereklidir.', 'info');
+        return;
+      }
       window.MCMPlatform?.navigateToScreen('game');
-      showEndermanRulesIntro();
+      showEndermanRulesIntro(false);
     });
 
     // Ekstra Can İkinci Şans Modalı

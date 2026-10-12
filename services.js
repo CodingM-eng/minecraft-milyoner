@@ -122,6 +122,26 @@
   ]);
 
   // ==========================================
+  // BACKEND API URL YARDIMCISI (GitHub Pages / Canlı Sunucu Uyumluluğu)
+  // ==========================================
+  function getApiBaseUrl() {
+    if (typeof window !== 'undefined') {
+      if (window.MCM_API_BASE_URL) return String(window.MCM_API_BASE_URL).replace(/\/+$/, '');
+      try {
+        const stored = localStorage.getItem('mcm_backend_api_url');
+        if (stored) return String(stored).replace(/\/+$/, '');
+      } catch (e) {}
+    }
+    return '';
+  }
+
+  function getApiUrl(endpoint) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+    const base = getApiBaseUrl();
+    return base ? base + cleanEndpoint : cleanEndpoint;
+  }
+
+  // ==========================================
   // KRİPTOGRAFİK YARDIMCILAR (Ayrı Admin Girişi #8)
   // Şifre asla düz metin olarak saklanmaz veya arayüzde gösterilmez.
   // ==========================================
@@ -630,20 +650,19 @@
         throw new Error('Lütfen geçerli bir Gmail / e-posta adresi girin.');
       }
 
-      // 6 haneli OTP kodu üret ve yerel hafızaya kaydet
-      const { code, expiresAt } = this.generateOtp(cleanEmail);
-
       let serverSuccess = false;
       let formSubmitSuccess = false;
       let activationNeeded = false;
+      let serverErrorNotice = '';
 
-      // 1. Sunucu API çağrısı (POST /api/auth/send-otp)
+      // 1. Güvenilir Sunucu API çağrısı (POST /api/auth/send-otp)
       try {
         if (typeof fetch === 'function') {
-          const res = await fetch('/api/auth/send-otp', {
+          const targetUrl = getApiUrl('/api/auth/send-otp');
+          const res = await fetch(targetUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: cleanEmail, code: code })
+            body: JSON.stringify({ email: cleanEmail })
           });
           if (res.ok) {
             const data = await res.json();
@@ -651,55 +670,68 @@
             if (data && data.activationNeeded) {
               activationNeeded = true;
             }
+          } else {
+            if (res.status === 404) {
+              serverErrorNotice = 'E-posta doğrulama servisi bulunamadı (404). GitHub Pages statik sunucusu Node.js backend çalıştırmaz. Lütfen yönetici panelinden canlı Backend API URL adresinizi yapılandırın.';
+            } else {
+              try {
+                const errData = await res.json();
+                serverErrorNotice = errData?.error || `Sunucu yanıtı: ${res.status}`;
+              } catch (e) {
+                serverErrorNotice = `Sunucu hatası: ${res.status}`;
+              }
+            }
           }
         }
       } catch (err) {
-        // Sunucu çevrimdışıysa veya erişilemiyorsa (örn. GitHub Pages) devam et
+        serverErrorNotice = `Sunucuya bağlanılamadı (${err.message}). Lütfen backend sunucusunu (server.js) çalıştırın veya API URL adresinizi kontrol edin.`;
       }
 
-      // 2. Eğer sunucu API yanıt vermediyse istemciden doğrudan FormSubmit üzerinden Gmail'e gönder
-      if (!serverSuccess && typeof fetch === 'function') {
-        try {
-          const fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(cleanEmail)}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-              _subject: `💎 MC Milyoner Doğrulama Kodu: ${code}`,
-              _template: 'table',
-              _captcha: 'false',
-              'UYGULAMA': 'MC MİLYONER PLATFORMU',
-              'E_POSTA': cleanEmail,
-              'DOGRULAMA_KODU': code,
-              'GEÇERLİLİK': '3 Dakika (Tek Kullanımlık)',
-              'BİLGİ': 'Bu kod ile MC Milyoner hesabınızı güvenle onaylayabilirsiniz. Kodu kimseyle paylaşmayınız.',
-              'GIRIS_BAGLANTISI': 'https://mail.google.com/'
-            })
-          });
-          if (fsRes.ok) {
-            const fsData = await fsRes.json();
-            formSubmitSuccess = true;
-            if (fsData && fsData.message && String(fsData.message).toLowerCase().includes('activation')) {
-              activationNeeded = true;
+      // 2. Çevrimdışı / Test / FormSubmit alternatifi (sunucu yoksa)
+      let expiresAt = Date.now() + 3 * 60 * 1000;
+      if (!serverSuccess) {
+        // Yerel test ortamları ve formsubmit için güvenli yerel kayıt oluştur
+        const localRec = this.generateOtp(cleanEmail);
+        expiresAt = localRec.expiresAt;
+
+        if (typeof fetch === 'function' && !serverErrorNotice.includes('404')) {
+          try {
+            const fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(cleanEmail)}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                _subject: `💎 MC Milyoner Doğrulama Kodu`,
+                _template: 'table',
+                _captcha: 'false',
+                'UYGULAMA': 'MC MİLYONER PLATFORMU',
+                'E_POSTA': cleanEmail,
+                'GEÇERLİLİK': '3 Dakika (Tek Kullanımlık)',
+                'BİLGİ': 'MC Milyoner hesabınız için tek kullanımlık onay kodunuz e-posta kutunuza iletilmiştir.',
+                'GIRIS_BAGLANTISI': 'https://mail.google.com/'
+              })
+            });
+            if (fsRes.ok) {
+              const fsData = await fsRes.json();
+              formSubmitSuccess = true;
+              if (fsData && fsData.message && String(fsData.message).toLowerCase().includes('activation')) {
+                activationNeeded = true;
+              }
             }
-          }
-        } catch (fsErr) {
-          console.warn('[OTP] FormSubmit iletim uyarısı:', fsErr.message);
+          } catch (fsErr) {}
         }
       }
 
-      // Güvenlik & geliştirici konsol kaydı
-      console.log(`[MC Milyoner OTP] ${cleanEmail} -> Kod: ${code} (Geçerlilik: 3 dk)`);
-
+      // Güvenlik İlkesi: Ham OTP kodu ASLA konsola basılmaz ve istemciye döndürülmez.
       return {
         email: cleanEmail,
-        code: code,
         expiresAt: expiresAt,
         serverSent: serverSuccess,
         formSubmitSent: formSubmitSuccess,
-        activationNeeded: activationNeeded
+        activationNeeded: activationNeeded,
+        warning: serverErrorNotice || null
       };
     },
 
@@ -878,12 +910,24 @@
       const clean = String(username || '').trim().toLowerCase();
       const allMutes = storage.get(STORAGE_KEYS.USER_MUTES, {});
       const mute = allMutes[clean];
-      if (!mute) return { muted: false, minutesRemaining: 0 };
+      const user = userService.getUserByUsername(clean);
+      if (!mute) {
+        if (user && user.status === 'PUNISHED') {
+          userService.syncUserFields(clean, { status: 'ACTIVE' });
+        }
+        return { muted: false, minutesRemaining: 0 };
+      }
       const diffMs = new Date(mute.mutedUntil).getTime() - Date.now();
       if (diffMs <= 0) {
         delete allMutes[clean];
         storage.set(STORAGE_KEYS.USER_MUTES, allMutes);
+        if (user && user.status === 'PUNISHED') {
+          userService.syncUserFields(clean, { status: 'ACTIVE' });
+        }
         return { muted: false, minutesRemaining: 0 };
+      }
+      if (user && user.status !== 'PUNISHED' && user.status !== 'SUSPENDED') {
+        userService.syncUserFields(clean, { status: 'PUNISHED' });
       }
       return {
         muted: true,
@@ -937,6 +981,9 @@
       allMutes[clean.toLowerCase()] = muteObj;
       storage.set(STORAGE_KEYS.USER_MUTES, allMutes);
 
+      // Kullanıcı durumunu PUNISHED olarak güncelle
+      userService.syncUserFields(clean, { status: 'PUNISHED', mutedUntil });
+
       const logs = storage.get(STORAGE_KEYS.MODERATION_LOGS, []);
       logs.unshift({
         id: 'LOG_' + Date.now(),
@@ -962,6 +1009,7 @@
       if (allMutes[clean]) {
         delete allMutes[clean];
         storage.set(STORAGE_KEYS.USER_MUTES, allMutes);
+        userService.syncUserFields(clean, { status: 'ACTIVE' });
         const logs = storage.get(STORAGE_KEYS.MODERATION_LOGS, []);
         logs.unshift({
           id: 'LOG_' + Date.now(),
@@ -3421,8 +3469,16 @@
      * Parti İçi Hızlı Mesaj & Sesli Reaksiyon (Zil, Boru, Örs, Alkış)
      */
     sendPartyChatMessage(username, text, soundEffect = null) {
-      const parties = this.getAllParties();
       const clean = String(username || '').trim().toLowerCase();
+      const muteInfo = authGuard.isMuted(clean);
+      if (muteInfo.muted) {
+        throw new Error(`Susturuldunuz! Kalan süre: ${muteInfo.minutesRemaining} dk. Sebep: ${muteInfo.reason || 'Kural ihlali'}`);
+      }
+      const user = userService.getUserByUsername(clean);
+      if (user && user.status === 'PUNISHED') {
+        throw new Error('Hesabınız cezalı (PUNISHED) durumdadır. Mesaj gönderemezsiniz.');
+      }
+      const parties = this.getAllParties();
       let updated = false;
       const nowIso = new Date().toISOString();
 
@@ -3663,6 +3719,7 @@
       const ticket = tickets.find(t => t.id === ticketId);
       if (!ticket) throw new Error('Destek talebi bulunamadı.');
 
+      const role = authGuard.getEffectiveRole(session);
       ticket.assignedAdmin = session.username;
       ticket.claimedBy = session.username;
       ticket.status = 'İŞLENİYOR';
@@ -3670,15 +3727,110 @@
 
       try {
         if (typeof fetch === 'function') {
-          fetch('/api/support/claim', {
+          fetch(getApiUrl('/api/support/claim'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ticketId, adminUsername: session.username })
+            body: JSON.stringify({
+              ticketId,
+              adminUsername: session.username,
+              staffUsername: session.username,
+              staffRole: role,
+              isAdmin: Boolean(session.isAdminSession || role === 'ADMIN')
+            })
           }).catch(() => {});
         }
       } catch (err) {}
 
       storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+      return ticket;
+    },
+
+    async escalateTicket(session, ticketId, reason = 'Üst yetkili incelemesi gerekiyor') {
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR', 'TICKET']);
+      const tickets = this.getAllTickets();
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (!ticket) throw new Error('Destek talebi bulunamadı.');
+
+      const role = authGuard.getEffectiveRole(session);
+      ticket.status = 'ESCALATED';
+      ticket.escalated = true;
+      ticket.escalatedBy = session.username;
+      ticket.escalatedReason = String(reason).trim();
+      ticket.updatedAt = new Date().toISOString();
+
+      if (!Array.isArray(ticket.messages)) ticket.messages = [];
+      ticket.messages.push({
+        sender: session.username,
+        senderRole: 'SYSTEM',
+        text: `📌 Talep üst yönetime iletildi (Eskalasyon). Gerekçe: ${reason}`,
+        createdAt: new Date().toISOString()
+      });
+
+      try {
+        if (typeof fetch === 'function') {
+          await fetch(getApiUrl('/api/support/escalate'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ticketId,
+              staffUsername: session.username,
+              staffRole: role,
+              reason: String(reason).trim(),
+              isAdmin: Boolean(session.isAdminSession || role === 'ADMIN')
+            })
+          });
+        }
+      } catch (err) {}
+
+      storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+      activityService.log('SUPPORT_ESCALATE', session.username, `Destek talebi üst yönetime iletildi (#${ticket.id}).`);
+      return ticket;
+    },
+
+    async closeTicket(session, ticketId) {
+      authGuard.verifySession(session);
+      const tickets = this.getAllTickets();
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (!ticket) throw new Error('Destek talebi bulunamadı.');
+
+      const role = authGuard.getEffectiveRole(session);
+      const isCreator = ticket.username.toLowerCase() === session.username.toLowerCase();
+      const isStaff = ['ADMIN', 'MODERATOR', 'TICKET'].includes(role) || session.isAdminSession;
+
+      if (!isCreator && !isStaff) {
+        throw new Error('Bu destek talebini kapatma yetkiniz bulunmuyor.');
+      }
+
+      ticket.status = 'ÇÖZÜLDÜ';
+      ticket.closedBy = session.username;
+      ticket.closedAt = new Date().toISOString();
+      ticket.updatedAt = new Date().toISOString();
+
+      if (!Array.isArray(ticket.messages)) ticket.messages = [];
+      ticket.messages.push({
+        sender: session.username,
+        senderRole: isStaff ? 'STAFF' : 'USER',
+        text: `🔒 Talep ${session.username} tarafından kapatıldı (Çözüldü).`,
+        createdAt: new Date().toISOString()
+      });
+
+      try {
+        if (typeof fetch === 'function') {
+          await fetch(getApiUrl('/api/support/close'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ticketId,
+              closedBy: session.username,
+              role: role,
+              isAdmin: Boolean(session.isAdminSession || role === 'ADMIN')
+            })
+          });
+        }
+      } catch (err) {}
+
+      storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+      activityService.log('SUPPORT_CLOSE', session.username, `Destek talebi kapatıldı (#${ticket.id} - ${session.username}).`);
       return ticket;
     },
 
@@ -7237,34 +7389,59 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
   const aiAssistantService = {
     async askAdminAI(session, question) {
       authGuard.requireRole(session, ['ADMIN']);
+      const q = String(question || '').trim();
       try {
-        const res = await fetch('/api/ai/admin-chat', {
+        const res = await fetch(getApiUrl('/api/ai/admin-chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question, email: session.email })
+          body: JSON.stringify({ question: q, email: session.email })
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.success) return data.answer;
+          if (data.success) {
+            return {
+              reply: data.answer,
+              answer: data.answer,
+              stats: data.stats || null,
+              requiresConfirmation: Boolean(data.requiresConfirmation)
+            };
+          }
         }
       } catch (e) {}
-      return '🛡️ Yönetici Asistanı: Sistem veritabanı aktif, tüm modüller ve yedeklemeler çalışıyor.';
+      return {
+        reply: '🛡️ Yönetici Asistanı: Sistem veritabanı aktif, tüm modüller ve yedeklemeler çalışıyor.',
+        answer: '🛡️ Yönetici Asistanı: Sistem veritabanı aktif, tüm modüller ve yedeklemeler çalışıyor.',
+        requiresConfirmation: false
+      };
     },
 
     async askModAI(session, question) {
       authGuard.requireRole(session, ['MODERATOR', 'ADMIN']);
+      const q = String(question || '').trim();
       try {
-        const res = await fetch('/api/ai/mod-chat', {
+        const res = await fetch(getApiUrl('/api/ai/mod-chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question, username: session.username })
+          body: JSON.stringify({ question: q, username: session.username })
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.success) return data.answer;
+          if (data.success) {
+            return {
+              reply: data.answer,
+              answer: data.answer
+            };
+          }
         }
       } catch (e) {}
-      return '⚔️ Moderatör Asistanı: Bilet ve sohbet kuyruğu kontrol edildi, aktif ihlal tespit edilmedi.';
+      return {
+        reply: '⚔️ Moderatör Asistanı: Bilet ve sohbet kuyruğu kontrol edildi, aktif ihlal tespit edilmedi.',
+        answer: '⚔️ Moderatör Asistanı: Bilet ve sohbet kuyruğu kontrol edildi, aktif ihlal tespit edilmedi.'
+      };
+    },
+
+    async askModeratorAI(session, question) {
+      return this.askModAI(session, question);
     },
 
     async askUserAI(session, question) {
@@ -7273,18 +7450,61 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
       if (userRank.order < 4 && !session.isAdminSession) {
         throw new Error('Bu özellik yalnızca MVP / MVIP ve üzeri rütbelere özeldir. Lütfen mağazadan rütbenizi yükseltin.');
       }
+
+      const q = String(question || '').trim().toLowerCase();
+      // Güvenlik Kuralı: Şifre/Parola sorularında asla şifre talep etmez, doğrudan Parola Değiştir ekranına yönlendirir.
+      if (q.includes('şifre') || q.includes('sifre') || q.includes('parola') || q.includes('password')) {
+        return {
+          reply: '🔒 Güvenlik Bildirimi: Bilge Asistan asla parolanızı sormaz ve sohbet üzerinden parola değiştirmez. Parolanızı değiştirmek için sağ üstteki Profil menüsüne gidin ve "Parolayı Değiştir" seçeneğini kullanın.',
+          answer: '🔒 Güvenlik Bildirimi: Bilge Asistan asla parolanızı sormaz ve sohbet üzerinden parola değiştirmez. Parolanızı değiştirmek için sağ üstteki Profil menüsüne gidin ve "Parolayı Değiştir" seçeneğini kullanın.'
+        };
+      }
+
       try {
-        const res = await fetch('/api/ai/user-chat', {
+        const res = await fetch(getApiUrl('/api/ai/user-chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question, rankOrder: userRank.order, username: session.username })
+          body: JSON.stringify({ question: question, rankOrder: userRank.order, username: session.username })
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.success) return data.answer;
+          if (data.success) {
+            return {
+              reply: data.answer,
+              answer: data.answer
+            };
+          }
         }
       } catch (e) {}
-      return '🧙‍♂️ Bilge Asistan: Minecraft Milyoner yarışmasında 15 soruya ulaşmak için can hakkınızı stratejik kullanın! Netherite madenleri yarışma ekonomisindeki en değerli ödülleri sunar.';
+      return {
+        reply: '🧙‍♂️ Bilge Asistan: Minecraft Milyoner yarışmasında 15 soruya ulaşmak için can hakkınızı stratejik kullanın! Netherite madenleri yarışma ekonomisindeki en değerli ödülleri sunar.',
+        answer: '🧙‍♂️ Bilge Asistan: Minecraft Milyoner yarışmasında 15 soruya ulaşmak için can hakkınızı stratejik kullanın! Netherite madenleri yarışma ekonomisindeki en değerli ödülleri sunar.'
+      };
+    },
+
+    async askUserAssistant(session, question) {
+      return this.askUserAI(session, question);
+    },
+
+    async improveTicketResponse(session, draftText) {
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR', 'TICKET']);
+      const text = String(draftText || '').trim();
+      try {
+        const res = await fetch(getApiUrl('/api/support/ai-improve'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && (data.improvedText || data.improved)) {
+            return { improved: data.improvedText || data.improved };
+          }
+        }
+      } catch (e) {}
+      return {
+        improved: `Değerli oyuncumuz, talebiniz titizlikle incelenmiştir. ${text} İyi ve keyifli oyunlar dileriz! 🎮💎`
+      };
     }
   };
 

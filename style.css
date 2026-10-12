@@ -8038,6 +8038,29 @@ body.screen-game-active #screen-game {
   animation: enderWarpIn 0.4s ease-out;
 }
 
+.enderman-rules-overlay.modal-mode {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  background: rgba(3, 7, 18, 0.92);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.enderman-rules-overlay.modal-mode .enderman-rules-card {
+  max-width: 640px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
 .enderman-rules-card {
   background: rgba(18, 12, 30, 0.98);
   border: 3px solid #a855f7;

@@ -39,6 +39,15 @@
         Hesabınıza giriş yapın veya ücretsiz kayıt olarak her gün <strong>Günlük Zümrüt</strong> ödülüyle yarışmaya başlayın! (İlk <strong>VIP</strong> alımında <strong>+50</strong>, ilk en az <strong>VIP+</strong> alımında anında <strong>+250 Netherite</strong> hediye!)
       </p>
 
+      <div class="gate-access-notice" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="font-size: 0.8rem; color: #cbd5e1; line-height: 1.45;">
+          <span>🔮</span> <strong style="color: #6ee7b7;">End Rehberi &amp; Kurallar:</strong> Yarışma kurallarını ve jokerleri giriş yapmadan inceleyebilirsiniz.
+        </div>
+        <button type="button" id="btn-gate-open-end-guide" class="mc-btn mc-btn-secondary mc-btn-xs" style="white-space: nowrap; padding: 5px 10px; font-size: 0.78rem;">
+          📖 Kuralları Oku
+        </button>
+      </div>
+
       <!-- Sekmeler: Sadece Giriş Yap & Kayıt Ol -->
       <div class="auth-tabs" role="tablist">
         <button type="button" class="auth-tab active" data-auth-tab="login" id="tab-btn-login" role="tab"
@@ -209,12 +218,12 @@
 
       <!-- 5. 6 HANELİ OTP KODU ONAYLAMA FORMU (FormSubmit & Gmail) -->
       <form id="access-otp-form" class="gate-form hidden" novalidate>
-        <!-- En Üst: Kodu Kopyala / Panodan Yapıştır Hızlı İşlem Çubuğu -->
-        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.85); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.35); margin-bottom: 14px;">
-          <span style="font-size: 0.78rem; color: #94a3b8;">Hızlı İşlem:</span>
-          <button type="button" id="btn-gate-copy-otp-top" class="mc-btn mc-btn-secondary mc-btn-xs" style="padding: 4px 10px; font-size: 0.76rem; display: inline-flex; align-items: center; gap: 5px;">
-            <span>📋</span> <span>Kodu Kopyala</span>
-          </button>
+        <!-- Güvenlik Bilgilendirmesi -->
+        <div style="display: flex; align-items: center; gap: 8px; background: rgba(30, 41, 59, 0.85); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.35); margin-bottom: 14px;">
+          <span>🔒</span>
+          <span style="font-size: 0.78rem; color: #cbd5e1; line-height: 1.4;">
+            Güvenliğiniz için tek kullanımlık onay kodunuz yalnızca e-posta gelen kutunuza gönderilir. Kodunuzu kimseyle paylaşmayınız.
+          </span>
         </div>
 
         <!-- Başlık & Sol Üstte Logo Alanı -->

@@ -343,7 +343,7 @@ function buildOtpHtmlEmail(code, recipientEmail) {
 }
 
 async function dispatchEmail(recipientEmail, code) {
-  console.log(`[OTP DISPATCH] ${recipientEmail} -> Kod: ${code}`);
+  console.log(`[OTP DISPATCH] ${recipientEmail} için 6 haneli onay kodu oluşturuldu ve güvenle iletiliyor.`);
   const mailOptions = {
     from: `"MC Milyoner Platformu" <${process.env.GMAIL_USER || SUPER_ADMIN_EMAIL}>`,
     to: recipientEmail,
@@ -493,8 +493,8 @@ const server = http.createServer(async (req, res) => {
       if (!email || !email.includes('@')) {
         return sendJson(res, 400, { success: false, error: 'Lütfen geçerli bir Gmail adresi girin.' });
       }
-      const inputCode = String(body.code || '').replace(/\D/g, '').trim();
-      const code = (/^\d{6}$/.test(inputCode)) ? inputCode : String(Math.floor(100000 + Math.random() * 900000));
+      // 6 haneli güvenli OTP kodunu yalnızca sunucu tarafında kriptografik olarak üret
+      const code = String(crypto.randomInt(100000, 999999));
       const expiresAt = Date.now() + 3 * 60 * 1000;
       activeOtps.set(email, { code, expiresAt, attempts: 0 });
       const mailRes = await dispatchEmail(email, code);
@@ -1439,19 +1439,102 @@ const server = http.createServer(async (req, res) => {
     try {
       const { json: body } = await parseRequestBody(req);
       const ticketId = String(body.ticketId || '').trim();
-      const adminUsername = String(body.adminUsername || 'Yönetici').trim();
+      const staffUsername = String(body.staffUsername || body.adminUsername || 'Yetkili').trim();
+      const staffRole = String(body.staffRole || 'TICKET').toUpperCase();
 
       const ticket = supportTickets.find(t => t.id === ticketId);
       if (!ticket) {
         return sendJson(res, 404, { success: false, error: 'Destek talebi bulunamadı.' });
       }
 
-      ticket.assignedAdmin = adminUsername;
+      const isStaff = ['ADMIN', 'MODERATOR', 'TICKET'].includes(staffRole) || body.isAdmin;
+      if (!isStaff) {
+        return sendJson(res, 403, { success: false, error: 'Destek talebini sahiplenmek için yetkili olmalısınız.' });
+      }
+
+      ticket.assignedStaff = staffUsername;
+      ticket.assignedAdmin = staffUsername;
       ticket.status = 'IN_PROGRESS';
       ticket.updatedAt = new Date().toISOString();
 
       safeSaveJson('support_tickets.json', supportTickets);
-      return sendJson(res, 200, { success: true, ticket });
+      return sendJson(res, 200, { success: true, ticket, message: `Talep #${ticketId} başarıyla üstlenildi.` });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/support/escalate') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const ticketId = String(body.ticketId || '').trim();
+      const staffUsername = String(body.staffUsername || 'Yetkili').trim();
+      const staffRole = String(body.staffRole || 'TICKET').toUpperCase();
+      const reason = String(body.reason || 'Üst yetkili incelemesi gerekiyor').trim();
+
+      const ticket = supportTickets.find(t => t.id === ticketId);
+      if (!ticket) {
+        return sendJson(res, 404, { success: false, error: 'Destek talebi bulunamadı.' });
+      }
+
+      const isStaff = ['ADMIN', 'MODERATOR', 'TICKET'].includes(staffRole) || body.isAdmin;
+      if (!isStaff) {
+        return sendJson(res, 403, { success: false, error: 'Talebi iletmek için yetkili olmalısınız.' });
+      }
+
+      ticket.status = 'ESCALATED';
+      ticket.escalated = true;
+      ticket.escalatedBy = staffUsername;
+      ticket.escalatedReason = reason;
+      ticket.updatedAt = new Date().toISOString();
+
+      ticket.messages.push({
+        sender: staffUsername,
+        senderRole: 'SYSTEM',
+        text: `📌 Talep üst yönetime iletildi (Eskalasyon). Gerekçe: ${reason}`,
+        createdAt: new Date().toISOString()
+      });
+
+      safeSaveJson('support_tickets.json', supportTickets);
+      return sendJson(res, 200, { success: true, ticket, message: 'Talep üst yönetime iletildi.' });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/support/close') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const ticketId = String(body.ticketId || '').trim();
+      const closedBy = String(body.closedBy || body.username || '').trim();
+      const role = String(body.role || 'USER').toUpperCase();
+
+      const ticket = supportTickets.find(t => t.id === ticketId);
+      if (!ticket) {
+        return sendJson(res, 404, { success: false, error: 'Destek talebi bulunamadı.' });
+      }
+
+      const isCreator = ticket.username.toLowerCase() === closedBy.toLowerCase();
+      const isStaff = ['ADMIN', 'MODERATOR', 'TICKET'].includes(role) || body.isAdmin;
+
+      if (!isCreator && !isStaff) {
+        return sendJson(res, 403, { success: false, error: 'Bu destek talebini kapatma yetkiniz bulunmuyor.' });
+      }
+
+      ticket.status = 'ÇÖZÜLDÜ';
+      ticket.closedBy = closedBy;
+      ticket.closedAt = new Date().toISOString();
+      ticket.updatedAt = new Date().toISOString();
+
+      ticket.messages.push({
+        sender: closedBy,
+        senderRole: isStaff ? 'STAFF' : 'USER',
+        text: `🔒 Talep ${closedBy} tarafından kapatıldı (Çözüldü).`,
+        createdAt: new Date().toISOString()
+      });
+
+      safeSaveJson('support_tickets.json', supportTickets);
+      return sendJson(res, 200, { success: true, ticket, message: 'Destek talebi başarıyla kapatıldı.' });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }

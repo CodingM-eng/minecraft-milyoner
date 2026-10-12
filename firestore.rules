@@ -252,15 +252,23 @@ service cloud.firestore {
              (!(data.settings is map) || data.settings.keys().size() <= 30);
     }
 
-    // Validate user update payload (prevents privilege self-escalation)
+    // Validate user update payload (prevents privilege escalation and balance tampering)
     function isValidUserUpdate(data) {
       return isValidUser(data) &&
              areImmutableFieldsUnchanged(['userId', 'createdAt']) &&
-             // Non-admins cannot grant themselves ADMIN role, rank or moderator status
+             // Non-admins cannot modify roles, ranks, moderator status, account status, or currency balances
              (isAdmin() || (
-               (!('role' in data) || data.role == resource.data.role || (data.role != 'ADMIN' && resource.data.role != 'ADMIN')) &&
-               (!('rank' in data) || data.rank == resource.data.rank || data.rank != 'ADMIN') &&
-               (!('isModerator' in data) || data.isModerator == resource.data.isModerator || data.isModerator == false)
+               (!('role' in data) || data.role == resource.data.role) &&
+               (!('rank' in data) || data.rank == resource.data.rank) &&
+               (!('isModerator' in data) || data.isModerator == resource.data.isModerator) &&
+               (!('status' in data) || data.status == resource.data.status) &&
+               (!('coins' in data) || data.coins == resource.data.coins) &&
+               (!('emeralds' in data) || data.emeralds == resource.data.emeralds) &&
+               (!('emeraldBalance' in data) || data.emeraldBalance == resource.data.emeraldBalance) &&
+               (!('emeraldsEarnedTotal' in data) || data.emeraldsEarnedTotal == resource.data.emeraldsEarnedTotal) &&
+               (!('emeraldsSpentTotal' in data) || data.emeraldsSpentTotal == resource.data.emeraldsSpentTotal) &&
+               (!('netheriteBalance' in data) || data.netheriteBalance == resource.data.netheriteBalance) &&
+               (!('points' in data) || data.points == resource.data.points)
              ));
     }
 
@@ -423,20 +431,14 @@ service cloud.firestore {
         allow read: if isOwner(userId) ||
                        isAdmin() ||
                        (get(/databases/$(database)/documents/users/$(userId)).data.drivePermissionGranted == true);
-        allow create, update: if (isOwner(userId) && hasOnlyAllowedFields([
-          'coins', 'emeralds', 'emeraldBalance', 'netheriteBalance', 'points',
-          'gamesWon', 'gamesLost', 'achievements', 'transactions', 'inventory', 'updatedAt'
-        ])) || isAdmin();
-        allow delete: if isAdmin();
+        // Only Super Admin or authorized backend can modify private balance records
+        allow write: if isAdmin();
       }
 
-      // User's own transaction ledger subcollection
+      // User's own transaction ledger subcollection (immutable audit records written only by system/admin)
       match /transactions/{transactionId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create: if (isOwner(userId) &&
-                          request.resource.data.userId == userId &&
-                          isValidTransaction(request.resource.data)) || isAdmin();
-        allow update, delete: if isAdmin();
+        allow write: if isAdmin();
       }
 
       // User's achievements subcollection
@@ -504,42 +506,25 @@ service cloud.firestore {
     // Rules: Economy & Transactions
     // ===============================================================
 
-    // Root-level transactions collection
-    // Only the owner or admin can read their own transactions.
+    // Root-level transactions collection (Audit records readable by owner, written only by Admin/System)
     match /transactions/{transactionId} {
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid || isAdmin());
-
-      allow create: if (isAuthenticated() &&
-                        request.resource.data.userId == request.auth.uid &&
-                        isValidTransaction(request.resource.data)) || isAdmin();
-
-      // Transactions are immutable audit records; updates and deletions strictly restricted to Admin
-      allow update, delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // Netherite transactions ledger
     match /netherite_transactions/{transactionId} {
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid || isAdmin());
-
-      allow create: if (isAuthenticated() &&
-                        request.resource.data.userId == request.auth.uid &&
-                        isValidTransaction(request.resource.data)) || isAdmin();
-
-      allow update, delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // Store item purchases
     match /purchases/{purchaseId} {
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid || isAdmin());
-
-      allow create: if (isAuthenticated() &&
-                        request.resource.data.userId == request.auth.uid &&
-                        isValidPurchase(request.resource.data)) || isAdmin();
-
-      allow update, delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // Ranks catalog: Publicly/Authenticated readable, modifiable only by Admin
