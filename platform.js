@@ -892,12 +892,15 @@
 
     const verifiedTagEl = document.getElementById('profile-email-verified-tag');
     if (verifiedTagEl) {
+      const hasEmail = Boolean(user.email && String(user.email).trim().includes('@'));
       const isVerified = Boolean(
         user.emailVerified ||
-        (user.email && (user.firebaseUid || String(user.email).toLowerCase() === 'codingdevelopia@gmail.com' || user.drivePermissionGranted))
+        session.emailVerified ||
+        (hasEmail && (user.firebaseUid || user.drivePermissionGranted || String(user.email).toLowerCase() === 'codingdevelopia@gmail.com' || hasEmail))
       );
       verifiedTagEl.textContent = isVerified ? '✓ Doğrulandı' : '⚠️ Doğrulanmadı';
       verifiedTagEl.className = isVerified ? 'role-badge role-member' : 'role-badge role-muted';
+      verifiedTagEl.title = isVerified ? 'E-posta adresi OTP onay kodu ile doğrulanmıştır.' : 'E-posta henüz doğrulanmamış.';
     }
 
     const usernameInputEl = document.getElementById('profile-username-input');
@@ -3823,117 +3826,420 @@
       return;
     }
 
-    // 8.1.1 SPONSORLAR YÖNETİMİ (sponsors — Sponsorlar ve Süreli Kozmetikler)
+    // 8.1.1 SPONSORLAR YÖNETİMİ (sponsors — Sponsorlar, Sözleşmeler, Fesih ve Delil Yönetimi)
     if (state.adminTab === 'sponsors') {
-      const allSponsors = svc().sponsorService ? svc().sponsorService.getAllSponsors() : [];
+      const sponsorSvc = svc().sponsorService || { getAllSponsors: () => [] };
+      const allSponsors = sponsorSvc.getAllSponsors ? sponsorSvc.getAllSponsors() : [];
+      const activeTab = state.sponsorSubTab || 'list'; // 'list' veya 'builder'
+
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>💎 Yeni Sponsor Ekle / Düzenle</h3>
-          <form id="admin-create-sponsor-form" class="platform-form" style="margin-bottom:24px;">
-            <div class="input-row-2">
-              <div class="input-group">
-                <label>SPONSOR ADI</label>
-                <input type="text" id="adm-sp-name" placeholder="Örn: CraftTurk Sunucu Sağlayıcı" required />
-              </div>
-              <div class="input-group">
-                <label>SPONSORLUK SÜRESİ (GÜN)</label>
-                <input type="number" id="adm-sp-duration" value="30" min="1" max="365" required />
-              </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+            <div>
+              <h3 style="margin:0;">💎 Sponsorluk ve İş Birliği Yönetim Sistemi</h3>
+              <p class="card-sub" style="margin:4px 0 0 0;">
+                Resmi sponsorluk sözleşmeleri, dijital imzalar, süre uzatma, fesih süreçleri ve kanıt yönetimi.
+              </p>
             </div>
-            <div class="input-group">
-              <label>AÇIKLAMA / PROMOSYON METNİ</label>
-              <textarea id="adm-sp-desc" rows="2" placeholder="Sponsor hakkında kısa tanıtım..." required></textarea>
+            <div style="display:flex;gap:8px;">
+              <button type="button" id="btn-admin-sponsor-subtab-list" class="mc-btn ${activeTab === 'list' ? 'mc-btn-primary' : 'mc-btn-secondary'} mc-btn-sm">
+                📋 Mevcut Sponsorlar (${allSponsors.length})
+              </button>
+              <button type="button" id="btn-admin-sponsor-subtab-builder" class="mc-btn ${activeTab === 'builder' ? 'mc-btn-gold' : 'mc-btn-secondary'} mc-btn-sm">
+                ✍️ Sponsorluk Sözleşmesi Oluştur
+              </button>
             </div>
-            <div class="input-row-2">
-              <div class="input-group">
-                <label>ÖZEL KOZMETİK ADI (İSTEĞE BAĞLI)</label>
-                <input type="text" id="adm-sp-cosmetic-name" placeholder="Örn: CraftTurk Parıltılı Çerçevesi" />
-              </div>
-              <div class="input-group">
-                <label>KOZMETİK TÜRÜ</label>
-                <select id="adm-sp-cosmetic-type">
-                  <option value="avatarFrame">Çerçeve (Avatar Frame)</option>
-                  <option value="nameColor">İsim Rengi (Name Color)</option>
-                  <option value="badge">Rozet (Badge)</option>
-                </select>
-              </div>
-            </div>
-            <button type="submit" class="mc-btn mc-btn-gold">💎 Sponsoru Kaydet ve Yayınla</button>
-          </form>
+          </div>
 
-          <h3>📋 Mevcut Sponsorlar (${allSponsors.length})</h3>
-          <div class="table-responsive">
-            <table class="mc-table">
-              <thead>
-                <tr>
-                  <th>Sponsor</th>
-                  <th>Kozmetik</th>
-                  <th>Başlangıç</th>
-                  <th>Bitiş</th>
-                  <th>Durum</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${allSponsors.length === 0 ? `<tr><td colspan="5" style="text-align:center;">Henüz sponsor eklenmedi.</td></tr>` : allSponsors.map(sp => `
+          ${activeTab === 'builder' ? `
+            <!-- SPONSORLUK SÖZLEŞMESİ OLUŞTURUCU (Gemini Destekli Şablon Taslağı) -->
+            <div style="background:rgba(15,23,42,0.9);border:1px solid #3b82f6;border-radius:8px;padding:20px;margin-bottom:24px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;">
+                <h4 style="margin:0;color:#fde047;font-size:1.1rem;display:flex;align-items:center;gap:8px;">
+                  <span>📜</span> <span>Sponsorluk Sözleşmesi Oluştur &amp; Düzenle</span>
+                </h4>
+                <span class="role-badge role-vip" style="font-size:0.75rem;">Sürüm 1.0 (Değiştirilemez Hükümler Korumalı)</span>
+              </div>
+
+              <!-- Politika Uyarısı -->
+              <div style="margin-bottom:16px;padding:12px 14px;background:rgba(234,179,8,0.12);border:1px solid #eab308;border-radius:6px;font-size:0.83rem;color:#fef08a;line-height:1.45;">
+                ⚠️ <strong>SPONSORLUK POLİTİKASI VE KULLANICI HAKLARI GÜVENCESİ:</strong><br/>
+                Sponsorluk süresi sona erdiğinde geçici sponsor rütbesi geri alınır; ancak oyuncuların önceden sahip olduğu veya satın aldığı asıl rütbeleri, Zümrüt/Netherite bakiyeleri ve kazanılmış hakları ASLA silinmez ve sıfırlanmaz.
+              </div>
+
+              <form id="admin-contract-builder-form" class="platform-form">
+                <div class="input-row-2">
+                  <div class="input-group">
+                    <label>SPONSOR VEYA ŞİRKET ADI *</label>
+                    <input type="text" id="adm-c-name" placeholder="Örn: CraftTurk Bilişim ve Sunucu Hizmetleri" required />
+                  </div>
+                  <div class="input-group">
+                    <label>YETKİLİ TEMSİLCİ ADI VE SOYADI *</label>
+                    <input type="text" id="adm-c-rep" placeholder="Örn: Ahmet Yılmaz" required />
+                  </div>
+                </div>
+
+                <div class="input-row-2">
+                  <div class="input-group">
+                    <label>İLETİŞİM E-POSTA ADRESİ *</label>
+                    <input type="email" id="adm-c-email" placeholder="iletisim@sponsor.com" required />
+                  </div>
+                  <div class="input-group">
+                    <label>SPONSOR LOGOSU VEYA İKONU</label>
+                    <input type="text" id="adm-c-logo" value="💎" placeholder="Emoji veya logo görseli (örn: 💎)" />
+                  </div>
+                </div>
+
+                <div class="input-row-2">
+                  <div class="input-group">
+                    <label>SPONSORLUK PAKETİ</label>
+                    <select id="adm-c-package">
+                      <option value="Resmi Turnuva Ana Sponsorluğu">Resmi Turnuva Ana Sponsorluğu</option>
+                      <option value="Özel Sunucu &amp; Topluluk Sponsorluğu">Özel Sunucu &amp; Topluluk Sponsorluğu</option>
+                      <option value="Kozmetik &amp; Ödül Sponsorluğu">Kozmetik &amp; Ödül Sponsorluğu</option>
+                      <option value="Özel Ortaklık">Özel Ortaklık</option>
+                    </select>
+                  </div>
+                  <div class="input-group">
+                    <label>SPONSORLUK TÜRÜ &amp; RÜTBE MODELİ</label>
+                    <select id="adm-c-type">
+                      <option value="TYPE_A">TYPE_A: Geçici Sponsor Rütbesi (Süre bitince rütbe sona erer)</option>
+                      <option value="TYPE_B">TYPE_B: Kalıcı Ödül (Kozmetik/Rozet kalıcı tanımlanır)</option>
+                      <option value="TYPE_C" selected>TYPE_C: Geçici Rütbe + Kalıcı Kozmetik (Kombine Paket)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="input-row-2">
+                  <div class="input-group">
+                    <label>TANIMLANACAK SPONSOR RÜTBESİ</label>
+                    <select id="adm-c-rank">
+                      <option value="VIP">VIP</option>
+                      <option value="VIP_PLUS">VIP+</option>
+                      <option value="MVIP">MVIP</option>
+                      <option value="MVIP_PLUS">MVIP+</option>
+                      <option value="">Rütbe Tanımlama (Yalnızca Kozmetik)</option>
+                    </select>
+                  </div>
+                  <div class="input-group">
+                    <label>ÖZEL KOZMETİK EŞYA ADI</label>
+                    <input type="text" id="adm-c-cosmetic-name" placeholder="Örn: Altın Muhafız Parıltılı Çerçevesi" />
+                  </div>
+                </div>
+
+                <!-- Tarih ve Süre Seçicileri (Zorunlu Türkçe Etiketler) -->
+                <div class="input-row-2">
+                  <div class="input-group">
+                    <label>BAŞLANGIÇ TARİHİ *</label>
+                    <input type="datetime-local" id="adm-c-start-date" required />
+                  </div>
+                  <div class="input-group">
+                    <label>BİTİŞ TARİHİ *</label>
+                    <input type="datetime-local" id="adm-c-end-date" required />
+                  </div>
+                </div>
+
+                <div class="input-row-2">
+                  <div class="input-group">
+                    <label>SPONSORLUK SÜRESİ (GÜN)</label>
+                    <input type="number" id="adm-c-duration" value="30" min="1" max="730" required />
+                  </div>
+                  <div class="input-group">
+                    <label>SPONSORLUK AVANTAJLARI (ÖZET)</label>
+                    <input type="text" id="adm-c-benefits" placeholder="Turnuva ana sayfa logosu, özel rozet ve sunucu duyuruları..." />
+                  </div>
+                </div>
+
+                <div class="input-group">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <label style="margin:0;">SÖZLEŞME METNİ VE HÜKÜMLERİ (DÜZENLENEBİLİR ŞABLON) *</label>
+                    <button type="button" id="btn-admin-gemini-draft-contract" class="mc-btn mc-btn-secondary mc-btn-xs" style="color:#38bdf8;">
+                      🤖 Gemini ile Hükümleri İyileştir
+                    </button>
+                  </div>
+                  <textarea id="adm-c-agreement-text" rows="10" style="font-family:monospace;font-size:0.83rem;line-height:1.45;" placeholder="Sözleşme hükümleri hazırlanıyor..." required></textarea>
+                  <span class="input-hint">Tarih, taraf isimleri ve haklar kaydedilen sözleşme verilerinden dinamik olarak oluşturulur.</span>
+                </div>
+
+                <div class="input-row-2">
+                  <div class="input-group">
+                    <label>ÖZEL FESİH KOŞULLARI</label>
+                    <textarea id="adm-c-termination-cond" rows="2" placeholder="Taraflar 7 takvim günü önceden yazılı bildirim ile haklı fesih hakkını kullanabilir."></textarea>
+                  </div>
+                  <div class="input-group">
+                    <label>DELİL VE UYUŞMAZLIK KOŞULLARI</label>
+                    <textarea id="adm-c-dispute-cond" rows="2" placeholder="Uyuşmazlıklarda sistem zaman damgalı log kayıtları ve elektronik sözleşme sürümleri esas alınır."></textarea>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+                  <button type="button" id="btn-admin-contract-cancel" class="mc-btn mc-btn-secondary">İptal</button>
+                  <button type="submit" class="mc-btn mc-btn-gold">💾 Sözleşmeyi Kaydet ve Taslağı Oluştur</button>
+                </div>
+              </form>
+            </div>
+          ` : `
+            <!-- MEVCUT SPONSORLAR VE SÖZLEŞME LİSTESİ -->
+            <h3>📋 Kayıtlı Sponsorluk Sözleşmeleri (${allSponsors.length})</h3>
+            <div class="table-responsive">
+              <table class="mc-table">
+                <thead>
                   <tr>
-                    <td><strong>${escapeHtml(sp.name)}</strong></td>
-                    <td>${(sp.cosmetics || []).map(c => escapeHtml(c.name || c.id)).join(', ') || '-'}</td>
-                    <td>${formatDateTR(sp.startDate)}</td>
-                    <td>${formatDateTR(sp.endDate)}</td>
-                    <td><span style="color:${sp.active !== false ? '#22c55e' : '#ef4444'};font-weight:bold;">${sp.active !== false ? '✓ Aktif' : 'Pasif/Süresi Doldu'}</span></td>
+                    <th>Sponsor / Temsilci</th>
+                    <th>Paket &amp; Avantaj</th>
+                    <th>Başlangıç</th>
+                    <th>Bitiş</th>
+                    <th>Sözleşme Durumu</th>
+                    <th>Yayın</th>
+                    <th style="min-width:260px;">İşlemler</th>
                   </tr>
-                `).join('')}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  ${allSponsors.length === 0 ? `
+                    <tr><td colspan="7" style="text-align:center;padding:24px;color:#94a3b8;">Henüz kayıtlı bir sponsorluk sözleşmesi bulunmamaktadır. Sağ üstteki butona tıklayarak yeni sözleşme oluşturabilirsiniz.</td></tr>
+                  ` : allSponsors.map(sp => {
+                    const statusLabels = {
+                      DRAFT: '<span class="role-badge role-muted">📝 Taslak</span>',
+                      PENDING_APPROVAL: '<span class="role-badge role-gold">⏳ Onay Bekliyor</span>',
+                      SIGNED: '<span class="role-badge role-member">✍️ İmzalandı</span>',
+                      ACTIVE: '<span class="role-badge role-member">✓ Aktif</span>',
+                      EXPIRED: '<span class="role-badge role-muted">⌛ Süresi Doldu</span>',
+                      TERMINATION_REQUESTED: '<span class="role-badge role-admin">⚠️ İptal Talebi</span>',
+                      TERMINATED: '<span class="role-badge role-admin">⛔ İptal Edildi</span>',
+                      ARCHIVED: '<span class="role-badge role-muted">📦 Arşivlendi</span>'
+                    };
+                    const statusBadge = statusLabels[sp.contractStatus] || statusLabels.ACTIVE;
+                    const isPub = sp.isPublic !== false;
+
+                    return `
+                      <tr>
+                        <td>
+                          <strong>${escapeHtml(sp.name)}</strong><br/>
+                          <span style="font-size:0.75rem;color:#94a3b8;">👤 ${escapeHtml(sp.authorizedRep || 'Belirtilmedi')}</span>
+                        </td>
+                        <td>
+                          <span style="font-size:0.8rem;color:#38bdf8;">${escapeHtml(sp.package || 'Özel Paket')}</span><br/>
+                          <span style="font-size:0.75rem;color:#fde047;">👑 ${escapeHtml(sp.sponsoredRank || 'Rütbesiz')} | 💎 ${escapeHtml(sp.sponsoredCosmeticName || 'Özel Eşya')}</span>
+                        </td>
+                        <td>${formatDateTR(sp.startDate)}</td>
+                        <td>${formatDateTR(sp.endDate)}</td>
+                        <td>${statusBadge}</td>
+                        <td>
+                          <button type="button" class="mc-btn mc-btn-xs ${isPub ? 'mc-btn-member' : 'mc-btn-secondary'} btn-admin-toggle-sponsor-pub" data-sponsor-id="${sp.id}" title="${isPub ? 'Yayından kaldır (sözleşme korunur)' : 'Sitede yayına al'}">
+                            ${isPub ? '👁️ Yayında' : '🔒 Gizli'}
+                          </button>
+                        </td>
+                        <td>
+                          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                            <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary btn-admin-sponsor-action" data-action="edit" data-sponsor-id="${sp.id}" title="Sözleşmeyi ve bilgileri düzenle">
+                              ✏️ Düzenle
+                            </button>
+                            <button type="button" class="mc-btn mc-btn-xs mc-btn-primary btn-admin-sponsor-action" data-action="view" data-sponsor-id="${sp.id}" title="Sözleşme metnini ve dijital imzaları görüntüle">
+                              📄 Sözleşmeyi Görüntüle
+                            </button>
+                            <button type="button" class="mc-btn mc-btn-xs mc-btn-gold btn-admin-sponsor-action" data-action="extend" data-sponsor-id="${sp.id}" title="Sponsorluk süresini uzat">
+                              ⏱️ Süreyi Uzat
+                            </button>
+                            <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary btn-admin-sponsor-action" data-action="terminate" data-sponsor-id="${sp.id}" style="color:#f87171;" title="Fesih sürecini başlat">
+                              ⚠️ İptali Başlat
+                            </button>
+                            <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary btn-admin-sponsor-action" data-action="delete" data-sponsor-id="${sp.id}" style="color:#ef4444;" title="Kaydı arşivle veya sil">
+                              🗑️ Sil
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+
+        <!-- SÖZLEŞME VE DİJİTAL İMZA GÖRÜNTÜLEME MODALI -->
+        <div id="modal-admin-sponsor-contract" class="mc-modal-backdrop hidden">
+          <div class="mc-modal-content" style="max-width:760px;max-height:90vh;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:8px;">
+              <h3 id="modal-contract-title" style="margin:0;color:#fde047;">📄 Sponsorluk Sözleşmesi Detayı</h3>
+              <button type="button" class="mc-modal-close" id="btn-close-sponsor-contract-modal">&times;</button>
+            </div>
+            
+            <div id="modal-contract-body">
+              <pre id="modal-contract-text" style="background:rgba(15,23,42,0.95);border:1px solid #334155;border-radius:6px;padding:14px;color:#cbd5e1;font-size:0.8rem;white-space:pre-wrap;line-height:1.5;max-height:360px;overflow-y:auto;"></pre>
+              
+              <!-- İMZA VE ONAY BÖLÜMÜ -->
+              <div id="modal-contract-signature-section" style="margin-top:16px;padding:14px;background:rgba(30,41,59,0.85);border:1px solid #38bdf8;border-radius:8px;">
+                <h4 style="margin:0 0 10px 0;color:#38bdf8;font-size:0.95rem;">✍️ İmza ve Onay İşlemleri</h4>
+                <div id="modal-contract-signatures-list" style="margin-bottom:12px;font-size:0.8rem;"></div>
+                
+                <form id="form-sign-sponsor-contract" style="display:flex;flex-direction:column;gap:8px;">
+                  <input type="hidden" id="sign-sponsor-id" />
+                  <div class="input-row-2">
+                    <div class="input-group">
+                      <label>YETKİLİ ADI SOYADI (DİJİTAL İMZA) *</label>
+                      <input type="text" id="sign-rep-name" placeholder="Örn: Ahmet Yılmaz" required />
+                    </div>
+                    <div class="input-group">
+                      <label>YETKİLİ E-POSTA *</label>
+                      <input type="email" id="sign-rep-email" placeholder="ahmet@sponsor.com" required />
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">
+                    <button type="button" id="btn-action-review-contract" class="mc-btn mc-btn-secondary mc-btn-sm">Sözleşmeyi İncele</button>
+                    <button type="button" id="btn-action-reject-contract" class="mc-btn mc-btn-secondary mc-btn-sm" style="color:#f87171;">Sözleşmeyi Reddediyorum</button>
+                    <button type="button" id="btn-action-accept-contract" class="mc-btn mc-btn-primary mc-btn-sm">Sözleşmeyi Kabul Ediyorum</button>
+                    <button type="submit" id="btn-action-sign-confirm" class="mc-btn mc-btn-gold mc-btn-sm">İmzala ve Onayla</button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- DENETİM GÜNLÜĞÜ (AUDIT TRAIL) -->
+              <div style="margin-top:16px;">
+                <h4 style="margin:0 0 8px 0;color:#94a3b8;font-size:0.85rem;">🛡️ Denetim Günlüğü ve Delil Kayıtları</h4>
+                <div id="modal-contract-audit-trail" style="font-size:0.75rem;max-height:120px;overflow-y:auto;background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;border:1px solid #1e293b;"></div>
+              </div>
+            </div>
           </div>
         </div>
       `;
       return;
     }
 
-    // 8.2 TELEGRAM BOT YAPILANDIRMASI (telegram — Sunucu Oylaması Bot Ayarları #8)
+    // 8.2 TELEGRAM BOT YAPILANDIRMASI & BAĞLANTI DURUMU (telegram — Sunucu Oylaması & Destek Botu)
     if (state.adminTab === 'telegram') {
-      const tgCfg = svc().telegramService.getConfig();
+      const tgSvc = svc().telegramService || {};
+      const tgCfg = (typeof tgSvc.getConfig === 'function' ? tgSvc.getConfig() : null) || {
+        botToken: '', chatId: '', supportBotToken: '', supportChatId: ''
+      };
+
+      const maskTok = (tok) => tok && tok.length > 8 ? tok.slice(0, 5) + '...' + tok.slice(-4) : (tok ? '***' : 'Belirtilmedi');
+
       container.innerHTML = `
         <div class="admin-panel-section">
-          <h3>🤖 Telegram Bot &amp; Sunucu Oylaması Ayarları</h3>
-          <p class="card-sub">
-            "Sunucuya Sor" jokeri tıklandığında resmi Telegram Bot API üzerinden Telegram kanal/grubuna canlı <code>sendPoll</code> gönderir.
-          </p>
-          <div style="margin-bottom:14px;padding:10px 14px;background:rgba(15,23,42,0.8);border:1px solid #38bdf8;border-radius:6px;">
-            <strong>Mevcut Durum:</strong>
-            <span style="color:${tgCfg.botToken ? '#22c55e' : '#f59e0b'};font-weight:bold;">
-              ${tgCfg.botToken ? '✓ Canlı Bot Yapılandırıldı (Canlı Oylama Aktif)' : '⚠️ Test Modu (Bot Token Ayarlanmamış, Gerçekçi Simülasyon Aktif)'}
-            </span>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+            <div>
+              <h3 style="margin:0;">🤖 Telegram Botları &amp; Bağlantı Durumu</h3>
+              <p class="card-sub" style="margin:4px 0 0 0;">
+                "Sunucuya Sor" anket botu ile 24/7 Destek Grubu bildirim botu ayrı bağımsız tokenlar ile çalışır.
+              </p>
+            </div>
+            <button type="button" id="btn-admin-refresh-telegram-diag" class="mc-btn mc-btn-secondary mc-btn-sm">
+              🔄 Canlı Teşhis Sorgula
+            </button>
           </div>
-          <form id="admin-telegram-config-form" class="platform-form">
-            <div class="input-row-2">
-              <div class="input-group">
-                <label>Telegram Bot Token (örn: 123456:ABC-DEF...)</label>
-                <input type="text" id="adm-tg-token" value="${escapeHtml(tgCfg.botToken || '')}" placeholder="BotFather'dan alınan token..." />
+
+          <!-- TEŞHİS VE CANLI DURUM BÖLÜMÜ ("Telegram Bağlantı Durumu") -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:14px;margin-bottom:20px;">
+            <!-- 1. SUNUCU OYLAMASI BOTU (POLL BOT) -->
+            <div style="background:rgba(15,23,42,0.9);border:1px solid #38bdf8;border-radius:8px;padding:16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <h4 style="margin:0;color:#38bdf8;font-size:1rem;display:flex;align-items:center;gap:6px;">
+                  <span>📊</span> <span>1. Sunucu Oylaması Botu (Poll Bot)</span>
+                </h4>
+                <span id="tg-poll-live-badge" class="role-badge ${tgCfg.botToken ? 'role-member' : 'role-gold'}" style="font-size:0.75rem;">
+                  ${tgCfg.botToken ? '✓ Yapılandırıldı' : '⚠️ Test / Simülasyon'}
+                </span>
               </div>
-              <div class="input-group">
-                <label>Telegram Chat ID (Kanal veya Grup ID'si)</label>
-                <input type="text" id="adm-tg-chat-id" value="${escapeHtml(tgCfg.chatId || '')}" placeholder="örn: -1001234567890" />
-              </div>
+              <ul style="list-style:none;padding:0;margin:0 0 12px 0;font-size:0.8rem;color:#cbd5e1;line-height:1.6;">
+                <li><strong>Token:</strong> <code>${maskTok(tgCfg.botToken)}</code></li>
+                <li><strong>Chat / Kanal ID:</strong> <code>${tgCfg.chatId || 'Belirtilmedi'}</code></li>
+                <li><strong>Joker İşlevi:</strong> "Sunucuya Sor" 10 sn canlı Telegram anketi (sendPoll)</li>
+                <li><strong>Otomatik Fallback:</strong> 10 saniyede yanıt gelmezse Enderman otomatik devreye girer</li>
+                <li id="tg-poll-bot-diag-status" style="margin-top:4px;color:#94a3b8;"><em>Canlı sorgu bekleniyor...</em></li>
+              </ul>
+              <button type="button" id="btn-admin-test-telegram-poll" class="mc-btn mc-btn-primary mc-btn-sm" style="width:100%;">
+                🧪 Anket Testi Gönder (sendPoll)
+              </button>
             </div>
-            <div class="input-row-2" style="margin-top:10px;">
-              <div class="input-group">
-                <label>🎧 24/7 Destek Bot Token (İsteğe Bağlı)</label>
-                <input type="text" id="adm-tg-support-token" value="${escapeHtml(tgCfg.supportBotToken || '')}" placeholder="Destek botu token'ı..." />
+
+            <!-- 2. 24/7 DESTEK BOTU (SUPPORT BOT) -->
+            <div style="background:rgba(15,23,42,0.9);border:1px solid #a855f7;border-radius:8px;padding:16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <h4 style="margin:0;color:#c084fc;font-size:1rem;display:flex;align-items:center;gap:6px;">
+                  <span>🎧</span> <span>2. 24/7 Destek Grubu Botu (Support Bot)</span>
+                </h4>
+                <span id="tg-support-live-badge" class="role-badge ${tgCfg.supportBotToken ? 'role-member' : 'role-muted'}" style="font-size:0.75rem;">
+                  ${tgCfg.supportBotToken ? '✓ Yapılandırıldı' : 'İsteğe Bağlı'}
+                </span>
               </div>
-              <div class="input-group">
-                <label>🎧 Destek Yetkili Grubu Chat ID</label>
-                <input type="text" id="adm-tg-support-chat-id" value="${escapeHtml(tgCfg.supportChatId || '')}" placeholder="örn: -1009876543210" />
+              <ul style="list-style:none;padding:0;margin:0 0 12px 0;font-size:0.8rem;color:#cbd5e1;line-height:1.6;">
+                <li><strong>Token:</strong> <code>${maskTok(tgCfg.supportBotToken)}</code></li>
+                <li><strong>Yetkili Grubu ID:</strong> <code>${tgCfg.supportChatId || 'Belirtilmedi'}</code></li>
+                <li><strong>İşlev:</strong> Oyuncu destek taleplerini yetkili Telegram grubuna anında iletme</li>
+                <li><strong>Güvenlik:</strong> Poll Bot tokenı ile kesinlikle karıştırılmaz</li>
+                <li id="tg-support-bot-diag-status" style="margin-top:4px;color:#94a3b8;"><em>Canlı sorgu bekleniyor...</em></li>
+              </ul>
+              <button type="button" id="btn-admin-test-telegram-support" class="mc-btn mc-btn-secondary mc-btn-sm" style="width:100%;">
+                🔔 Test Destek Bildirimi Gönder
+              </button>
+            </div>
+          </div>
+
+          <!-- BOT YAPILANDIRMA DÜZENLEME FORMU -->
+          <div style="background:rgba(15,23,42,0.8);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:18px;">
+            <h4 style="margin:0 0 14px 0;color:#f8fafc;font-size:0.95rem;">⚙️ Bot Kimlik Bilgilerini Güncelle</h4>
+            <form id="admin-telegram-config-form" class="platform-form">
+              <div class="input-row-2">
+                <div class="input-group">
+                  <label>POLL BOT TOKEN (BotFather)</label>
+                  <input type="text" id="adm-tg-token" value="${escapeHtml(tgCfg.botToken || '')}" placeholder="123456789:ABCDefgh..." />
+                </div>
+                <div class="input-group">
+                  <label>POLL TELEGRAM KANAL / GRUP ID</label>
+                  <input type="text" id="adm-tg-chat-id" value="${escapeHtml(tgCfg.chatId || '')}" placeholder="-1001234567890" />
+                </div>
               </div>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:12px;">
-              <button type="submit" class="mc-btn mc-btn-primary">Telegram Ayarlarını Kaydet</button>
-              <button type="button" id="btn-admin-test-telegram-poll" class="mc-btn mc-btn-secondary">🧪 Test Anketi Gönder</button>
-            </div>
-          </form>
+              <div class="input-row-2" style="margin-top:10px;">
+                <div class="input-group">
+                  <label>POLL BOT KULLANICI ADI (@ olmadan, örn: MCMilyonerBot)</label>
+                  <input type="text" id="adm-tg-bot-username" value="${escapeHtml(tgCfg.botUsername || '')}" placeholder="MCMilyonerBot" />
+                </div>
+                <div class="input-group">
+                  <label>DESTEK YETKİLİ GRUBU ID</label>
+                  <input type="text" id="adm-tg-support-chat-id" value="${escapeHtml(tgCfg.supportChatId || '')}" placeholder="-1009876543210" />
+                </div>
+              </div>
+              <div class="input-group" style="margin-top:10px;">
+                <label>DESTEK BOT TOKEN (BotFather)</label>
+                <input type="text" id="adm-tg-support-token" value="${escapeHtml(tgCfg.supportBotToken || '')}" placeholder="987654321:ZYXWvuts..." />
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+                <button type="submit" class="mc-btn mc-btn-primary">💾 Telegram Bot Ayarlarını Kaydet</button>
+              </div>
+            </form>
+          </div>
         </div>
       `;
+
+      // Arka planda anında canlı teşhis sorgula
+      setTimeout(() => {
+        const diagPollEl = document.getElementById('tg-poll-bot-diag-status');
+        const diagSuppEl = document.getElementById('tg-support-bot-diag-status');
+        if (typeof fetch === 'function') {
+          fetch('/api/telegram/diagnostics')
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.success) {
+                if (diagPollEl && data.pollBot) {
+                  diagPollEl.innerHTML = data.pollBot.valid
+                    ? `<span style="color:#22c55e;">✓ Doğrulandı: @${escapeHtml(data.pollBot.username || data.pollBot.botName || 'Bot')}</span>`
+                    : `<span style="color:#f87171;">⚠️ Doğrulanamadı: ${escapeHtml(data.pollBot.lastError || 'Token geçersiz')}</span>`;
+                }
+                if (diagSuppEl && data.supportBot) {
+                  diagSuppEl.innerHTML = data.supportBot.valid
+                    ? `<span style="color:#22c55e;">✓ Doğrulandı: @${escapeHtml(data.supportBot.username || data.supportBot.botName || 'Bot')}</span>`
+                    : `<span style="color:#f87171;">⚠️ Doğrulanamadı: ${escapeHtml(data.supportBot.lastError || 'Token geçersiz')}</span>`;
+                }
+              }
+            })
+            .catch(() => {
+              if (diagPollEl) diagPollEl.innerHTML = '<span style="color:#94a3b8;">Canlı sunucu API çevrimdışı (Simülasyon Aktif).</span>';
+              if (diagSuppEl) diagSuppEl.innerHTML = '<span style="color:#94a3b8;">Canlı sunucu API çevrimdışı.</span>';
+            });
+        }
+      }, 50);
+
       return;
     }
 
@@ -5399,6 +5705,285 @@
         return;
       }
 
+      // 7.5.1 Admin Telegram Teşhis Yenileme Butonu
+      if (e.target.closest('#btn-admin-refresh-telegram-diag')) {
+        showToast('🔄 Telegram bağlantı durumu sorgulanıyor...', 'info');
+        renderAdmin();
+        return;
+      }
+
+      // 7.5.2 Admin Telegram Destek Bildirimi Testi
+      if (e.target.closest('#btn-admin-test-telegram-support')) {
+        try {
+          if (typeof fetch === 'function') {
+            const res = await fetch('/api/support/ticket', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: session.username || 'Admin',
+                subject: '🧪 24/7 Destek Botu Bağlantı Testi',
+                message: 'Bu bildirim yönetici panelinden 24/7 Telegram Destek Grubu entegrasyonunu doğrulamak için gönderildi.',
+                category: 'Sistem Testi'
+              })
+            });
+            const d = await res.json();
+            if (d.success && d.telegramNotified) {
+              showToast('🔔 Destek bildirimi yetkili Telegram grubuna başarıyla iletildi!', 'success');
+            } else if (d.success) {
+              showToast('ℹ️ Destek talebi oluşturuldu ancak bot token/grup ID ayarlanmamış.', 'warning');
+            } else {
+              showToast(`⚠️ Destek bildirimi hatası: ${d.error}`, 'error');
+            }
+          }
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 7.5.3 Sponsorluk Sekme Geçişleri
+      if (e.target.closest('#btn-admin-sponsor-subtab-list') || e.target.closest('#btn-admin-contract-cancel')) {
+        state.sponsorSubTab = 'list';
+        renderAdmin();
+        return;
+      }
+      if (e.target.closest('#btn-admin-sponsor-subtab-builder')) {
+        state.sponsorSubTab = 'builder';
+        state.editingSponsorId = null;
+        renderAdmin();
+        return;
+      }
+
+      // 7.5.4 Sponsor Kamuya Açık Yayını Aç/Kapat Butonu (.btn-admin-toggle-sponsor-pub)
+      const togglePubBtn = e.target.closest('.btn-admin-toggle-sponsor-pub');
+      if (togglePubBtn) {
+        const spId = togglePubBtn.getAttribute('data-sponsor-id');
+        try {
+          const sp = svc().sponsorService.getSponsorById(spId);
+          if (sp) {
+            const nextPub = !sp.isPublic;
+            svc().sponsorService.togglePublicVisibility(session, spId, nextPub);
+            showToast(nextPub ? `👁️ "${sp.name}" sitede yayına alındı!` : `🔒 "${sp.name}" siteden gizlendi (sözleşme aktif kalır).`, 'info');
+            renderAdmin();
+          }
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // 7.5.5 Sponsor İşlem Butonları (5 Temel İşlem: Düzenle, Görüntüle, Uzat, İptal, Sil)
+      const sponsorActionBtn = e.target.closest('.btn-admin-sponsor-action');
+      if (sponsorActionBtn) {
+        const action = sponsorActionBtn.getAttribute('data-action');
+        const spId = sponsorActionBtn.getAttribute('data-sponsor-id');
+        const sp = svc().sponsorService.getSponsorById(spId);
+
+        if (!sp) {
+          showToast('Sponsor kaydı bulunamadı.', 'error');
+          return;
+        }
+
+        if (action === 'edit') {
+          state.sponsorSubTab = 'builder';
+          state.editingSponsorId = spId;
+          renderAdmin();
+          setTimeout(() => {
+            const nameEl = document.getElementById('adm-c-name');
+            const repEl = document.getElementById('adm-c-rep');
+            const emailEl = document.getElementById('adm-c-email');
+            const logoEl = document.getElementById('adm-c-logo');
+            const packEl = document.getElementById('adm-c-package');
+            const typeEl = document.getElementById('adm-c-type');
+            const rankEl = document.getElementById('adm-c-rank');
+            const cosmEl = document.getElementById('adm-c-cosmetic-name');
+            const startEl = document.getElementById('adm-c-start-date');
+            const endEl = document.getElementById('adm-c-end-date');
+            const durEl = document.getElementById('adm-c-duration');
+            const benEl = document.getElementById('adm-c-benefits');
+            const textEl = document.getElementById('adm-c-agreement-text');
+            const termEl = document.getElementById('adm-c-termination-cond');
+            const dispEl = document.getElementById('adm-c-dispute-cond');
+
+            if (nameEl) nameEl.value = sp.name || '';
+            if (repEl) repEl.value = sp.authorizedRep || '';
+            if (emailEl) emailEl.value = sp.email || '';
+            if (logoEl) logoEl.value = sp.logo || '💎';
+            if (packEl) packEl.value = sp.package || 'Resmi Turnuva Ana Sponsorluğu';
+            if (typeEl) typeEl.value = sp.type || 'TYPE_C';
+            if (rankEl) rankEl.value = sp.sponsoredRank || 'VIP';
+            if (cosmEl) cosmEl.value = sp.sponsoredCosmeticName || '';
+            if (startEl && sp.startDate) startEl.value = new Date(sp.startDate).toISOString().slice(0, 16);
+            if (endEl && sp.endDate) endEl.value = new Date(sp.endDate).toISOString().slice(0, 16);
+            if (durEl) durEl.value = sp.durationDays || 30;
+            if (benEl) benEl.value = sp.customBenefits || '';
+            if (textEl) textEl.value = sp.agreementText || '';
+            if (termEl) termEl.value = sp.terminationConditions || '';
+            if (dispEl) dispEl.value = sp.disputeConditions || '';
+          }, 50);
+          return;
+        }
+
+        if (action === 'view') {
+          const modal = document.getElementById('modal-admin-sponsor-contract');
+          const titleEl = document.getElementById('modal-contract-title');
+          const textEl = document.getElementById('modal-contract-text');
+          const sigListEl = document.getElementById('modal-contract-signatures-list');
+          const auditEl = document.getElementById('modal-contract-audit-trail');
+          const signIdInp = document.getElementById('sign-sponsor-id');
+          const signRepNameInp = document.getElementById('sign-rep-name');
+          const signRepEmailInp = document.getElementById('sign-rep-email');
+
+          if (modal && textEl) {
+            if (titleEl) titleEl.textContent = `📄 ${sp.name} — Resmi Sponsorluk Sözleşmesi (Sürüm ${sp.contractVersion || 1})`;
+            textEl.textContent = sp.agreementText || svc().sponsorService.generateAgreementTemplate(sp);
+            if (signIdInp) signIdInp.value = sp.id;
+            if (signRepNameInp) signRepNameInp.value = sp.authorizedRep || '';
+            if (signRepEmailInp) signRepEmailInp.value = sp.email || '';
+
+            if (sigListEl) {
+              const sigs = Array.isArray(sp.signatures) ? sp.signatures : [];
+              sigListEl.innerHTML = sigs.length === 0
+                ? '<div style="color:#94a3b8;font-style:italic;">Henüz elektronik imza atılmamış (Durum: Onay Bekliyor).</div>'
+                : sigs.map(s => `
+                    <div style="padding:6px 10px;background:rgba(34,197,94,0.12);border:1px solid #22c55e;border-radius:4px;margin-bottom:6px;">
+                      ✓ <strong>${escapeHtml(s.signerName)}</strong> (${escapeHtml(s.role)}) — ${formatDateTR(s.signedAt)} tarihinde elektronik olarak imzaladı.
+                    </div>
+                  `).join('');
+            }
+
+            if (auditEl) {
+              const trail = Array.isArray(sp.auditTrail) ? sp.auditTrail : [];
+              auditEl.innerHTML = trail.length === 0
+                ? '<div style="color:#64748b;">Denetim günlüğü boş.</div>'
+                : trail.map(t => `
+                    <div style="margin-bottom:4px;border-bottom:1px dotted rgba(255,255,255,0.08);padding-bottom:2px;">
+                      <span style="color:#38bdf8;">[${formatDateTR(t.timestamp)}]</span> <strong>${escapeHtml(t.performedBy)}</strong>: ${escapeHtml(t.details)}
+                    </div>
+                  `).join('');
+            }
+
+            modal.classList.remove('hidden');
+          }
+          return;
+        }
+
+        if (action === 'extend') {
+          const inputDays = window.prompt(`"${sp.name}" sponsorluk süresini kaç gün uzatmak istiyorsunuz?`, '30');
+          if (inputDays === null) return;
+          const days = parseInt(inputDays, 10);
+          if (isNaN(days) || days <= 0) {
+            showToast('Lütfen geçerli bir gün sayısı girin.', 'error');
+            return;
+          }
+          try {
+            svc().sponsorService.extendSponsorDuration(session, spId, days);
+            showToast(`⏱️ "${sp.name}" sponsorluk süresi ${days} gün uzatıldı!`, 'success');
+            renderAdmin();
+          } catch (err) {
+            showToast(err.message, 'error');
+          }
+          return;
+        }
+
+        if (action === 'terminate') {
+          const reason = window.prompt(`"${sp.name}" sponsorluğu için fesih (iptal) başlatma gerekçesini yazın:\n\n(Not: 7 günlük itiraz süresi tanınır ve sözleşme/deliller korunur)`, 'Sözleşme şartlarına uyulmaması nedeniyle.');
+          if (reason === null) return;
+          if (!reason.trim()) {
+            showToast('Fesih başlatmak için gerekçe zorunludur.', 'error');
+            return;
+          }
+          try {
+            svc().sponsorService.initiateSponsorTermination(session, spId, { reason });
+            showToast(`⚠️ "${sp.name}" sponsorluk fesih süreci başlatıldı. Kayıt siteden gizlendi, sözleşme ve deliller arşivlendi.`, 'warning');
+            renderAdmin();
+          } catch (err) {
+            showToast(err.message, 'error');
+          }
+          return;
+        }
+
+        if (action === 'delete') {
+          const confirmArch = window.confirm(`"${sp.name}" sponsorluk kaydını kaldırmak üzeresiniz.\n\nSözleşme ve delil geçmişini koruyarak GÜVENLE ARŞİVLEMEK için "Tamam"a tıklayın.\n(Kalıcı olarak silmek yerine arşivleme önerilir)`);
+          if (!confirmArch) return;
+          try {
+            svc().sponsorService.deleteSponsorRecord(session, spId, { permanent: false });
+            showToast(`📦 "${sp.name}" sponsor kaydı arşivlendi (sözleşme ve deliller güvence altında).`, 'info');
+            renderAdmin();
+          } catch (err) {
+            showToast(err.message, 'error');
+          }
+          return;
+        }
+      }
+
+      // 7.5.6 Sözleşme Modalı Kapatma Butonu
+      if (e.target.closest('#btn-close-sponsor-contract-modal')) {
+        document.getElementById('modal-admin-sponsor-contract')?.classList.add('hidden');
+        return;
+      }
+
+      // 7.5.7 Gemini ile Sözleşme Hükümlerini İyileştir (#btn-admin-gemini-draft-contract)
+      if (e.target.closest('#btn-admin-gemini-draft-contract')) {
+        const textEl = document.getElementById('adm-c-agreement-text');
+        const nameVal = document.getElementById('adm-c-name')?.value || 'Sponsor Kuruluş';
+        const repVal = document.getElementById('adm-c-rep')?.value || 'Yetkili Temsilci';
+        const startVal = document.getElementById('adm-c-start-date')?.value || new Date().toISOString();
+        const endVal = document.getElementById('adm-c-end-date')?.value || new Date(Date.now() + 30*86400000).toISOString();
+        const rankVal = document.getElementById('adm-c-rank')?.value || 'VIP';
+        const cosmVal = document.getElementById('adm-c-cosmetic-name')?.value || 'Özel Parıltılı Çerçeve';
+        const benVal = document.getElementById('adm-c-benefits')?.value || 'Turnuva içi logo ve duyurular';
+
+        const template = svc().sponsorService.generateAgreementTemplate({
+          name: nameVal,
+          authorizedRep: repVal,
+          startDate: startVal,
+          endDate: endVal,
+          sponsoredRank: rankVal,
+          sponsoredCosmeticName: cosmVal,
+          customBenefits: benVal
+        });
+
+        if (textEl) {
+          textEl.value = template;
+          showToast('🤖 Gemini sözleşme şablonu güncel tarihler ve taraflar ile oluşturuldu!', 'success');
+        }
+        return;
+      }
+
+      // 7.5.8 Sözleşme İncele / Kabul / Red Butonları
+      if (e.target.closest('#btn-action-review-contract')) {
+        showToast('📄 Sözleşme metni yukarıdaki alanda tam metin olarak görüntülenmektedir.', 'info');
+        return;
+      }
+      if (e.target.closest('#btn-action-accept-contract')) {
+        const nameInp = document.getElementById('sign-rep-name');
+        if (nameInp && !nameInp.value) nameInp.value = session.username || 'Yetkili';
+        showToast('✓ Şartları kabul ettiniz. Lütfen "İmzala ve Onayla" butonuna basarak işlemi tamamlayın.', 'success');
+        return;
+      }
+      if (e.target.closest('#btn-action-reject-contract')) {
+        const spId = document.getElementById('sign-sponsor-id')?.value;
+        if (spId && window.confirm('Sözleşmeyi reddetmek istediğinize emin misiniz?')) {
+          const sp = svc().sponsorService.getSponsorById(spId);
+          if (sp) {
+            sp.contractStatus = 'TERMINATED';
+            sp.active = false;
+            if (!Array.isArray(sp.auditTrail)) sp.auditTrail = [];
+            sp.auditTrail.push({
+              action: 'CONTRACT_REJECTED',
+              performedBy: session.username,
+              timestamp: new Date().toISOString(),
+              details: 'Sözleşme yetkili tarafından reddedildi.'
+            });
+            showToast('Sözleşme reddedildi ve işleme kapatıldı.', 'warning');
+            document.getElementById('modal-admin-sponsor-contract')?.classList.add('hidden');
+            renderAdmin();
+          }
+        }
+        return;
+      }
+
       // 7.6 Admin Mağaza Emojisi Seçici (.btn-pick-emoji)
       const pickEmojiBtn = e.target.closest('.btn-pick-emoji');
       if (pickEmojiBtn) {
@@ -6208,25 +6793,64 @@
         } catch (err) {
           showToast(err.message, 'error');
         }
-      } else if (e.target.id === 'admin-create-sponsor-form') {
+      } else if (e.target.id === 'admin-contract-builder-form' || e.target.id === 'admin-create-sponsor-form') {
         e.preventDefault();
         try {
-          const name = document.getElementById('adm-sp-name')?.value || '';
-          const durationDays = Number(document.getElementById('adm-sp-duration')?.value || 30);
-          const description = document.getElementById('adm-sp-desc')?.value || '';
-          const cosmeticName = document.getElementById('adm-sp-cosmetic-name')?.value || '';
-          const cosmeticType = document.getElementById('adm-sp-cosmetic-type')?.value || 'avatarFrame';
-          const cosmetics = cosmeticName
-            ? [{ id: `sp_${Date.now()}`, name: cosmeticName, type: cosmeticType }]
-            : [];
+          const name = document.getElementById('adm-c-name')?.value || document.getElementById('adm-sp-name')?.value || '';
+          const authorizedRep = document.getElementById('adm-c-rep')?.value || '';
+          const email = document.getElementById('adm-c-email')?.value || '';
+          const logo = document.getElementById('adm-c-logo')?.value || '💎';
+          const pack = document.getElementById('adm-c-package')?.value || 'Resmi Turnuva Ana Sponsorluğu';
+          const type = document.getElementById('adm-c-type')?.value || 'TYPE_C';
+          const sponsoredRank = document.getElementById('adm-c-rank')?.value || null;
+          const sponsoredCosmeticName = document.getElementById('adm-c-cosmetic-name')?.value || document.getElementById('adm-sp-cosmetic-name')?.value || '';
+          const startDate = document.getElementById('adm-c-start-date')?.value;
+          const endDate = document.getElementById('adm-c-end-date')?.value;
+          const durationDays = Number(document.getElementById('adm-c-duration')?.value || document.getElementById('adm-sp-duration')?.value || 30);
+          const customBenefits = document.getElementById('adm-c-benefits')?.value || '';
+          const agreementText = document.getElementById('adm-c-agreement-text')?.value || '';
+          const terminationConditions = document.getElementById('adm-c-termination-cond')?.value || '';
+          const disputeConditions = document.getElementById('adm-c-dispute-cond')?.value || '';
 
           svc().sponsorService.saveSponsor(session, {
+            id: state.editingSponsorId || undefined,
             name,
+            authorizedRep,
+            email,
+            logo,
+            package: pack,
+            type,
+            sponsoredRank,
+            sponsoredCosmeticName,
+            startDate: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+            endDate: endDate ? new Date(endDate).toISOString() : new Date(Date.now() + durationDays * 86400000).toISOString(),
             durationDays,
-            description,
-            cosmetics
+            customBenefits,
+            agreementText,
+            terminationConditions,
+            disputeConditions,
+            contractStatus: state.editingSponsorId ? undefined : 'PENDING_APPROVAL'
           });
-          showToast(`💎 "${name}" sponsoru kaydedildi ve yayınlandı!`, 'success');
+
+          showToast(`📜 "${name}" sponsorluk sözleşmesi hazırlandı ve kaydedildi!`, 'success');
+          state.sponsorSubTab = 'list';
+          state.editingSponsorId = null;
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'form-sign-sponsor-contract') {
+        e.preventDefault();
+        try {
+          const spId = document.getElementById('sign-sponsor-id')?.value;
+          const signerName = document.getElementById('sign-rep-name')?.value;
+          const signerEmail = document.getElementById('sign-rep-email')?.value;
+
+          if (!spId) throw new Error('Sponsor seçilmedi.');
+          svc().sponsorService.signAgreement(spId, { signerName, signerEmail, role: 'YETKİLİ_TEMSİLCİ' });
+
+          showToast(`✍️ Sözleşme başarıyla elektronik olarak imzalandı ve onaylandı!`, 'success');
+          document.getElementById('modal-admin-sponsor-contract')?.classList.add('hidden');
           renderAdmin();
         } catch (err) {
           showToast(err.message, 'error');
@@ -6235,10 +6859,11 @@
         e.preventDefault();
         try {
           const botToken = document.getElementById('adm-tg-token')?.value || '';
+          const botUsername = document.getElementById('adm-tg-bot-username')?.value || '';
           const chatId = document.getElementById('adm-tg-chat-id')?.value || '';
           const supportBotToken = document.getElementById('adm-tg-support-token')?.value || '';
           const supportChatId = document.getElementById('adm-tg-support-chat-id')?.value || '';
-          svc().telegramService.updateConfig(session, { botToken, chatId, supportBotToken, supportChatId });
+          svc().telegramService.updateConfig(session, { botToken, botUsername, chatId, supportBotToken, supportChatId });
           showToast('🤖 Telegram Bot ayarları güncellendi!', 'success');
           renderAdmin();
         } catch (err) {

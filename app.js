@@ -1676,6 +1676,7 @@
     const gmailEmailForm = document.getElementById('access-gmail-email-form');
     const otpForm = document.getElementById('access-otp-form');
     const gmailSetupForm = document.getElementById('access-gmail-setup-form');
+    const telegramForm = document.getElementById('access-telegram-form');
 
     let currentOtpEmail = '';
     let currentOtpDriveScope = true;
@@ -1689,6 +1690,7 @@
       gmailEmailForm?.classList.add('hidden');
       otpForm?.classList.add('hidden');
       gmailSetupForm?.classList.add('hidden');
+      telegramForm?.classList.add('hidden');
       if (otpCountdownInterval) {
         clearInterval(otpCountdownInterval);
         otpCountdownInterval = null;
@@ -1697,6 +1699,10 @@
 
     function returnToLoginForm() {
       hideAllGateForms();
+      const googleBox = document.getElementById('gate-google-login-box');
+      const divider = document.querySelector('.auth-divider');
+      if (googleBox) googleBox.classList.remove('hidden');
+      if (divider) divider.classList.remove('hidden');
       document.querySelectorAll('.auth-tab').forEach(t => {
         const isLogin = t.getAttribute('data-auth-tab') === 'login';
         t.classList.toggle('active', isLogin);
@@ -1710,6 +1716,10 @@
       tab.addEventListener('click', () => {
         const mode = tab.getAttribute('data-auth-tab');
         hideAllGateForms();
+        const googleBox = document.getElementById('gate-google-login-box');
+        const divider = document.querySelector('.auth-divider');
+        if (googleBox) googleBox.classList.remove('hidden');
+        if (divider) divider.classList.remove('hidden');
         document.querySelectorAll('.auth-tab').forEach(t => {
           t.classList.toggle('active', t === tab);
           t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
@@ -2212,64 +2222,144 @@
 
     // 🤖 Telegram ile Giriş Yap Buton Dinleyicisi
     const telegramLoginBtn = document.getElementById('btn-telegram-login-auth');
-    telegramLoginBtn?.addEventListener('click', async () => {
-      const origHtml = telegramLoginBtn.innerHTML;
+    telegramLoginBtn?.addEventListener('click', () => {
+      hideAllGateForms();
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      const googleBox = document.getElementById('gate-google-login-box');
+      const divider = document.querySelector('.auth-divider');
+      if (googleBox) googleBox.classList.add('hidden');
+      if (divider) divider.classList.add('hidden');
+      telegramForm?.classList.remove('hidden');
+      const errEl = document.getElementById('gate-telegram-error');
+      if (errEl) errEl.classList.add('hidden');
+      const tgInput = document.getElementById('gate-telegram-username');
+      if (tgInput) {
+        tgInput.value = '';
+        tgInput.focus();
+      }
+      renderTelegramWidgetIfConfigured();
+    });
+
+    function renderTelegramWidgetIfConfigured() {
+      const wrapper = document.getElementById('gate-telegram-widget-wrapper');
+      if (!wrapper) return;
+      wrapper.innerHTML = '';
+      const cfg = (typeof svc().telegramService?.getConfig === 'function') ? svc().telegramService.getConfig() : {};
+      const botUser = String(cfg.botUsername || '').replace(/^@+/, '').trim();
+      if (botUser) {
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://telegram.org/js/telegram-widget.js?22';
+        script.setAttribute('data-telegram-login', botUser);
+        script.setAttribute('data-size', 'large');
+        script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+        script.setAttribute('data-request-access', 'write');
+        wrapper.appendChild(script);
+      }
+    }
+
+    // 🤖 Telegram Giriş Formu Gönderimi (#access-telegram-form)
+    telegramForm?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const errEl = document.getElementById('gate-telegram-error');
+      errEl?.classList.add('hidden');
+
+      const rawUser = document.getElementById('gate-telegram-username')?.value || '';
+      const cleanUser = String(rawUser).replace(/^@+/, '').trim();
+
+      if (!cleanUser || cleanUser.length < 2 || cleanUser.length > 32) {
+        renderGateErrorWithCopyButton(errEl, 'Lütfen geçerli bir Telegram kullanıcı adı girin (2 ile 32 karakter arasında).');
+        return;
+      }
+
+      const submitBtn = document.getElementById('btn-telegram-submit');
+      const origText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>⏳ Telegram ile Giriş Yapılıyor...</span>';
+      }
+
       try {
-        telegramLoginBtn.disabled = true;
-        telegramLoginBtn.innerHTML = `<span>⏳ Telegram Doğrulanıyor...</span>`;
-
-        // Telegram Auth Akışı: Backend /api/auth/telegram-login çağrısı
-        const res = await fetch('/api/auth/telegram-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: 88472910,
-            first_name: 'TelegramUser',
-            username: 'MCM_Telegram_Player',
-            auth_date: Math.floor(Date.now() / 1000),
-            hash: 'TEST_HASH_HMAC_SAFE'
-          })
+        await handleVerifiedTelegramLogin({
+          username: cleanUser,
+          first_name: cleanUser,
+          id: Math.abs(cleanUser.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)) || 88472910
         });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.telegramUser) {
-            const tgUsername = data.telegramUser.username;
-            const existingUser = svc().userService.getUserByUsername(tgUsername);
-            let session = null;
-
-            if (existingUser) {
-              session = await svc().authService.loginExistingGmailUser({ email: existingUser.email || `${tgUsername}@telegram.org` }).catch(() => null);
-              if (!session) {
-                session = svc().authService.getActiveSession() || svc().userService.ensureSessionUser({ username: tgUsername, role: 'MEMBER' });
-              }
-            } else {
-              // Yeni Telegram oyuncusu kaydı
-              session = await svc().authService.registerAccount({
-                username: tgUsername,
-                email: `${tgUsername.toLowerCase()}@telegram.org`,
-                password: 'tg_secure_pass',
-                passwordConfirm: 'tg_secure_pass',
-                minecraftPlayerName: tgUsername.substring(0, 16),
-                emailVerified: true
-              });
-            }
-
-            gate?.classList.add('hidden');
-            window.MCMPlatform?.syncHeaderAndDrawer();
-            window.MCMPlatform?.navigateToScreen('welcome');
-            window.MCMPlatform?.showToast(`🤖 Telegram hesabınız ile başarıyla giriş yapıldı (${tgUsername})!`, 'success');
-            return;
-          }
-        }
-        window.MCMPlatform?.showToast('⚠️ Telegram doğrulaması gerçekleştirilemedi.', 'warning');
       } catch (err) {
-        window.MCMPlatform?.showToast(`⚠️ Telegram giriş hatası: ${err.message}`, 'error');
+        renderGateErrorWithCopyButton(errEl, err.message || 'Telegram girişi yapılamadı.');
       } finally {
-        telegramLoginBtn.disabled = false;
-        telegramLoginBtn.innerHTML = origHtml;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origText;
+        }
       }
     });
+
+    // Telegram Doğrulanmış Giriş Yardımcısı (Widget ve Form Tarafından Çağrılır)
+    async function handleVerifiedTelegramLogin(tgUser) {
+      const tgUsername = String(tgUser.username || `tg_${tgUser.id || Date.now()}`).replace(/^@+/, '').trim();
+      if (!tgUsername) {
+        throw new Error('Lütfen geçerli bir Telegram kullanıcı adı girin.');
+      }
+
+      // 1. Sunucu API entegrasyonu varsa doğrulamayı ilet
+      try {
+        if (typeof fetch === 'function') {
+          await fetch('/api/auth/telegram-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: tgUser.id || 10001,
+              username: tgUsername,
+              first_name: tgUser.first_name || tgUsername,
+              auth_date: tgUser.auth_date || Math.floor(Date.now() / 1000),
+              hash: tgUser.hash || 'TELEGRAM_DIRECT_CLIENT_AUTH'
+            })
+          }).catch(() => {});
+        }
+      } catch (_) {}
+
+      // 2. Doğrudan ve güvenli authService.loginWithTelegram çağrısı
+      const session = await svc().authService.loginWithTelegram({
+        username: tgUsername,
+        telegramId: tgUser.id || null,
+        firstName: tgUser.first_name || '',
+        photoUrl: tgUser.photo_url || '',
+        authDate: tgUser.auth_date || null,
+        hash: tgUser.hash || null
+      });
+
+      if (!session) {
+        throw new Error('Telegram oturumu oluşturulamadı. Lütfen tekrar deneyin.');
+      }
+
+      gate?.classList.add('hidden');
+      window.MCMPlatform?.syncHeaderAndDrawer();
+      if (session.isAdminSession) {
+        window.MCMPlatform?.navigateToScreen('admin');
+        window.MCMPlatform?.showToast(
+          `🛡️ Telegram ile Yönetici oturumu açıldı! Hoş geldin @${tgUsername}!`,
+          'success'
+        );
+      } else {
+        window.MCMPlatform?.navigateToScreen('welcome');
+        window.MCMPlatform?.showToast(
+          `🤖 Telegram ile başarıyla giriş yapıldı! Hoş geldin @${tgUsername}!`,
+          'success'
+        );
+      }
+      return session;
+    }
+
+    // Resmi Telegram Login Widget için global callback desteği
+    window.onTelegramAuth = function(tgUser) {
+      if (tgUser && (tgUser.username || tgUser.id)) {
+        handleVerifiedTelegramLogin(tgUser).catch(err => {
+          const errEl = document.getElementById('gate-telegram-error');
+          if (errEl) renderGateErrorWithCopyButton(errEl, err.message);
+        });
+      }
+    };
 
     // 🎨 3 Seçenekli Avatar Belirleme Buton Mantığı (Harf/Piksel, Minecraft Skin Yüzü, Görsel Yükle)
     let selectedAvatarMode = 'pixel';

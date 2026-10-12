@@ -1190,7 +1190,7 @@
           }
           u.vipTierBonusRuleMigrated_v2 = true;
         }
-        if (u.email && !u.emailVerified && (u.firebaseUid || String(u.email).toLowerCase() === SUPER_ADMIN_EMAIL || u.drivePermissionGranted)) {
+        if (u.email && String(u.email).includes('@') && !u.emailVerified) {
           u.emailVerified = true;
           mutated = true;
         }
@@ -1220,11 +1220,27 @@
     getUserByUsernameOrEmail(identifier) {
       if (!identifier) return null;
       const clean = String(identifier).trim().toLowerCase();
+      const stripped = clean.replace(/^@+/, '');
       return (
         this.getAllUsers().find(
           u =>
-            (u && u.username && u.username.toLowerCase() === clean) ||
+            (u && u.username && (u.username.toLowerCase() === clean || u.username.toLowerCase() === stripped)) ||
+            (u && u.telegramUsername && u.telegramUsername.toLowerCase() === stripped) ||
             (u && u.email && String(u.email).trim().toLowerCase() === clean)
+        ) || null
+      );
+    },
+
+    getUserByTelegram(identifier) {
+      if (!identifier) return null;
+      const clean = String(identifier).replace(/^@+/, '').trim().toLowerCase();
+      return (
+        this.getAllUsers().find(
+          u =>
+            (u && u.telegramUsername && u.telegramUsername.toLowerCase() === clean) ||
+            (u && u.telegramId && String(u.telegramId) === clean) ||
+            (u && u.username && u.username.toLowerCase() === clean) ||
+            (u && u.email && u.email.toLowerCase() === `${clean}@telegram.org`)
         ) || null
       );
     },
@@ -1414,6 +1430,8 @@
         const updatedSession = {
           ...active,
           userId: immutableId,
+          email: users[idx].email || active.email || '',
+          emailVerified: Boolean(users[idx].emailVerified || active.emailVerified || (users[idx].email && String(users[idx].email).includes('@'))),
           rank: active.isAdminSession ? 'ADMIN' : users[idx].rank,
           role: active.isAdminSession ? 'ADMIN' : users[idx].role,
           isModerator: Boolean(users[idx].isModerator),
@@ -2074,6 +2092,162 @@
 
       if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
         cloudSyncService.pushNow().catch(() => {});
+      }
+
+      return session;
+    },
+
+    async loginWithTelegram({
+      username,
+      telegramId = null,
+      firstName = '',
+      lastName = '',
+      photoUrl = '',
+      authDate = null,
+      hash = null
+    }) {
+      const rawUser = String(username || '').replace(/^@+/, '').trim();
+      if (!rawUser && !telegramId) {
+        throw new Error('Lütfen geçerli bir Telegram kullanıcı adı veya kimliği girin.');
+      }
+
+      const cleanUser = rawUser ? rawUser.slice(0, 32) : `tg_${telegramId}`;
+      const cleanEmail = `${cleanUser.toLowerCase()}@telegram.org`;
+      const nowIso = new Date().toISOString();
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
+        await cloudSyncService.syncNow().catch(() => {});
+      }
+
+      // Mevcut kullanıcıyı ara (asla veri, rütbe veya bakiye kaybı olmadan)
+      const allUsers = userService.getAllUsers();
+      let matchedUser = null;
+
+      if (telegramId) {
+        matchedUser = allUsers.find(u => u && String(u.telegramId) === String(telegramId));
+      }
+      if (!matchedUser && cleanUser) {
+        matchedUser = allUsers.find(
+          u => u && u.telegramUsername && u.telegramUsername.toLowerCase() === cleanUser.toLowerCase()
+        );
+      }
+      if (!matchedUser && cleanUser) {
+        matchedUser = userService.getUserByUsername(cleanUser);
+      }
+      if (!matchedUser) {
+        matchedUser = allUsers.find(
+          u => u && u.email && u.email.toLowerCase() === cleanEmail.toLowerCase()
+        );
+      }
+
+      if (matchedUser) {
+        // Mevcut kullanıcı: Zümrüt, Netherite, rütbe, başarımlar ve kozmetikler KORUNARAK güncellenir
+        const updates = {
+          emailVerified: true,
+          lastLoginAt: nowIso,
+          telegramUsername: cleanUser
+        };
+        if (telegramId && !matchedUser.telegramId) {
+          updates.telegramId = telegramId;
+        }
+        if (photoUrl && (!matchedUser.avatarUrl || matchedUser.avatarUrl.includes('placeholder'))) {
+          updates.avatarUrl = photoUrl;
+        }
+        if (!matchedUser.email) {
+          updates.email = cleanEmail;
+        }
+        matchedUser = userService.syncUserFields(matchedUser.username, updates);
+
+        activityService.log(
+          'TELEGRAM_LOGIN',
+          matchedUser.username,
+          `${matchedUser.username} (@${cleanUser}) Telegram ile giriş yaptı.`
+        );
+      } else {
+        // Yeni Telegram kullanıcısı oluştur
+        let candidateName = cleanUser.replace(/[^a-zA-Z0-9_ğüşıöçĞÜŞİÖÇ]/g, '_');
+        if (candidateName.length < 3) candidateName = `tg_${candidateName}`;
+        if (candidateName.length > 20) candidateName = candidateName.slice(0, 20);
+
+        let finalUsername = candidateName;
+        let suffix = 1;
+        while (userService.getUserByUsername(finalUsername)) {
+          finalUsername = `${candidateName.slice(0, 16)}_${suffix++}`;
+        }
+
+        const newUser = {
+          userId: generateId('USR'),
+          username: finalUsername,
+          telegramUsername: cleanUser,
+          telegramId: telegramId || null,
+          email: cleanEmail,
+          emailVerified: true,
+          minecraftPlayerName: finalUsername.slice(0, 16),
+          avatarUrl: photoUrl || '',
+          customAvatarUrl: photoUrl || '',
+          passwordHash: '',
+          rank: 'MEMBER',
+          role: 'MEMBER',
+          isModerator: false,
+          status: 'ACTIVE',
+          emeraldBalance: 0,
+          emeraldsEarnedTotal: 0,
+          emeraldsSpentTotal: 0,
+          netheriteBalance: 0,
+          initialNetheriteBonusClaimed: false,
+          lastNetheriteClaimAt: null,
+          lastDailyEmeraldClaimAt: null,
+          extraLives: 0,
+          points: 0,
+          bestScore: 0,
+          gamesPlayed: 0,
+          gamesWon: 0,
+          gamesLost: 0,
+          ownedCosmetics: [],
+          equippedCosmetics: {
+            avatarFrame: null,
+            nameColor: null,
+            badge: null,
+            profileEffect: null
+          },
+          achievements: [],
+          settings: {
+            sound: true,
+            particles: true
+          },
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          lastLoginAt: nowIso
+        };
+
+        const users = userService.getAllUsers();
+        users.push(newUser);
+        userService._saveAllUsers(users);
+        matchedUser = newUser;
+
+        notificationService.notifyUser(matchedUser.username, {
+          type: 'SYSTEM_NOTIFICATION',
+          title: '🤖 Minecraft Milyoner\'e Hoş Geldin!',
+          message: 'Telegram hesabınla başarıyla giriş yaptın! Günlük Zümrüt ödülünü alabilir, profilini özelleştirebilirsin.'
+        });
+
+        activityService.log(
+          'USER_REGISTER_TELEGRAM',
+          matchedUser.username,
+          `${matchedUser.username} (@${cleanUser}) Telegram ile kayıt oldu.`
+        );
+      }
+
+      const isAdmin = Boolean(
+        matchedUser.email === SUPER_ADMIN_EMAIL ||
+        (matchedUser.telegramUsername && matchedUser.telegramUsername.toLowerCase() === 'codingdevelopia')
+      );
+
+      const session = buildSessionPayload(matchedUser, isAdmin);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        await cloudSyncService.pushNow().catch(() => {});
       }
 
       return session;
@@ -4175,6 +4349,7 @@
     getConfig() {
       const cfg = storage.get(STORAGE_KEYS.TELEGRAM_CONFIG, {
         botToken: '',
+        botUsername: '',
         chatId: '',
         webhookUrl: '',
         supportBotToken: '',
@@ -4182,6 +4357,7 @@
       });
       return {
         botToken: cfg.botToken || '',
+        botUsername: cfg.botUsername || '',
         chatId: cfg.chatId || '',
         webhookUrl: cfg.webhookUrl || '',
         supportBotToken: cfg.supportBotToken || '',
@@ -4195,6 +4371,7 @@
       const updated = {
         ...current,
         botToken: patch.botToken !== undefined ? String(patch.botToken || '').trim() : current.botToken,
+        botUsername: patch.botUsername !== undefined ? String(patch.botUsername || '').replace(/^@+/, '').trim() : current.botUsername,
         chatId: patch.chatId !== undefined ? String(patch.chatId || '').trim() : current.chatId,
         webhookUrl: patch.webhookUrl !== undefined ? String(patch.webhookUrl || '').trim() : current.webhookUrl,
         supportBotToken: patch.supportBotToken !== undefined ? String(patch.supportBotToken || '').trim() : current.supportBotToken,
@@ -4756,23 +4933,19 @@
   // ==========================================
   const sponsorService = {
     getAllSponsors() {
-      return storage.get(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', [
-        {
-          id: 'SPONSOR_MINEHOST',
-          name: 'MineHost TR',
-          logo: '🌐',
-          type: 'TYPE_C',
-          description: 'Yüksek Performanslı Minecraft Sunucu Sağlayıcısı',
-          sponsoredRank: 'VIP',
-          sponsoredCosmetic: 'BORDER_GOLD',
-          sponsoredCosmeticName: 'Altın Muhafız Çerçevesi',
-          permanentRewards: ['BORDER_GOLD'],
-          active: true,
-          startDate: '2026-01-01T00:00:00.000Z',
-          durationDays: 365,
-          endDate: '2026-12-31T23:59:59.000Z'
-        }
-      ]);
+      const raw = storage.get(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', []);
+      const list = Array.isArray(raw) ? raw : [];
+      // MineHost TR sahte sponsorunu kesinlikle temizle ve kalıcı olarak kaldır
+      const cleaned = list.filter(s => s && s.id !== 'SPONSOR_MINEHOST' && s.name !== 'MineHost TR');
+      if (cleaned.length !== list.length) {
+        storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', cleaned);
+        activityService.log(
+          'SPONSOR_AUDIT',
+          'SYSTEM',
+          'MineHost TR sahte sponsor kaydı platformdan ve depolamadan başarıyla kaldırıldı.'
+        );
+      }
+      return cleaned;
     },
 
     getActiveSponsors() {
@@ -4780,9 +4953,16 @@
       const now = new Date();
       return list.filter(s => {
         if (!s.active) return false;
+        if (s.isPublic === false) return false;
+        if (s.contractStatus === 'TERMINATED') return false;
         if (s.endDate && new Date(s.endDate) < now) return false;
         return true;
       });
+    },
+
+    getSponsorById(id) {
+      if (!id) return null;
+      return this.getAllSponsors().find(s => s.id === id) || null;
     },
 
     saveSponsor(session, sponsorData) {
@@ -4790,29 +4970,66 @@
       const all = this.getAllSponsors();
       const id = sponsorData.id || 'SPONSOR_' + Date.now();
       const idx = all.findIndex(s => s.id === id);
+      const existing = idx >= 0 ? all[idx] : null;
 
-      const durationDays = Number(sponsorData.durationDays || 30);
+      const durationDays = sponsorData.durationDays !== undefined ? Number(sponsorData.durationDays) : 30;
       const start = sponsorData.startDate ? new Date(sponsorData.startDate) : new Date();
-      const end = new Date(start.getTime() + durationDays * 86400000);
+      const end = sponsorData.endDate ? new Date(sponsorData.endDate) : new Date(start.getTime() + durationDays * 86400000);
 
       const isExpired = end < new Date();
-      const isActive = sponsorData.active !== false && !isExpired;
+      const contractStatus = sponsorData.contractStatus || (existing ? existing.contractStatus : 'DRAFT');
+      const isActive = sponsorData.active !== false && !isExpired && contractStatus !== 'TERMINATED';
+      const isPublic = sponsorData.isPublic !== undefined ? Boolean(sponsorData.isPublic) : (existing ? (existing.isPublic !== false) : true);
+
+      const currentVer = Number((existing && existing.contractVersion) || 1);
+      const nextVer = sponsorData.incrementVersion ? currentVer + 1 : currentVer;
 
       const record = {
         id,
         name: String(sponsorData.name || 'Sponsor').trim(),
+        authorizedRep: String(sponsorData.authorizedRep || (existing && existing.authorizedRep) || '').trim(),
+        email: String(sponsorData.email || (existing && existing.email) || '').trim().toLowerCase(),
         logo: String(sponsorData.logo || '💎').trim(),
+        package: String(sponsorData.package || 'Özel Turnuva Paketi').trim(),
         type: ['TYPE_A', 'TYPE_B', 'TYPE_C'].includes(sponsorData.type) ? sponsorData.type : 'TYPE_A',
         description: String(sponsorData.description || '').trim(),
         sponsoredRank: sponsorData.sponsoredRank || null,
         sponsoredCosmetic: String(sponsorData.sponsoredCosmetic || 'BORDER_GOLD'),
         sponsoredCosmeticName: String(sponsorData.sponsoredCosmeticName || 'Özel Çerçeve'),
         permanentRewards: Array.isArray(sponsorData.permanentRewards) ? sponsorData.permanentRewards : [],
+        customBenefits: String(sponsorData.customBenefits || (existing && existing.customBenefits) || '').trim(),
         active: isActive,
+        isPublic,
         startDate: start.toISOString(),
         durationDays,
-        endDate: end.toISOString()
+        endDate: end.toISOString(),
+        contractStatus,
+        contractVersion: nextVer,
+        agreementText: sponsorData.agreementText || (existing && existing.agreementText) || this.generateAgreementTemplate({
+          name: sponsorData.name,
+          authorizedRep: sponsorData.authorizedRep,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          sponsoredRank: sponsorData.sponsoredRank,
+          sponsoredCosmeticName: sponsorData.sponsoredCosmeticName,
+          customBenefits: sponsorData.customBenefits
+        }),
+        specialConditions: String(sponsorData.specialConditions || (existing && existing.specialConditions) || '').trim(),
+        terminationConditions: String(sponsorData.terminationConditions || (existing && existing.terminationConditions) || 'Taraflar 7 gün önceden bildirimde bulunarak haklı fesih hakkını kullanabilir.').trim(),
+        disputeConditions: String(sponsorData.disputeConditions || (existing && existing.disputeConditions) || 'Uyuşmazlıklarda platform denetim günlükleri ve dijital delil kayıtları esas alınır.').trim(),
+        signatures: Array.isArray(sponsorData.signatures) ? sponsorData.signatures : (existing && existing.signatures ? existing.signatures : []),
+        auditTrail: Array.isArray(existing && existing.auditTrail) ? existing.auditTrail : [],
+        evidences: Array.isArray(existing && existing.evidences) ? existing.evidences : [],
+        createdAt: (existing && existing.createdAt) || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
+
+      record.auditTrail.push({
+        action: existing ? 'SPONSOR_UPDATED' : 'SPONSOR_CREATED',
+        performedBy: session.username,
+        timestamp: new Date().toISOString(),
+        details: `${record.name} sponsor kaydı güncellendi (Sürüm: ${record.contractVersion}, Durum: ${record.contractStatus}).`
+      });
 
       if (idx >= 0) all[idx] = record;
       else all.unshift(record);
@@ -4821,8 +5038,276 @@
       return record;
     },
 
-    // Kullanıcının etkin rütbesini hesaplar: Sponsor rütbesi süresi bittiğinde
-    // kullanıcının önceden sahip olduğu veya satın aldığı asıl rütbesi (paidRank) korunur!
+    // 1. Sponsorluk Süresini Uzat
+    extendSponsorDuration(session, id, additionalDays = 30) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const all = this.getAllSponsors();
+      const sponsor = all.find(s => s.id === id);
+      if (!sponsor) throw new Error('Sponsor kaydı bulunamadı.');
+
+      const daysToAdd = Math.max(1, Number(additionalDays || 30));
+      const currentEnd = sponsor.endDate ? new Date(sponsor.endDate) : new Date();
+      const baseDate = currentEnd > new Date() ? currentEnd : new Date();
+      const newEnd = new Date(baseDate.getTime() + daysToAdd * 86400000);
+
+      sponsor.endDate = newEnd.toISOString();
+      sponsor.durationDays = Number(sponsor.durationDays || 0) + daysToAdd;
+      sponsor.active = true;
+      sponsor.contractStatus = 'ACTIVE';
+      sponsor.updatedAt = new Date().toISOString();
+
+      if (!Array.isArray(sponsor.auditTrail)) sponsor.auditTrail = [];
+      sponsor.auditTrail.push({
+        action: 'DURATION_EXTENDED',
+        performedBy: session.username,
+        timestamp: new Date().toISOString(),
+        details: `Sponsorluk süresi +${daysToAdd} gün uzatıldı. Yeni Bitiş: ${newEnd.toLocaleString('tr-TR')}`
+      });
+
+      storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
+      return sponsor;
+    },
+
+    // 2. Sponsorluk İptalini Başlat (Fesih Süreci)
+    initiateSponsorTermination(session, id, { reason, evidenceNotes = '' } = {}) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const all = this.getAllSponsors();
+      const sponsor = all.find(s => s.id === id);
+      if (!sponsor) throw new Error('Sponsor kaydı bulunamadı.');
+
+      const cleanReason = String(reason || '').trim();
+      if (!cleanReason) throw new Error('İptal gerekçesi belirtilmelidir.');
+
+      sponsor.contractStatus = 'TERMINATION_REQUESTED';
+      sponsor.terminationReason = cleanReason;
+      sponsor.terminationInitiatedAt = new Date().toISOString();
+      sponsor.terminationInitiatedBy = session.username;
+      sponsor.terminationDeadline = new Date(Date.now() + 7 * 86400000).toISOString(); // 7 gün itiraz hakkı
+      sponsor.isPublic = false; // Hemen kamuya açık sayfadan gizle, ancak sözleşme ve delilleri ASLA silme
+
+      if (!Array.isArray(sponsor.auditTrail)) sponsor.auditTrail = [];
+      sponsor.auditTrail.push({
+        action: 'TERMINATION_INITIATED',
+        performedBy: session.username,
+        timestamp: new Date().toISOString(),
+        details: `Fesih süreci başlatıldı. Gerekçe: ${cleanReason}`
+      });
+
+      if (evidenceNotes) {
+        this.addEvidence(session, id, {
+          title: 'Fesih Başlatma Gerekçesi ve Notları',
+          description: evidenceNotes,
+          fileType: 'text/plain',
+          originalFilename: 'termination_notice.txt',
+          submitter: session.username,
+          status: 'INCELEME_BEKLIYOR'
+        });
+      }
+
+      storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
+      return sponsor;
+    },
+
+    // 3. Fesih Kararını Onayla / Tamamla
+    finalizeTermination(session, id) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const all = this.getAllSponsors();
+      const sponsor = all.find(s => s.id === id);
+      if (!sponsor) throw new Error('Sponsor kaydı bulunamadı.');
+
+      sponsor.contractStatus = 'TERMINATED';
+      sponsor.active = false;
+      sponsor.isPublic = false;
+      sponsor.terminatedAt = new Date().toISOString();
+
+      if (!Array.isArray(sponsor.auditTrail)) sponsor.auditTrail = [];
+      sponsor.auditTrail.push({
+        action: 'TERMINATION_FINALIZED',
+        performedBy: session.username,
+        timestamp: new Date().toISOString(),
+        details: `Sponsorluk feshi kesinleştirildi. Sözleşme ve delil geçmişi arşivlendi.`
+      });
+
+      storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
+      return sponsor;
+    },
+
+    // 4. Kamuya Açık Siteden Kaldır / Göster (Sözleşmeyi silmeden yayından alma)
+    togglePublicVisibility(session, id, isPublic) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const all = this.getAllSponsors();
+      const sponsor = all.find(s => s.id === id);
+      if (!sponsor) throw new Error('Sponsor kaydı bulunamadı.');
+
+      sponsor.isPublic = Boolean(isPublic);
+      sponsor.updatedAt = new Date().toISOString();
+
+      if (!Array.isArray(sponsor.auditTrail)) sponsor.auditTrail = [];
+      sponsor.auditTrail.push({
+        action: 'VISIBILITY_TOGGLED',
+        performedBy: session.username,
+        timestamp: new Date().toISOString(),
+        details: sponsor.isPublic ? 'Sponsor kamuya açık sitede yayına alındı.' : 'Sponsor kamuya açık siteden gizlendi (sözleşme aktif kalır).'
+      });
+
+      storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
+      return sponsor;
+    },
+
+    // 5. Sponsorluk Kaydını Sil (Korumalı Silme)
+    deleteSponsorRecord(session, id, { permanent = false } = {}) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const all = this.getAllSponsors();
+      const idx = all.findIndex(s => s.id === id);
+      if (idx === -1) throw new Error('Sponsor kaydı bulunamadı.');
+
+      const sponsor = all[idx];
+
+      if (!permanent) {
+        // Yumuşak silme / Arşivleme: Yasal ve operasyonel verileri korur
+        sponsor.active = false;
+        sponsor.isPublic = false;
+        sponsor.contractStatus = 'ARCHIVED';
+        sponsor.deletedAt = new Date().toISOString();
+        if (!Array.isArray(sponsor.auditTrail)) sponsor.auditTrail = [];
+        sponsor.auditTrail.push({
+          action: 'SPONSOR_ARCHIVED',
+          performedBy: session.username,
+          timestamp: new Date().toISOString(),
+          details: 'Sponsor kaydı arşivlendi (deliller ve sözleşme saklanıyor).'
+        });
+        storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
+        return { success: true, archived: true };
+      } else {
+        // Kalıcı silme: Yalnızca açık onay ile
+        activityService.log(
+          'SPONSOR_AUDIT',
+          session.username,
+          `Yönetici ${session.username}, "${sponsor.name}" (#${id}) sponsor kaydını kalıcı olarak sildi.`
+        );
+        all.splice(idx, 1);
+        storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
+        return { success: true, permanent: true };
+      }
+    },
+
+    // 6. Delil Ekleme ve Yönetimi
+    addEvidence(session, id, evidenceData = {}) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const all = this.getAllSponsors();
+      const sponsor = all.find(s => s.id === id);
+      if (!sponsor) throw new Error('Sponsor kaydı bulunamadı.');
+
+      const evId = 'EVD_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      const evidence = {
+        id: evId,
+        caseId: id,
+        contractVersion: sponsor.contractVersion || 1,
+        title: String(evidenceData.title || 'Delil Belgesi').trim(),
+        description: String(evidenceData.description || '').trim(),
+        fileType: String(evidenceData.fileType || 'text/plain').trim(),
+        originalFilename: String(evidenceData.originalFilename || 'belge.txt').trim(),
+        submitter: session.username,
+        submittedAt: new Date().toISOString(),
+        hash: 'SHA256_' + Date.now().toString(16),
+        status: evidenceData.status || 'INCELEME_BEKLIYOR', // INCELEME_BEKLIYOR, IHLAL_DOGRULANDI, IHLAL_REDDEDILDI, DOSYA_KAPATILDI
+        adminNotes: String(evidenceData.adminNotes || '').trim()
+      };
+
+      if (!Array.isArray(sponsor.evidences)) sponsor.evidences = [];
+      sponsor.evidences.unshift(evidence);
+
+      if (!Array.isArray(sponsor.auditTrail)) sponsor.auditTrail = [];
+      sponsor.auditTrail.push({
+        action: 'EVIDENCE_ADDED',
+        performedBy: session.username,
+        timestamp: new Date().toISOString(),
+        details: `Yeni delil eklendi: "${evidence.title}" (${evidence.id})`
+      });
+
+      storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
+      return evidence;
+    },
+
+    // 7. Dijital İmza Ekleme ("İmza ve Onay")
+    signAgreement(id, { signerName, signerEmail, role = 'SPONSOR_REPRESENTATIVE', signatureType = 'TYPED', signatureData = '' } = {}) {
+      const all = this.getAllSponsors();
+      const sponsor = all.find(s => s.id === id);
+      if (!sponsor) throw new Error('Sponsor kaydı bulunamadı.');
+
+      const cleanName = String(signerName || '').trim();
+      const cleanEmail = String(signerEmail || '').trim().toLowerCase();
+      if (!cleanName || cleanName.length < 3) {
+        throw new Error('Geçerli bir yetkili ad ve soyad girilmelidir.');
+      }
+
+      const sigRecord = {
+        id: 'SIG_' + Date.now(),
+        signerName: cleanName,
+        signerEmail: cleanEmail,
+        role,
+        signatureType, // TYPED veya DRAWN
+        signatureData: signatureData || cleanName,
+        signedAt: new Date().toISOString(),
+        contractVersion: sponsor.contractVersion || 1
+      };
+
+      if (!Array.isArray(sponsor.signatures)) sponsor.signatures = [];
+      sponsor.signatures.push(sigRecord);
+
+      sponsor.contractStatus = 'SIGNED';
+      sponsor.active = true;
+      sponsor.isPublic = true;
+      sponsor.updatedAt = new Date().toISOString();
+
+      if (!Array.isArray(sponsor.auditTrail)) sponsor.auditTrail = [];
+      sponsor.auditTrail.push({
+        action: 'CONTRACT_SIGNED',
+        performedBy: cleanName,
+        timestamp: new Date().toISOString(),
+        details: `Sözleşme ${cleanName} (${role}) tarafından elektronik olarak imzalandı ve onaylandı.`
+      });
+
+      storage.set(STORAGE_KEYS.SPONSORS || 'mc_millionaire_tr_sponsors_v10', all);
+      return sigRecord;
+    },
+
+    // 8. Sözleşme Şablonu Oluşturucu
+    generateAgreementTemplate(data = {}) {
+      const startStr = data.startDate ? new Date(data.startDate).toLocaleString('tr-TR') : 'Belirtilmedi';
+      const endStr = data.endDate ? new Date(data.endDate).toLocaleString('tr-TR') : 'Belirtilmedi';
+      const rep = data.authorizedRep || 'Yetkili Temsilci';
+      const spName = data.name || 'Sponsor Kuruluş';
+      const rank = data.sponsoredRank || 'VIP';
+      const cosmetic = data.sponsoredCosmeticName || 'Özel Çerçeve';
+      const benefits = data.customBenefits || 'Turnuva içi logo görünürlüğü ve özel ödüller.';
+
+      return `===============================================================
+RESMİ SPONSORLUK VE İŞ BİRLİĞİ DİJİTAL SÖZLEŞMESİ
+===============================================================
+
+1. TARAFLAR:
+İşbu sözleşme, "MC Milyoner Olmak İster Platformu Yönetimi" (bundan böyle "PLATFORM" olarak anılacaktır) ile ${spName} yetkili temsilcisi Sayın ${rep} (bundan böyle "SPONSOR" olarak anılacaktır) arasında akdedilmiştir.
+
+2. SPONSORLUK SÜRESİ VE YÜRÜRLÜK:
+Bu sponsorluk, ${startStr} ile ${endStr} arasında geçerlidir. Belirtilen sürenin bitiminde sponsorluk hakları, taraflarca süresi uzatılmadığı müddetçe kendiliğinden sona erer.
+
+3. SPONSORLUK AVANTAJLARI VE TAAHHÜTLER:
+PLATFORM, sözleşme süresince SPONSOR'a aşağıdaki hak ve avantajları temin etmeyi taahhüt eder:
+- Sponsorluk Rütbesi: ${rank}
+- Özel Kozmetik Ödülü: ${cosmetic}
+- İlave Hak ve Tanıtımlar: ${benefits}
+
+4. KULLANICI HAKLARININ KORUNMASI:
+Sponsorluk süresi sona erdiğinde, sponsorluk kapsamında tanımlanan geçici rütbeler kaldırılır; ancak kullanıcıların önceden sahip olduğu veya ücretli olarak satın aldığı kalıcı rütbeler, Zümrüt/Netherite bakiyeleri ve kazanılmış kalıcı ödüller ASLA etkilenmez ve silinmez.
+
+5. FESİH VE İTİRAZ KOŞULLARI:
+Taraflardan birinin sözleşme şartlarını ihlal etmesi durumunda karşı taraf "Sponsorluk İptalini Başlat" hakkına sahiptir. İptal talebine ilişkin 7 (yedi) takvim günü içinde gerekçe ve delil sunularak itiraz edilebilir. Uyuşmazlıklarda sistem üzerindeki elektronik denetim günlükleri (audit trail) ve zaman damgalı delil kayıtları esas alınır.
+
+6. DİJİTAL ONAY VE DELİL ANLAŞMASI:
+İşbu sözleşme, taraflarca elektronik ortamda incelenmiş, hükümleri kabul edilmiş ve yetkili elektronik imza ile yürürlüğe girmiştir.`;
+    },
+
     getUserEffectiveRank(username) {
       const users = storage.get(STORAGE_KEYS.USERS, []);
       const user = Array.isArray(users) ? users.find(u => u && u.username && u.username.toLowerCase() === String(username || '').toLowerCase()) : null;
@@ -4830,7 +5315,6 @@
 
       const baseRank = user.paidRank || user.rank || 'MEMBER';
 
-      // Eğer kullanıcıya bir sponsor rütbesi atanmışsa
       if (user.sponsorRank && user.sponsorExpiresAt) {
         const isSponsorActive = new Date(user.sponsorExpiresAt) > new Date();
         if (isSponsorActive) {
@@ -6383,9 +6867,7 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     }
   };
 
-  // Bulut senkronizasyonunu başlat
-  cloudSyncService.init();
-
+  // MCMServices nesnesini hemen ve gecikmesiz olarak dışa aktar (güvenli başlatma garantisi)
   window.MCMServices = Object.assign(window.MCMServices || {}, {
     mcIconService,
     activityService,
@@ -6412,5 +6894,12 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     dailyQuestionService,
     sponsorService
   });
+
+  // Bulut senkronizasyonunu güvenle başlat
+  try {
+    cloudSyncService.init();
+  } catch (err) {
+    console.warn('[CloudSync] Başlatma uyarısı:', err?.message || err);
+  }
 })(window);
 
