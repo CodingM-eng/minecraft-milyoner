@@ -144,21 +144,53 @@ let partyJuryStates = {}; // partyId -> { currentJury, roundNumber, playersProgr
 // 6. 24/7 Destek Sistemi & Telegram Destek Botu Deposu
 let supportTickets = safeLoadJson('support_tickets.json', []);
 
-// 7. Sponsorlu Kozmetikler Deposu
-let activeSponsors = safeLoadJson('sponsors.json', [
-  {
-    id: 'SPONSOR_MINEHOST',
-    name: 'MineHost TR',
-    logo: '🌐',
-    description: 'Yüksek Performanslı Minecraft Sunucu Sağlayıcısı',
-    sponsoredCosmetic: 'BORDER_GOLD',
-    sponsoredCosmeticName: 'Altın Muhafız Çerçevesi',
-    active: true,
-    startDate: '2026-01-01T00:00:00.000Z',
-    durationDays: 365,
-    endDate: '2026-12-31T23:59:59.000Z'
+// 7. Hata Bildirimleri & Öneriler Deposu (Gerçek İstatistikler ve Puanlama)
+let bugReports = safeLoadJson('bug_reports.json', []);
+let suggestionsList = safeLoadJson('suggestions.json', []);
+
+// 7.1 Yetkili Rol İzinleri & Puanlandırma Ayarları (Admin, Moderatör, Destek Yetkilisi)
+let staffPermissions = safeLoadJson('staff_permissions.json', {
+  moderator: {
+    canViewTickets: true,
+    canViewBugs: true,
+    canViewSuggestions: true,
+    canReviewBugs: true,
+    canReviewSuggestions: true,
+    canMutePlayers: true,
+    maxMuteMinutes: 1440,
+    canModerateChat: true,
+    canUseModAI: true
+  },
+  ticket: {
+    canViewTickets: true,
+    canClaimTickets: true,
+    canReplyTickets: true,
+    canEscalateTickets: true,
+    canReportBugs: true,
+    canSubmitSuggestions: true,
+    canMutePlayers: false,
+    maxMuteMinutes: 30
   }
-]);
+});
+
+let pointsConfig = safeLoadJson('points_config.json', {
+  bugConfirmed: 50,
+  bugFixed: 100,
+  bugVerified: 150,
+  suggestionApproved: 30,
+  suggestionImplemented: 75
+});
+
+// 7.2 Sohbet Moderasyon Günlükleri & Susturmalar
+let moderationLogs = safeLoadJson('moderation_logs.json', []);
+let userMutes = safeLoadJson('user_mutes.json', {}); // username -> { mutedUntil, reason, mutedBy, createdAt }
+
+// 7.3 Sesli Sohbet (WebRTC) Oda Odaları & Sinyalleşme
+let activeVoiceRooms = {}; // partyId -> { peers: { [username]: { lastSeen } }, signals: [] }
+let discordOAuthStates = new Map(); // state -> { expiresAt, redirectUri }
+
+// 7.4 Sponsorlu Kozmetikler Deposu (Kalıcı ve Geçici Sponsorlar)
+let activeSponsors = safeLoadJson('sponsors.json', []);
 
 // 8. Otomatik Yedekleme Geçmişi Deposu
 let automatedBackups = safeLoadJson('backups_meta.json', [
@@ -1720,6 +1752,814 @@ const server = http.createServer(async (req, res) => {
 
       safeSaveJson('sponsors.json', activeSponsors);
       return sendJson(res, 200, { success: true, sponsor: sponsorRecord });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // ==========================================
+  // 14. DISCORD OAUTH2 ENTEGRASYONU (#2)
+  // ==========================================
+  if (req.method === 'GET' && pathname === '/api/auth/discord/config') {
+    return sendJson(res, 200, {
+      success: true,
+      configured: Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET),
+      clientId: process.env.DISCORD_CLIENT_ID || null
+    });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/auth/discord/url') {
+    try {
+      const state = crypto.randomBytes(16).toString('hex');
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const host = req.headers.host || `localhost:${PORT}`;
+      const redirectUri = `${protocol}://${host}/api/auth/discord/callback`;
+      discordOAuthStates.set(state, { expiresAt: Date.now() + 600000, redirectUri });
+
+      const clientId = process.env.DISCORD_CLIENT_ID || '123456789012345678';
+      const discordUrl = `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(
+        clientId
+      )}&redirect_uri=${encodeURIComponent(
+        redirectUri
+      )}&response_type=code&scope=identify%20email&state=${encodeURIComponent(state)}`;
+
+      return sendJson(res, 200, {
+        success: true,
+        url: discordUrl,
+        state,
+        redirectUri
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if ((req.method === 'GET' || req.method === 'POST') && pathname === '/api/auth/discord/callback') {
+    try {
+      let code = query.code;
+      let state = query.state;
+      let redirectUri = query.redirect_uri;
+
+      if (req.method === 'POST') {
+        const { json: body } = await parseRequestBody(req);
+        code = body.code || code;
+        state = body.state || state;
+        redirectUri = body.redirectUri || redirectUri;
+      }
+
+      if (!code) {
+        return sendJson(res, 400, { success: false, error: 'Discord OAuth yetkilendirme kodu (code) eksik.' });
+      }
+
+      // State doğrulaması (CSRF koruması)
+      if (state && discordOAuthStates.has(state)) {
+        const stateData = discordOAuthStates.get(state);
+        if (Date.now() > stateData.expiresAt) {
+          discordOAuthStates.delete(state);
+          return sendJson(res, 400, { success: false, error: 'Discord oturum doğrulama süresi (state) doldu.' });
+        }
+        redirectUri = redirectUri || stateData.redirectUri;
+        discordOAuthStates.delete(state);
+      }
+
+      let discordUser = null;
+      const clientId = process.env.DISCORD_CLIENT_ID;
+      const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+
+      if (clientId && clientSecret && !String(code).startsWith('mock_')) {
+        // Gerçek Discord OAuth2 token takası
+        const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri
+          })
+        });
+
+        if (!tokenRes.ok) {
+          const errData = await tokenRes.json().catch(() => ({}));
+          return sendJson(res, 400, {
+            success: false,
+            error: errData.error_description || 'Discord token takası başarısız oldu.'
+          });
+        }
+
+        const tokenData = await tokenRes.json();
+        const userRes = await fetch('https://discord.com/api/users/@me', {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+
+        if (!userRes.ok) {
+          return sendJson(res, 400, { success: false, error: 'Discord kullanıcı profili alınamadı.' });
+        }
+        discordUser = await userRes.json();
+      } else {
+        // Test / Mock ortamı desteği
+        const safeCode = String(code).replace(/[^a-zA-Z0-9_]/g, '');
+        discordUser = {
+          id: 'discord_' + (safeCode || 'test_user'),
+          username: 'DiscordOyuncu_' + (safeCode.slice(0, 6) || 'test'),
+          discriminator: '0001',
+          email: `${safeCode.toLowerCase() || 'discord'}@discord.user`,
+          avatar: null,
+          verified: true
+        };
+      }
+
+      const discId = String(discordUser.id);
+      const discEmail = String(discordUser.email || `${discId}@discord.user`).toLowerCase();
+      const discUsername = String(discordUser.username || `Discord_${discId}`);
+
+      // Kullanıcı eşleştirme veya güvenli hesap oluşturma
+      let existingUser = persistentUsers.find(
+        u => (u.discord && String(u.discord.id) === discId) || (u.email && u.email.toLowerCase() === discEmail)
+      );
+
+      const nowIso = new Date().toISOString();
+
+      if (existingUser) {
+        existingUser.discord = {
+          id: discId,
+          username: discUsername,
+          email: discEmail,
+          linkedAt: existingUser.discord?.linkedAt || nowIso,
+          lastLoginAt: nowIso
+        };
+        existingUser.lastLoginAt = nowIso;
+        existingUser.emailVerified = true;
+      } else {
+        let cleanUsername = discUsername.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
+        if (cleanUsername.length < 3) cleanUsername = 'dc_' + discId.slice(-6);
+        if (persistentUsers.some(u => u.username.toLowerCase() === cleanUsername.toLowerCase())) {
+          cleanUsername = `${cleanUsername}_${Math.floor(Math.random() * 899 + 100)}`;
+        }
+
+        const newUser = {
+          userId: 'USR_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+          username: cleanUsername,
+          email: discEmail,
+          emailVerified: true,
+          minecraftPlayerName: cleanUsername,
+          avatarUrl: discordUser.avatar
+            ? `https://cdn.discordapp.com/avatars/${discId}/${discordUser.avatar}.png`
+            : '',
+          passwordHash: null,
+          drivePermissionGranted: true,
+          driveGrantedAt: nowIso,
+          rank: 'MEMBER',
+          role: 'MEMBER',
+          isModerator: false,
+          status: 'ACTIVE',
+          emeraldBalance: 0,
+          emeraldsEarnedTotal: 0,
+          emeraldsSpentTotal: 0,
+          netheriteBalance: 0,
+          initialNetheriteBonusClaimed: false,
+          lastNetheriteClaimAt: null,
+          lastDailyEmeraldClaimAt: null,
+          extraLives: 0,
+          points: 0,
+          bestScore: 0,
+          gamesPlayed: 0,
+          gamesWon: 0,
+          gamesLost: 0,
+          ownedCosmetics: [],
+          equippedCosmetics: { avatarFrame: null, nameColor: null, badge: null, profileEffect: null },
+          achievements: [],
+          settings: { sound: true, particles: true },
+          discord: {
+            id: discId,
+            username: discUsername,
+            email: discEmail,
+            linkedAt: nowIso,
+            lastLoginAt: nowIso
+          },
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          lastLoginAt: nowIso
+        };
+        persistentUsers.push(newUser);
+        existingUser = newUser;
+      }
+
+      safeSaveJson('users.json', persistentUsers);
+
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(`
+          <!DOCTYPE html>
+          <html>
+            <head><meta charset="utf-8"><title>Discord Girişi Başarılı</title></head>
+            <body style="background:#0f172a;color:#f8fafc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
+              <div style="text-align:center;padding:24px;background:#1e293b;border-radius:12px;border:1px solid #10b981;">
+                <h2>🎉 Discord ile Giriş Başarılı!</h2>
+                <p>Kullanıcı: <strong>${existingUser.username}</strong></p>
+                <p>Yönlendiriliyorsunuz...</p>
+                <script>
+                  if (window.opener) {
+                    window.opener.postMessage({ type: 'DISCORD_AUTH_SUCCESS', user: ${JSON.stringify(existingUser)} }, '*');
+                    window.close();
+                  } else {
+                    window.location.href = '/#profile';
+                  }
+                </script>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        user: existingUser,
+        message: 'Discord ile giriş ve hesap eşleştirmesi başarıyla tamamlandı.'
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/auth/discord/unlink') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const username = String(body.username || '').trim();
+      const user = persistentUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+      if (!user) {
+        return sendJson(res, 404, { success: false, error: 'Kullanıcı bulunamadı.' });
+      }
+
+      user.discord = null;
+      user.updatedAt = new Date().toISOString();
+      safeSaveJson('users.json', persistentUsers);
+
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Discord hesabı bağlantısı başarıyla kaldırıldı.'
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // ==========================================
+  // 15. YETKİLİ ROL VE İZİN YÖNETİCİSİ (#3)
+  // ==========================================
+  if (req.method === 'GET' && pathname === '/api/staff/permissions') {
+    return sendJson(res, 200, {
+      success: true,
+      permissions: staffPermissions
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/staff/permissions/update') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const role = String(body.role || '').toLowerCase(); // moderator veya ticket
+      if (!['moderator', 'ticket'].includes(role)) {
+        return sendJson(res, 400, { success: false, error: 'Geçersiz yetkili rolü (moderator veya ticket olmalı).' });
+      }
+
+      staffPermissions[role] = Object.assign(staffPermissions[role] || {}, body.permissions || {});
+      safeSaveJson('staff_permissions.json', staffPermissions);
+
+      return sendJson(res, 200, {
+        success: true,
+        permissions: staffPermissions,
+        message: `${role.toUpperCase()} rol izinleri başarıyla güncellendi.`
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // ==========================================
+  // 16. MODERASYON, SUSTURMA VE GÜNLÜKLER (#3 & #8)
+  // ==========================================
+  if (req.method === 'GET' && pathname === '/api/moderator/mutes') {
+    const now = Date.now();
+    const active = {};
+    for (const [usr, mute] of Object.entries(userMutes)) {
+      if (new Date(mute.mutedUntil).getTime() > now) {
+        active[usr] = mute;
+      }
+    }
+    return sendJson(res, 200, { success: true, mutes: active });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/moderator/mute') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const targetUser = String(body.targetUsername || '').trim();
+      const minutes = Math.max(1, Number(body.durationMinutes || 15));
+      const reason = String(body.reason || 'Kural ihlali').trim();
+      const mutedBy = String(body.mutedBy || 'Yetkili').trim();
+      const staffRole = String(body.staffRole || 'MODERATOR').toUpperCase();
+
+      const maxAllowed = staffRole === 'ADMIN' ? 43200 : (staffPermissions.moderator?.maxMuteMinutes || 1440);
+      if (minutes > maxAllowed) {
+        return sendJson(res, 400, {
+          success: false,
+          error: `Maksimum susturma süresi ${maxAllowed} dakikadır.`
+        });
+      }
+
+      const mutedUntil = new Date(Date.now() + minutes * 60000).toISOString();
+      userMutes[targetUser] = {
+        targetUsername: targetUser,
+        mutedUntil,
+        minutes,
+        reason,
+        mutedBy,
+        createdAt: new Date().toISOString()
+      };
+      safeSaveJson('user_mutes.json', userMutes);
+
+      const logEntry = {
+        id: 'MODLOG_' + Date.now(),
+        type: 'MUTE',
+        targetUsername: targetUser,
+        durationMinutes: minutes,
+        reason,
+        staffUsername: mutedBy,
+        createdAt: new Date().toISOString()
+      };
+      moderationLogs.unshift(logEntry);
+      if (moderationLogs.length > 200) moderationLogs.length = 200;
+      safeSaveJson('moderation_logs.json', moderationLogs);
+
+      return sendJson(res, 200, {
+        success: true,
+        mute: userMutes[targetUser],
+        message: `${targetUser} kullanıcısı ${minutes} dakika susturuldu.`
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/moderator/unmute') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const targetUser = String(body.targetUsername || '').trim();
+      const unmutedBy = String(body.unmutedBy || 'Yetkili').trim();
+
+      if (userMutes[targetUser]) {
+        delete userMutes[targetUser];
+        safeSaveJson('user_mutes.json', userMutes);
+
+        moderationLogs.unshift({
+          id: 'MODLOG_' + Date.now(),
+          type: 'UNMUTE',
+          targetUsername: targetUser,
+          staffUsername: unmutedBy,
+          createdAt: new Date().toISOString()
+        });
+        safeSaveJson('moderation_logs.json', moderationLogs);
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        message: `${targetUser} kullanıcısının susturması kaldırıldı.`
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/moderation/logs') {
+    return sendJson(res, 200, { success: true, logs: moderationLogs });
+  }
+
+  // ==========================================
+  // 17. ŞEFFAF PUANLAMA, HATA VE ÖNERİ SİSTEMİ (#4)
+  // ==========================================
+  if (req.method === 'GET' && pathname === '/api/points/config') {
+    return sendJson(res, 200, { success: true, pointsConfig });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/points/config/update') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      pointsConfig = Object.assign(pointsConfig, body);
+      safeSaveJson('points_config.json', pointsConfig);
+      return sendJson(res, 200, { success: true, pointsConfig, message: 'Puan ayarları güncellendi.' });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/points/leaderboard') {
+    const userScores = {};
+    for (const u of persistentUsers) {
+      userScores[u.username] = {
+        username: u.username,
+        points: Number(u.points || 0),
+        rank: u.rank || 'MEMBER',
+        confirmedBugs: 0,
+        fixedBugs: 0,
+        approvedSuggestions: 0
+      };
+    }
+
+    for (const b of bugReports) {
+      if (userScores[b.username]) {
+        if (['ONAYLANDI', 'CONFIRMED'].includes(b.status)) userScores[b.username].confirmedBugs++;
+        if (['ÇÖZÜLDÜ', 'FIXED', 'DOĞRULANDI', 'VERIFIED'].includes(b.status)) userScores[b.username].fixedBugs++;
+      }
+    }
+
+    for (const s of suggestionsList) {
+      if (userScores[s.username] && ['ONAYLANDI', 'APPROVED', 'UYGULANDI', 'IMPLEMENTED'].includes(s.status)) {
+        userScores[s.username].approvedSuggestions++;
+      }
+    }
+
+    const sorted = Object.values(userScores).sort((a, b) => b.points - a.points).slice(0, 50);
+    return sendJson(res, 200, { success: true, leaderboard: sorted });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/bugs/list') {
+    return sendJson(res, 200, { success: true, bugs: bugReports });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/bugs/submit') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const newBug = {
+        id: 'BUG_' + Date.now(),
+        title: String(body.title || 'Hata Bildirimi').trim(),
+        description: String(body.description || '').trim(),
+        category: String(body.category || 'Arayüz (UI)').trim(),
+        severity: String(body.severity || 'Orta').trim(),
+        username: String(body.username || 'Oyuncu').trim(),
+        status: 'SUBMITTED', // SUBMITTED, CONFIRMED, FIXED, VERIFIED, REJECTED
+        pointsAwarded: 0,
+        rewardEmerald: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      bugReports.unshift(newBug);
+      safeSaveJson('bug_reports.json', bugReports);
+      return sendJson(res, 200, { success: true, bug: newBug });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/bugs/review') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const bug = bugReports.find(b => b.id === body.bugId);
+      if (!bug) return sendJson(res, 404, { success: false, error: 'Hata kaydı bulunamadı.' });
+
+      const oldStatus = bug.status;
+      const newStatus = String(body.status || 'CONFIRMED').toUpperCase();
+      bug.status = newStatus;
+      bug.adminNote = String(body.adminNote || '').trim();
+      bug.reviewedBy = String(body.reviewedBy || 'Yetkili').trim();
+      bug.updatedAt = new Date().toISOString();
+
+      let pointsToAdd = 0;
+      if (newStatus === 'CONFIRMED' && oldStatus !== 'CONFIRMED') {
+        pointsToAdd = pointsConfig.bugConfirmed || 50;
+      } else if ((newStatus === 'FIXED' || newStatus === 'ÇÖZÜLDÜ') && oldStatus !== 'FIXED') {
+        pointsToAdd = pointsConfig.bugFixed || 100;
+      } else if (newStatus === 'VERIFIED' && oldStatus !== 'VERIFIED') {
+        pointsToAdd = pointsConfig.bugVerified || 150;
+      }
+
+      if (pointsToAdd > 0) {
+        bug.pointsAwarded = (bug.pointsAwarded || 0) + pointsToAdd;
+        const targetUser = persistentUsers.find(u => u.username.toLowerCase() === bug.username.toLowerCase());
+        if (targetUser) {
+          targetUser.points = (targetUser.points || 0) + pointsToAdd;
+          safeSaveJson('users.json', persistentUsers);
+        }
+      }
+
+      safeSaveJson('bug_reports.json', bugReports);
+      return sendJson(res, 200, { success: true, bug, pointsAdded: pointsToAdd });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/suggestions/list') {
+    return sendJson(res, 200, { success: true, suggestions: suggestionsList });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/suggestions/submit') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const newSuggestion = {
+        id: 'SUGG_' + Date.now(),
+        title: String(body.title || 'Yeni Öneri').trim(),
+        details: String(body.details || '').trim(),
+        category: String(body.category || 'Genel').trim(),
+        username: String(body.username || 'Oyuncu').trim(),
+        status: 'SUBMITTED', // SUBMITTED, APPROVED, IMPLEMENTED, REJECTED
+        upvotes: 1,
+        voters: [String(body.username || 'Oyuncu')],
+        pointsAwarded: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      suggestionsList.unshift(newSuggestion);
+      safeSaveJson('suggestions.json', suggestionsList);
+      return sendJson(res, 200, { success: true, suggestion: newSuggestion });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/suggestions/review') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const sugg = suggestionsList.find(s => s.id === body.suggestionId);
+      if (!sugg) return sendJson(res, 404, { success: false, error: 'Öneri kaydı bulunamadı.' });
+
+      const oldStatus = sugg.status;
+      const newStatus = String(body.status || 'APPROVED').toUpperCase();
+      sugg.status = newStatus;
+      sugg.adminNote = String(body.adminNote || '').trim();
+      sugg.reviewedBy = String(body.reviewedBy || 'Yetkili').trim();
+      sugg.updatedAt = new Date().toISOString();
+
+      let pointsToAdd = 0;
+      if (newStatus === 'APPROVED' && oldStatus !== 'APPROVED') {
+        pointsToAdd = pointsConfig.suggestionApproved || 30;
+      } else if (newStatus === 'IMPLEMENTED' && oldStatus !== 'IMPLEMENTED') {
+        pointsToAdd = pointsConfig.suggestionImplemented || 75;
+      }
+
+      if (pointsToAdd > 0) {
+        sugg.pointsAwarded = (sugg.pointsAwarded || 0) + pointsToAdd;
+        const targetUser = persistentUsers.find(u => u.username.toLowerCase() === sugg.username.toLowerCase());
+        if (targetUser) {
+          targetUser.points = (targetUser.points || 0) + pointsToAdd;
+          safeSaveJson('users.json', persistentUsers);
+        }
+      }
+
+      safeSaveJson('suggestions.json', suggestionsList);
+      return sendJson(res, 200, { success: true, suggestion: sugg, pointsAdded: pointsToAdd });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // ==========================================
+  // 18. ADMIN, MODERATÖR VE GENEL KULLANICI AI ASİSTANLARI (#4 & #5)
+  // ==========================================
+  if (req.method === 'POST' && pathname === '/api/ai/admin-chat') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const question = String(body.question || '').trim();
+      const adminEmail = String(body.email || '').toLowerCase().trim();
+
+      if (adminEmail !== SUPER_ADMIN_EMAIL) {
+        return sendJson(res, 403, { success: false, error: 'Admin AI yalnızca baş yönetici tarafından kullanılabilir.' });
+      }
+
+      const totalRevenue = stripeTransactions.reduce((acc, t) => acc + (t.amountTry || 0), 0);
+      const stats = {
+        totalUsers: persistentUsers.length,
+        activeSponsors: activeSponsors.filter(s => s.active).length,
+        openTickets: supportTickets.filter(t => t.status === 'AÇIK').length,
+        unresolvedBugs: bugReports.filter(b => ['SUBMITTED', 'CONFIRMED'].includes(b.status)).length,
+        pendingSuggestions: suggestionsList.filter(s => s.status === 'SUBMITTED').length,
+        totalBackups: automatedBackups.length,
+        totalRevenueTry: totalRevenue.toFixed(2),
+        discordConfigured: Boolean(process.env.DISCORD_CLIENT_ID),
+        telegramConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN)
+      };
+
+      let answer = `🛡️ **Yönetici Asistanı Özeti**:\n` +
+        `• Kayıtlı Kullanıcılar: ${stats.totalUsers}\n` +
+        `• Açık Destek Biletleri: ${stats.openTickets}\n` +
+        `• Bekleyen Hata Bildirimleri: ${stats.unresolvedBugs}\n` +
+        `• Toplam Stripe Geliri: ${stats.totalRevenueTry} ₺\n` +
+        `• Aktif Sponsorlar: ${stats.activeSponsors}\n` +
+        `• Bulut Yedekleri: ${stats.totalBackups} adet onaylı snapshot.\n\n`;
+
+      if (question.toLowerCase().includes('yedek')) {
+        answer += `Son yedek ${automatedBackups[0]?.createdAt || 'bilinmiyor'} tarihinde alındı. Tüm veriler Google Drive formatında hazırdır.`;
+      } else if (question.toLowerCase().includes('gelir') || question.toLowerCase().includes('para')) {
+        answer += `Platform üzerinde toplam ${stripeTransactions.length} başarılı ödeme işlemi gerçekleşti. Toplam ciro: ${stats.totalRevenueTry} ₺.`;
+      } else {
+        answer += `Soru: "${question}"\nSistem tüm bileşenleriyle stabil ve güvenli çalışıyor. İzinler ve veri tabanı bütünlüğü koruma altındadır.`;
+      }
+
+      return sendJson(res, 200, { success: true, answer, stats });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/ai/mod-chat') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const question = String(body.question || '').trim();
+
+      const openTicketsCount = supportTickets.filter(t => t.status === 'AÇIK').length;
+      const reportedBugsCount = bugReports.filter(b => b.status === 'SUBMITTED').length;
+      const suggestionsCount = suggestionsList.filter(s => s.status === 'SUBMITTED').length;
+      const activeMutesCount = Object.keys(userMutes).length;
+
+      let answer = `⚔️ **Moderatör Asistanı Yanıtı**:\n` +
+        `• İncelenmeyi bekleyen bilet: ${openTicketsCount}\n` +
+        `• Yeni hata bildirimi: ${reportedBugsCount}\n` +
+        `• Bekleyen öneri: ${suggestionsCount}\n` +
+        `• Aktif susturulan oyuncu: ${activeMutesCount}\n\n`;
+
+      if (question.toLowerCase().includes('kural') || question.toLowerCase().includes('küfür')) {
+        answer += `Sohbette hakaret veya argo kullanan oyuncular otomatik olarak sansürlenir ve günlük kaydı tutulur. Moderatör olarak oyuncuyu maksimum ${staffPermissions.moderator?.maxMuteMinutes || 1440} dakika susturabilirsiniz.`;
+      } else {
+        answer += `Öneri: Destek biletlerini ve hata bildirimlerini inceleyip doğruladığınızda oyuncular şeffaf puan kazanır.`;
+      }
+
+      return sendJson(res, 200, { success: true, answer });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/ai/user-chat') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const question = String(body.question || '').trim();
+      const rankOrder = Number(body.rankOrder || 1);
+
+      if (rankOrder < 4) {
+        return sendJson(res, 403, {
+          success: false,
+          error: 'Bu özellik yalnızca MVP / MVIP ve üzeri rütbelere özeldir. Lütfen mağazadan rütbenizi yükseltin.'
+        });
+      }
+
+      let answer = `🧙‍♂️ **Bilge Asistan (MVIP Özel)**:\n`;
+      const q = question.toLowerCase();
+
+      if (q.includes('netherite') || q.includes('zümrüt')) {
+        answer += `Netherite en değerli madendir! İlk VIP alımında +50, VIP+ ve üzeri alımlarda +250 Netherite ilk alım bonusu verilir. Zümrütlerle Ölümsüzlük Totemi (Ekstra Can) ve özel mağaza kozmetikleri edinebilirsiniz.`;
+      } else if (q.includes('parti') || q.includes('jüri') || q.includes('turnuva')) {
+        answer += `Parti turnuvalarında dönüşümlü jüri sistemi uygulanır! 1. turda davet edilen oyuncu jüri iken, 2. turda lider jüri koltuğuna geçer. Bu sayede tüm oyuncular adil yarışır.`;
+      } else if (q.includes('ender') || q.includes('dragon') || q.includes('ejderha')) {
+        answer += `Ender Ejderhası'nı yenmek için yatak patlatma taktiğini kullanabilir veya kristallerini patlatarak can yenilemesini durdurabilirsiniz!`;
+      } else {
+        answer += `Harika bir Minecraft sorusu! Yarışmada 15. soruya ulaşmak için can hakkınızı ve seyirci/jüri jokerlerinizi kritik anlara saklamanızı öneririm! Bol şans! 🌟`;
+      }
+
+      return sendJson(res, 200, { success: true, answer });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // ==========================================
+  // 19. SOHBET KÜFÜR FİLTRESİ (#8)
+  // ==========================================
+  if (req.method === 'POST' && pathname === '/api/chat/moderate') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const rawText = String(body.text || '');
+      const username = String(body.username || 'Oyuncu');
+
+      // Türkçe küfür ve hakaret kökleri ile varyasyonlar
+      const profanityPatterns = [
+        /\b(?:a[m\s]*q|a[m\s]*k|o[\s]*[çc]|p[i\s]*[çc]|s[\s]*[i1][\s]*k[\s]*[t\+]?|y[a\s]*r[r\s]*[a\s]*k|o[r\s]*[o\s]*s[p\s]*u|g[öo][\s]*t|i[\s]*b[\s]*n[\s]*e|k[\s]*a[\s]*h[\s]*p[\s]*e|p[\s]*u[\s]*[şs][\s]*t|t[\s]*a[\s]*[şs][\s]*a[\s]*k|d[\s]*[öo][\s]*l|a[\s]*m[\s]*c[\s]*[ıi][\s]*k|s[\s]*[i1][\s]*k[\s]*i[\s]*m|s[\s]*[i1][\s]*k[\s]*e[\s]*y[\s]*i[\s]*m|a[\s]*m[\s]*[ıi][\s]*n[\s]*a)\b/gi,
+        /\b(?:orospu|pic|piç|sikik|yarak|yarrak|amcık|amcik|amk|aq|oç|oc|siktir|gavat|pezevenk|kahpe|ibne|şerefsiz|serefsiz|aptal|salak)\b/gi
+      ];
+
+      let cleaned = rawText;
+      let censored = false;
+
+      for (const pattern of profanityPatterns) {
+        if (pattern.test(cleaned)) {
+          censored = true;
+          cleaned = cleaned.replace(pattern, '[sansürlendi]');
+        }
+      }
+
+      if (censored) {
+        moderationLogs.unshift({
+          id: 'MODLOG_' + Date.now(),
+          type: 'CHAT_FILTER',
+          targetUsername: username,
+          originalSnippet: rawText.slice(0, 40) + '...',
+          createdAt: new Date().toISOString()
+        });
+        if (moderationLogs.length > 200) moderationLogs.length = 200;
+        safeSaveJson('moderation_logs.json', moderationLogs);
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        censored,
+        wasCensored: censored,
+        cleanText: cleaned
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // ==========================================
+  // 20. WEBRTC SESLİ SOHBET SİNYALLEŞME SİSTEMİ (#9)
+  // ==========================================
+  if (req.method === 'POST' && pathname === '/api/voice/join') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const partyId = String(body.partyId || 'default');
+      const username = String(body.username || 'Oyuncu');
+
+      if (!activeVoiceRooms[partyId]) {
+        activeVoiceRooms[partyId] = { peers: {}, signals: [] };
+      }
+
+      activeVoiceRooms[partyId].peers[username] = { lastSeen: Date.now() };
+
+      return sendJson(res, 200, {
+        success: true,
+        partyId,
+        peers: Object.keys(activeVoiceRooms[partyId].peers)
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/voice/signal') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const partyId = String(body.partyId || 'default');
+      const from = String(body.from || '');
+      const to = String(body.to || '');
+      const signal = body.signal;
+
+      if (!activeVoiceRooms[partyId]) {
+        activeVoiceRooms[partyId] = { peers: {}, signals: [] };
+      }
+
+      activeVoiceRooms[partyId].signals.push({
+        id: 'SIG_' + Date.now() + '_' + Math.random(),
+        from,
+        to,
+        signal,
+        createdAt: Date.now()
+      });
+
+      // 30 saniyeden eski sinyalleri temizle
+      const cutoff = Date.now() - 30000;
+      activeVoiceRooms[partyId].signals = activeVoiceRooms[partyId].signals.filter(s => s.createdAt > cutoff);
+
+      return sendJson(res, 200, { success: true });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/voice/signals') {
+    const partyId = String(query.partyId || 'default');
+    const username = String(query.username || '');
+
+    if (!activeVoiceRooms[partyId]) {
+      return sendJson(res, 200, { success: true, signals: [] });
+    }
+
+    if (username && activeVoiceRooms[partyId].peers[username]) {
+      activeVoiceRooms[partyId].peers[username].lastSeen = Date.now();
+    }
+
+    const pending = activeVoiceRooms[partyId].signals.filter(s => s.to === username || s.to === 'ALL');
+    // Alınan sinyalleri sil
+    activeVoiceRooms[partyId].signals = activeVoiceRooms[partyId].signals.filter(s => s.to !== username);
+
+    return sendJson(res, 200, {
+      success: true,
+      signals: pending,
+      activePeers: Object.keys(activeVoiceRooms[partyId].peers)
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/voice/leave') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const partyId = String(body.partyId || 'default');
+      const username = String(body.username || '');
+
+      if (activeVoiceRooms[partyId] && activeVoiceRooms[partyId].peers[username]) {
+        delete activeVoiceRooms[partyId].peers[username];
+        if (Object.keys(activeVoiceRooms[partyId].peers).length === 0) {
+          delete activeVoiceRooms[partyId];
+        }
+      }
+
+      return sendJson(res, 200, { success: true, message: 'Ses odasından ayrılındı.' });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }

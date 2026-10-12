@@ -44,7 +44,11 @@
     ACTIVE_OTP: 'mc_millionaire_tr_active_otps_v10',
     SPONSORS: 'mc_millionaire_tr_sponsors_v10',
     PRE_UPDATE_BACKUP: 'mc_millionaire_tr_pre_update_backup_v10',
-    COSMETIC_ENTITLEMENTS: 'mc_millionaire_tr_cosmetic_entitlements_v10'
+    COSMETIC_ENTITLEMENTS: 'mc_millionaire_tr_cosmetic_entitlements_v10',
+    TICKET_PERMISSIONS: 'mc_millionaire_tr_ticket_perms_v10',
+    USER_MUTES: 'mc_millionaire_tr_user_mutes_v10',
+    MODERATION_LOGS: 'mc_millionaire_tr_mod_logs_v10',
+    POINTS_CONFIG: 'mc_millionaire_tr_points_cfg_v10'
   };
 
   // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan verileri _v10 sürümüne GÜVENLİ MİGRE ET
@@ -586,7 +590,22 @@
     canModerateParties: true,
     canReviewTickets: true,
     canReviewBugs: true,
-    canReviewSuggestions: true
+    canReviewSuggestions: true,
+    canMutePlayers: true,
+    maxMuteMinutes: 1440,
+    canModerateChat: true,
+    canUseModAI: true
+  };
+
+  const DEFAULT_TICKET_PERMS = {
+    canViewTickets: true,
+    canClaimTickets: true,
+    canReplyTickets: true,
+    canEscalateTickets: true,
+    canReportBugs: true,
+    canSubmitSuggestions: true,
+    canMutePlayers: false,
+    maxMuteMinutes: 30
   };
 
   const SUPER_ADMIN_EMAIL = 'codingdevelopia@gmail.com';
@@ -797,7 +816,23 @@
         canReviewSuggestions:
           updates.canReviewSuggestions !== undefined
             ? Boolean(updates.canReviewSuggestions)
-            : current.canReviewSuggestions
+            : current.canReviewSuggestions,
+        canMutePlayers:
+          updates.canMutePlayers !== undefined
+            ? Boolean(updates.canMutePlayers)
+            : current.canMutePlayers,
+        maxMuteMinutes:
+          updates.maxMuteMinutes !== undefined
+            ? Math.max(1, Number(updates.maxMuteMinutes))
+            : current.maxMuteMinutes,
+        canModerateChat:
+          updates.canModerateChat !== undefined
+            ? Boolean(updates.canModerateChat)
+            : current.canModerateChat,
+        canUseModAI:
+          updates.canUseModAI !== undefined
+            ? Boolean(updates.canUseModAI)
+            : current.canUseModAI
       };
       storage.set(STORAGE_KEYS.MOD_PERMISSIONS, next);
       activityService.log(
@@ -806,6 +841,138 @@
         `Yönetici ${session.username} Moderatör yetkilerini güncelledi.`
       );
       return next;
+    },
+
+    getTicketPermissions() {
+      const saved = storage.get(STORAGE_KEYS.TICKET_PERMISSIONS, null);
+      return { ...DEFAULT_TICKET_PERMS, ...(saved || {}) };
+    },
+
+    updateTicketPermissions(session, updates = {}) {
+      this.requireRole(session, ['ADMIN']);
+      const current = this.getTicketPermissions();
+      const next = {
+        ...current,
+        canViewTickets: updates.canViewTickets !== undefined ? Boolean(updates.canViewTickets) : current.canViewTickets,
+        canClaimTickets: updates.canClaimTickets !== undefined ? Boolean(updates.canClaimTickets) : current.canClaimTickets,
+        canReplyTickets: updates.canReplyTickets !== undefined ? Boolean(updates.canReplyTickets) : current.canReplyTickets,
+        canEscalateTickets: updates.canEscalateTickets !== undefined ? Boolean(updates.canEscalateTickets) : current.canEscalateTickets,
+        canReportBugs: updates.canReportBugs !== undefined ? Boolean(updates.canReportBugs) : current.canReportBugs,
+        canSubmitSuggestions: updates.canSubmitSuggestions !== undefined ? Boolean(updates.canSubmitSuggestions) : current.canSubmitSuggestions,
+        canMutePlayers: updates.canMutePlayers !== undefined ? Boolean(updates.canMutePlayers) : current.canMutePlayers,
+        maxMuteMinutes: updates.maxMuteMinutes !== undefined ? Math.max(1, Number(updates.maxMuteMinutes)) : current.maxMuteMinutes
+      };
+      storage.set(STORAGE_KEYS.TICKET_PERMISSIONS, next);
+      activityService.log('TICKET_PERMS_UPDATED', session.username, `Yönetici ${session.username} Destek Yetkilisi izinlerini güncelledi.`);
+      return next;
+    },
+
+    getStaffPermissions() {
+      return {
+        moderator: this.getModeratorPermissions(),
+        ticket: this.getTicketPermissions()
+      };
+    },
+
+    isMuted(username) {
+      const clean = String(username || '').trim().toLowerCase();
+      const allMutes = storage.get(STORAGE_KEYS.USER_MUTES, {});
+      const mute = allMutes[clean];
+      if (!mute) return { muted: false, minutesRemaining: 0 };
+      const diffMs = new Date(mute.mutedUntil).getTime() - Date.now();
+      if (diffMs <= 0) {
+        delete allMutes[clean];
+        storage.set(STORAGE_KEYS.USER_MUTES, allMutes);
+        return { muted: false, minutesRemaining: 0 };
+      }
+      return {
+        muted: true,
+        minutesRemaining: Math.ceil(diffMs / 60000),
+        reason: mute.reason,
+        mutedUntil: mute.mutedUntil
+      };
+    },
+
+    muteUser(session, targetUsernameOrObj, durationMinutesParam = 15, reasonParam = 'Kural ihlali') {
+      this.verifySession(session);
+      let targetUsername = '';
+      let durationMinutes = 15;
+      let reason = 'Kural ihlali';
+
+      if (typeof targetUsernameOrObj === 'object' && targetUsernameOrObj !== null) {
+        targetUsername = targetUsernameOrObj.targetUsername;
+        durationMinutes = targetUsernameOrObj.durationMinutes ?? 15;
+        reason = targetUsernameOrObj.reason ?? 'Kural ihlali';
+      } else {
+        targetUsername = targetUsernameOrObj;
+        durationMinutes = durationMinutesParam;
+        reason = reasonParam;
+      }
+
+      const role = this.getEffectiveRole(session);
+      if (role !== 'ADMIN' && role !== 'MODERATOR' && role !== 'TICKET') {
+        throw new Error('Yalnızca yetkililer susturma işlemi uygulayabilir.');
+      }
+      const ticketPerms = this.getTicketPermissions();
+      if (role === 'TICKET' && !ticketPerms.canMutePlayers) {
+        throw new Error('Destek yetkililerinin oyuncu susturma izni kapalıdır.');
+      }
+      const maxMinutes = role === 'ADMIN' ? 43200 : role === 'MODERATOR' ? (this.getModeratorPermissions().maxMuteMinutes || 1440) : (ticketPerms.maxMuteMinutes || 30);
+      const dur = Math.min(Math.max(1, Number(durationMinutes)), maxMinutes);
+
+      const clean = String(targetUsername || '').trim();
+      if (!clean) throw new Error('Geçerli bir kullanıcı adı belirtilmelidir.');
+
+      const mutedUntil = new Date(Date.now() + dur * 60000).toISOString();
+      const muteObj = {
+        targetUsername: clean,
+        mutedUntil,
+        durationMinutes: dur,
+        reason: String(reason).trim(),
+        mutedBy: session.username,
+        createdAt: new Date().toISOString()
+      };
+
+      const allMutes = storage.get(STORAGE_KEYS.USER_MUTES, {});
+      allMutes[clean.toLowerCase()] = muteObj;
+      storage.set(STORAGE_KEYS.USER_MUTES, allMutes);
+
+      const logs = storage.get(STORAGE_KEYS.MODERATION_LOGS, []);
+      logs.unshift({
+        id: 'LOG_' + Date.now(),
+        type: 'MUTE',
+        targetUsername: clean,
+        durationMinutes: dur,
+        reason,
+        staffUsername: session.username,
+        createdAt: new Date().toISOString()
+      });
+      storage.set(STORAGE_KEYS.MODERATION_LOGS, logs.slice(0, 100));
+      return muteObj;
+    },
+
+    unmuteUser(session, targetUsername) {
+      this.verifySession(session);
+      const role = this.getEffectiveRole(session);
+      if (role !== 'ADMIN' && role !== 'MODERATOR') {
+        throw new Error('Susturmayı kaldırma yetkisine sahip değilsiniz.');
+      }
+      const clean = String(targetUsername || '').trim().toLowerCase();
+      const allMutes = storage.get(STORAGE_KEYS.USER_MUTES, {});
+      if (allMutes[clean]) {
+        delete allMutes[clean];
+        storage.set(STORAGE_KEYS.USER_MUTES, allMutes);
+        const logs = storage.get(STORAGE_KEYS.MODERATION_LOGS, []);
+        logs.unshift({
+          id: 'LOG_' + Date.now(),
+          type: 'UNMUTE',
+          targetUsername,
+          staffUsername: session.username,
+          createdAt: new Date().toISOString()
+        });
+        storage.set(STORAGE_KEYS.MODERATION_LOGS, logs.slice(0, 100));
+      }
+      return true;
     },
 
     verifySession(session) {
@@ -837,6 +1004,9 @@
         if (user.isModerator || user.role === 'MODERATOR' || user.rank === 'MODERATOR') {
           return 'MODERATOR';
         }
+        if (user.role === 'TICKET' || user.isTicketStaff) {
+          return 'TICKET';
+        }
         const norm = normalizeRankId(user.rank || user.role || 'MEMBER');
         return norm === 'ADMIN' ? 'MEMBER' : norm;
       }
@@ -850,6 +1020,7 @@
       const rankId = this.getEffectiveRankId(session);
       if (rankId === 'ADMIN') return 'ADMIN';
       if (rankId === 'MODERATOR') return 'MODERATOR';
+      if (rankId === 'TICKET') return 'TICKET';
       if (['VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(rankId)) return 'VIP';
       return 'MEMBER';
     },
@@ -877,6 +1048,10 @@
         if (rankId === 'MODERATOR') {
           const modPerms = this.getModeratorPermissions();
           return { ...mergedPerms, ...modPerms, canCreateParty: true, canInvitePlayers: true };
+        }
+        if (rankId === 'TICKET') {
+          const ticketPerms = this.getTicketPermissions();
+          return { ...mergedPerms, ...ticketPerms, canCreateParty: true, canInvitePlayers: true };
         }
         return mergedPerms;
       }
@@ -1600,6 +1775,8 @@
       netheriteBalance: Number(user.netheriteBalance ?? 0),
       extraLives: Number(user.extraLives || 0),
       points: Number(user.points || 0),
+      discordId: user.discordId || null,
+      discordUsername: user.discordUsername || user.discordTag || null,
       loginAt: new Date().toISOString()
     };
     payload.signature = computeTokenSignature(payload);
@@ -1857,11 +2034,14 @@
       const user = userService.getUserByUsername(session.username);
       if (!user) throw new Error('Hesap bulunamadı.');
 
-      const currHash = await sha256Async(
-        `${AUTH_SALT}::PWD::${user.username.toLowerCase()}::${String(currentPassword || '')}`
-      );
-      if (user.passwordHash !== currHash && !session.isAdminSession) {
-        throw new Error('Mevcut şifrenizi hatalı girdiniz.');
+      const hasExistingPassword = Boolean(user.passwordHash);
+      if (hasExistingPassword && !session.isAdminSession) {
+        const currHash = await sha256Async(
+          `${AUTH_SALT}::PWD::${user.username.toLowerCase()}::${String(currentPassword || '')}`
+        );
+        if (user.passwordHash !== currHash) {
+          throw new Error('Mevcut şifrenizi hatalı girdiniz.');
+        }
       }
 
       if (!newPassword || String(newPassword).length < 4) {
@@ -1875,6 +2055,92 @@
       if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
         cloudSyncService.pushNow().catch(() => {});
       }
+      return true;
+    },
+
+    async getDiscordAuthUrl() {
+      try {
+        const res = await fetch('/api/auth/discord/url');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.url) return data.url;
+        }
+      } catch (e) {}
+      return null;
+    },
+
+    async loginWithDiscord({ code, state, redirectUri } = {}) {
+      const res = await fetch('/api/auth/discord/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, state, redirectUri })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Discord ile giriş yapılamadı.');
+      }
+      const user = data.user;
+      const isAdmin = Boolean(user.rank === 'ADMIN' || (user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL));
+      const session = buildSessionPayload(user, isAdmin);
+      storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+      activityService.log(
+        'DISCORD_LOGIN',
+        user.username,
+        `${user.username} Discord OAuth2 ile giriş yaptı.`
+      );
+
+      if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+        cloudSyncService.pushNow().catch(() => {});
+      }
+
+      return session;
+    },
+
+    async linkDiscord(session, { code, state, redirectUri } = {}) {
+      authGuard.verifySession(session);
+      const res = await fetch('/api/auth/discord/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, state, redirectUri })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Discord hesabı bağlanamadı.');
+      }
+      const linkedUser = data.user;
+      userService.syncUserFields(session.username, {
+        discord: linkedUser.discord
+      });
+
+      activityService.log(
+        'DISCORD_LINK',
+        session.username,
+        `${session.username} Discord hesabını (${linkedUser.discord?.username || ''}) başarıyla bağladı.`
+      );
+
+      return linkedUser;
+    },
+
+    async unlinkDiscord(session) {
+      authGuard.verifySession(session);
+      const res = await fetch('/api/auth/discord/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: session.username })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Discord bağlantısı kaldırılamadı.');
+      }
+      userService.syncUserFields(session.username, { discord: null });
+
+      activityService.log(
+        'DISCORD_UNLINK',
+        session.username,
+        `${session.username} Discord hesabı bağlantısını kaldırdı.`
+      );
+
       return true;
     },
 
@@ -3392,7 +3658,7 @@
     },
 
     claimTicket(session, ticketId) {
-      authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR', 'TICKET']);
       const tickets = this.getAllTickets();
       const ticket = tickets.find(t => t.id === ticketId);
       if (!ticket) throw new Error('Destek talebi bulunamadı.');
@@ -3417,7 +3683,7 @@
     },
 
     updateTicketStatus(session, ticketId, newStatus) {
-      authGuard.requireRole(session, ['ADMIN', 'MODERATOR']);
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR', 'TICKET']);
       const tickets = this.getAllTickets();
       const ticket = tickets.find(t => t.id === ticketId);
       if (!ticket) throw new Error('Destek talebi bulunamadı.');
@@ -3531,6 +3797,32 @@
         bug.rewarded = true;
         bug.rewardEmerald = numReward;
         rewardGranted = numReward;
+      }
+
+      const ptsConfig = (window.MCMServices?.pointsService?.getConfig && window.MCMServices.pointsService.getConfig()) || {
+        bugConfirmed: 50,
+        bugFixed: 100,
+        bugVerified: 150
+      };
+      let ptsToAdd = 0;
+      const upperStatus = String(status || '').toUpperCase();
+      if ((upperStatus === 'ONAYLANDI' || upperStatus === 'CONFIRMED') && !bug.pointsConfirmedAwarded) {
+        ptsToAdd += ptsConfig.bugConfirmed || 50;
+        bug.pointsConfirmedAwarded = true;
+      }
+      if ((upperStatus === 'ÇÖZÜLDÜ' || upperStatus === 'FIXED') && !bug.pointsFixedAwarded) {
+        ptsToAdd += ptsConfig.bugFixed || 100;
+        bug.pointsFixedAwarded = true;
+      }
+      if ((upperStatus === 'DOĞRULANDI' || upperStatus === 'VERIFIED') && !bug.pointsVerifiedAwarded) {
+        ptsToAdd += ptsConfig.bugVerified || 150;
+        bug.pointsVerifiedAwarded = true;
+      }
+      if (ptsToAdd > 0) {
+        bug.pointsAwarded = (bug.pointsAwarded || 0) + ptsToAdd;
+        if (window.MCMServices?.pointsService) {
+          window.MCMServices.pointsService.awardPoints(bug.username, ptsToAdd, `Hata Bildirimi (#${bug.id})`);
+        }
       }
 
       storage.set(STORAGE_KEYS.BUG_REPORTS, bugs);
@@ -3694,6 +3986,27 @@
         item.rewarded = true;
         item.rewardEmerald = numReward;
         rewardGranted = numReward;
+      }
+
+      const ptsConfig = (window.MCMServices?.pointsService?.getConfig && window.MCMServices.pointsService.getConfig()) || {
+        suggestionApproved: 30,
+        suggestionImplemented: 75
+      };
+      let ptsToAdd = 0;
+      const upperStatus = String(status || '').toUpperCase();
+      if ((upperStatus === 'ONAYLANDI' || upperStatus === 'APPROVED') && !item.pointsApprovedAwarded) {
+        ptsToAdd += ptsConfig.suggestionApproved || 30;
+        item.pointsApprovedAwarded = true;
+      }
+      if ((upperStatus === 'UYGULANDI' || upperStatus === 'IMPLEMENTED') && !item.pointsImplementedAwarded) {
+        ptsToAdd += ptsConfig.suggestionImplemented || 75;
+        item.pointsImplementedAwarded = true;
+      }
+      if (ptsToAdd > 0) {
+        item.pointsAwarded = (item.pointsAwarded || 0) + ptsToAdd;
+        if (window.MCMServices?.pointsService) {
+          window.MCMServices.pointsService.awardPoints(item.username, ptsToAdd, `Öneri Değerlendirmesi (#${item.id})`);
+        }
       }
 
       storage.set(STORAGE_KEYS.SUGGESTIONS, list);
@@ -6867,6 +7180,168 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     }
   };
 
+  // ==========================================
+  // ŞEFFAF PUANLAMA SERVİSİ (pointsService)
+  // ==========================================
+  const pointsService = {
+    getConfig() {
+      const cfg = storage.get(STORAGE_KEYS.POINTS_CONFIG, {
+        bugConfirmed: 50,
+        bugFixed: 100,
+        bugVerified: 150,
+        suggestionApproved: 30,
+        suggestionImplemented: 75
+      });
+      return {
+        ...cfg,
+        bugFixedPoints: cfg.bugFixed || 100,
+        suggestionImplementedPoints: cfg.suggestionImplemented || 75
+      };
+    },
+
+    updateConfig(session, updates = {}) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const current = this.getConfig();
+      const next = Object.assign(current, updates);
+      storage.set(STORAGE_KEYS.POINTS_CONFIG, next);
+      return next;
+    },
+
+    getUserPoints(username) {
+      const cleanUser = String(username || '').trim();
+      const user = userService.getUserByUsername(cleanUser);
+      return Number(user?.points || 0);
+    },
+
+    awardPoints(username, points, reason = '') {
+      const cleanUser = String(username || '').trim();
+      const numPoints = Math.max(0, Number(points || 0));
+      if (!cleanUser || numPoints <= 0) return 0;
+      const user = userService.getUserByUsername(cleanUser);
+      if (user) {
+        user.points = (user.points || 0) + numPoints;
+        userService.syncUserFields(cleanUser, { points: user.points });
+        notificationService.notifyUser(cleanUser, {
+          type: 'POINTS_AWARDED',
+          title: '🌟 Katkı Puanı Kazandınız!',
+          message: `${reason ? `${reason}: ` : ''}+${numPoints} puan hesabınıza eklendi! Toplam Puanınız: ${user.points}`
+        });
+      }
+      return numPoints;
+    }
+  };
+
+  // ==========================================
+  // YAPAY ZEKA ASİSTAN SERVİSİ (aiAssistantService - Admin, Mod, MVIP Özel)
+  // ==========================================
+  const aiAssistantService = {
+    async askAdminAI(session, question) {
+      authGuard.requireRole(session, ['ADMIN']);
+      try {
+        const res = await fetch('/api/ai/admin-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, email: session.email })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) return data.answer;
+        }
+      } catch (e) {}
+      return '🛡️ Yönetici Asistanı: Sistem veritabanı aktif, tüm modüller ve yedeklemeler çalışıyor.';
+    },
+
+    async askModAI(session, question) {
+      authGuard.requireRole(session, ['MODERATOR', 'ADMIN']);
+      try {
+        const res = await fetch('/api/ai/mod-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, username: session.username })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) return data.answer;
+        }
+      } catch (e) {}
+      return '⚔️ Moderatör Asistanı: Bilet ve sohbet kuyruğu kontrol edildi, aktif ihlal tespit edilmedi.';
+    },
+
+    async askUserAI(session, question) {
+      authGuard.verifySession(session);
+      const userRank = window.MCMServices?.rankService?.getUserRank(session.username) || { order: 1 };
+      if (userRank.order < 4 && !session.isAdminSession) {
+        throw new Error('Bu özellik yalnızca MVP / MVIP ve üzeri rütbelere özeldir. Lütfen mağazadan rütbenizi yükseltin.');
+      }
+      try {
+        const res = await fetch('/api/ai/user-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, rankOrder: userRank.order, username: session.username })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) return data.answer;
+        }
+      } catch (e) {}
+      return '🧙‍♂️ Bilge Asistan: Minecraft Milyoner yarışmasında 15 soruya ulaşmak için can hakkınızı stratejik kullanın! Netherite madenleri yarışma ekonomisindeki en değerli ödülleri sunar.';
+    }
+  };
+
+  // ==========================================
+  // SOHBET MODERASYON & KÜFÜR FİLTRESİ (chatModerationService)
+  // ==========================================
+  const chatModerationService = {
+    filterMessageLocally(text) {
+      const profanityPatterns = [
+        /\b(?:a[m\s]*q|a[m\s]*k|o[\s]*[çc]|p[i\s]*[çc]|s[\s]*[i1][\s]*k[\s]*[t\+]?|y[a\s]*r[r\s]*[a\s]*k|o[r\s]*[o\s]*s[p\s]*u|g[öo][\s]*t|i[\s]*b[\s]*n[\s]*e|k[\s]*a[\s]*h[\s]*p[\s]*e|p[\s]*u[\s]*[şs][\s]*t|t[\s]*a[\s]*[şs][\s]*a[\s]*k|d[\s]*[öo][\s]*l|a[\s]*m[\s]*c[\s]*[ıi][\s]*k|s[\s]*[i1][\s]*k[\s]*i[\s]*m|s[\s]*[i1][\s]*k[\s]*e[\s]*y[\s]*i[\s]*m|a[\s]*m[\s]*[ıi][\s]*n[\s]*a)\b/gi,
+        /\b(?:orospu|pic|piç|sikik|yarak|yarrak|amcık|amcik|amk|aq|oç|oc|siktir|gavat|pezevenk|kahpe|ibne|şerefsiz|serefsiz|aptal|salak)\b/gi
+      ];
+      let cleaned = String(text || '');
+      let censored = false;
+      for (const pat of profanityPatterns) {
+        if (pat.test(cleaned)) {
+          censored = true;
+          cleaned = cleaned.replace(pat, '[sansürlendi]');
+        }
+      }
+      return { cleanText: cleaned, censored, wasCensored: censored };
+    },
+
+    async moderateMessage(arg1, arg2) {
+      let username = 'Oyuncu';
+      let text = '';
+      if (typeof arg1 === 'string') {
+        text = arg1;
+        if (typeof arg2 === 'string') username = arg2;
+        else if (arg2 && typeof arg2 === 'object') username = arg2.username || arg2.minecraftPlayerName || 'Oyuncu';
+      } else if (arg1 && typeof arg1 === 'object') {
+        username = arg1.username || arg1.minecraftPlayerName || 'Oyuncu';
+        text = String(arg2 || '');
+      } else {
+        text = String(arg2 || '');
+      }
+
+      try {
+        if (typeof fetch === 'function') {
+          const res = await fetch('/api/chat/moderate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, username })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.cleanText !== undefined) {
+              const isCensored = Boolean(data.censored || data.wasCensored);
+              return { cleanText: data.cleanText, censored: isCensored, wasCensored: isCensored };
+            }
+          }
+        }
+      } catch (e) {}
+      return this.filterMessageLocally(text);
+    }
+  };
+
   // MCMServices nesnesini hemen ve gecikmesiz olarak dışa aktar (güvenli başlatma garantisi)
   window.MCMServices = Object.assign(window.MCMServices || {}, {
     mcIconService,
@@ -6892,7 +7367,10 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     otpService,
     maintenanceService,
     dailyQuestionService,
-    sponsorService
+    sponsorService,
+    pointsService,
+    aiAssistantService,
+    chatModerationService
   });
 
   // Bulut senkronizasyonunu güvenle başlat

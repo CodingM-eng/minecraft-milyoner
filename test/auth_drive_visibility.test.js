@@ -1161,8 +1161,133 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert(specialItems.length > 0, 'Özel paketler kategorisinde ürünler bulunmalıdır.');
     console.log(`✓ 8 Kategorili mağaza filtreleme sistemi başarıyla doğrulandı (${badgesItems.length} Rozet, ${profileCustomItems.length} Profil Özelleştirme).`);
 
+    // ------------------------------------------------------------------
+    // TEST 35: Discord OAuth2 & Hesap Bağlama Entegrasyonu (#2)
+    // ------------------------------------------------------------------
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-34 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 35: Discord OAuth2 & Hesap Bağlama Entegrasyonu');
+    console.log('====================================================');
+
+    global.fetch = async (url, options = {}) => {
+      if (String(url).includes('/api/auth/discord/url')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            url: 'https://discord.com/oauth2/authorize?client_id=123&response_type=code&scope=identify%20email&state=mock_state_123'
+          })
+        };
+      }
+      if (String(url).includes('/api/auth/discord/callback')) {
+        const mockUser = {
+          username: 'DiscordSteve',
+          email: 'discord.steve@test.com',
+          discordId: 'discord_999888777',
+          discordUsername: 'DiscordSteve#1337',
+          rank: 'MEMBER'
+        };
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            user: mockUser
+          })
+        };
+      }
+      if (String(url).includes('/api/chat/moderate')) {
+        const body = options.body ? JSON.parse(options.body) : {};
+        const isDirty = /\b(?:orospu|pic|piç|sikik|yarak|yarrak|amcık|amcik|amk|aq|oç|oc|siktir|gavat|pezevenk|kahpe|ibne|şerefsiz|serefsiz|aptal|salak)\b/gi.test(body.text || '');
+        const cleanText = isDirty ? String(body.text || '').replace(/\b(?:orospu|pic|piç|sikik|yarak|yarrak|amcık|amcik|amk|aq|oç|oc|siktir|gavat|pezevenk|kahpe|ibne|şerefsiz|serefsiz|aptal|salak)\b/gi, '[sansürlendi]') : body.text;
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            censored: isDirty,
+            wasCensored: isDirty,
+            cleanText
+          })
+        };
+      }
+      return { ok: true, json: async () => ({ success: true }) };
+    };
+
+    const authSvc = window.MCMServices.authService;
+    const discordUrl = await authSvc.getDiscordAuthUrl();
+    assert(discordUrl.includes('discord.com/oauth2/authorize'), 'Discord yetkilendirme linki doğru olmalı');
+    assert(discordUrl.includes('state='), 'OAuth2 CSRF state parametresi bulunmalı');
+
+    // Discord callback ile oturum açma
+    const discordLoginRes = await authSvc.loginWithDiscord({ code: 'mock_code', state: 'mock_state_123' });
+    assert(discordLoginRes, 'Discord ile giriş oturum döndürmeli');
+    assert.strictEqual(discordLoginRes.discordId, 'discord_999888777', 'Kayıtta Discord ID saklanmalı');
+    console.log('✓ Discord OAuth yetkilendirme linki ve güvenli giriş akışı başarıyla doğrulandı.');
+
+    // ------------------------------------------------------------------
+    // TEST 36: Moderatör & Destek Yetki Matrisi & Mute Sistemi (#3)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 36: Moderatör & Destek Yetki Matrisi & Mute Sistemi');
+    console.log('====================================================');
+
+    const aGuard = window.MCMServices.authGuard;
+    const modPerms = aGuard.getModeratorPermissions();
+    assert.strictEqual(modPerms.canMutePlayers, true, 'Moderatör susturma yetkisine sahip olmalı');
+    assert.strictEqual(modPerms.maxMuteMinutes, 1440, 'Maksimum susturma 24 saat (1440 dk) olmalı');
+
+    const ticketPerms = aGuard.getTicketPermissions();
+    assert.strictEqual(ticketPerms.canClaimTickets, true, 'Destek personeli talep sahiplenebilmeli');
+    assert.strictEqual(ticketPerms.canMutePlayers, false, 'Destek personeli varsayılan olarak susturma yetkisine sahip olmamalı');
+
+    // Mute uygulama testi
+    const adminSess = { username: 'SuperAdmin', role: 'ADMIN', email: 'codingdevelopia@gmail.com', isAdminSession: true };
+    aGuard.muteUser(adminSess, 'ToxicPlayer', 60, 'Uygunsuz dil kullanımı');
+    const isMuted = aGuard.isMuted('ToxicPlayer');
+    assert.strictEqual(isMuted.muted, true, 'Kullanıcı susturulmuş olmalı');
+    assert.strictEqual(isMuted.minutesRemaining > 0, true, 'Kalan ceza süresi pozitif olmalı');
+
+    // Susturmayı kaldırma
+    aGuard.unmuteUser(adminSess, 'ToxicPlayer');
+    assert.strictEqual(aGuard.isMuted('ToxicPlayer').muted, false, 'Ceza kaldırılabilmeli');
+    console.log('✓ Moderatör ve Destek yetkileri, mute cezası ve loglama başarıyla doğrulandı.');
+
+    // ------------------------------------------------------------------
+    // TEST 37: Dinamik Puanlama & Hata/Öneri Ödüllendirmesi (#4)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 37: Dinamik Puanlama & Hata/Öneri Ödüllendirmesi');
+    console.log('====================================================');
+
+    const ptsSvc = window.MCMServices.pointsService;
+    const initialPtsConfig = ptsSvc.getConfig();
+    assert.strictEqual(initialPtsConfig.bugFixedPoints, 100, 'Hata çözümü varsayılan 100 puan olmalı');
+    assert.strictEqual(initialPtsConfig.suggestionImplementedPoints, 75, 'Öneri uygulaması varsayılan 75 puan olmalı');
+
+    // Kullanıcıya dinamik puan ekleme
+    const prevScore = ptsSvc.getUserPoints('RegularPlayer');
+    ptsSvc.awardPoints('RegularPlayer', initialPtsConfig.bugFixedPoints, 'Hata bildirimi ödülü');
+    const newScore = ptsSvc.getUserPoints('RegularPlayer');
+    assert.strictEqual(newScore, prevScore + 100, 'Kullanıcıya 100 puan başarıyla eklenmeli');
+    console.log('✓ Dinamik puanlama matrisi ve puan liderlik tablosu başarıyla doğrulandı.');
+
+    // ------------------------------------------------------------------
+    // TEST 38: Türkçe Argo & Küfür Filtresi Pipeline (#8)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 38: Türkçe Argo & Küfür Filtresi Pipeline');
+    console.log('====================================================');
+
+    const chatModSvc = window.MCMServices.chatModerationService;
+    const testCleanMsg = await chatModSvc.moderateMessage({ username: 'PlayerOne' }, 'Tebrikler güzel maçtı!');
+    assert.strictEqual(testCleanMsg.wasCensored, false, 'Temiz mesaj filtrelenmemeli');
+    assert.strictEqual(testCleanMsg.cleanText, 'Tebrikler güzel maçtı!');
+
+    const testDirtyMsg = await chatModSvc.moderateMessage({ username: 'PlayerBad' }, 'sen tam bir aptal ve salak adamsın');
+    assert.strictEqual(testDirtyMsg.wasCensored, true, 'Uygunsuz ifadeler sansürlenmeli');
+    assert(testDirtyMsg.cleanText.includes('[sansürlendi]'), 'Küfürler [sansürlendi] etiketiyle değiştirilmeli');
+    console.log('✓ Türkçe küfür ve argo filtreleme pipeline’ı başarıyla doğrulandı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-38 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

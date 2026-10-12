@@ -72,9 +72,15 @@
             </svg>
             <span>Telegram ile Giriş Yap</span>
           </button>
+          <button type="button" id="btn-discord-login-auth" class="mc-btn mc-btn-secondary mc-btn-lg" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.95rem; padding: 10px 16px; background: #5865F2; border-color: #4752C4; color: #ffffff;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff">
+              <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+            </svg>
+            <span>Discord ile Giriş Yap</span>
+          </button>
         </div>
         <p style="margin: 8px 0 0 0; font-size: 0.78rem; color: #94a3b8; line-height: 1.4;">
-          🔒 İsteğe bağlıdır. Google / Telegram ile bağlanabilir veya aşağıdaki klasik formu doldurabilirsiniz.
+          🔒 İsteğe bağlıdır. Google, Telegram veya Discord ile bağlanabilir ya da aşağıdaki klasik formu doldurabilirsiniz.
         </p>
       </div>
 
@@ -517,6 +523,18 @@
             <span class="drawer-item-icon">⚙️</span>
             <span class="drawer-item-text">Ayarlar</span>
           </button>
+          <!-- Moderatör Paneli (Moderatör veya Admin için Görünür) -->
+          <button type="button" id="drawer-btn-moderator" class="drawer-item drawer-item-admin hidden"
+            data-nav-screen="moderator">
+            <span class="drawer-item-icon">⚔️</span>
+            <span class="drawer-item-text">Moderatör Paneli</span>
+          </button>
+          <!-- Destek Paneli (Destek Yetkilisi, Mod veya Admin için Görünür) -->
+          <button type="button" id="drawer-btn-ticket" class="drawer-item drawer-item-admin hidden"
+            data-nav-screen="ticket">
+            <span class="drawer-item-icon">🎧</span>
+            <span class="drawer-item-text">Destek Yetkili Paneli</span>
+          </button>
           <!-- Yönetici Paneli (Yalnızca Admin Oturumunda Görünür) -->
           <button type="button" id="drawer-btn-admin" class="drawer-item drawer-item-admin hidden"
             data-nav-screen="admin">
@@ -924,13 +942,24 @@
               <span class="input-hint">Minecraft oyuncu adınızı girdiğinizde avatarınız otomatik olarak skin yüzünüz olur.</span>
             </form>
 
-            <!-- Güvenli Çıkış Yap Butonu -->
-            <div style="margin: 8px 0 12px; display: flex; gap: 8px;">
+            <!-- Güvenli Çıkış Yap & Şifre Butonları (#6) -->
+            <div style="margin: 8px 0 12px; display: flex; gap: 8px; flex-wrap: wrap;">
               <button type="button" id="btn-profile-signout" class="mc-btn mc-btn-danger mc-btn-sm" style="flex:1;">
                 🚪 Güvenli Çıkış Yap
               </button>
-              <button type="button" class="mc-btn mc-btn-secondary mc-btn-sm" data-nav-screen="settings" style="flex:1;">
-                ⚙️ Şifremi Değiştir
+              <button type="button" id="btn-open-change-password-modal" class="mc-btn mc-btn-secondary mc-btn-sm" style="flex:1;">
+                🔒 Parolayı Değiştir
+              </button>
+            </div>
+
+            <!-- Discord Bağlantı Durumu (#2) -->
+            <div id="profile-discord-box" style="margin-bottom:12px;padding:8px 12px;background:rgba(88,101,242,0.15);border:1px solid #5865F2;border-radius:6px;display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.1rem;">👾</span>
+                <span id="profile-discord-status-text" style="font-size:0.84rem;color:#f8fafc;">Discord: Bağlı Değil</span>
+              </div>
+              <button type="button" id="btn-profile-toggle-discord" class="mc-btn mc-btn-sm mc-btn-secondary" style="font-size:0.78rem;padding:4px 8px;">
+                Hesabı Bağla
               </button>
             </div>
 
@@ -1236,11 +1265,17 @@
               <span id="party-voice-status" class="voice-status-text">Mikrofon: Kapalı</span>
             </div>
 
-            <div class="party-voice-controls">
+            <div class="party-voice-controls" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <button type="button" id="btn-toggle-party-mic" class="btn-party-mic">
                 🎙️ Mikrofonu Aç
               </button>
-              <div class="voice-level-meter-wrap" title="Mikrofon Ses Seviyesi">
+              <select id="select-party-mic-device" class="mc-select" style="font-size:0.8rem;padding:4px 8px;max-width:180px;background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:4px;" title="Mikrofon Aygıtı Seç">
+                <option value="">Varsayılan Mikrofon</option>
+              </select>
+              <button type="button" id="btn-test-mic" class="mc-btn mc-btn-sm mc-btn-secondary" style="font-size:0.78rem;">
+                🎙️ Test Et
+              </button>
+              <div class="voice-level-meter-wrap" title="Mikrofon Ses Seviyesi" style="flex:1;min-width:120px;">
                 <span style="font-size:0.75rem;color:#64748b;">Düzey:</span>
                 <div class="voice-level-bar">
                   <div id="party-mic-level-fill" class="voice-level-fill"></div>
@@ -1273,6 +1308,14 @@
                 Parti içi sesli ve yazılı reaksiyonlar burada görünür...
               </div>
             </div>
+
+            <!-- Özel Mesaj Yazma Girişi (#7) -->
+            <form id="party-custom-chat-form" class="party-custom-chat-form" style="display:flex;gap:8px;margin-top:10px;">
+              <input type="text" id="party-custom-chat-input" class="mc-input" placeholder="Partiye mesaj yazın... (Enter ile gönder)" maxlength="150" autocomplete="off" style="flex:1;background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:4px;padding:8px 12px;font-size:0.88rem;" />
+              <button type="submit" id="btn-party-send-chat" class="mc-btn mc-btn-primary mc-btn-sm" style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                <span>💬 Gönder</span>
+              </button>
+            </form>
           </div>
         </div>
 
@@ -1675,6 +1718,76 @@
           <!-- Sağ İçerik Alanı -->
           <div class="admin-content-area" id="admin-content-area"></div>
         </div>
+    </main>
+
+    <!-- ========================================================
+         17. EKRAN: MODERATÖR PANELİ (screen-moderator — #3)
+         ======================================================== -->
+    <main id="screen-moderator" class="screen platform-screen hidden">
+      <div class="platform-container admin-container">
+        <div class="section-header-bar">
+          <div>
+            <span class="section-eyebrow">⚔️ MODERASYON &amp; TOPLULUK GÜVENLİĞİ</span>
+            <h2>MODERATÖR PANELİ</h2>
+          </div>
+          <div class="admin-top-actions">
+            <span class="admin-badge mod-badge">⚔️ MODERATÖR YETKİSİ</span>
+            <button type="button" class="mc-btn mc-btn-secondary" data-nav-screen="welcome">← Ana Sayfa</button>
+          </div>
+        </div>
+
+        <div class="admin-layout">
+          <!-- Sol Moderatör Menüsü -->
+          <nav class="admin-sidebar-nav" id="mod-sidebar-nav">
+            <button type="button" class="admin-nav-item active" data-mod-tab="overview">
+              <span>📊</span>
+              <span>Genel Bakış &amp; Mod AI</span>
+            </button>
+            <button type="button" class="admin-nav-item" data-mod-tab="mutes">
+              <span>🔇</span>
+              <span>Oyuncu Susturma &amp; Ceza</span>
+            </button>
+            <button type="button" class="admin-nav-item" data-mod-tab="bugs">
+              <span>🐞</span>
+              <span>Hata Bildirimleri</span>
+              <span class="admin-nav-badge hidden" id="mod-badge-bugs">0</span>
+            </button>
+            <button type="button" class="admin-nav-item" data-mod-tab="suggestions">
+              <span>💡</span>
+              <span>Öneri İnceleme</span>
+              <span class="admin-nav-badge hidden" id="mod-badge-suggs">0</span>
+            </button>
+            <button type="button" class="admin-nav-item" data-mod-tab="chatlogs">
+              <span>📜</span>
+              <span>Sohbet Günlükleri</span>
+            </button>
+          </nav>
+
+          <!-- Sağ Moderatör İçerik Alanı -->
+          <div class="admin-content-area" id="mod-content-area"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ========================================================
+         18. EKRAN: DESTEK YETKİLİ PANELİ (screen-ticket — #3)
+         ======================================================== -->
+    <main id="screen-ticket" class="screen platform-screen hidden">
+      <div class="platform-container admin-container">
+        <div class="section-header-bar">
+          <div>
+            <span class="section-eyebrow">🎧 OYUNCU İLİŞKİLERİ &amp; BİLET MASASI</span>
+            <h2>DESTEK YETKİLİ PANELİ</h2>
+          </div>
+          <div class="admin-top-actions">
+            <span class="admin-badge ticket-badge">🎧 DESTEK GÖREVLİSİ</span>
+            <button type="button" class="mc-btn mc-btn-secondary" data-nav-screen="welcome">← Ana Sayfa</button>
+          </div>
+        </div>
+
+        <div class="ticket-panel-container" id="ticket-panel-content">
+          <!-- Dinamik Olarak platform.js Tarafından Render Edilir -->
+        </div>
       </div>
     </main>
   </div>
@@ -2024,6 +2137,12 @@
     <span class="support-btn-badge hidden" id="support-unread-badge">1</span>
   </div>
 
+  <!-- 🧙‍♂️ MVIP BİLGE ASİSTAN YÜZEN BUTONU -->
+  <div id="floating-ai-btn" class="floating-ai-btn hidden" title="🧙‍♂️ Bilge Asistan (MVP / MVIP Özel)">
+    <div class="support-btn-pulse" style="border-color:#facc15;"></div>
+    <span class="support-btn-icon">🧙‍♂️</span>
+  </div>
+
   <!-- 🎧 24/7 Destek Modalı / Canlı Sohbet Paneli -->
   <div id="modal-support-widget" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-support-title">
     <div class="mc-modal-card support-widget-card" style="max-width: 520px; height: 85vh; max-height: 620px; display: flex; flex-direction: column;">
@@ -2091,6 +2210,91 @@
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 🔒 Parolayı Değiştir Modalı (#6) -->
+  <div id="modal-change-password" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-pwd-title">
+    <div class="mc-modal-card" style="max-width: 440px;">
+      <div class="mc-modal-header">
+        <h3 id="modal-pwd-title">🔒 PAROLAYI DEĞİŞTİR</h3>
+        <button type="button" id="btn-close-change-password" class="drawer-close-btn" aria-label="Kapat">✕</button>
+      </div>
+      <div class="mc-modal-body">
+        <form id="form-change-password">
+          <div class="input-group" id="group-current-password">
+            <label for="input-current-password">MEVCUT ŞİFRE</label>
+            <div style="position:relative;">
+              <input type="password" id="input-current-password" placeholder="Mevcut şifrenizi girin..." style="width:100%;padding-right:38px;" />
+              <button type="button" class="btn-toggle-pwd-vis" data-target="input-current-password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;">👁️</button>
+            </div>
+          </div>
+          <div class="input-group">
+            <label for="input-new-password">YENİ ŞİFRE (EN AZ 4 KARAKTER)</label>
+            <div style="position:relative;">
+              <input type="password" id="input-new-password" placeholder="Yeni şifrenizi belirleyin..." required style="width:100%;padding-right:38px;" />
+              <button type="button" class="btn-toggle-pwd-vis" data-target="input-new-password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;">👁️</button>
+            </div>
+          </div>
+          <div class="input-group">
+            <label for="input-confirm-new-password">YENİ ŞİFRE TEKRAR</label>
+            <div style="position:relative;">
+              <input type="password" id="input-confirm-new-password" placeholder="Yeni şifrenizi tekrar girin..." required style="width:100%;padding-right:38px;" />
+              <button type="button" class="btn-toggle-pwd-vis" data-target="input-confirm-new-password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;">👁️</button>
+            </div>
+          </div>
+          <div id="change-password-error" class="gate-error hidden" style="margin-bottom:12px;"></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button type="button" id="btn-cancel-change-password" class="mc-btn mc-btn-secondary">Vazgeç</button>
+            <button type="submit" id="btn-submit-change-password" class="mc-btn mc-btn-primary">💾 Şifreyi Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. 🎙️ Mikrofon Ses Testi Modalı (#9) -->
+  <div id="modal-test-mic" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-test-mic-title">
+    <div class="mc-modal-card" style="max-width: 460px;">
+      <div class="mc-modal-header">
+        <h3 id="modal-test-mic-title">🎙️ MİKROFON SES TESTİ</h3>
+        <button type="button" id="btn-close-test-mic" class="drawer-close-btn" aria-label="Kapat">✕</button>
+      </div>
+      <div class="mc-modal-body" style="text-align:center;">
+        <p style="color:#94a3b8;font-size:0.88rem;margin-bottom:14px;">Mikrofonunuza doğru konuşun ve yeşil ses düzeyi çubuğunun hareketini gözlemleyin.</p>
+        <div class="voice-level-bar" style="height:18px;background:#0f172a;border-radius:6px;overflow:hidden;border:1px solid #334155;margin-bottom:14px;">
+          <div id="test-mic-level-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#3b82f6);transition:width 0.05s ease;"></div>
+        </div>
+        <div id="test-mic-status-label" style="font-weight:bold;color:#10b981;font-size:0.9rem;margin-bottom:14px;">Mikrofon dinleniyor...</div>
+        <button type="button" id="btn-finish-test-mic" class="mc-btn mc-btn-primary mc-btn-block">Tamam</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. 🧙‍♂️ MVIP Bilge Asistan Modalı (#5) -->
+  <div id="modal-ai-assistant" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-ai-title">
+    <div class="mc-modal-card" style="max-width: 540px; height: 580px; display:flex; flex-direction:column;">
+      <div class="mc-modal-header" style="background:linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.3rem;">🧙‍♂️</span>
+          <h3 id="modal-ai-title" style="margin:0;color:#facc15;">BİLGE ASİSTAN (MVP / MVIP ÖZEL)</h3>
+        </div>
+        <button type="button" id="btn-close-ai-assistant" class="drawer-close-btn" aria-label="Kapat">✕</button>
+      </div>
+      <div class="mc-modal-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden;padding:14px;">
+        <div id="ai-chat-messages" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px;padding:10px;background:rgba(15,23,42,0.8);border-radius:8px;border:1px solid #334155;">
+          <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#f8fafc;">
+            Merhaba! Ben Minecraft Milyoner arenasında sana rehberlik eden <strong>Bilge Asistan</strong>'ım.
+            Minecraft stratejileri, yarışma tüyoları, ekonomi veya rütbe avantajları hakkında bana her şeyi sorabilirsin!
+          </div>
+        </div>
+        <form id="ai-chat-form" style="display:flex;gap:8px;">
+          <input type="text" id="ai-chat-input" class="mc-input" placeholder="Bir soru sorun... (Örn: Netherite nasıl biriktirilir?)" style="flex:1;" maxlength="200" required />
+          <button type="submit" id="btn-send-ai-chat" class="mc-btn mc-btn-primary mc-btn-sm" style="white-space:nowrap;">
+            🚀 Sor
+          </button>
+        </form>
       </div>
     </div>
   </div>

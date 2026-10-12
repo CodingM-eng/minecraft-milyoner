@@ -8297,6 +8297,92 @@ body.screen-game-active #screen-game {
   margin-bottom: 6px;
 }
 
+/* ==========================================
+   DISCORD GİRİŞ & HESAP BAĞLAMA (#2)
+   ========================================== */
+.mc-btn-discord {
+  background: #5865F2;
+  color: #ffffff;
+  border: 2px solid #4752C4;
+  box-shadow: 0 4px 12px rgba(88, 101, 242, 0.35);
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+
+.mc-btn-discord:hover {
+  background: #4752C4;
+  box-shadow: 0 6px 18px rgba(88, 101, 242, 0.5);
+  transform: translateY(-1px);
+}
+
+/* ==========================================
+   YÜZEN BİLGE ASİSTAN BUTONU (#5)
+   ========================================== */
+.floating-ai-btn {
+  position: fixed;
+  bottom: 84px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%);
+  border: 2px solid #facc15;
+  box-shadow: 0 4px 16px rgba(250, 204, 21, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 998;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.floating-ai-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 22px rgba(250, 204, 21, 0.6);
+}
+
+.floating-ai-btn .support-btn-icon {
+  font-size: 1.5rem;
+}
+
+/* ==========================================
+   STAFF BADGES & MODERATÖR / TICKET PANELLERİ (#3)
+   ========================================== */
+.mod-badge {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid #10b981;
+  color: #10b981;
+}
+
+.ticket-badge {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+}
+
+.ticket-queue-item {
+  transition: all 0.15s ease;
+}
+
+.ticket-queue-item:hover {
+  border-color: #10b981;
+  background: rgba(30, 41, 59, 0.85);
+}
+
+/* ==========================================
+   RÜTBE KARŞILAŞTIRMA TABLOSU DUYARLI KAYDIRMA (#1)
+   ========================================== */
+.rank-comp-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rank-comp-table-wrap table {
+  min-width: 680px;
+}
+
+
 
 
 

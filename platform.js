@@ -464,6 +464,25 @@
     );
     if (drawerAdminBtn) drawerAdminBtn.classList.toggle('hidden', !isAdmin);
 
+    // Moderatör ve Destek Butonu Görünürlüğü
+    const effectiveRole = svc().authGuard?.getEffectiveRole(session);
+    const drawerModBtn = document.getElementById('drawer-btn-moderator');
+    const drawerTicketBtn = document.getElementById('drawer-btn-ticket');
+    if (drawerModBtn) {
+      drawerModBtn.classList.toggle('hidden', !(effectiveRole === 'MODERATOR' || effectiveRole === 'ADMIN'));
+    }
+    if (drawerTicketBtn) {
+      drawerTicketBtn.classList.toggle('hidden', !(effectiveRole === 'TICKET' || effectiveRole === 'MODERATOR' || effectiveRole === 'ADMIN'));
+    }
+
+    // MVP / MVIP Bilge Asistan Yüzen Butonu Görünürlüğü (order >= 4 veya staff)
+    const floatingAiBtn = document.getElementById('floating-ai-btn');
+    if (floatingAiBtn) {
+      const userRank = svc().rankService?.getUserRank(user.username);
+      const canAccessAi = (userRank && userRank.order >= 4) || effectiveRole === 'ADMIN' || effectiveRole === 'MODERATOR';
+      floatingAiBtn.classList.toggle('hidden', !canAccessAi);
+    }
+
     const lbResetBtn = document.getElementById('btn-leaderboard-admin-reset');
     if (lbResetBtn) lbResetBtn.classList.toggle('hidden', !isAdmin);
 
@@ -696,6 +715,26 @@
       }
     }
 
+    // Moderatör ekranı güvenlik kontrolü
+    if (screenKey === 'moderator') {
+      const effRole = svc().authGuard?.getEffectiveRole(session);
+      if (effRole !== 'MODERATOR' && effRole !== 'ADMIN') {
+        showToast('Moderatör paneline yalnızca yetkili moderatör veya yöneticiler erişebilir!', 'error');
+        navigateToScreen('welcome');
+        return;
+      }
+    }
+
+    // Destek Yetkili ekranı güvenlik kontrolü
+    if (screenKey === 'ticket') {
+      const effRole = svc().authGuard?.getEffectiveRole(session);
+      if (effRole !== 'TICKET' && effRole !== 'MODERATOR' && effRole !== 'ADMIN') {
+        showToast('Destek yetkili paneline yalnızca yetkili personel erişebilir!', 'error');
+        navigateToScreen('welcome');
+        return;
+      }
+    }
+
     // Faz 6: BAKIM MODU KONTROLÜ
     // Kalıcı bayrak PLATFORM_SETTINGS altında tutulur.
     // Yalnızca ADMIN (codingdevelopia@gmail.com) ve MODERATOR rolleri hariç tüm kullanıcılar tam ekran bloklanır.
@@ -811,6 +850,12 @@
         break;
       case 'admin':
         renderAdmin();
+        break;
+      case 'moderator':
+        renderModerator();
+        break;
+      case 'ticket':
+        renderTicket();
         break;
       default:
         break;
@@ -1047,6 +1092,22 @@
           .join('');
       }
     }
+    // Discord Bağlantı Durumu (#2)
+    const discordStatusText = document.getElementById('profile-discord-status-text');
+    const discordToggleBtn = document.getElementById('btn-profile-toggle-discord');
+    if (discordStatusText && discordToggleBtn) {
+      if (user.discordId) {
+        discordStatusText.innerHTML = `Discord: <strong style="color:#5865F2;">${escapeHtml(user.discordTag || user.discordUsername || user.discordId)}</strong> (Bağlı)`;
+        discordToggleBtn.textContent = 'Bağlantıyı Kaldır';
+        discordToggleBtn.className = 'mc-btn mc-btn-sm mc-btn-danger';
+        discordToggleBtn.dataset.discordAction = 'unlink';
+      } else {
+        discordStatusText.textContent = 'Discord: Bağlı Değil';
+        discordToggleBtn.textContent = 'Hesabı Bağla';
+        discordToggleBtn.className = 'mc-btn mc-btn-sm mc-btn-primary';
+        discordToggleBtn.dataset.discordAction = 'link';
+      }
+    }
   }
 
   // ==========================================
@@ -1197,6 +1258,128 @@
     injectCustomCurrencyIcons();
   }
 
+  function renderRankComparisonModal() {
+    const container = document.getElementById('dynamic-rank-comp-container');
+    if (!container) return;
+
+    const ranks = svc().rankService.getAllRanks();
+    const displayRanks = ranks.filter(r => ['MEMBER', 'VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(r.id));
+    const session = getSession();
+    const userRank = session ? (svc().rankService?.getUserRank(session.username) || { id: 'MEMBER', order: 1 }) : { id: 'MEMBER', order: 1 };
+
+    const tableHtml = `
+      <div class="rank-comp-card-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <table class="mc-table rank-comp-table" style="width:100%;min-width:680px;font-size:0.86rem;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#0f172a;">
+              <th style="text-align:left;min-width:140px;position:sticky;left:0;background:#0f172a;z-index:2;padding:10px;">Özellik / Ayrıcalık</th>
+              ${displayRanks
+                .map(
+                  r => `
+                <th style="color:${r.color};text-align:center;padding:10px;border-left:1px solid #334155;">
+                  <div style="font-size:1.2rem;">${r.badge || ''}</div>
+                  <div style="font-weight:bold;margin-top:2px;">${r.name}</div>
+                  ${userRank.id === r.id ? `<span style="display:inline-block;margin-top:4px;font-size:0.7rem;padding:2px 6px;background:#10b981;color:#fff;border-radius:4px;">MEVCUT</span>` : ''}
+                </th>`
+                )
+                .join('')}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Fiyat (Stripe / TRY)</strong></td>
+              ${displayRanks
+                .map(r => `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">${r.priceTry ? `<strong style="color:#22c55e;">${Number(r.priceTry).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</strong>` : '<span style="color:#94a3b8;">Ücretsiz</span>'}</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Netherite Fiyatı</strong></td>
+              ${displayRanks
+                .map(r => `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">${r.netheritePrice ? `<strong style="color:#f8fafc;">${Number(r.netheritePrice).toLocaleString('tr-TR')} ⬛</strong>` : '-'}</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>İlk Satın Alma Bonusu</strong></td>
+              ${displayRanks
+                .map(r => `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">${r.id === 'VIP' ? '<span style="color:#facc15;font-weight:bold;">+50 ⬛ Netherite</span>' : ['VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(r.id) ? '<span style="color:#facc15;font-weight:bold;">+250 ⬛ Netherite</span>' : '-'}</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Günlük Zümrüt Ödülü</strong></td>
+              ${displayRanks
+                .map(r => `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;"><strong style="color:#10b981;">+${r.dailyEmerald || 50} 🟢</strong></td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Günlük Netherite Ödülü</strong></td>
+              ${displayRanks
+                .map(r => `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">${r.dailyNetherite > 0 ? `<strong style="color:#94a3b8;">+${r.dailyNetherite} ⬛</strong>` : '-'}</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Zümrüt Çarpanı</strong></td>
+              ${displayRanks
+                .map(r => `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">${r.permissions?.emeraldMultiplier || '1.0'}x</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Maksimum Parti Kapasitesi</strong></td>
+              ${displayRanks
+                .map(r => `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">${r.permissions?.maxPartySize || 4} Kişi</td>`)
+                .join('')}
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Destek / Hata Önceliği</strong></td>
+              ${displayRanks
+                .map(r => {
+                  const prioMap = { NORMAL: 'Normal', HIGH: 'Yüksek', VERY_HIGH: 'Çok Yüksek', CRITICAL: 'Kritik / Anında' };
+                  return `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">${prioMap[r.permissions?.supportPriority || 'NORMAL'] || 'Normal'}</td>`;
+                })
+                .join('')}
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Sohbet & İsim Efektleri</strong></td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">Standart Beyaz</td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;color:#38bdf8;">VIP Gökyüzü Mavisi</td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;color:#c084fc;">VIP+ Eflatun Işıltı</td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;color:#facc15;">MVIP Altın Gradyan</td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;color:#ec4899;">MVIP+ RGB Gökkuşağı</td>
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Özel Çerçeveler & Rozetler</strong></td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">Standart Çerçeve</td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">Altın Muhafız</td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">Elmas Kristal</td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">Antik Netherite</td>
+              <td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">Ender Ejderhası & Ametist</td>
+            </tr>
+            <tr>
+              <td style="position:sticky;left:0;background:#1e293b;z-index:1;padding:8px 10px;"><strong>Satın Al / Yükselt</strong></td>
+              ${displayRanks
+                .map(r => {
+                  if (r.id === 'MEMBER') return '<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">-</td>';
+                  const isOwnedOrHigher = userRank.order >= r.order;
+                  if (isOwnedOrHigher) {
+                    return `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;"><span style="color:#10b981;font-weight:bold;">✓ Sahipsiniz</span></td>`;
+                  }
+                  return `<td style="text-align:center;padding:8px 10px;border-left:1px solid #334155;">
+                    <button type="button" class="mc-btn mc-btn-xs mc-btn-gold" data-stripe-buy-rank="${r.id}">
+                      Satın Al
+                    </button>
+                  </td>`;
+                })
+                .join('')}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    container.innerHTML = tableHtml;
+  }
+  window.MCMPlatform = window.MCMPlatform || {};
+  window.MCMPlatform.renderRankComparisonModal = renderRankComparisonModal;
+
   function renderShopRanksGrid(user, userRank) {
     const container = document.getElementById('ranks-grid-container');
     if (!container) return;
@@ -1215,114 +1398,6 @@
         </button>
       </div>
     `;
-
-  function renderRankComparisonModal() {
-    const container = document.getElementById('dynamic-rank-comp-container');
-    if (!container) return;
-
-    const ranks = svc().rankService.getAllRanks();
-    const displayRanks = ranks.filter(r => ['MEMBER', 'VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(r.id));
-
-    const tableHtml = `
-      <div class="rank-comp-card-wrap">
-        <table class="mc-table rank-comp-table" style="width:100%;font-size:0.86rem;">
-          <thead>
-            <tr>
-              <th style="text-align:left;min-width:140px;">Özellik / Ayrıcalık</th>
-              ${displayRanks
-                .map(
-                  r => `
-                <th style="color:${r.color};text-align:center;">
-                  <div style="font-size:1.1rem;">${r.badge || ''}</div>
-                  <div>${r.name}</div>
-                </th>`
-                )
-                .join('')}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Fiyat (Stripe / TRY)</strong></td>
-              ${displayRanks
-                .map(r => `<td>${r.priceTry ? `${Number(r.priceTry).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺` : 'Ücretsiz'}</td>`)
-                .join('')}
-            </tr>
-            <tr>
-              <td><strong>Netherite Fiyatı</strong></td>
-              ${displayRanks
-                .map(r => `<td>${r.netheritePrice ? `${Number(r.netheritePrice).toLocaleString('tr-TR')} ⬛` : '-'}</td>`)
-                .join('')}
-            </tr>
-            <tr>
-              <td><strong>İlk Satın Alma Bonusu</strong></td>
-              ${displayRanks
-                .map(r => `<td>${r.id === 'VIP' ? '+50 ⬛' : ['VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(r.id) ? '+250 ⬛' : '-'}</td>`)
-                .join('')}
-            </tr>
-            <tr>
-              <td><strong>Günlük Zümrüt Ödülü</strong></td>
-              ${displayRanks
-                .map(r => `<td><strong>+${r.dailyEmerald || 50}</strong> 🟢</td>`)
-                .join('')}
-            </tr>
-            <tr>
-              <td><strong>Günlük Netherite Ödülü</strong></td>
-              ${displayRanks
-                .map(r => `<td>${r.dailyNetherite > 0 ? `<strong>+${r.dailyNetherite}</strong> ⬛` : '-'}</td>`)
-                .join('')}
-            </tr>
-            <tr>
-              <td><strong>Zümrüt Çarpanı</strong></td>
-              ${displayRanks
-                .map(r => `<td>${r.permissions?.emeraldMultiplier || '1.0'}x</td>`)
-                .join('')}
-            </tr>
-            <tr>
-              <td><strong>Maksimum Parti Kapasitesi</strong></td>
-              ${displayRanks
-                .map(r => `<td>${r.permissions?.maxPartySize || 4} Kişi</td>`)
-                .join('')}
-            </tr>
-            <tr>
-              <td><strong>Destek / Hata Bildirim Önceliği</strong></td>
-              ${displayRanks
-                .map(r => {
-                  const prioMap = { NORMAL: 'Normal', HIGH: 'Yüksek', VERY_HIGH: 'Çok Yüksek', CRITICAL: 'Kritik / Anında' };
-                  return `<td>${prioMap[r.permissions?.supportPriority || 'NORMAL'] || 'Normal'}</td>`;
-                })
-                .join('')}
-            </tr>
-            <tr>
-              <td><strong>Sohbet & İsim Efektleri</strong></td>
-              <td>Standart Beyaz</td>
-              <td>VIP Gökyüzü Mavisi</td>
-              <td>VIP+ Eflatun Işıltı</td>
-              <td>MVIP Altın Gradyan</td>
-              <td>MVIP+ Canlı RGB Gökkuşağı</td>
-            </tr>
-            <tr>
-              <td><strong>Özel Rozetler & Çerçeveler</strong></td>
-              <td>Standart Çerçeve</td>
-              <td>Altın Muhafız Çerçevesi</td>
-              <td>Elmas Kristal Çerçeve</td>
-              <td>Antik Netherite Çerçeve</td>
-              <td>Ender Ejderhası & Ametist Çerçeve</td>
-            </tr>
-            <tr>
-              <td><strong>Soru Temaları & Zafer Efekti</strong></td>
-              <td>Klasik Taş Teması</td>
-              <td>Obsidyen & Kızıltaş Odası</td>
-              <td>Havai Fişek Şovu</td>
-              <td>Nether Kalesi Teması</td>
-              <td>Ölümsüzlük Totemi Patlaması</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    `;
-
-    container.innerHTML = tableHtml;
-  }
 
     container.innerHTML = compHeaderHtml + purchasableRanks
       .map(rank => {
@@ -2369,6 +2444,10 @@
           .join('');
       }
     }
+
+    try {
+      partyVoiceEngine?.populateDeviceSelector?.();
+    } catch (_e) {}
   }
 
   // ==========================================
@@ -4668,6 +4747,421 @@
         </div>
       `;
     }
+  // ==========================================
+  // 16. EKRAN: MODERATÖR PANELİ (renderModerator — #3)
+  // ==========================================
+  function renderModerator() {
+    const session = getSession();
+    const { authGuard } = svc();
+    const effectiveRole = authGuard?.getEffectiveRole(session);
+    if (!session || (effectiveRole !== 'MODERATOR' && effectiveRole !== 'ADMIN')) {
+      navigateToScreen('welcome');
+      return;
+    }
+
+    state.modTab = state.modTab || 'overview';
+    document.querySelectorAll('#mod-sidebar-nav .admin-nav-item[data-mod-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-mod-tab') === state.modTab);
+    });
+
+    const container = document.getElementById('mod-content-area');
+    if (!container) return;
+
+    const { supportService, bugService, suggestionService } = svc();
+    const tickets = supportService?.getAllTickets() || [];
+    const bugs = bugService?.getAllBugs() || [];
+    const suggestions = suggestionService?.getAllSuggestions() || [];
+
+    const openTicketsCount = tickets.filter(t => t.status === 'AÇIK').length;
+    const pendingBugsCount = bugs.filter(b => b.status === 'SUBMITTED' || b.status === 'İNCELENİYOR').length;
+    const pendingSuggsCount = suggestions.filter(s => s.status === 'SUBMITTED' || s.status === 'İNCELENİYOR').length;
+
+    // Badge'leri güncelle
+    const bBug = document.getElementById('mod-badge-bugs');
+    if (bBug) {
+      bBug.textContent = pendingBugsCount;
+      bBug.classList.toggle('hidden', pendingBugsCount <= 0);
+    }
+    const bSug = document.getElementById('mod-badge-suggs');
+    if (bSug) {
+      bSug.textContent = pendingSuggsCount;
+      bSug.classList.toggle('hidden', pendingSuggsCount <= 0);
+    }
+
+    // 1. GENEL BAKIŞ & MOD AI
+    if (state.modTab === 'overview') {
+      container.innerHTML = `
+        <div class="admin-tab-pane active">
+          <div class="admin-pane-header">
+            <h3>⚔️ Moderatör Paneli Genel Bakış</h3>
+            <p>Topluluk denetimi, destek biletleri, hata incelemeleri ve Moderatör AI asistanı.</p>
+          </div>
+
+          <div class="stats-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+            <div class="stat-kpi-card">
+              <span class="kpi-label">AÇIK DESTEK TALEPLERİ</span>
+              <strong class="kpi-val ${openTicketsCount > 0 ? 'gold-text' : ''}">${openTicketsCount}</strong>
+            </div>
+            <div class="stat-kpi-card">
+              <span class="kpi-label">BEKLEYEN HATA BİLDİRİMLERİ</span>
+              <strong class="kpi-val ${pendingBugsCount > 0 ? 'gold-text' : ''}">${pendingBugsCount}</strong>
+            </div>
+            <div class="stat-kpi-card">
+              <span class="kpi-label">BEKLEYEN ÖNERİLER</span>
+              <strong class="kpi-val">${pendingSuggsCount}</strong>
+            </div>
+          </div>
+
+          <!-- Moderatör AI Asistanı Kartı -->
+          <div class="platform-card" style="border: 1px solid #10b981; background: rgba(6, 78, 59, 0.2);">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+              <span style="font-size:1.5rem;">🤖</span>
+              <div>
+                <h4 style="margin:0;color:#10b981;">Moderatör AI Asistanı</h4>
+                <p style="margin:2px 0 0;font-size:0.8rem;color:#94a3b8;">Kurallar, şüpheli oyuncu kontrolleri ve moderasyon tavsiyeleri için danışın.</p>
+              </div>
+            </div>
+            <div id="mod-ai-history" style="max-height:180px;overflow-y:auto;background:rgba(15,23,42,0.8);border-radius:6px;padding:10px;margin-bottom:10px;font-size:0.88rem;color:#cbd5e1;">
+              ⚔️ <strong>Moderatör AI:</strong> Merhaba yetkili arkadaşım! Açık biletler ve sohbet moderasyonu konusunda size yardımcı olmaya hazırım.
+            </div>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="input-mod-ai-prompt" class="mc-input" placeholder="Moderatör AI'a soru sorun... (Örn: Hakaret eden oyuncuya kaç dk ceza verilmeli?)" style="flex:1;" />
+              <button type="button" id="btn-ask-mod-ai" class="mc-btn mc-btn-primary mc-btn-sm" style="white-space:nowrap;">
+                💬 Gönder
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 2. OYUNCU SUSTURMA & CEZA
+    if (state.modTab === 'mutes') {
+      const activeMutes = storage.get(STORAGE_KEYS.USER_MUTES, {});
+      const activeMuteEntries = Object.entries(activeMutes).filter(([u, m]) => new Date(m.mutedUntil).getTime() > Date.now());
+
+      container.innerHTML = `
+        <div class="admin-tab-pane active">
+          <div class="admin-pane-header">
+            <h3>🔇 Oyuncu Susturma &amp; Moderasyon</h3>
+            <p>Kural ihlali yapan oyuncuları partilerde ve sohbette geçici olarak susturun.</p>
+          </div>
+
+          <div class="platform-card" style="margin-bottom:20px;">
+            <h4>Yeni Susturma Uygula</h4>
+            <form id="form-mod-mute-player" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+              <div class="input-group">
+                <label for="mute-target-user">OYUNCU KULLANICI ADI</label>
+                <input type="text" id="mute-target-user" placeholder="Hedef oyuncu adı..." required />
+              </div>
+              <div class="input-group">
+                <label for="mute-duration-select">SUSTURMA SÜRESİ</label>
+                <select id="mute-duration-select" class="form-input">
+                  <option value="15">15 Dakika (Uyarı)</option>
+                  <option value="60">1 Saat (Hafif İhlal)</option>
+                  <option value="360">6 Saat (Küfür / Taciz)</option>
+                  <option value="1440">24 Saat (Ağır İhlal)</option>
+                </select>
+              </div>
+              <div class="input-group" style="grid-column:1 / -1;">
+                <label for="mute-reason-input">GEREKÇE</label>
+                <input type="text" id="mute-reason-input" placeholder="Örn: Sohbette argo / hakaret kullanımı" required />
+              </div>
+              <div style="grid-column:1 / -1;display:flex;justify-content:flex-end;">
+                <button type="submit" class="mc-btn mc-btn-danger">🔇 Oyuncuyu Sustur</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="platform-card">
+            <h4>Aktif Susturulan Oyuncular (${activeMuteEntries.length})</h4>
+            ${activeMuteEntries.length === 0 ? `<p class="muted">Şu anda susturulmuş aktif bir oyuncu bulunmuyor.</p>` : `
+              <table class="mc-table" style="width:100%;margin-top:10px;">
+                <thead>
+                  <tr>
+                    <th>Oyuncu</th>
+                    <th>Bitiş Zamanı</th>
+                    <th>Gerekçe</th>
+                    <th>Yetkili</th>
+                    <th>İşlem</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${activeMuteEntries.map(([usr, m]) => `
+                    <tr>
+                      <td><strong>${escapeHtml(m.targetUsername || usr)}</strong></td>
+                      <td>${new Date(m.mutedUntil).toLocaleTimeString('tr-TR')} (${Math.round((new Date(m.mutedUntil).getTime() - Date.now()) / 60000)} dk kaldı)</td>
+                      <td>${escapeHtml(m.reason || '-')}</td>
+                      <td>${escapeHtml(m.mutedBy || 'Yetkili')}</td>
+                      <td>
+                        <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary" data-mod-unmute="${escapeHtml(usr)}">
+                          Susturmayı Kaldır
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            `}
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 3. HATA BİLDİRİMLERİ İNCELEME
+    if (state.modTab === 'bugs') {
+      container.innerHTML = `
+        <div class="admin-tab-pane active">
+          <div class="admin-pane-header">
+            <h3>🐞 Hata Bildirimleri İnceleme</h3>
+            <p>Oyuncuların gönderdiği hata raporlarını doğrulayın, puanlandırın ve durumlarını güncelleyin.</p>
+          </div>
+
+          <div class="platform-card">
+            ${bugs.length === 0 ? `<p class="muted">Henüz kaydedilmiş bir hata bildirimi yok.</p>` : `
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                ${bugs.map(b => `
+                  <div class="platform-card" style="background:rgba(15,23,42,0.6);border:1px solid #334155;padding:14px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+                      <div>
+                        <strong style="font-size:1.05rem;color:#f8fafc;">#${b.id} - ${escapeHtml(b.title)}</strong>
+                        <div style="font-size:0.8rem;color:#94a3b8;margin-top:4px;">
+                          Bildiren: <strong>${escapeHtml(b.username)}</strong> • Kategori: ${escapeHtml(b.category)} • Önem: <span style="color:#facc15;">${escapeHtml(b.severity)}</span>
+                        </div>
+                      </div>
+                      <span class="role-badge role-vip" style="font-size:0.75rem;">${escapeHtml(b.status)}</span>
+                    </div>
+                    <p style="font-size:0.88rem;color:#cbd5e1;margin:10px 0;background:rgba(30,41,59,0.5);padding:8px 10px;border-radius:4px;">
+                      ${escapeHtml(b.description || '')}
+                    </p>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+                      <button type="button" class="mc-btn mc-btn-xs mc-btn-primary" data-bug-status="ONAYLANDI" data-bug-id="${b.id}">
+                        ✓ Onayla (+50 Puan)
+                      </button>
+                      <button type="button" class="mc-btn mc-btn-xs mc-btn-gold" data-bug-status="ÇÖZÜLDÜ" data-bug-id="${b.id}">
+                        🔧 Çözüldü (+100 Puan)
+                      </button>
+                      <button type="button" class="mc-btn mc-btn-xs mc-btn-emerald" data-bug-status="DOĞRULANDI" data-bug-id="${b.id}">
+                        🌟 Doğrulandı (+150 Puan)
+                      </button>
+                      <button type="button" class="mc-btn mc-btn-xs mc-btn-danger" data-bug-status="REDDEDİLDİ" data-bug-id="${b.id}">
+                        ✕ Reddet
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 4. ÖNERİ İNCELEME
+    if (state.modTab === 'suggestions') {
+      container.innerHTML = `
+        <div class="admin-tab-pane active">
+          <div class="admin-pane-header">
+            <h3>💡 Oyuncu Önerileri İnceleme</h3>
+            <p>Topluluk tarafından gönderilen ve oylanan önerileri değerlendirin.</p>
+          </div>
+
+          <div class="platform-card">
+            ${suggestions.length === 0 ? `<p class="muted">Henüz gönderilmiş bir öneri bulunmuyor.</p>` : `
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                ${suggestions.map(s => `
+                  <div class="platform-card" style="background:rgba(15,23,42,0.6);border:1px solid #334155;padding:14px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+                      <div>
+                        <strong style="font-size:1.05rem;color:#f8fafc;">#${s.id} - ${escapeHtml(s.title)}</strong>
+                        <div style="font-size:0.8rem;color:#94a3b8;margin-top:4px;">
+                          Öneren: <strong>${escapeHtml(s.username)}</strong> • Kategori: ${escapeHtml(s.category)} • Oy: 👍 ${(s.upvotes || []).length}
+                        </div>
+                      </div>
+                      <span class="role-badge role-vip" style="font-size:0.75rem;">${escapeHtml(s.status)}</span>
+                    </div>
+                    <p style="font-size:0.88rem;color:#cbd5e1;margin:10px 0;background:rgba(30,41,59,0.5);padding:8px 10px;border-radius:4px;">
+                      ${escapeHtml(s.details || '')}
+                    </p>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+                      <button type="button" class="mc-btn mc-btn-xs mc-btn-primary" data-sug-status="ONAYLANDI" data-sug-id="${s.id}">
+                        ✓ Onayla (+30 Puan)
+                      </button>
+                      <button type="button" class="mc-btn mc-btn-xs mc-btn-emerald" data-sug-status="UYGULANDI" data-sug-id="${s.id}">
+                        🚀 Uygulandı (+75 Puan)
+                      </button>
+                      <button type="button" class="mc-btn mc-btn-xs mc-btn-danger" data-sug-status="REDDEDİLDİ" data-sug-id="${s.id}">
+                        ✕ Reddet
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 5. SOHBET GÜNLÜKLERİ
+    if (state.modTab === 'chatlogs') {
+      const logs = storage.get(STORAGE_KEYS.MODERATION_LOGS, []);
+      container.innerHTML = `
+        <div class="admin-tab-pane active">
+          <div class="admin-pane-header">
+            <h3>📜 Canlı Sohbet &amp; Moderasyon Günlükleri</h3>
+            <p>Filtrelenen argo/küfür girişimleri ve uygulanan cezaların tam dökümü.</p>
+          </div>
+
+          <div class="platform-card">
+            ${logs.length === 0 ? `<p class="muted">Kayıtlı moderasyon günlüğü bulunmuyor.</p>` : `
+              <table class="mc-table" style="width:100%;">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>İşlem Türü</th>
+                    <th>Hedef Oyuncu</th>
+                    <th>Detay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${logs.map(l => `
+                    <tr>
+                      <td style="font-size:0.8rem;color:#94a3b8;">${new Date(l.createdAt).toLocaleTimeString('tr-TR')}</td>
+                      <td><span class="role-badge role-${l.type === 'MUTE' ? 'admin' : 'member'}">${escapeHtml(l.type)}</span></td>
+                      <td><strong>${escapeHtml(l.targetUsername || '-')}</strong></td>
+                      <td>${escapeHtml(l.reason || l.originalSnippet || '-')}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            `}
+          </div>
+        </div>
+      `;
+      return;
+    }
+  }
+
+  // ==========================================
+  // 17. EKRAN: DESTEK YETKİLİ PANELİ (renderTicket — #3)
+  // ==========================================
+  function renderTicket() {
+    const session = getSession();
+    const { authGuard } = svc();
+    const effectiveRole = authGuard?.getEffectiveRole(session);
+    if (!session || (effectiveRole !== 'TICKET' && effectiveRole !== 'MODERATOR' && effectiveRole !== 'ADMIN')) {
+      navigateToScreen('welcome');
+      return;
+    }
+
+    const container = document.getElementById('ticket-panel-content');
+    if (!container) return;
+
+    const { supportService } = svc();
+    const tickets = supportService?.getAllTickets() || [];
+    state.ticketFilter = state.ticketFilter || 'ALL';
+
+    const filtered = tickets.filter(t => {
+      if (state.ticketFilter === 'OPEN') return t.status === 'AÇIK';
+      if (state.ticketFilter === 'IN_PROGRESS') return t.status === 'İŞLENİYOR' || t.status === 'KULLANICI_BEKLENİYOR';
+      if (state.ticketFilter === 'RESOLVED') return t.status === 'ÇÖZÜLDÜ' || t.status === 'KAPATILDI';
+      return true;
+    });
+
+    const selectedTicket = tickets.find(t => t.id === activeSelectedSupportTicketId) || filtered[0] || null;
+
+    container.innerHTML = `
+      <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;min-height:560px;">
+        <!-- Sol: Bilet Listesi & Filtreler -->
+        <div class="platform-card" style="display:flex;flex-direction:column;padding:12px;">
+          <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;">
+            <button type="button" class="mc-btn mc-btn-xs ${state.ticketFilter === 'ALL' ? 'mc-btn-primary' : 'mc-btn-secondary'}" data-ticket-tab="ALL">Tümü (${tickets.length})</button>
+            <button type="button" class="mc-btn mc-btn-xs ${state.ticketFilter === 'OPEN' ? 'mc-btn-primary' : 'mc-btn-secondary'}" data-ticket-tab="OPEN">Açık (${tickets.filter(t => t.status === 'AÇIK').length})</button>
+            <button type="button" class="mc-btn mc-btn-xs ${state.ticketFilter === 'IN_PROGRESS' ? 'mc-btn-primary' : 'mc-btn-secondary'}" data-ticket-tab="IN_PROGRESS">İşleniyor</button>
+            <button type="button" class="mc-btn mc-btn-xs ${state.ticketFilter === 'RESOLVED' ? 'mc-btn-primary' : 'mc-btn-secondary'}" data-ticket-tab="RESOLVED">Çözüldü</button>
+          </div>
+          <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+            ${filtered.length === 0 ? `<p class="muted" style="text-align:center;padding:20px 0;">Bu filtreye uygun bilet bulunamadı.</p>` : `
+              ${filtered.map(t => `
+                <div class="ticket-queue-item ${selectedTicket?.id === t.id ? 'active' : ''}" data-select-ticket="${t.id}" style="padding:10px;border-radius:6px;background:${selectedTicket?.id === t.id ? 'rgba(16,185,129,0.15)' : 'rgba(30,41,59,0.6)'};border:1px solid ${selectedTicket?.id === t.id ? '#10b981' : '#334155'};cursor:pointer;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <strong style="font-size:0.88rem;color:#f8fafc;">#${t.id.slice(-6)} ${escapeHtml(t.subject.slice(0, 20))}</strong>
+                    <span style="font-size:0.7rem;padding:2px 6px;border-radius:4px;background:#334155;color:#e2e8f0;">${t.status}</span>
+                  </div>
+                  <div style="font-size:0.78rem;color:#94a3b8;margin-top:4px;">
+                    ${escapeHtml(t.username)} • ${escapeHtml(t.category)}
+                  </div>
+                </div>
+              `).join('')}
+            `}
+          </div>
+        </div>
+
+        <!-- Sağ: Bilet Detayı ve Hızlı Yanıt Masası -->
+        <div class="platform-card" style="display:flex;flex-direction:column;padding:16px;">
+          ${!selectedTicket ? `<p class="muted" style="text-align:center;margin:auto;">Lütfen incelemek için soldan bir bilet seçin.</p>` : `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #334155;">
+              <div>
+                <h3 style="margin:0;font-size:1.15rem;color:#f8fafc;">${escapeHtml(selectedTicket.subject)}</h3>
+                <div style="font-size:0.82rem;color:#94a3b8;margin-top:4px;">
+                  Bilet No: <strong>#${selectedTicket.id}</strong> • Oyuncu: <strong>${escapeHtml(selectedTicket.username)}</strong> • Kategori: ${escapeHtml(selectedTicket.category)}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${!selectedTicket.claimedBy ? `
+                  <button type="button" class="mc-btn mc-btn-xs mc-btn-primary" data-ticket-action="claim" data-ticket-id="${selectedTicket.id}">
+                    ✋ Talebi Sahiplen
+                  </button>
+                ` : `
+                  <span style="font-size:0.78rem;padding:4px 8px;background:rgba(16,185,129,0.2);color:#10b981;border-radius:4px;">
+                    Sahiplenen: ${escapeHtml(selectedTicket.claimedBy)}
+                  </span>
+                `}
+                <button type="button" class="mc-btn mc-btn-xs mc-btn-gold" data-ticket-action="escalate" data-ticket-id="${selectedTicket.id}">
+                  🚨 Yöneticiye İlet
+                </button>
+                <button type="button" class="mc-btn mc-btn-xs mc-btn-emerald" data-ticket-action="resolve" data-ticket-id="${selectedTicket.id}">
+                  ✓ Çözüldü
+                </button>
+              </div>
+            </div>
+
+            <!-- Mesaj Geçmişi -->
+            <div style="flex:1;overflow-y:auto;padding:12px 0;display:flex;flex-direction:column;gap:10px;">
+              ${(selectedTicket.messages || []).map(m => `
+                <div style="padding:10px 12px;border-radius:6px;background:${m.senderRole === 'ADMIN' ? 'rgba(16,185,129,0.1)' : 'rgba(30,41,59,0.7)'};border-left:3px solid ${m.senderRole === 'ADMIN' ? '#10b981' : '#38bdf8'};">
+                  <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#94a3b8;margin-bottom:4px;">
+                    <strong>${escapeHtml(m.sender)} (${m.senderRole === 'ADMIN' ? 'Yetkili' : 'Oyuncu'})</strong>
+                    <span>${new Date(m.createdAt).toLocaleTimeString('tr-TR')}</span>
+                  </div>
+                  <p style="margin:0;font-size:0.88rem;color:#f8fafc;white-space:pre-wrap;">${escapeHtml(m.text)}</p>
+                </div>
+              `).join('')}
+            </div>
+
+            <!-- Yanıt Yazma Formu -->
+            <form id="form-ticket-desk-reply" style="padding-top:12px;border-top:1px solid #334155;">
+              <div style="display:flex;gap:8px;margin-bottom:8px;">
+                <textarea id="ticket-desk-reply-text" rows="3" class="mc-input" placeholder="Oyuncuya yanıtınızı yazın..." style="flex:1;resize:none;" required></textarea>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <button type="button" id="btn-ticket-ai-improve" class="mc-btn mc-btn-xs mc-btn-secondary" style="font-size:0.78rem;">
+                  ✨ AI ile Yanıtı İyileştir
+                </button>
+                <button type="submit" class="mc-btn mc-btn-primary mc-btn-sm">
+                  📨 Yanıtı Gönder
+                </button>
+              </div>
+            </form>
+          `}
+        </div>
+      </div>
+    `;
   }
 
   // ==========================================
@@ -5189,6 +5683,29 @@
         }
       },
 
+      selectedDeviceId: '',
+
+      async getAudioDevices() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          return devices.filter(d => d.kind === 'audioinput');
+        } catch (e) {
+          return [];
+        }
+      },
+
+      async populateDeviceSelector() {
+        const select = document.getElementById('select-party-mic-device');
+        if (!select) return;
+        const devices = await this.getAudioDevices();
+        if (devices.length === 0) return;
+        select.innerHTML = devices.map((d, i) => `
+          <option value="${d.deviceId}">${escapeHtml(d.label || `Mikrofon ${i + 1}`)}</option>
+        `).join('');
+        if (this.selectedDeviceId) select.value = this.selectedDeviceId;
+      },
+
       stop() {
         this.isMuted = true;
         if (this.rafId) {
@@ -5205,6 +5722,65 @@
         }
       }
     };
+
+    let testMicStream = null;
+    let testMicAudioCtx = null;
+    let testMicRaf = null;
+
+    async function openMicTestModal() {
+      const modal = document.getElementById('modal-test-mic');
+      const fill = document.getElementById('test-mic-level-fill');
+      const label = document.getElementById('test-mic-status-label');
+      modal?.classList.remove('hidden');
+
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Tarayıcınız mikrofon erişimini desteklemiyor.');
+        }
+        const constraints = { audio: partyVoiceEngine.selectedDeviceId ? { deviceId: { exact: partyVoiceEngine.selectedDeviceId } } : true };
+        testMicStream = await navigator.mediaDevices.getUserMedia(constraints);
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        testMicAudioCtx = new AudioCtx();
+        const src = testMicAudioCtx.createMediaStreamSource(testMicStream);
+        const analyser = testMicAudioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser);
+
+        const bufLen = analyser.frequencyBinCount;
+        const data = new Uint8Array(bufLen);
+
+        if (label) label.textContent = '🟢 Mikrofon aktif — Konuşmayı deneyin!';
+
+        const loop = () => {
+          analyser.getByteFrequencyData(data);
+          let sum = 0;
+          for (let i = 0; i < bufLen; i++) sum += data[i];
+          const avg = sum / bufLen;
+          const pct = Math.min(100, Math.round((avg / 128) * 100));
+          if (fill) fill.style.width = `${pct}%`;
+          testMicRaf = requestAnimationFrame(loop);
+        };
+        testMicRaf = requestAnimationFrame(loop);
+      } catch (err) {
+        if (label) label.textContent = `⚠️ Mikrofon testi başlatılamadı: ${err.message}`;
+      }
+    }
+
+    function closeMicTestModal() {
+      if (testMicRaf) { cancelAnimationFrame(testMicRaf); testMicRaf = null; }
+      if (testMicStream) { testMicStream.getTracks().forEach(t => t.stop()); testMicStream = null; }
+      if (testMicAudioCtx) { try { testMicAudioCtx.close(); } catch (e) {} testMicAudioCtx = null; }
+      const modal = document.getElementById('modal-test-mic');
+      const fill = document.getElementById('test-mic-level-fill');
+      if (fill) fill.style.width = '0%';
+      modal?.classList.add('hidden');
+    }
+
+    // Mikrofon Cihazı Değişimi
+    document.getElementById('select-party-mic-device')?.addEventListener('change', e => {
+      partyVoiceEngine.selectedDeviceId = e.target.value;
+      showToast('🎙️ Mikrofon girişi ayarlandı.', 'info');
+    });
 
     // 🎙️ Mikrofon Aç/Kapat Butonu
     document.getElementById('btn-toggle-party-mic')?.addEventListener('click', () => {
@@ -5322,6 +5898,148 @@
         showToast('Şifreniz başarıyla güncellendi!', 'success');
       } catch (err) {
         showToast(err.message, 'error');
+      }
+    });
+
+    // Profil Modalı: Parolayı Değiştir Formu (#form-change-password — #6)
+    document.getElementById('form-change-password')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const curPwd = document.getElementById('input-current-password')?.value || '';
+      const newPwd = document.getElementById('input-new-password')?.value || '';
+      const confirmPwd = document.getElementById('input-confirm-new-password')?.value || '';
+      const errEl = document.getElementById('change-password-error');
+      const submitBtn = document.getElementById('btn-submit-change-password');
+
+      if (newPwd !== confirmPwd) {
+        if (errEl) { errEl.textContent = 'Yeni şifreler birbiriyle eşleşmiyor!'; errEl.classList.remove('hidden'); }
+        return;
+      }
+      if (newPwd.length < 4) {
+        if (errEl) { errEl.textContent = 'Yeni şifreniz en az 4 karakter olmalıdır!'; errEl.classList.remove('hidden'); }
+        return;
+      }
+
+      try {
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ Kaydediliyor...'; }
+        await svc().authService.changePassword(session, curPwd, newPwd);
+        showToast('🔒 Parolanız başarıyla güncellendi!', 'success');
+        document.getElementById('modal-change-password')?.classList.add('hidden');
+        e.target.reset();
+      } catch (err) {
+        if (errEl) { errEl.textContent = err.message; errEl.classList.remove('hidden'); }
+        else { showToast(err.message, 'error'); }
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '💾 Şifreyi Kaydet'; }
+      }
+    });
+
+    // Parti Özel Sohbet Formu (#party-custom-chat-form — #7, #8)
+    document.getElementById('party-custom-chat-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const inputEl = document.getElementById('party-custom-chat-input');
+      const rawText = String(inputEl?.value || '').trim();
+      if (!rawText) return;
+
+      try {
+        const modRes = await svc().chatModerationService.moderateMessage(session, rawText);
+        if (modRes.wasCensored) {
+          showToast('⚠️ Mesajınızdaki uygunsuz ifadeler filtrelendi.', 'warning');
+        }
+        svc().partyService?.sendPartyChatMessage(session.username, modRes.cleanText);
+        svc().cloudSyncService?.pushNow();
+        if (inputEl) inputEl.value = '';
+        renderParty();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Moderatör: Oyuncu Susturma Formu (#form-mod-mute-player)
+    document.getElementById('form-mod-mute-player')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const targetU = document.getElementById('mute-target-user')?.value || '';
+      const durationMins = Number(document.getElementById('mute-duration-select')?.value || 15);
+      const reason = document.getElementById('mute-reason-text')?.value || 'Kural ihlali';
+      try {
+        svc().authGuard.muteUser(session, targetU, durationMins, reason);
+        showToast(`🔇 ${targetU} oyuncusu ${durationMins} dakika süreyle susturuldu!`, 'warning');
+        renderModerator();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Destek Yetkili Masası: Yanıt Gönderme Formu (#form-ticket-desk-reply)
+    document.getElementById('form-ticket-desk-reply')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session || !activeSelectedSupportTicketId) return;
+      const textEl = document.getElementById('ticket-desk-reply-text');
+      const text = String(textEl?.value || '').trim();
+      if (!text) return;
+      try {
+        await svc().supportService.replyToTicket(session, activeSelectedSupportTicketId, text);
+        showToast('📨 Yanıtınız oyuncuya iletildi ve bildirim gönderildi!', 'success');
+        if (textEl) textEl.value = '';
+        renderTicket();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // MVIP Bilge Asistan Soru Sorma Formu (#ai-chat-form — #5)
+    document.getElementById('ai-chat-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const session = getSession();
+      if (!session) return;
+      const inp = document.getElementById('ai-chat-input');
+      const q = String(inp?.value || '').trim();
+      const msgsBox = document.getElementById('ai-chat-messages');
+      const btn = document.getElementById('btn-send-ai-chat');
+      if (!q) return;
+
+      if (msgsBox) {
+        msgsBox.innerHTML += `
+          <div style="background:rgba(30,41,59,0.9);padding:8px 12px;border-radius:8px;border-left:3px solid #38bdf8;font-size:0.88rem;color:#f8fafc;align-self:flex-end;max-width:85%;">
+            <strong>Siz:</strong> ${escapeHtml(q)}
+          </div>
+          <div id="ai-user-loading" style="background:#1e293b;padding:8px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#facc15;font-style:italic;">
+            ⏳ Bilge Asistan düşünüyor...
+          </div>
+        `;
+        msgsBox.scrollTop = msgsBox.scrollHeight;
+      }
+      if (inp) inp.value = '';
+
+      try {
+        if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+        const res = await svc().aiAssistantService.askUserAssistant(session, q);
+        document.getElementById('ai-user-loading')?.remove();
+        if (msgsBox) {
+          msgsBox.innerHTML += `
+            <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#f8fafc;">
+              🧙‍♂️ <strong>Bilge Asistan:</strong> ${escapeHtml(res.reply)}
+            </div>
+          `;
+          msgsBox.scrollTop = msgsBox.scrollHeight;
+        }
+      } catch (err) {
+        document.getElementById('ai-user-loading')?.remove();
+        if (msgsBox) {
+          msgsBox.innerHTML += `
+            <div style="background:rgba(127,29,29,0.5);padding:8px 12px;border-radius:8px;border-left:3px solid #ef4444;font-size:0.85rem;color:#fca5a5;">
+              ⚠️ Hata: ${escapeHtml(err.message)}
+            </div>
+          `;
+        }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🚀 Sor'; }
       }
     });
 
@@ -5992,6 +6710,268 @@
         const prev = document.getElementById('adm-shop-emoji-preview');
         if (inp) inp.value = em;
         if (prev) prev.innerHTML = em;
+        return;
+      }
+
+      // ==========================================
+      // MODERATÖR PANELİ İŞLEMLERİ (#3)
+      // ==========================================
+      const modTabBtn = e.target.closest('#mod-sidebar-nav [data-mod-tab]');
+      if (modTabBtn) {
+        state.modTab = modTabBtn.getAttribute('data-mod-tab');
+        renderModerator();
+        return;
+      }
+
+      // Moderatör: Oyuncu Susturmasını Kaldır ([data-mod-unmute])
+      const modUnmuteBtn = e.target.closest('[data-mod-unmute]');
+      if (modUnmuteBtn) {
+        const session = getSession();
+        if (!session) return;
+        const targetU = modUnmuteBtn.getAttribute('data-mod-unmute');
+        try {
+          svc().authGuard.unmuteUser(session, targetU);
+          showToast(`🔊 ${targetU} oyuncusunun susturma cezası kaldırıldı.`, 'success');
+          renderModerator();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // Moderatör: Hata Durumu Güncelleme ([data-bug-status])
+      const bugStatusBtn = e.target.closest('[data-bug-status]');
+      if (bugStatusBtn) {
+        const session = getSession();
+        if (!session) return;
+        const bId = bugStatusBtn.getAttribute('data-bug-id');
+        const newStatus = bugStatusBtn.getAttribute('data-bug-status');
+        try {
+          svc().bugService.adminUpdateBug(session, bId, { status: newStatus });
+          showToast(`🐞 Hata bildirimi "${newStatus}" olarak güncellendi ve puanlar işletildi!`, 'success');
+          renderModerator();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // Moderatör: Öneri Durumu Güncelleme ([data-sug-status])
+      const sugModStatusBtn = e.target.closest('[data-sug-status]');
+      if (sugModStatusBtn) {
+        const session = getSession();
+        if (!session) return;
+        const sId = sugModStatusBtn.getAttribute('data-sug-id');
+        const newStatus = sugModStatusBtn.getAttribute('data-sug-status');
+        try {
+          svc().suggestionService.adminUpdateSuggestion(session, sId, { status: newStatus });
+          showToast(`💡 Öneri durumu "${newStatus}" olarak güncellendi ve puanlar işletildi!`, 'success');
+          renderModerator();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // Moderatör AI Soru Sorma Butonu (#btn-ask-mod-ai)
+      if (e.target.closest('#btn-ask-mod-ai')) {
+        const session = getSession();
+        if (!session) return;
+        const promptInput = document.getElementById('input-mod-ai-prompt');
+        const promptText = String(promptInput?.value || '').trim();
+        const historyEl = document.getElementById('mod-ai-history');
+        if (!promptText) return;
+        if (promptInput) promptInput.value = '';
+
+        if (historyEl) {
+          historyEl.innerHTML += `<div style="margin-top:6px;color:#93c5fd;"><strong>Siz:</strong> ${escapeHtml(promptText)}</div><div id="mod-ai-loading" style="margin-top:4px;color:#a7f3d0;font-style:italic;">⏳ Moderatör AI yanıtlıyor...</div>`;
+          historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        try {
+          const res = await svc().aiAssistantService.askModeratorAI(session, promptText);
+          const loadEl = document.getElementById('mod-ai-loading');
+          if (loadEl) loadEl.remove();
+          if (historyEl) {
+            historyEl.innerHTML += `<div style="margin-top:4px;color:#cbd5e1;">⚔️ <strong>Moderatör AI:</strong> ${escapeHtml(res.reply)}</div>`;
+            historyEl.scrollTop = historyEl.scrollHeight;
+          }
+        } catch (err) {
+          const loadEl = document.getElementById('mod-ai-loading');
+          if (loadEl) loadEl.remove();
+          if (historyEl) {
+            historyEl.innerHTML += `<div style="margin-top:4px;color:#f87171;">⚠️ Hata: ${escapeHtml(err.message)}</div>`;
+          }
+        }
+        return;
+      }
+
+      // ==========================================
+      // DESTEK YETKİLİ PANELİ İŞLEMLERİ (#3)
+      // ==========================================
+      const ticketTabBtn = e.target.closest('[data-ticket-tab]');
+      if (ticketTabBtn) {
+        state.ticketFilter = ticketTabBtn.getAttribute('data-ticket-tab');
+        renderTicket();
+        return;
+      }
+
+      // Destek Talebi Sahiplen, Yöneticiye İlet, Çözüldü Yap ([data-ticket-action])
+      const ticketActionBtn = e.target.closest('[data-ticket-action]');
+      if (ticketActionBtn) {
+        const session = getSession();
+        if (!session) return;
+        const act = ticketActionBtn.getAttribute('data-ticket-action');
+        const tId = ticketActionBtn.getAttribute('data-ticket-id');
+        try {
+          if (act === 'claim') {
+            svc().supportService.claimTicket(session, tId);
+            showToast(`🎯 #${tId} numaralı talep sahiplenildi!`, 'success');
+          } else if (act === 'escalate') {
+            svc().supportService.escalateTicket(session, tId, 'Yönetici incelemesi talep edildi.');
+            showToast(`🚨 #${tId} numaralı talep üst yöneticiye iletildi.`, 'info');
+          } else if (act === 'resolve') {
+            svc().supportService.closeTicket(session, tId);
+            showToast(`✓ #${tId} numaralı talep çözüldü olarak kapatıldı.`, 'success');
+          }
+          renderTicket();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // Destek Yanıtını AI ile İyileştir (#btn-ticket-ai-improve)
+      if (e.target.closest('#btn-ticket-ai-improve')) {
+        const textarea = document.getElementById('ticket-desk-reply-text');
+        const currentText = String(textarea?.value || '').trim();
+        const improveBtn = document.getElementById('btn-ticket-ai-improve');
+        if (!currentText) {
+          showToast('Lütfen önce iyileştirilmesini istediğiniz taslak yanıtı yazın.', 'warning');
+          return;
+        }
+        try {
+          if (improveBtn) { improveBtn.disabled = true; improveBtn.textContent = '⏳ İyileştiriliyor...'; }
+          const res = await svc().aiAssistantService.improveTicketResponse(getSession(), currentText);
+          if (textarea && res.improved) {
+            textarea.value = res.improved;
+            showToast('✨ Yanıtınız profesyonel ve kibar bir Minecraft destek üslubuna dönüştürüldü!', 'success');
+          }
+        } catch (err) {
+          showToast(err.message, 'error');
+        } finally {
+          if (improveBtn) { improveBtn.disabled = false; improveBtn.textContent = '✨ AI ile Yanıtı İyileştir'; }
+        }
+        return;
+      }
+
+      // ==========================================
+      // 🧙‍♂️ MVIP BİLGE ASİSTAN MODALI (#5)
+      // ==========================================
+      if (e.target.closest('#floating-ai-btn')) {
+        const session = getSession();
+        if (!session) return;
+        const userRank = svc().rankService.getUserRank(session.username);
+        const effRole = svc().authGuard?.getEffectiveRole(session);
+        if (userRank.order < 4 && effRole !== 'ADMIN' && effRole !== 'MODERATOR') {
+          showToast('Bilge Asistan ayrıcalığı MVP ve MVIP+ üyelerine özeldir. Mağazadan rütbenizi yükseltebilirsiniz!', 'warning');
+          return;
+        }
+        document.getElementById('modal-ai-assistant')?.classList.remove('hidden');
+        return;
+      }
+
+      if (e.target.closest('#btn-close-ai-assistant')) {
+        document.getElementById('modal-ai-assistant')?.classList.add('hidden');
+        return;
+      }
+
+      // ==========================================
+      // 🔒 PAROLAYI DEĞİŞTİR MODALI (#6)
+      // ==========================================
+      if (e.target.closest('#btn-open-change-password-modal')) {
+        const session = getSession();
+        if (!session) return;
+        const user = svc().userService.getUserByUsername(session.username);
+        const currentGroup = document.getElementById('group-current-password');
+        const hasHash = Boolean(user?.passwordHash);
+        if (currentGroup) {
+          currentGroup.style.display = hasHash ? 'block' : 'none';
+          const curInp = document.getElementById('input-current-password');
+          if (curInp) curInp.required = hasHash;
+        }
+        const errEl = document.getElementById('change-password-error');
+        if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+        document.getElementById('form-change-password')?.reset();
+        document.getElementById('modal-change-password')?.classList.remove('hidden');
+        return;
+      }
+
+      if (e.target.closest('#btn-close-change-password') || e.target.closest('#btn-cancel-change-password')) {
+        document.getElementById('modal-change-password')?.classList.add('hidden');
+        return;
+      }
+
+      // Şifre Göster/Gizle Butonları (.btn-toggle-pwd-vis)
+      const toggleVisBtn = e.target.closest('.btn-toggle-pwd-vis');
+      if (toggleVisBtn) {
+        const targetId = toggleVisBtn.getAttribute('data-target');
+        const inp = document.getElementById(targetId);
+        if (inp) {
+          const isPwd = inp.type === 'password';
+          inp.type = isPwd ? 'text' : 'password';
+          toggleVisBtn.textContent = isPwd ? '🙈' : '👁️';
+        }
+        return;
+      }
+
+      // ==========================================
+      // 👾 DISCORD GİRİŞ & HESAP BAĞLAMA (#2)
+      // ==========================================
+      if (e.target.closest('#btn-discord-login-auth')) {
+        try {
+          const authUrl = await svc().authService.getDiscordAuthUrl();
+          window.location.href = authUrl;
+        } catch (err) {
+          showToast(`Discord ile bağlantı başlatılamadı: ${err.message}`, 'error');
+        }
+        return;
+      }
+
+      if (e.target.closest('#btn-profile-toggle-discord')) {
+        const session = getSession();
+        if (!session) return;
+        const action = document.getElementById('btn-profile-toggle-discord')?.dataset?.discordAction;
+        if (action === 'unlink') {
+          if (window.confirm('Discord hesabı bağlantısını kaldırmak istediğinize emin misiniz?')) {
+            try {
+              await svc().authService.unlinkDiscord(session);
+              showToast('Discord hesabınızın bağlantısı kaldırıldı.', 'info');
+              renderProfile();
+            } catch (err) {
+              showToast(err.message, 'error');
+            }
+          }
+        } else {
+          try {
+            const authUrl = await svc().authService.getDiscordAuthUrl();
+            window.location.href = authUrl;
+          } catch (err) {
+            showToast(`Discord bağlantı bağlantısı alınamadı: ${err.message}`, 'error');
+          }
+        }
+        return;
+      }
+
+      // ==========================================
+      // 🎙️ MİKROFON SES TESTİ MODALI (#9)
+      // ==========================================
+      if (e.target.closest('#btn-test-mic')) {
+        openMicTestModal();
+        return;
+      }
+      if (e.target.closest('#btn-close-test-mic') || e.target.closest('#btn-finish-test-mic')) {
+        closeMicTestModal();
         return;
       }
       const notifFilterBtn = e.target.closest('[data-notif-filter]');
