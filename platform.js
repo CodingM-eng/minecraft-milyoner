@@ -347,6 +347,8 @@
     const userChip = document.getElementById('user-account-chip');
     const notifBtn = document.getElementById('btn-open-notifications');
     const drawerAdminBtn = document.getElementById('drawer-btn-admin');
+    const drawerModBtn = document.getElementById('drawer-btn-moderator');
+    const drawerTicketBtn = document.getElementById('drawer-btn-ticket');
 
     if (!session) {
       emeraldPill?.classList.add('hidden');
@@ -354,6 +356,8 @@
       userChip?.classList.add('hidden');
       notifBtn?.classList.add('hidden');
       drawerAdminBtn?.classList.add('hidden');
+      drawerModBtn?.classList.add('hidden');
+      drawerTicketBtn?.classList.add('hidden');
       return;
     }
 
@@ -657,7 +661,8 @@
     syncHeaderAndDrawer();
     drawer.classList.remove('hidden');
     backdrop.classList.remove('hidden');
-    requestAnimationFrame(() => {
+    const nextTick = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb => setTimeout(cb, 16));
+    nextTick(() => {
       drawer.classList.add('open');
       backdrop.classList.add('open');
     });
@@ -6473,6 +6478,21 @@
         renderSupport();
         return;
       }
+
+      // Menü Çekmecesi Aç/Kapat (#btn-toggle-menu) & Kapatma Butonları
+      const menuToggleTrigger = e.target.closest('#btn-toggle-menu');
+      if (menuToggleTrigger) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleDrawer();
+        return;
+      }
+      if (e.target.closest('#btn-close-menu') || e.target.closest('#menu-drawer-backdrop')) {
+        e.preventDefault();
+        closeDrawer();
+        return;
+      }
+
       // 0. Oyuncu Profili Görüntüle ([data-view-profile])
       const viewProfileTrigger = e.target.closest('[data-view-profile]');
       if (viewProfileTrigger) {

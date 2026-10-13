@@ -2885,32 +2885,37 @@
     INVITE_TTL_MS: 24 * 60 * 60 * 1000, // 24 saat geçerli davet
 
     getAllParties() {
-      return storage.get(STORAGE_KEYS.PARTIES, []);
+      const parties = storage.get(STORAGE_KEYS.PARTIES, []);
+      return Array.isArray(parties) ? parties : [];
     },
 
     _saveAllParties(parties) {
-      storage.set(STORAGE_KEYS.PARTIES, parties);
+      storage.set(STORAGE_KEYS.PARTIES, Array.isArray(parties) ? parties : []);
     },
 
     getAllInvitations() {
-      return storage.get(STORAGE_KEYS.PARTY_INVITATIONS, []);
+      const invs = storage.get(STORAGE_KEYS.PARTY_INVITATIONS, []);
+      return Array.isArray(invs) ? invs : [];
     },
 
     _saveAllInvitations(list) {
-      storage.set(STORAGE_KEYS.PARTY_INVITATIONS, list);
+      storage.set(STORAGE_KEYS.PARTY_INVITATIONS, Array.isArray(list) ? list : []);
     },
 
     getInvitationById(invitationId) {
       if (!invitationId) return null;
       const cleanId = String(invitationId).trim();
-      return this.getAllInvitations().find(inv => inv && inv.id === cleanId) || null;
+      const invs = this.getAllInvitations();
+      return Array.isArray(invs) ? (invs.find(inv => inv && inv.id === cleanId) || null) : null;
     },
 
     getActivePartyForUser(username) {
       if (!username) return null;
       const clean = String(username).trim().toLowerCase();
+      const parties = this.getAllParties();
+      if (!Array.isArray(parties)) return null;
       return (
-        this.getAllParties().find(
+        parties.find(
           p =>
             p &&
             p.status !== 'CLOSED' &&
