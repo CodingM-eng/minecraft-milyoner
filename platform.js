@@ -4990,20 +4990,31 @@
           </div>
 
           <!-- Moderatör AI Asistanı Kartı -->
-          <div class="platform-card" style="border: 1px solid #10b981; background: rgba(6, 78, 59, 0.2);">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-              <span style="font-size:1.5rem;">🤖</span>
-              <div>
-                <h4 style="margin:0;color:#10b981;">Moderatör AI Asistanı</h4>
-                <p style="margin:2px 0 0;font-size:0.8rem;color:#94a3b8;">Kurallar, şüpheli oyuncu kontrolleri ve moderasyon tavsiyeleri için danışın.</p>
+          <div class="platform-card mod-ai-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:42px;height:42px;border-radius:8px;background:rgba(16,185,129,0.2);border:1.5px solid #10b981;display:flex;align-items:center;justify-content:center;font-size:1.4rem;">🤖</div>
+                <div>
+                  <h4 style="margin:0;color:#34d399;font-size:1.05rem;display:flex;align-items:center;gap:8px;">
+                    Moderatör AI Asistanı
+                    <span style="font-size:0.7rem;background:rgba(16,185,129,0.2);color:#10b981;padding:2px 6px;border-radius:4px;border:1px solid #10b981;font-weight:700;">CANLI</span>
+                  </h4>
+                  <p style="margin:2px 0 0;font-size:0.8rem;color:#94a3b8;">Kurallar, şüpheli oyuncu kontrolleri ve moderasyon tavsiyeleri için danışın.</p>
+                </div>
+              </div>
+              <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary" onclick="window.openAiAssistantModal &amp;&amp; window.openAiAssistantModal();" title="Yapay Zeka Asistan Modalı">
+                🧙‍♂️ Çoklu Bot Modalı
+              </button>
+            </div>
+            <div id="mod-ai-history" class="mod-ai-history-box">
+              <div style="display:flex;gap:8px;align-items:flex-start;">
+                <span style="font-size:1.1rem;">⚔️</span>
+                <div><strong style="color:#34d399;">Moderatör AI:</strong> Merhaba yetkili arkadaşım! Açık biletler, ceza kuralları ve sohbet moderasyonu konusunda size yardımcı olmaya hazırım.</div>
               </div>
             </div>
-            <div id="mod-ai-history" style="max-height:180px;overflow-y:auto;background:rgba(15,23,42,0.8);border-radius:6px;padding:10px;margin-bottom:10px;font-size:0.88rem;color:#cbd5e1;">
-              ⚔️ <strong>Moderatör AI:</strong> Merhaba yetkili arkadaşım! Açık biletler ve sohbet moderasyonu konusunda size yardımcı olmaya hazırım.
-            </div>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;margin-top:10px;">
               <input type="text" id="input-mod-ai-prompt" class="mc-input" placeholder="Moderatör AI'a soru sorun... (Örn: Hakaret eden oyuncuya kaç dk ceza verilmeli?)" style="flex:1;" />
-              <button type="button" id="btn-ask-mod-ai" class="mc-btn mc-btn-primary mc-btn-sm" style="white-space:nowrap;">
+              <button type="button" id="btn-ask-mod-ai" class="mc-btn mc-btn-emerald mc-btn-sm" style="white-space:nowrap;">
                 💬 Gönder
               </button>
             </div>

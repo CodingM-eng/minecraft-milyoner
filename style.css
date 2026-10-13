@@ -8405,6 +8405,264 @@ body.screen-game-active #screen-game {
   min-width: 680px;
 }
 
+/* ========================================================
+   🧙‍♂️ YAPAY ZEKA ASİSTAN MODALI & BOT SEKMELERİ (GUI İYİLEŞTİRMESİ)
+   ======================================================== */
+.ai-assistant-modal-card {
+  max-width: 580px;
+  height: 600px;
+  display: flex;
+  flex-direction: column;
+  background: #0b0f19 !important;
+  border: 2px solid #6366f1 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.9), 0 0 32px rgba(99, 102, 241, 0.25) !important;
+  overflow: hidden;
+}
+
+.ai-assistant-modal-header {
+  background: linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%) !important;
+  border-bottom: 2px solid #312e81 !important;
+  padding: 12px 18px !important;
+}
+
+.ai-bot-switcher-tabs,
+#ai-bot-switcher-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #090d16;
+  border-bottom: 2px solid #1e293b;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  align-items: center;
+}
+
+.ai-bot-switcher-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+.ai-bot-switcher-tabs::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+
+.mc-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 14px;
+  background: rgba(30, 41, 59, 0.75);
+  border: 1.5px solid rgba(71, 85, 105, 0.6);
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  outline: none;
+}
+
+.mc-tab-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: #94a3b8;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.mc-tab-btn:active {
+  transform: translateY(1px);
+}
+
+.mc-tab-btn.active {
+  font-weight: 800;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* 🧙‍♂️ Bilge Bot Aktif Stili */
+.mc-tab-btn[data-ai-bot="user"].active,
+#tab-bot-user.active {
+  background: linear-gradient(135deg, #4f46e5 0%, #312e81 100%);
+  border-color: #facc15;
+  color: #fef08a;
+  box-shadow: 0 4px 14px rgba(250, 204, 21, 0.35), 0 0 10px rgba(99, 102, 241, 0.4);
+}
+
+/* 🎫 Destek / Ticket Bot Aktif Stili */
+.mc-tab-btn[data-ai-bot="ticket"].active,
+#tab-bot-ticket.active {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border-color: #38bdf8;
+  color: #e0f2fe;
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.35), 0 0 10px rgba(14, 165, 233, 0.4);
+}
+
+/* ⚔️ Moderatör Bot Aktif Stili */
+.mc-tab-btn[data-ai-bot="mod"].active,
+#tab-bot-mod.active {
+  background: linear-gradient(135deg, #059669 0%, #064e3b 100%);
+  border-color: #34d399;
+  color: #d1fae5;
+  box-shadow: 0 4px 14px rgba(52, 211, 153, 0.35), 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+/* 🛡️ Admin Bot Aktif Stili */
+.mc-tab-btn[data-ai-bot="admin"].active,
+#tab-bot-admin.active {
+  background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
+  border-color: #fbbf24;
+  color: #fef3c7;
+  box-shadow: 0 4px 14px rgba(251, 191, 36, 0.35), 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+/* Bilgi ve Güvenlik Uyarı Şeridi */
+.ai-safety-notice,
+#ai-safety-notice {
+  background: linear-gradient(90deg, rgba(30, 27, 75, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+  padding: 8px 14px;
+  border-bottom: 1.5px solid rgba(99, 102, 241, 0.3);
+  border-left: 3.5px solid #6366f1;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.4;
+}
+
+.ai-safety-notice .ai-safety-icon,
+.ai-safety-notice > span:first-child {
+  font-size: 1rem;
+  color: #818cf8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ai-safety-notice #ai-safety-notice-text {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+/* ========================================================
+   ⚔️ MODERATÖR PANELİ SİDEBAR & SEKMELERİ (GUI İYİLEŞTİRMESİ)
+   ======================================================== */
+.admin-sidebar-nav,
+#mod-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: rgba(10, 14, 24, 0.95);
+  border: 2px solid #10b981;
+  border-radius: 8px;
+  padding: 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(16, 185, 129, 0.15);
+}
+
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1.5px solid rgba(51, 65, 85, 0.6);
+  border-radius: 6px;
+  color: #cbd5e1;
+  text-align: left;
+  padding: 0.7rem 0.95rem;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-nav-item:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #34d399;
+  color: #ffffff;
+  transform: translateX(3px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.admin-nav-item.active {
+  border-color: #10b981;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.25) 0%, rgba(6, 78, 59, 0.4) 100%);
+  color: #34d399;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3), inset 3px 0 0 #10b981;
+  font-weight: 800;
+}
+
+.admin-nav-badge {
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-left: auto;
+}
+
+/* Moderatör AI Asistanı Kartı */
+.mod-ai-card {
+  border: 2px solid #10b981 !important;
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.25) 0%, rgba(15, 23, 42, 0.95) 100%) !important;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.15) !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+}
+
+.mod-ai-history-box {
+  max-height: 200px;
+  overflow-y: auto;
+  background: rgba(10, 14, 24, 0.9);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  border: 1px solid #1e293b;
+  line-height: 1.5;
+}
+
+/* Destek Paneli Filtre Butonları */
+[data-ticket-tab] {
+  transition: all 0.18s ease;
+  font-weight: 700;
+  border-radius: 5px;
+}
+
+[data-ticket-tab].mc-btn-primary {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border: 1.5px solid #34d399;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+@media (max-width: 900px) {
+  .admin-sidebar-nav,
+  #mod-sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 2px solid #10b981;
+  }
+
+  .admin-nav-item {
+    white-space: nowrap;
+    width: auto;
+  }
+}
+
 
 
 

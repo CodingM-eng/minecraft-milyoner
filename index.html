@@ -2313,8 +2313,8 @@
 
   <!-- 7. 🧙‍♂️ Yapay Zeka Asistan Modalı (Bilge / Ticket / Mod / Admin Çoklu Bot Değiştirici - #4 & #5) -->
   <div id="modal-ai-assistant" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-ai-title">
-    <div class="mc-modal-card" style="max-width: 580px; height: 600px; display:flex; flex-direction:column;">
-      <div class="mc-modal-header" style="background:linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%);">
+    <div class="mc-modal-card ai-assistant-modal-card">
+      <div class="mc-modal-header ai-assistant-modal-header">
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="modal-ai-icon" style="font-size:1.3rem;">🧙‍♂️</span>
           <h3 id="modal-ai-title" style="margin:0;color:#facc15;">BİLGE ASİSTAN</h3>
@@ -2323,7 +2323,7 @@
       </div>
 
       <!-- Yetkiye Göre Filtrelenen Bot Değiştirici Sekmeleri -->
-      <div id="ai-bot-switcher-tabs" style="display:flex;gap:6px;padding:8px 14px;background:#0f172a;border-bottom:1px solid #334155;overflow-x:auto;">
+      <div id="ai-bot-switcher-tabs" class="ai-bot-switcher-tabs">
         <button type="button" class="mc-tab-btn active" data-ai-bot="user" id="tab-bot-user">🧙‍♂️ Bilge Bot</button>
         <button type="button" class="mc-tab-btn hidden" data-ai-bot="ticket" id="tab-bot-ticket">🎫 Ticket Bot</button>
         <button type="button" class="mc-tab-btn hidden" data-ai-bot="mod" id="tab-bot-mod">⚔️ Mod Bot</button>
@@ -2331,8 +2331,8 @@
       </div>
 
       <!-- Bilgi & Güvenlik Uyarısı (AI Asla Otomatik İşlem Yürütmez) -->
-      <div id="ai-safety-notice" style="background:#1e1b4b;padding:6px 14px;border-bottom:1px solid #312e81;font-size:0.78rem;color:#cbd5e1;display:flex;align-items:center;gap:6px;">
-        <span>ℹ️</span>
+      <div id="ai-safety-notice" class="ai-safety-notice">
+        <span class="ai-safety-icon">ℹ️</span>
         <span id="ai-safety-notice-text">Yapay zeka yalnızca öneri ve taslak hazırlar; hiçbir işlem otomatik yürütülmez.</span>
       </div>
 
