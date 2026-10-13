@@ -270,9 +270,19 @@ function sendViaFormSubmit(recipientEmail, code) {
   return new Promise((resolve) => {
     try {
       const payload = JSON.stringify({
-        _subject: `MC Milyoner Onay Kodunuz: ${code}`,
-        email: recipientEmail,
-        code: code,
+        _subject: `💎 MC MİLYONER ONAY KODUNUZ: ${code} 💎`,
+        _template: 'table',
+        _captcha: 'false',
+        'UYGULAMA': 'MC MİLYONER PLATFORMU',
+        'E_POSTA': recipientEmail,
+        'ONAY_KODU': `🔑 >>> ${code} <<< 🔑`,
+        'DOGRULAMA_KODU': `${code}`,
+        'GİRİŞ_KODU': `${code} (Tek kullanımlık kod)`,
+        'GEÇERLİLİK': '3 Dakika (Tek Kullanımlık)',
+        'BİLGİ': `Sayın kullanıcımız, MC Milyoner platformu tek kullanımlık giriş onay kodunuz: ${code} dir. Bu kodu giriş ekranındaki kutuya yazınız. Lütfen kodu kimseyle paylaşmayınız.`,
+        'GIRIS_BAGLANTISI': 'https://codingm-eng.github.io/minecraft-milyoner/',
+        'KOD': `${code}`,
+        code: `${code}`,
         message: `MC Milyoner Giriş Onay Kodunuz: ${code}\n\nBu kod 3 dakika boyunca geçerlidir.\nAlıcı: ${recipientEmail}`
       });
 

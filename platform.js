@@ -4316,7 +4316,8 @@
         const diagPollEl = document.getElementById('tg-poll-bot-diag-status');
         const diagSuppEl = document.getElementById('tg-support-bot-diag-status');
         if (typeof fetch === 'function') {
-          fetch('/api/telegram/diagnostics')
+          const diagUrl = (typeof getApiUrl === 'function') ? getApiUrl('/api/telegram/diagnostics') : '/api/telegram/diagnostics';
+          fetch(diagUrl)
             .then(res => res.json())
             .then(data => {
               if (data && data.success) {
@@ -6530,7 +6531,8 @@
       if (e.target.closest('#btn-admin-test-telegram-support')) {
         try {
           if (typeof fetch === 'function') {
-            const res = await fetch('/api/support/ticket', {
+            const ticketUrl = (typeof getApiUrl === 'function') ? getApiUrl('/api/support/ticket') : '/api/support/ticket';
+            const res = await fetch(ticketUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -7027,9 +7029,11 @@
       if (e.target.closest('#btn-discord-login-auth')) {
         try {
           const authUrl = await svc().authService.getDiscordAuthUrl();
-          window.location.href = authUrl;
+          if (authUrl) {
+            window.location.href = authUrl;
+          }
         } catch (err) {
-          showToast(`Discord ile bağlantı başlatılamadı: ${err.message}`, 'error');
+          showToast(err.message || 'Discord ile bağlantı başlatılamadı.', 'error', 9000, { errorCode: 'ERR_DISCORD_SETUP_REQUIRED' });
         }
         return;
       }
@@ -7106,9 +7110,11 @@
         } else {
           try {
             const authUrl = await svc().authService.getDiscordAuthUrl(session.username);
-            window.location.href = authUrl;
+            if (authUrl) {
+              window.location.href = authUrl;
+            }
           } catch (err) {
-            showToast(`Discord bağlantı adresi alınamadı: ${err.message}`, 'error');
+            showToast(err.message || 'Discord bağlantı servisi başlatılamadı.', 'error', 10000, { errorCode: 'ERR_DISCORD_SETUP_REQUIRED' });
           }
         }
         return;

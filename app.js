@@ -2237,33 +2237,17 @@
       if (googleBox) googleBox.classList.add('hidden');
       if (divider) divider.classList.add('hidden');
       telegramForm?.classList.remove('hidden');
+
+      // Her Telegram giriş denemesinde OTP onay akışını 1. adıma sıfırla
+      document.getElementById('gate-telegram-step-request')?.classList.remove('hidden');
+      document.getElementById('gate-telegram-step-verify')?.classList.add('hidden');
+      currentTelegramNonce = null;
+      const codeInput = document.getElementById('gate-telegram-code');
+      if (codeInput) codeInput.value = '';
+
       const errEl = document.getElementById('gate-telegram-error');
       if (errEl) errEl.classList.add('hidden');
-      const tgInput = document.getElementById('gate-telegram-username');
-      if (tgInput) {
-        tgInput.value = '';
-        tgInput.focus();
-      }
-      renderTelegramWidgetIfConfigured();
     });
-
-    function renderTelegramWidgetIfConfigured() {
-      const wrapper = document.getElementById('gate-telegram-widget-wrapper');
-      if (!wrapper) return;
-      wrapper.innerHTML = '';
-      const cfg = (typeof svc().telegramService?.getConfig === 'function') ? svc().telegramService.getConfig() : {};
-      const botUser = String(cfg.botUsername || '').replace(/^@+/, '').trim();
-      if (botUser) {
-        const script = document.createElement('script');
-        script.async = true;
-        script.src = 'https://telegram.org/js/telegram-widget.js?22';
-        script.setAttribute('data-telegram-login', botUser);
-        script.setAttribute('data-size', 'large');
-        script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-        script.setAttribute('data-request-access', 'write');
-        wrapper.appendChild(script);
-      }
-    }
 
     let currentTelegramNonce = null;
 
@@ -2280,6 +2264,9 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
+        if (res.status === 404) {
+          throw new Error('Telegram bot servisi bulunamadı (404). GitHub Pages statik sunucusu Node.js backend çalıştırmaz. Lütfen Yönetici Paneli -> Ayarlar üzerinden Backend API URL adresinizi yapılandırın veya sunucunuzu (server.js) başlatın.');
+        }
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) {
           throw new Error(data.error || 'Telegram botu başlatılamadı. Lütfen sunucu TELEGRAM_BOT_TOKEN ayarını kontrol edin.');
@@ -2334,6 +2321,9 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nonce: currentTelegramNonce, code: cleanCode })
         });
+        if (res.status === 404) {
+          throw new Error('Telegram doğrulama servisi bulunamadı (404). Lütfen sunucunuzun (server.js) çalıştığından ve API URL ayarınızın yapıldığından emin olun.');
+        }
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) {
           throw new Error(data.error || 'Telegram onay kodu doğrulanamadı.');
@@ -2387,31 +2377,13 @@
 
     window.onTelegramAuth = async function (user) {
       const errEl = document.getElementById('gate-telegram-error');
-      errEl?.classList.add('hidden');
-      try {
-        const targetUrl = getApiUrl('/api/auth/telegram-login');
-        const res = await fetch(targetUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(user)
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Telegram imza doğrulaması başarısız.');
-        }
-        await handleVerifiedTelegramLogin(data.telegramUser, data.user);
-      } catch (err) {
-        renderGateErrorWithCopyButton(errEl, err.message);
-      }
-    };
-
-    // Resmi Telegram Login Widget için global callback desteği
-    window.onTelegramAuth = function(tgUser) {
-      if (tgUser && (tgUser.username || tgUser.id)) {
-        handleVerifiedTelegramLogin(tgUser).catch(err => {
-          const errEl = document.getElementById('gate-telegram-error');
-          if (errEl) renderGateErrorWithCopyButton(errEl, err.message);
-        });
+      if (errEl) errEl.classList.add('hidden');
+      // Güvenlik Kuralı: Telegram oturumunda tek kullanımlık bot OTP kodu zorunludur!
+      // Doğrudan kodsuz giriş kesin olarak engellenir, bot OTP akışı tetiklenir.
+      const btnTgRequest = document.getElementById('btn-telegram-request-code');
+      if (btnTgRequest) {
+        window.MCMPlatform?.showToast('Güvenliğiniz için lütfen Telegram botundan 6 haneli onay kodunuzu alıp girin.', 'info', 7000);
+        btnTgRequest.click();
       }
     };
 

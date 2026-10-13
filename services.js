@@ -141,6 +141,15 @@
     return base ? base + cleanEndpoint : cleanEndpoint;
   }
 
+  if (typeof window !== 'undefined') {
+    window.getApiUrl = getApiUrl;
+    window.getApiBaseUrl = getApiBaseUrl;
+  }
+  if (typeof global !== 'undefined') {
+    global.getApiUrl = getApiUrl;
+    global.getApiBaseUrl = getApiBaseUrl;
+  }
+
   // ==========================================
   // KRİPTOGRAFİK YARDIMCILAR (Ayrı Admin Girişi #8)
   // Şifre asla düz metin olarak saklanmaz veya arayüzde gösterilmez.
@@ -2125,22 +2134,29 @@
     async getDiscordAuthUrl(linkingUsername = null) {
       try {
         const queryParam = linkingUsername ? `?linkingUsername=${encodeURIComponent(linkingUsername)}` : '';
-        const res = await fetch(`/api/auth/discord/url${queryParam}`);
+        const targetUrl = getApiUrl(`/api/auth/discord/url${queryParam}`);
+        const res = await fetch(targetUrl);
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.url) return data.url;
         } else {
+          if (res.status === 404) {
+            throw new Error('Discord bağlantı servisi (404) bulunamadı. GitHub Pages statik sunucusu Node.js backend çalıştırmaz. Lütfen Yönetici Paneli -> Ayarlar üzerinden Backend API URL adresinizi yapılandırın veya yerel sunucunuzu (server.js) başlatın.');
+          }
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData?.error || 'Discord entegrasyonu sunucu tarafında henüz yapılandırılmamış.');
+          throw new Error(errData?.error || 'Discord entegrasyonu sunucu tarafında henüz yapılandırılmamış (DISCORD_CLIENT_ID eksik).');
         }
       } catch (e) {
+        if (e.message && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.message.includes('fetch failed'))) {
+          throw new Error('Backend sunucusuna bağlanılamadı. Discord hesabını bağlamak için aktif bir Node.js backend sunucusu gereklidir. Lütfen Yönetici Paneli -> Ayarlar bölümünden API URL adresinizi tanımlayın.');
+        }
         throw e;
       }
       return null;
     },
 
     async loginWithDiscord({ code, state, redirectUri } = {}) {
-      const res = await fetch('/api/auth/discord/callback', {
+      const res = await fetch(getApiUrl('/api/auth/discord/callback'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, state, redirectUri })
@@ -2169,7 +2185,7 @@
 
     async linkDiscord(session, { code, state, redirectUri } = {}) {
       authGuard.verifySession(session);
-      const res = await fetch('/api/auth/discord/callback', {
+      const res = await fetch(getApiUrl('/api/auth/discord/callback'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, state, redirectUri, linkingUsername: session.username })
@@ -2205,7 +2221,7 @@
         throw new Error('Hesap erişimini kaybetmemek için Discord bağlantısını kaldırmadan önce lütfen bir şifre belirleyin veya başka bir giriş yöntemi (Google/Telegram) bağlayın.');
       }
 
-      const res = await fetch('/api/auth/discord/unlink', {
+      const res = await fetch(getApiUrl('/api/auth/discord/unlink'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: session.username })
@@ -2625,7 +2641,7 @@
 
       try {
         if (typeof fetch === 'function') {
-          await fetch('/api/auth/telegram/unlink', {
+          await fetch(getApiUrl('/api/auth/telegram/unlink'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: session.username })
@@ -3692,7 +3708,7 @@
       // 1. Sunucu API çağrısı ile Telegram Bot Grubuna ilet
       try {
         if (typeof fetch === 'function') {
-          const res = await fetch('/api/support/ticket', {
+          const res = await fetch(getApiUrl('/api/support/ticket'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3756,7 +3772,7 @@
 
       try {
         if (typeof fetch === 'function') {
-          await fetch('/api/support/reply', {
+          await fetch(getApiUrl('/api/support/reply'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3925,7 +3941,7 @@
       const text = typeof rawText === 'string' ? rawText : (typeof sessionOrTicketId === 'string' ? sessionOrTicketId : '');
       try {
         if (typeof fetch === 'function') {
-          const res = await fetch('/api/support/ai-improve', {
+          const res = await fetch(getApiUrl('/api/support/ai-improve'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text })
@@ -4316,7 +4332,7 @@
       // 1. Sunucu API'sini çağır (POST /api/stripe/create-checkout-session)
       try {
         if (typeof fetch === 'function') {
-          const res = await fetch('/api/stripe/create-checkout-session', {
+          const res = await fetch(getApiUrl('/api/stripe/create-checkout-session'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -4926,7 +4942,7 @@
     async createPoll(questionText, options = ['A', 'B', 'C', 'D']) {
       try {
         if (typeof fetch === 'function') {
-          const res = await fetch('/api/telegram/create-poll', {
+          const res = await fetch(getApiUrl('/api/telegram/create-poll'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ question: questionText, options })
@@ -4955,7 +4971,7 @@
     async getPollStatus(pollId) {
       try {
         if (typeof fetch === 'function') {
-          const res = await fetch(`/api/telegram/poll-status?pollId=${encodeURIComponent(pollId)}`);
+          const res = await fetch(getApiUrl(`/api/telegram/poll-status?pollId=${encodeURIComponent(pollId)}`));
           if (res.ok) {
             return await res.json();
           }
@@ -5100,7 +5116,7 @@
       authGuard.verifySession(session);
       try {
         if (typeof fetch === 'function') {
-          const res = await fetch('/api/extra-life/consume', {
+          const res = await fetch(getApiUrl('/api/extra-life/consume'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -7619,7 +7635,7 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
 
       try {
         if (typeof fetch === 'function') {
-          const res = await fetch('/api/chat/moderate', {
+          const res = await fetch(getApiUrl('/api/chat/moderate'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, username })
