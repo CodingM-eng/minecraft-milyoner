@@ -187,7 +187,8 @@ let userMutes = safeLoadJson('user_mutes.json', {}); // username -> { mutedUntil
 
 // 7.3 Sesli Sohbet (WebRTC) Oda Odaları & Sinyalleşme
 let activeVoiceRooms = {}; // partyId -> { peers: { [username]: { lastSeen } }, signals: [] }
-let discordOAuthStates = new Map(); // state -> { expiresAt, redirectUri }
+let discordOAuthStates = new Map(); // state -> { expiresAt, redirectUri, linkingUsername }
+let pendingTelegramAuths = new Map(); // nonce -> { code, expiresAt, attempts, telegramUser, dispatched }
 
 // 7.4 Sponsorlu Kozmetikler Deposu (Kalıcı ve Geçici Sponsorlar)
 let activeSponsors = safeLoadJson('sponsors.json', []);
@@ -398,13 +399,29 @@ function parseRequestBody(req) {
   });
 }
 
-function sendJson(res, statusCode, data) {
+function getCorsOrigin(req) {
+  const origin = req?.headers?.origin;
+  if (!origin) return '*';
+  const allowedPatterns = [
+    /^https:\/\/codingm-eng\.github\.io$/,
+    /^http:\/\/localhost(:\d+)?$/,
+    /^http:\/\/127\.0\.0\.1(:\d+)?$/
+  ];
+  if (allowedPatterns.some(p => p.test(origin))) {
+    return origin;
+  }
+  return 'https://codingm-eng.github.io';
+}
+
+function sendJson(res, statusCode, data, req = null) {
   const payload = JSON.stringify(data);
+  const allowOrigin = getCorsOrigin(req);
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=UTF-8',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-    'Access-Control-Allow-Headers': 'Content-Type, stripe-signature, Authorization'
+    'Access-Control-Allow-Headers': 'Content-Type, stripe-signature, Authorization',
+    'Vary': 'Origin'
   });
   res.end(payload);
 }
@@ -454,6 +471,42 @@ function sendTelegramApiRequest(endpoint, postData, customToken = null) {
   });
 }
 
+async function checkTelegramAuthUpdates() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  try {
+    const res = await sendTelegramApiRequest('getUpdates', { limit: 25 });
+    if (!res.success || !Array.isArray(res.data)) return;
+    for (const upd of res.data) {
+      const msg = upd.message;
+      if (!msg || !msg.text) continue;
+      const text = msg.text.trim();
+      const match = text.match(/^\/start\s+auth_([a-zA-Z0-9_]+)/i);
+      if (match) {
+        const nonce = match[1];
+        const pending = pendingTelegramAuths.get(nonce);
+        if (pending && Date.now() <= pending.expiresAt) {
+          pending.telegramUser = {
+            id: msg.from.id,
+            username: msg.from.username || `tg_${msg.from.id}`,
+            firstName: msg.from.first_name || '',
+            lastName: msg.from.last_name || '',
+            chatId: msg.chat.id
+          };
+          if (!pending.dispatched) {
+            pending.dispatched = true;
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: `🔐 *MC Milyoner Giriş Onay Kodunuz*: \`${pending.code}\`\n\nBu kod 5 dakika boyunca geçerlidir. Lütfen sitedeki doğrulama kutusuna girin.`,
+              parse_mode: 'Markdown'
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {}
+}
+
 // HTTP Sunucusu
 const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
@@ -463,9 +516,10 @@ const server = http.createServer(async (req, res) => {
   // CORS Preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': getCorsOrigin(req),
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-      'Access-Control-Allow-Headers': 'Content-Type, stripe-signature, Authorization'
+      'Access-Control-Allow-Headers': 'Content-Type, stripe-signature, Authorization',
+      'Vary': 'Origin'
     });
     return res.end();
   }
@@ -491,24 +545,31 @@ const server = http.createServer(async (req, res) => {
       const { json: body } = await parseRequestBody(req);
       const email = String(body.email || '').trim().toLowerCase();
       if (!email || !email.includes('@')) {
-        return sendJson(res, 400, { success: false, error: 'Lütfen geçerli bir Gmail adresi girin.' });
+        return sendJson(res, 400, { success: false, error: 'Lütfen geçerli bir Gmail adresi girin.' }, req);
       }
       // 6 haneli güvenli OTP kodunu yalnızca sunucu tarafında kriptografik olarak üret
       const code = String(crypto.randomInt(100000, 999999));
       const expiresAt = Date.now() + 3 * 60 * 1000;
       activeOtps.set(email, { code, expiresAt, attempts: 0 });
       const mailRes = await dispatchEmail(email, code);
+      if (!mailRes.delivered) {
+        return sendJson(res, 503, {
+          success: false,
+          delivered: false,
+          error: 'E-posta gönderim servisi yapılandırılmamış veya teslimat sağlanamadı. Lütfen sunucu SMTP (GMAIL_USER & GMAIL_APP_PASSWORD) ayarlarını kontrol edin.'
+        }, req);
+      }
       return sendJson(res, 200, {
         success: true,
         message: 'Onay kodunuz mail.google.com gelen kutunuza gönderildi.',
         email,
         expiresAt,
-        delivered: mailRes.delivered,
+        delivered: true,
         method: mailRes.method,
         activationNeeded: Boolean(mailRes.activationNeeded)
-      });
+      }, req);
     } catch (err) {
-      return sendJson(res, 500, { success: false, error: err.message });
+      return sendJson(res, 500, { success: false, error: err.message }, req);
     }
   }
 
@@ -1564,57 +1625,411 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ==========================================
-  // 10. TELEGRAM İLE GİRİŞ DOĞRULAMA (Telegram Login Widget & Direct Client Auth)
+  // 10. TELEGRAM İLE GÜVENLİ GİRİŞ & BOT DOĞRULAMA (Widget HMAC & /start OTP)
   // ==========================================
+
+  // 10.1 Telegram Botu ile Derin Bağlantı (Deep-Link) & Tek Kullanımlık Kod Talebi
+  if (req.method === 'POST' && pathname === '/api/auth/telegram-start-request') {
+    try {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const botUsername = process.env.TELEGRAM_BOT_USERNAME || 'MCMilyonerBot';
+      if (!botToken) {
+        return sendJson(res, 503, {
+          success: false,
+          error: 'Telegram Botu sunucu tarafında henüz yapılandırılmamış (TELEGRAM_BOT_TOKEN eksik). Lütfen .env dosyasını yapılandırın.'
+        }, req);
+      }
+      const nonce = crypto.randomBytes(8).toString('hex');
+      const code = String(crypto.randomInt(100000, 999999));
+      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 dakika
+      pendingTelegramAuths.set(nonce, {
+        code,
+        expiresAt,
+        attempts: 0,
+        dispatched: false,
+        telegramUser: null
+      });
+
+      return sendJson(res, 200, {
+        success: true,
+        nonce,
+        botUsername,
+        deepLink: `https://t.me/${botUsername}?start=auth_${nonce}`,
+        expiresAt
+      }, req);
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message }, req);
+    }
+  }
+
+  // 10.2 Telegram Botu Tarafından Gönderilen 6 Haneli Onay Kodunu Doğrula
+  if (req.method === 'POST' && pathname === '/api/auth/telegram-verify-code') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const nonce = String(body.nonce || '').trim();
+      const inputCode = String(body.code || '').replace(/\D/g, '').trim();
+
+      // En güncel Telegram mesajlarını tara
+      await checkTelegramAuthUpdates();
+
+      const record = pendingTelegramAuths.get(nonce);
+      if (!record) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Geçersiz veya süresi dolmuş Telegram onay oturumu. Lütfen yeniden kod isteyin.'
+        }, req);
+      }
+      if (Date.now() > record.expiresAt) {
+        pendingTelegramAuths.delete(nonce);
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Telegram onay kodunun 5 dakikalık süresi doldu. Lütfen yeni kod isteyin.'
+        }, req);
+      }
+      record.attempts = (record.attempts || 0) + 1;
+      if (record.attempts > 5) {
+        pendingTelegramAuths.delete(nonce);
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Çok fazla hatalı deneme yapıldı. Lütfen yeni bir kod isteyin.'
+        }, req);
+      }
+      if (inputCode !== record.code) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Girdiğiniz 6 haneli Telegram onay kodu hatalı!'
+        }, req);
+      }
+      if (!record.telegramUser) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Telegram botu henüz başlatılmadı. Lütfen açılan Telegram botunda "Başlat" (/start) düğmesine tıklayın veya bota mesaj atın.'
+        }, req);
+      }
+
+      const tgUser = record.telegramUser;
+      pendingTelegramAuths.delete(nonce);
+      const tgId = String(tgUser.id);
+      const tgUsername = String(tgUser.username || `tg_${tgId}`).replace(/^@+/, '').trim();
+      const nowIso = new Date().toISOString();
+
+      let existingUser = persistentUsers.find(
+        u => u.telegramId && String(u.telegramId) === tgId
+      );
+
+      // Hesap bağlama modu
+      const linkingUsername = String(body.linkingUsername || '').trim();
+      if (linkingUsername) {
+        const userToLink = persistentUsers.find(u => u.username.toLowerCase() === linkingUsername.toLowerCase());
+        if (!userToLink) {
+          return sendJson(res, 404, { success: false, error: 'Bağlanacak kullanıcı bulunamadı.' }, req);
+        }
+        if (existingUser && existingUser.username.toLowerCase() !== linkingUsername.toLowerCase()) {
+          return sendJson(res, 409, {
+            success: false,
+            error: 'Bu Telegram hesabı zaten başka bir kullanıcıya bağlanmış.'
+          }, req);
+        }
+        userToLink.telegramId = tgId;
+        userToLink.telegramUsername = tgUsername;
+        userToLink.updatedAt = nowIso;
+        safeSaveJson('users.json', persistentUsers);
+        return sendJson(res, 200, {
+          success: true,
+          linked: true,
+          user: userToLink,
+          telegramUser: tgUser
+        }, req);
+      }
+
+      if (existingUser) {
+        existingUser.telegramUsername = tgUsername;
+        existingUser.lastLoginAt = nowIso;
+        safeSaveJson('users.json', persistentUsers);
+        return sendJson(res, 200, {
+          success: true,
+          user: existingUser,
+          telegramUser: tgUser
+        }, req);
+      }
+
+      // Yeni hesap oluştur (asla e-posta eşleşmesiyle otomatik birleştirme yapma!)
+      const cleanUsername = tgUsername.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
+      let finalUsername = cleanUsername.length >= 3 ? cleanUsername : `tg_${tgId.slice(-6)}`;
+      let suffix = 1;
+      while (persistentUsers.some(u => u.username.toLowerCase() === finalUsername.toLowerCase())) {
+        finalUsername = `${cleanUsername.slice(0, 12)}_${suffix++}`;
+      }
+
+      const newUser = {
+        userId: 'USR_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        username: finalUsername,
+        email: `${tgUsername.toLowerCase()}@telegram.org`,
+        emailVerified: true,
+        minecraftPlayerName: finalUsername,
+        avatarUrl: '',
+        passwordHash: null,
+        drivePermissionGranted: true,
+        driveGrantedAt: nowIso,
+        rank: 'MEMBER',
+        role: 'MEMBER',
+        isModerator: false,
+        status: 'ACTIVE',
+        emeraldBalance: 0,
+        emeraldsEarnedTotal: 0,
+        emeraldsSpentTotal: 0,
+        netheriteBalance: 0,
+        initialNetheriteBonusClaimed: false,
+        lastNetheriteClaimAt: null,
+        lastDailyEmeraldClaimAt: null,
+        extraLives: 0,
+        points: 0,
+        bestScore: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        ownedCosmetics: [],
+        equippedCosmetics: { avatarFrame: null, nameColor: null, badge: null, profileEffect: null },
+        achievements: [],
+        settings: { sound: true, particles: true },
+        telegramId: tgId,
+        telegramUsername: tgUsername,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        lastLoginAt: nowIso
+      };
+      persistentUsers.push(newUser);
+      safeSaveJson('users.json', persistentUsers);
+
+      return sendJson(res, 200, {
+        success: true,
+        user: newUser,
+        telegramUser: tgUser
+      }, req);
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message }, req);
+    }
+  }
+
+  // 10.3 Telegram Login Widget İmza Doğrulama (HMAC SHA-256)
   if (req.method === 'POST' && pathname === '/api/auth/telegram-login') {
     try {
       const { json: body } = await parseRequestBody(req);
       const { id, first_name, username, auth_date, hash } = body;
 
-      const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_SUPPORT_BOT_TOKEN;
-      const tgUsername = String(username || `tg_${id || Date.now()}`).replace(/^@+/, '').trim();
-      const isDirectClientAuth = (hash === 'TELEGRAM_DIRECT_CLIENT_AUTH' || hash === 'TELEGRAM_SAFE_WEB_AUTH' || !hash);
-
-      // Bot Token varsa ve widget hash'i geldiyse SHA-256 HMAC ile doğrula
-      let verified = false;
-      if (isDirectClientAuth || !botToken) {
-        verified = true;
-      } else if (botToken && hash) {
-        const secret = crypto.createHash('sha256').update(botToken).digest();
-        const checkArr = [];
-        for (const [k, v] of Object.entries(body)) {
-          if (k !== 'hash' && v !== undefined && v !== null) {
-            checkArr.push(`${k}=${v}`);
-          }
-        }
-        checkArr.sort();
-        const checkString = checkArr.join('\n');
-        const hmac = crypto.createHmac('sha256', secret).update(checkString).digest('hex');
-        verified = (hmac === hash);
-        if (!verified) {
-          // Doğrudan kullanıcı adı moduna güvenli fallback sağla
-          console.warn(`[TELEGRAM AUTH] HMAC eşleşmedi, güvenli doğrudan kullanıcı adı moduna geçildi: @${tgUsername}`);
-          verified = true;
-        }
-      } else {
-        verified = true;
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (!botToken) {
+        return sendJson(res, 503, {
+          success: false,
+          error: 'Telegram Botu sunucu tarafında henüz yapılandırılmamış (TELEGRAM_BOT_TOKEN eksik).'
+        }, req);
       }
 
-      if (!verified) {
-        return sendJson(res, 403, { success: false, error: 'Telegram imza doğrulaması başarısız oldu.' });
+      if (!hash || !id || !auth_date) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Telegram kimlik doğrulama parametreleri (id, auth_date, hash) eksik.'
+        }, req);
       }
+
+      // auth_date tazelik kontrolü (en fazla 24 saat = 86400 saniye)
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (Math.abs(nowSec - Number(auth_date)) > 86400) {
+        return sendJson(res, 401, {
+          success: false,
+          error: 'Telegram oturum imzasının süresi dolmuş. Lütfen tekrar deneyin.'
+        }, req);
+      }
+
+      // Kriptografik HMAC-SHA256 Doğrulaması (SHA256(bot_token) anahtarıyla)
+      const secret = crypto.createHash('sha256').update(botToken).digest();
+      const checkArr = [];
+      for (const [k, v] of Object.entries(body)) {
+        if (k !== 'hash' && k !== 'linkingUsername' && v !== undefined && v !== null) {
+          checkArr.push(`${k}=${v}`);
+        }
+      }
+      checkArr.sort();
+      const checkString = checkArr.join('\n');
+      const hmac = crypto.createHmac('sha256', secret).update(checkString).digest('hex');
+
+      if (hmac !== hash) {
+        return sendJson(res, 403, {
+          success: false,
+          error: 'Telegram imza doğrulaması başarısız oldu. Geçersiz veya tahrif edilmiş imza.'
+        }, req);
+      }
+
+      const tgId = String(id);
+      const tgUsername = String(username || `tg_${tgId}`).replace(/^@+/, '').trim();
+      const nowIso = new Date().toISOString();
+
+      let existingUser = persistentUsers.find(
+        u => u.telegramId && String(u.telegramId) === tgId
+      );
+
+      // Hesap bağlama modu
+      const linkingUsername = String(body.linkingUsername || '').trim();
+      if (linkingUsername) {
+        const userToLink = persistentUsers.find(u => u.username.toLowerCase() === linkingUsername.toLowerCase());
+        if (!userToLink) {
+          return sendJson(res, 404, { success: false, error: 'Bağlanacak kullanıcı bulunamadı.' }, req);
+        }
+        if (existingUser && existingUser.username.toLowerCase() !== linkingUsername.toLowerCase()) {
+          return sendJson(res, 409, {
+            success: false,
+            error: 'Bu Telegram hesabı zaten başka bir kullanıcıya bağlanmış.'
+          }, req);
+        }
+        userToLink.telegramId = tgId;
+        userToLink.telegramUsername = tgUsername;
+        userToLink.updatedAt = nowIso;
+        safeSaveJson('users.json', persistentUsers);
+        return sendJson(res, 200, {
+          success: true,
+          linked: true,
+          user: userToLink,
+          telegramUser: { id: tgId, username: tgUsername, firstName: first_name || tgUsername }
+        }, req);
+      }
+
+      if (existingUser) {
+        existingUser.telegramUsername = tgUsername;
+        existingUser.lastLoginAt = nowIso;
+        safeSaveJson('users.json', persistentUsers);
+        return sendJson(res, 200, {
+          success: true,
+          user: existingUser,
+          telegramUser: { id: tgId, username: tgUsername, firstName: first_name || tgUsername }
+        }, req);
+      }
+
+      // Yeni hesap oluştur (asla e-posta eşleşmesiyle otomatik birleştirme yapma!)
+      const cleanUsername = tgUsername.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
+      let finalUsername = cleanUsername.length >= 3 ? cleanUsername : `tg_${tgId.slice(-6)}`;
+      let suffix = 1;
+      while (persistentUsers.some(u => u.username.toLowerCase() === finalUsername.toLowerCase())) {
+        finalUsername = `${cleanUsername.slice(0, 12)}_${suffix++}`;
+      }
+
+      const newUser = {
+        userId: 'USR_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        username: finalUsername,
+        email: `${tgUsername.toLowerCase()}@telegram.org`,
+        emailVerified: true,
+        minecraftPlayerName: finalUsername,
+        avatarUrl: body.photo_url || '',
+        passwordHash: null,
+        drivePermissionGranted: true,
+        driveGrantedAt: nowIso,
+        rank: 'MEMBER',
+        role: 'MEMBER',
+        isModerator: false,
+        status: 'ACTIVE',
+        emeraldBalance: 0,
+        emeraldsEarnedTotal: 0,
+        emeraldsSpentTotal: 0,
+        netheriteBalance: 0,
+        initialNetheriteBonusClaimed: false,
+        lastNetheriteClaimAt: null,
+        lastDailyEmeraldClaimAt: null,
+        extraLives: 0,
+        points: 0,
+        bestScore: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        ownedCosmetics: [],
+        equippedCosmetics: { avatarFrame: null, nameColor: null, badge: null, profileEffect: null },
+        achievements: [],
+        settings: { sound: true, particles: true },
+        telegramId: tgId,
+        telegramUsername: tgUsername,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        lastLoginAt: nowIso
+      };
+      persistentUsers.push(newUser);
+      safeSaveJson('users.json', persistentUsers);
 
       return sendJson(res, 200, {
         success: true,
-        telegramUser: {
-          telegramId: id || null,
-          username: tgUsername,
-          firstName: first_name || tgUsername,
-          authDate: auth_date || Math.floor(Date.now() / 1000)
-        }
-      });
+        user: newUser,
+        telegramUser: { id: tgId, username: tgUsername, firstName: first_name || tgUsername }
+      }, req);
     } catch (e) {
-      return sendJson(res, 500, { success: false, error: e.message });
+      return sendJson(res, 500, { success: false, error: e.message }, req);
+    }
+  }
+
+  // 10.4 Telegram Hesabı Bağlantısını Kaldırma (Erişim Kaybı Korumalı)
+  if (req.method === 'POST' && pathname === '/api/auth/telegram/unlink') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const username = String(body.username || '').trim();
+      const user = persistentUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+      if (!user) {
+        return sendJson(res, 404, { success: false, error: 'Kullanıcı bulunamadı.' }, req);
+      }
+
+      // Hesap erişimini kaybetme riski kontrolü:
+      const hasPassword = Boolean(user.passwordHash && user.passwordHash.length > 0);
+      const hasDiscord = Boolean(user.discord?.id);
+      const hasEmailAuth = Boolean(user.email && user.emailVerified && !user.email.endsWith('@telegram.org') && !user.email.endsWith('@discord.user'));
+
+      if (!hasPassword && !hasDiscord && !hasEmailAuth) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Hesap erişimini kaybetmemek için Telegram bağlantısını kaldırmadan önce lütfen bir şifre belirleyin veya başka bir giriş yöntemi (Google/Discord) bağlayın.'
+        }, req);
+      }
+
+      user.telegramId = null;
+      user.telegramUsername = null;
+      user.updatedAt = new Date().toISOString();
+      safeSaveJson('users.json', persistentUsers);
+
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Telegram hesabı bağlantısı başarıyla kaldırıldı.'
+      }, req);
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message }, req);
+    }
+  }
+
+  // 10.5 Telegram Webhook (Opsiyonel Canlı Bot Webhook Entegrasyonu)
+  if (req.method === 'POST' && pathname === '/api/telegram/webhook') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      if (body && body.message && body.message.text) {
+        const text = String(body.message.text).trim();
+        const match = text.match(/^\/start\s+auth_([a-zA-Z0-9_]+)/i);
+        if (match) {
+          const nonce = match[1];
+          const pending = pendingTelegramAuths.get(nonce);
+          if (pending && Date.now() <= pending.expiresAt) {
+            pending.telegramUser = {
+              id: body.message.from.id,
+              username: body.message.from.username || `tg_${body.message.from.id}`,
+              firstName: body.message.from.first_name || '',
+              lastName: body.message.from.last_name || '',
+              chatId: body.message.chat.id
+            };
+            if (!pending.dispatched) {
+              pending.dispatched = true;
+              await sendTelegramApiRequest('sendMessage', {
+                chat_id: body.message.chat.id,
+                text: `🔐 *MC Milyoner Giriş Onay Kodunuz*: \`${pending.code}\`\n\nBu kod 5 dakika boyunca geçerlidir. Lütfen sitedeki kutucuğa girin.`,
+                parse_mode: 'Markdown'
+              });
+            }
+          }
+        }
+      }
+      return sendJson(res, 200, { ok: true }, req);
+    } catch (e) {
+      return sendJson(res, 200, { ok: false }, req);
     }
   }
 
@@ -1853,13 +2268,22 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && pathname === '/api/auth/discord/url') {
     try {
+      const clientId = process.env.DISCORD_CLIENT_ID;
+      if (!clientId) {
+        return sendJson(res, 503, {
+          success: false,
+          error: 'Discord entegrasyonu sunucu tarafında henüz yapılandırılmamış (DISCORD_CLIENT_ID eksik). Lütfen .env dosyasını kontrol edin.'
+        }, req);
+      }
+
       const state = crypto.randomBytes(16).toString('hex');
       const protocol = req.headers['x-forwarded-proto'] || 'http';
       const host = req.headers.host || `localhost:${PORT}`;
       const redirectUri = `${protocol}://${host}/api/auth/discord/callback`;
-      discordOAuthStates.set(state, { expiresAt: Date.now() + 600000, redirectUri });
+      const linkingUsername = query.linkingUsername ? String(query.linkingUsername).trim() : null;
 
-      const clientId = process.env.DISCORD_CLIENT_ID || '123456789012345678';
+      discordOAuthStates.set(state, { expiresAt: Date.now() + 600000, redirectUri, linkingUsername });
+
       const discordUrl = `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(
         clientId
       )}&redirect_uri=${encodeURIComponent(
@@ -1871,9 +2295,9 @@ const server = http.createServer(async (req, res) => {
         url: discordUrl,
         state,
         redirectUri
-      });
+      }, req);
     } catch (e) {
-      return sendJson(res, 500, { success: false, error: e.message });
+      return sendJson(res, 500, { success: false, error: e.message }, req);
     }
   }
 
@@ -1882,153 +2306,242 @@ const server = http.createServer(async (req, res) => {
       let code = query.code;
       let state = query.state;
       let redirectUri = query.redirect_uri;
+      let linkingUsername = query.linkingUsername || null;
 
       if (req.method === 'POST') {
         const { json: body } = await parseRequestBody(req);
         code = body.code || code;
         state = body.state || state;
         redirectUri = body.redirectUri || redirectUri;
+        linkingUsername = body.linkingUsername || linkingUsername;
       }
 
       if (!code) {
-        return sendJson(res, 400, { success: false, error: 'Discord OAuth yetkilendirme kodu (code) eksik.' });
+        return sendJson(res, 400, { success: false, error: 'Discord OAuth yetkilendirme kodu (code) eksik.' }, req);
       }
 
       // State doğrulaması (CSRF koruması)
-      if (state && discordOAuthStates.has(state)) {
-        const stateData = discordOAuthStates.get(state);
-        if (Date.now() > stateData.expiresAt) {
-          discordOAuthStates.delete(state);
-          return sendJson(res, 400, { success: false, error: 'Discord oturum doğrulama süresi (state) doldu.' });
-        }
-        redirectUri = redirectUri || stateData.redirectUri;
-        discordOAuthStates.delete(state);
+      if (!state || !discordOAuthStates.has(state)) {
+        return sendJson(res, 400, { success: false, error: 'Geçersiz veya süresi dolmuş Discord oturum doğrulama parametresi (state/CSRF).' }, req);
       }
 
-      let discordUser = null;
+      const stateData = discordOAuthStates.get(state);
+      if (Date.now() > stateData.expiresAt) {
+        discordOAuthStates.delete(state);
+        return sendJson(res, 400, { success: false, error: 'Discord oturum doğrulama süresi (state) doldu.' }, req);
+      }
+      redirectUri = redirectUri || stateData.redirectUri;
+      linkingUsername = linkingUsername || stateData.linkingUsername;
+      discordOAuthStates.delete(state);
+
       const clientId = process.env.DISCORD_CLIENT_ID;
       const clientSecret = process.env.DISCORD_CLIENT_SECRET;
 
-      if (clientId && clientSecret && !String(code).startsWith('mock_')) {
-        // Gerçek Discord OAuth2 token takası
-        const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            client_id: clientId,
-            client_secret: clientSecret,
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: redirectUri
-          })
-        });
-
-        if (!tokenRes.ok) {
-          const errData = await tokenRes.json().catch(() => ({}));
-          return sendJson(res, 400, {
-            success: false,
-            error: errData.error_description || 'Discord token takası başarısız oldu.'
-          });
-        }
-
-        const tokenData = await tokenRes.json();
-        const userRes = await fetch('https://discord.com/api/users/@me', {
-          headers: { Authorization: `Bearer ${tokenData.access_token}` }
-        });
-
-        if (!userRes.ok) {
-          return sendJson(res, 400, { success: false, error: 'Discord kullanıcı profili alınamadı.' });
-        }
-        discordUser = await userRes.json();
-      } else {
-        // Test / Mock ortamı desteği
-        const safeCode = String(code).replace(/[^a-zA-Z0-9_]/g, '');
-        discordUser = {
-          id: 'discord_' + (safeCode || 'test_user'),
-          username: 'DiscordOyuncu_' + (safeCode.slice(0, 6) || 'test'),
-          discriminator: '0001',
-          email: `${safeCode.toLowerCase() || 'discord'}@discord.user`,
-          avatar: null,
-          verified: true
-        };
+      if (!clientId || !clientSecret) {
+        return sendJson(res, 503, {
+          success: false,
+          error: 'Discord entegrasyonu sunucu tarafında henüz yapılandırılmamış (DISCORD_CLIENT_ID veya DISCORD_CLIENT_SECRET eksik).'
+        }, req);
       }
+
+      // Gerçek Discord OAuth2 token takası
+      const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: redirectUri
+        })
+      });
+
+      if (!tokenRes.ok) {
+        const errData = await tokenRes.json().catch(() => ({}));
+        return sendJson(res, 400, {
+          success: false,
+          error: errData.error_description || 'Discord token takası başarısız oldu.'
+        }, req);
+      }
+
+      const tokenData = await tokenRes.json();
+      const userRes = await fetch('https://discord.com/api/users/@me', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      });
+
+      if (!userRes.ok) {
+        return sendJson(res, 400, { success: false, error: 'Discord kullanıcı profili alınamadı.' }, req);
+      }
+      const discordUser = await userRes.json();
 
       const discId = String(discordUser.id);
       const discEmail = String(discordUser.email || `${discId}@discord.user`).toLowerCase();
       const discUsername = String(discordUser.username || `Discord_${discId}`);
-
-      // Kullanıcı eşleştirme veya güvenli hesap oluşturma
-      let existingUser = persistentUsers.find(
-        u => (u.discord && String(u.discord.id) === discId) || (u.email && u.email.toLowerCase() === discEmail)
-      );
-
       const nowIso = new Date().toISOString();
 
-      if (existingUser) {
-        existingUser.discord = {
+      let userWithDiscord = persistentUsers.find(
+        u => u.discord && String(u.discord.id) === discId
+      );
+
+      // 1. Hesap bağlama modu
+      if (linkingUsername) {
+        const userToLink = persistentUsers.find(u => u.username.toLowerCase() === linkingUsername.toLowerCase());
+        if (!userToLink) {
+          return sendJson(res, 404, { success: false, error: 'Bağlanacak kullanıcı bulunamadı.' }, req);
+        }
+        if (userWithDiscord && userWithDiscord.username.toLowerCase() !== linkingUsername.toLowerCase()) {
+          return sendJson(res, 409, {
+            success: false,
+            error: 'Bu Discord hesabı zaten başka bir kullanıcıya bağlanmış.'
+          }, req);
+        }
+        userToLink.discord = {
           id: discId,
           username: discUsername,
           email: discEmail,
-          linkedAt: existingUser.discord?.linkedAt || nowIso,
+          linkedAt: userToLink.discord?.linkedAt || nowIso,
           lastLoginAt: nowIso
         };
-        existingUser.lastLoginAt = nowIso;
-        existingUser.emailVerified = true;
-      } else {
-        let cleanUsername = discUsername.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
-        if (cleanUsername.length < 3) cleanUsername = 'dc_' + discId.slice(-6);
-        if (persistentUsers.some(u => u.username.toLowerCase() === cleanUsername.toLowerCase())) {
-          cleanUsername = `${cleanUsername}_${Math.floor(Math.random() * 899 + 100)}`;
+        userToLink.updatedAt = nowIso;
+        safeSaveJson('users.json', persistentUsers);
+
+        if (req.method === 'GET') {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          return res.end(`
+            <!DOCTYPE html>
+            <html>
+              <head><meta charset="utf-8"><title>Discord Bağlantısı Başarılı</title></head>
+              <body style="background:#0f172a;color:#f8fafc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
+                <div style="text-align:center;padding:24px;background:#1e293b;border-radius:12px;border:1px solid #10b981;">
+                  <h2>🎉 Discord Hesabı Başarıyla Bağlandı!</h2>
+                  <p>Kullanıcı: <strong>${userToLink.username}</strong> (${discUsername})</p>
+                  <p>Yönlendiriliyorsunuz...</p>
+                  <script>
+                    if (window.opener) {
+                      window.opener.postMessage({ type: 'DISCORD_LINK_SUCCESS', user: ${JSON.stringify(userToLink)} }, '*');
+                      window.close();
+                    } else {
+                      window.location.href = '/#profile';
+                    }
+                  </script>
+                </div>
+              </body>
+            </html>
+          `);
         }
 
-        const newUser = {
-          userId: 'USR_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-          username: cleanUsername,
-          email: discEmail,
-          emailVerified: true,
-          minecraftPlayerName: cleanUsername,
-          avatarUrl: discordUser.avatar
-            ? `https://cdn.discordapp.com/avatars/${discId}/${discordUser.avatar}.png`
-            : '',
-          passwordHash: null,
-          drivePermissionGranted: true,
-          driveGrantedAt: nowIso,
-          rank: 'MEMBER',
-          role: 'MEMBER',
-          isModerator: false,
-          status: 'ACTIVE',
-          emeraldBalance: 0,
-          emeraldsEarnedTotal: 0,
-          emeraldsSpentTotal: 0,
-          netheriteBalance: 0,
-          initialNetheriteBonusClaimed: false,
-          lastNetheriteClaimAt: null,
-          lastDailyEmeraldClaimAt: null,
-          extraLives: 0,
-          points: 0,
-          bestScore: 0,
-          gamesPlayed: 0,
-          gamesWon: 0,
-          gamesLost: 0,
-          ownedCosmetics: [],
-          equippedCosmetics: { avatarFrame: null, nameColor: null, badge: null, profileEffect: null },
-          achievements: [],
-          settings: { sound: true, particles: true },
-          discord: {
-            id: discId,
-            username: discUsername,
-            email: discEmail,
-            linkedAt: nowIso,
-            lastLoginAt: nowIso
-          },
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          lastLoginAt: nowIso
-        };
-        persistentUsers.push(newUser);
-        existingUser = newUser;
+        return sendJson(res, 200, {
+          success: true,
+          linked: true,
+          user: userToLink,
+          message: 'Discord hesabı başarıyla bağlandı.'
+        }, req);
       }
 
+      // 2. Doğrudan Giriş Modu
+      if (userWithDiscord) {
+        userWithDiscord.discord.lastLoginAt = nowIso;
+        userWithDiscord.lastLoginAt = nowIso;
+        safeSaveJson('users.json', persistentUsers);
+
+        if (req.method === 'GET') {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          return res.end(`
+            <!DOCTYPE html>
+            <html>
+              <head><meta charset="utf-8"><title>Discord Girişi Başarılı</title></head>
+              <body style="background:#0f172a;color:#f8fafc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
+                <div style="text-align:center;padding:24px;background:#1e293b;border-radius:12px;border:1px solid #10b981;">
+                  <h2>🎉 Discord ile Giriş Başarılı!</h2>
+                  <p>Kullanıcı: <strong>${userWithDiscord.username}</strong></p>
+                  <p>Yönlendiriliyorsunuz...</p>
+                  <script>
+                    if (window.opener) {
+                      window.opener.postMessage({ type: 'DISCORD_AUTH_SUCCESS', user: ${JSON.stringify(userWithDiscord)} }, '*');
+                      window.close();
+                    } else {
+                      window.location.href = '/#profile';
+                    }
+                  </script>
+                </div>
+              </body>
+            </html>
+          `);
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          user: userWithDiscord,
+          message: 'Discord ile başarıyla giriş yapıldı.'
+        }, req);
+      }
+
+      // 3. Kullanıcı Discord'a bağlı değil. Aynı e-postaya sahip mevcut kullanıcı var mı?
+      // KURAL: Bir e-posta mevcut hesaba aitse otomatik hesap birleştirme KESİNLİKLE YAPILMAZ!
+      const userWithSameEmail = persistentUsers.find(
+        u => u.email && u.email.toLowerCase() === discEmail && !discEmail.endsWith('@discord.user')
+      );
+      if (userWithSameEmail) {
+        return sendJson(res, 409, {
+          success: false,
+          requiresLinking: true,
+          error: 'Bu e-posta adresiyle kayıtlı bir hesap zaten var. Güvenlik gerekçesiyle otomatik birleştirme yapılmaz. Lütfen önce hesabınıza normal giriş yapın ve Profil ayarlarından Discord hesabınızı bağlayın.'
+        }, req);
+      }
+
+      // 4. Yepyeni Discord Kullanıcısı Oluştur
+      let cleanUsername = discUsername.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
+      if (cleanUsername.length < 3) cleanUsername = 'dc_' + discId.slice(-6);
+      if (persistentUsers.some(u => u.username.toLowerCase() === cleanUsername.toLowerCase())) {
+        cleanUsername = `${cleanUsername}_${Math.floor(Math.random() * 899 + 100)}`;
+      }
+
+      const newUser = {
+        userId: 'USR_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        username: cleanUsername,
+        email: discEmail,
+        emailVerified: true,
+        minecraftPlayerName: cleanUsername,
+        avatarUrl: discordUser.avatar
+          ? `https://cdn.discordapp.com/avatars/${discId}/${discordUser.avatar}.png`
+          : '',
+        passwordHash: null,
+        drivePermissionGranted: true,
+        driveGrantedAt: nowIso,
+        rank: 'MEMBER',
+        role: 'MEMBER',
+        isModerator: false,
+        status: 'ACTIVE',
+        emeraldBalance: 0,
+        emeraldsEarnedTotal: 0,
+        emeraldsSpentTotal: 0,
+        netheriteBalance: 0,
+        initialNetheriteBonusClaimed: false,
+        lastNetheriteClaimAt: null,
+        lastDailyEmeraldClaimAt: null,
+        extraLives: 0,
+        points: 0,
+        bestScore: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        ownedCosmetics: [],
+        equippedCosmetics: { avatarFrame: null, nameColor: null, badge: null, profileEffect: null },
+        achievements: [],
+        settings: { sound: true, particles: true },
+        discord: {
+          id: discId,
+          username: discUsername,
+          email: discEmail,
+          linkedAt: nowIso,
+          lastLoginAt: nowIso
+        },
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        lastLoginAt: nowIso
+      };
+      persistentUsers.push(newUser);
       safeSaveJson('users.json', persistentUsers);
 
       if (req.method === 'GET') {
@@ -2040,11 +2553,11 @@ const server = http.createServer(async (req, res) => {
             <body style="background:#0f172a;color:#f8fafc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
               <div style="text-align:center;padding:24px;background:#1e293b;border-radius:12px;border:1px solid #10b981;">
                 <h2>🎉 Discord ile Giriş Başarılı!</h2>
-                <p>Kullanıcı: <strong>${existingUser.username}</strong></p>
+                <p>Kullanıcı: <strong>${newUser.username}</strong></p>
                 <p>Yönlendiriliyorsunuz...</p>
                 <script>
                   if (window.opener) {
-                    window.opener.postMessage({ type: 'DISCORD_AUTH_SUCCESS', user: ${JSON.stringify(existingUser)} }, '*');
+                    window.opener.postMessage({ type: 'DISCORD_AUTH_SUCCESS', user: ${JSON.stringify(newUser)} }, '*');
                     window.close();
                   } else {
                     window.location.href = '/#profile';
@@ -2058,21 +2571,34 @@ const server = http.createServer(async (req, res) => {
 
       return sendJson(res, 200, {
         success: true,
-        user: existingUser,
-        message: 'Discord ile giriş ve hesap eşleştirmesi başarıyla tamamlandı.'
-      });
+        user: newUser,
+        message: 'Discord ile kayıt ve giriş başarıyla tamamlandı.'
+      }, req);
     } catch (e) {
-      return sendJson(res, 500, { success: false, error: e.message });
+      return sendJson(res, 500, { success: false, error: e.message }, req);
     }
   }
 
+  // 14.3 Discord Hesabı Bağlantısını Kaldırma (Erişim Kaybı Korumalı)
   if (req.method === 'POST' && pathname === '/api/auth/discord/unlink') {
     try {
       const { json: body } = await parseRequestBody(req);
       const username = String(body.username || '').trim();
       const user = persistentUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
       if (!user) {
-        return sendJson(res, 404, { success: false, error: 'Kullanıcı bulunamadı.' });
+        return sendJson(res, 404, { success: false, error: 'Kullanıcı bulunamadı.' }, req);
+      }
+
+      // Hesap erişimini kaybetme riski kontrolü:
+      const hasPassword = Boolean(user.passwordHash && user.passwordHash.length > 0);
+      const hasTelegram = Boolean(user.telegramId);
+      const hasEmailAuth = Boolean(user.email && user.emailVerified && !user.email.endsWith('@discord.user') && !user.email.endsWith('@telegram.org'));
+
+      if (!hasPassword && !hasTelegram && !hasEmailAuth) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Hesap erişimini kaybetmemek için Discord bağlantısını kaldırmadan önce lütfen bir şifre belirleyin veya başka bir giriş yöntemi (Google/Telegram) bağlayın.'
+        }, req);
       }
 
       user.discord = null;
@@ -2082,9 +2608,9 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, {
         success: true,
         message: 'Discord hesabı bağlantısı başarıyla kaldırıldı.'
-      });
+      }, req);
     } catch (e) {
-      return sendJson(res, 500, { success: false, error: e.message });
+      return sendJson(res, 500, { success: false, error: e.message }, req);
     }
   }
 

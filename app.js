@@ -1830,10 +1830,13 @@
         if (svc().otpService?.sendOtpToGmail) {
           otpData = await svc().otpService.sendOtpToGmail(currentOtpEmail);
         } else {
-          otpData = svc().authService.generateOtp(currentOtpEmail);
+          throw new Error('E-posta doğrulama servisi henüz hazır değil.');
         }
       } catch (err) {
-        otpData = svc().authService.generateOtp(currentOtpEmail);
+        const errorMsg = err.message || 'E-posta gönderilemedi. Lütfen backend sunucusunu kontrol edin.';
+        renderGateErrorWithCopyButton(errEl, errorMsg);
+        window.MCMPlatform?.showToast(`❌ ${errorMsg}`, 'error', 7000);
+        return;
       }
 
       startOtpCountdown(otpData?.expiresAt || (Date.now() + 3 * 60 * 1000));
@@ -2050,7 +2053,11 @@
         if (!inputCode || inputCode.length !== 6) {
           throw new Error('Lütfen 6 haneli onay kodunuzu eksiksiz olarak girin.');
         }
-        await svc().authService.verifyOtp(currentOtpEmail, inputCode);
+        if (svc().authService.verifyOtpWithServer) {
+          await svc().authService.verifyOtpWithServer(currentOtpEmail, inputCode);
+        } else {
+          svc().authService.verifyOtp(currentOtpEmail, inputCode);
+        }
 
         // Eğer klasik kayıt formundan gelinmişse bekleyen kayıt verilerini kullanarak doğrudan kaydet
         if (pendingRegistrationData && pendingRegistrationData.email === currentOtpEmail) {
@@ -2258,17 +2265,58 @@
       }
     }
 
-    // 🤖 Telegram Giriş Formu Gönderimi (#access-telegram-form)
+    let currentTelegramNonce = null;
+
+    const btnTgRequest = document.getElementById('btn-telegram-request-code');
+    btnTgRequest?.addEventListener('click', async () => {
+      const errEl = document.getElementById('gate-telegram-error');
+      errEl?.classList.add('hidden');
+      btnTgRequest.disabled = true;
+      btnTgRequest.innerHTML = '<span>⏳ Bot Açılıyor...</span>';
+
+      try {
+        const targetUrl = getApiUrl('/api/auth/telegram-start-request');
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Telegram botu başlatılamadı. Lütfen sunucu TELEGRAM_BOT_TOKEN ayarını kontrol edin.');
+        }
+
+        currentTelegramNonce = data.nonce;
+        window.open(data.deepLink, '_blank');
+
+        document.getElementById('gate-telegram-step-request')?.classList.add('hidden');
+        const verifyStep = document.getElementById('gate-telegram-step-verify');
+        verifyStep?.classList.remove('hidden');
+        document.getElementById('gate-telegram-code')?.focus();
+
+        window.MCMPlatform?.showToast('🤖 Telegram botu yeni sekmede açıldı. "Başlat" (/start) dedikten sonra gelen 6 haneli kodu buraya girin.', 'info', 7000);
+      } catch (err) {
+        renderGateErrorWithCopyButton(errEl, err.message);
+      } finally {
+        btnTgRequest.disabled = false;
+        btnTgRequest.innerHTML = '<span>🤖</span> <span>Telegram Botundan Onay Kodu Al</span>';
+      }
+    });
+
+    // 🤖 Telegram Kod Doğrulama Formu Submit (#access-telegram-form)
     telegramForm?.addEventListener('submit', async e => {
       e.preventDefault();
       const errEl = document.getElementById('gate-telegram-error');
       errEl?.classList.add('hidden');
 
-      const rawUser = document.getElementById('gate-telegram-username')?.value || '';
-      const cleanUser = String(rawUser).replace(/^@+/, '').trim();
+      const rawCode = document.getElementById('gate-telegram-code')?.value || '';
+      const cleanCode = String(rawCode).replace(/\D/g, '').trim();
 
-      if (!cleanUser || cleanUser.length < 2 || cleanUser.length > 32) {
-        renderGateErrorWithCopyButton(errEl, 'Lütfen geçerli bir Telegram kullanıcı adı girin (2 ile 32 karakter arasında).');
+      if (!cleanCode || cleanCode.length !== 6) {
+        renderGateErrorWithCopyButton(errEl, 'Lütfen botunuzun gönderdiği 6 haneli onay kodunu girin.');
+        return;
+      }
+      if (!currentTelegramNonce) {
+        renderGateErrorWithCopyButton(errEl, 'Lütfen önce "Telegram Botundan Onay Kodu Al" düğmesine tıklayın.');
         return;
       }
 
@@ -2276,17 +2324,24 @@
       const origText = submitBtn ? submitBtn.innerHTML : '';
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span>⏳ Telegram ile Giriş Yapılıyor...</span>';
+        submitBtn.innerHTML = '<span>⏳ Doğrulanıyor...</span>';
       }
 
       try {
-        await handleVerifiedTelegramLogin({
-          username: cleanUser,
-          first_name: cleanUser,
-          id: Math.abs(cleanUser.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)) || 88472910
+        const targetUrl = getApiUrl('/api/auth/telegram-verify-code');
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nonce: currentTelegramNonce, code: cleanCode })
         });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Telegram onay kodu doğrulanamadı.');
+        }
+
+        await handleVerifiedTelegramLogin(data.telegramUser, data.user);
       } catch (err) {
-        renderGateErrorWithCopyButton(errEl, err.message || 'Telegram girişi yapılamadı.');
+        renderGateErrorWithCopyButton(errEl, err.message || 'Telegram doğrulaması başarısız oldu.');
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
@@ -2295,38 +2350,17 @@
       }
     });
 
-    // Telegram Doğrulanmış Giriş Yardımcısı (Widget ve Form Tarafından Çağrılır)
-    async function handleVerifiedTelegramLogin(tgUser) {
-      const tgUsername = String(tgUser.username || `tg_${tgUser.id || Date.now()}`).replace(/^@+/, '').trim();
-      if (!tgUsername) {
-        throw new Error('Lütfen geçerli bir Telegram kullanıcı adı girin.');
-      }
+    // Telegram Doğrulanmış Giriş Yardımcısı
+    async function handleVerifiedTelegramLogin(tgUser, serverUser = null) {
+      const tgUsername = String(tgUser?.username || `tg_${tgUser?.id || Date.now()}`).replace(/^@+/, '').trim();
+      const tgId = tgUser?.id ? String(tgUser.id) : null;
 
-      // 1. Sunucu API entegrasyonu varsa doğrulamayı ilet
-      try {
-        if (typeof fetch === 'function') {
-          await fetch('/api/auth/telegram-login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: tgUser.id || 10001,
-              username: tgUsername,
-              first_name: tgUser.first_name || tgUsername,
-              auth_date: tgUser.auth_date || Math.floor(Date.now() / 1000),
-              hash: tgUser.hash || 'TELEGRAM_DIRECT_CLIENT_AUTH'
-            })
-          }).catch(() => {});
-        }
-      } catch (_) {}
-
-      // 2. Doğrudan ve güvenli authService.loginWithTelegram çağrısı
+      // Güvenli authService.loginWithTelegram çağrısı
       const session = await svc().authService.loginWithTelegram({
         username: tgUsername,
-        telegramId: tgUser.id || null,
-        firstName: tgUser.first_name || '',
-        photoUrl: tgUser.photo_url || '',
-        authDate: tgUser.auth_date || null,
-        hash: tgUser.hash || null
+        telegramId: tgId,
+        firstName: tgUser?.firstName || tgUser?.first_name || '',
+        photoUrl: tgUser?.photo_url || ''
       });
 
       if (!session) {
@@ -2350,6 +2384,26 @@
       }
       return session;
     }
+
+    window.onTelegramAuth = async function (user) {
+      const errEl = document.getElementById('gate-telegram-error');
+      errEl?.classList.add('hidden');
+      try {
+        const targetUrl = getApiUrl('/api/auth/telegram-login');
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(user)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Telegram imza doğrulaması başarısız.');
+        }
+        await handleVerifiedTelegramLogin(data.telegramUser, data.user);
+      } catch (err) {
+        renderGateErrorWithCopyButton(errEl, err.message);
+      }
+    };
 
     // Resmi Telegram Login Widget için global callback desteği
     window.onTelegramAuth = function(tgUser) {

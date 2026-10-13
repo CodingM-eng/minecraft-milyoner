@@ -1092,12 +1092,32 @@
           .join('');
       }
     }
+    // Telegram Bağlantı Durumu
+    const telegramStatusText = document.getElementById('profile-telegram-status-text');
+    const telegramToggleBtn = document.getElementById('btn-profile-toggle-telegram');
+    if (telegramStatusText && telegramToggleBtn) {
+      if (user.telegramId || user.telegramUsername) {
+        const tgName = user.telegramUsername ? `@${user.telegramUsername}` : user.telegramId;
+        telegramStatusText.innerHTML = `Telegram: <strong style="color:#229ED9;">${escapeHtml(tgName)}</strong> (Bağlı)`;
+        telegramToggleBtn.textContent = 'Bağlantıyı Kaldır';
+        telegramToggleBtn.className = 'mc-btn mc-btn-sm mc-btn-danger';
+        telegramToggleBtn.dataset.telegramAction = 'unlink';
+      } else {
+        telegramStatusText.textContent = 'Telegram: Bağlı Değil';
+        telegramToggleBtn.textContent = 'Hesabı Bağla';
+        telegramToggleBtn.className = 'mc-btn mc-btn-sm mc-btn-primary';
+        telegramToggleBtn.dataset.telegramAction = 'link';
+      }
+    }
+
     // Discord Bağlantı Durumu (#2)
     const discordStatusText = document.getElementById('profile-discord-status-text');
     const discordToggleBtn = document.getElementById('btn-profile-toggle-discord');
     if (discordStatusText && discordToggleBtn) {
-      if (user.discordId) {
-        discordStatusText.innerHTML = `Discord: <strong style="color:#5865F2;">${escapeHtml(user.discordTag || user.discordUsername || user.discordId)}</strong> (Bağlı)`;
+      const discId = user.discord?.id || user.discordId;
+      const discTag = user.discord?.username || user.discordTag || user.discordUsername || discId;
+      if (discId) {
+        discordStatusText.innerHTML = `Discord: <strong style="color:#5865F2;">${escapeHtml(discTag)}</strong> (Bağlı)`;
         discordToggleBtn.textContent = 'Bağlantıyı Kaldır';
         discordToggleBtn.className = 'mc-btn mc-btn-sm mc-btn-danger';
         discordToggleBtn.dataset.discordAction = 'unlink';
@@ -4821,6 +4841,8 @@
         </div>
       `;
     }
+  }
+
   // ==========================================
   // 16. EKRAN: MODERATÖR PANELİ (renderModerator — #3)
   // ==========================================
@@ -7012,6 +7034,61 @@
         return;
       }
 
+      if (e.target.closest('#btn-profile-toggle-telegram')) {
+        const session = getSession();
+        if (!session) return;
+        const action = document.getElementById('btn-profile-toggle-telegram')?.dataset?.telegramAction;
+        if (action === 'unlink') {
+          if (window.confirm('Telegram hesabı bağlantısını kaldırmak istediğinize emin misiniz?')) {
+            try {
+              await svc().authService.unlinkTelegram(session);
+              showToast('Telegram hesabınızın bağlantısı kaldırıldı.', 'info');
+              renderProfile();
+            } catch (err) {
+              showToast(err.message, 'error');
+            }
+          }
+        } else {
+          try {
+            const targetUrl = (typeof getApiUrl === 'function') ? getApiUrl('/api/auth/telegram-start-request') : '/api/auth/telegram-start-request';
+            const res = await fetch(targetUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'Telegram botu başlatılamadı. Sunucu TELEGRAM_BOT_TOKEN ayarını kontrol edin.');
+            }
+            window.open(data.deepLink, '_blank');
+            const codeInput = window.prompt(
+              'Telegram botu yeni sekmede açıldı.\nLütfen botta "Başlat" (/start) dedikten sonra gelen 6 haneli onay kodunu girin:'
+            );
+            if (codeInput && codeInput.trim()) {
+              const cleanCode = codeInput.replace(/\D/g, '').trim();
+              const verifyUrl = (typeof getApiUrl === 'function') ? getApiUrl('/api/auth/telegram-verify-code') : '/api/auth/telegram-verify-code';
+              const vRes = await fetch(verifyUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nonce: data.nonce, code: cleanCode, linkingUsername: session.username })
+              });
+              const vData = await vRes.json().catch(() => ({}));
+              if (!vRes.ok || !vData.success) {
+                throw new Error(vData.error || 'Telegram onay kodu doğrulanamadı.');
+              }
+              await svc().authService.linkTelegram(session, {
+                telegramId: vData.telegramUser?.id,
+                telegramUsername: vData.telegramUser?.username
+              });
+              showToast('🎉 Telegram hesabınız başarıyla bağlandı!', 'success');
+              renderProfile();
+            }
+          } catch (err) {
+            showToast(err.message, 'error');
+          }
+        }
+        return;
+      }
+
       if (e.target.closest('#btn-profile-toggle-discord')) {
         const session = getSession();
         if (!session) return;
@@ -7028,10 +7105,10 @@
           }
         } else {
           try {
-            const authUrl = await svc().authService.getDiscordAuthUrl();
+            const authUrl = await svc().authService.getDiscordAuthUrl(session.username);
             window.location.href = authUrl;
           } catch (err) {
-            showToast(`Discord bağlantı bağlantısı alınamadı: ${err.message}`, 'error');
+            showToast(`Discord bağlantı adresi alınamadı: ${err.message}`, 'error');
           }
         }
         return;

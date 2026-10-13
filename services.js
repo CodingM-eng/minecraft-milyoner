@@ -666,9 +666,12 @@
           });
           if (res.ok) {
             const data = await res.json();
-            serverSuccess = true;
-            if (data && data.activationNeeded) {
-              activationNeeded = true;
+            if (data && data.delivered) {
+              serverSuccess = true;
+              if (data.expiresAt) expiresAt = data.expiresAt;
+              if (data.activationNeeded) activationNeeded = true;
+            } else {
+              serverErrorNotice = data?.error || 'E-posta sağlayıcısı teslimatı onaylamadı. Lütfen sunucu SMTP ayarlarını kontrol edin.';
             }
           } else {
             if (res.status === 404) {
@@ -682,56 +685,25 @@
               }
             }
           }
+        } else {
+          serverErrorNotice = 'İstemci fetch desteği bulunamadı.';
         }
       } catch (err) {
         serverErrorNotice = `Sunucuya bağlanılamadı (${err.message}). Lütfen backend sunucusunu (server.js) çalıştırın veya API URL adresinizi kontrol edin.`;
       }
 
-      // 2. Çevrimdışı / Test / FormSubmit alternatifi (sunucu yoksa)
-      let expiresAt = Date.now() + 3 * 60 * 1000;
+      // Güvenlik Kuralı: İstemcide gizli OTP kodu üretilmez, sahte başarı gösterilmez!
       if (!serverSuccess) {
-        // Yerel test ortamları ve formsubmit için güvenli yerel kayıt oluştur
-        const localRec = this.generateOtp(cleanEmail);
-        expiresAt = localRec.expiresAt;
-
-        if (typeof fetch === 'function' && !serverErrorNotice.includes('404')) {
-          try {
-            const fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(cleanEmail)}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              body: JSON.stringify({
-                _subject: `💎 MC Milyoner Doğrulama Kodu`,
-                _template: 'table',
-                _captcha: 'false',
-                'UYGULAMA': 'MC MİLYONER PLATFORMU',
-                'E_POSTA': cleanEmail,
-                'GEÇERLİLİK': '3 Dakika (Tek Kullanımlık)',
-                'BİLGİ': 'MC Milyoner hesabınız için tek kullanımlık onay kodunuz e-posta kutunuza iletilmiştir.',
-                'GIRIS_BAGLANTISI': 'https://mail.google.com/'
-              })
-            });
-            if (fsRes.ok) {
-              const fsData = await fsRes.json();
-              formSubmitSuccess = true;
-              if (fsData && fsData.message && String(fsData.message).toLowerCase().includes('activation')) {
-                activationNeeded = true;
-              }
-            }
-          } catch (fsErr) {}
-        }
+        throw new Error(serverErrorNotice || 'E-posta doğrulama kodu gönderilemedi. Lütfen backend sunucunuzun açık olduğundan ve SMTP ayarlarının yapıldığından emin olun.');
       }
 
-      // Güvenlik İlkesi: Ham OTP kodu ASLA konsola basılmaz ve istemciye döndürülmez.
       return {
         email: cleanEmail,
         expiresAt: expiresAt,
-        serverSent: serverSuccess,
-        formSubmitSent: formSubmitSuccess,
+        serverSent: true,
+        delivered: true,
         activationNeeded: activationNeeded,
-        warning: serverErrorNotice || null
+        warning: null
       };
     },
 
@@ -811,6 +783,50 @@
         this._saveStoredOtps(stored);
       } catch (e) {}
       return true;
+    },
+
+    async verifyOtpWithServer(email, inputCode) {
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const cleanInput = String(inputCode || '').replace(/\D/g, '').trim();
+      if (!cleanInput || cleanInput.length !== 6) {
+        throw new Error('Lütfen 6 haneli onay kodunuzu eksiksiz olarak girin.');
+      }
+
+      // 1. Canlı Sunucu Doğrulaması (POST /api/auth/verify-otp)
+      if (typeof fetch === 'function') {
+        try {
+          const targetUrl = getApiUrl('/api/auth/verify-otp');
+          const res = await fetch(targetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cleanEmail, code: cleanInput })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.verified) {
+              this._activeOtps.delete(cleanEmail);
+              try {
+                const stored = this._getStoredOtps() || {};
+                delete stored[cleanEmail];
+                this._saveStoredOtps(stored);
+              } catch (e) {}
+              return true;
+            }
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            if (res.status !== 404) {
+              throw new Error(errData?.error || 'Girdiğiniz 6 haneli onay kodu hatalı veya süresi doldu!');
+            }
+          }
+        } catch (fetchErr) {
+          if (!fetchErr.message.includes('404') && !fetchErr.message.includes('Failed to fetch') && !fetchErr.message.includes('fetch failed')) {
+            throw fetchErr;
+          }
+        }
+      }
+
+      // 2. Mock / Yerel bellek doğrulaması
+      return this.verifyOtp(cleanEmail, cleanInput);
     }
   };
 
@@ -2106,14 +2122,20 @@
       return true;
     },
 
-    async getDiscordAuthUrl() {
+    async getDiscordAuthUrl(linkingUsername = null) {
       try {
-        const res = await fetch('/api/auth/discord/url');
+        const queryParam = linkingUsername ? `?linkingUsername=${encodeURIComponent(linkingUsername)}` : '';
+        const res = await fetch(`/api/auth/discord/url${queryParam}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.url) return data.url;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.error || 'Discord entegrasyonu sunucu tarafında henüz yapılandırılmamış.');
         }
-      } catch (e) {}
+      } catch (e) {
+        throw e;
+      }
       return null;
     },
 
@@ -2150,7 +2172,7 @@
       const res = await fetch('/api/auth/discord/callback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, state, redirectUri })
+        body: JSON.stringify({ code, state, redirectUri, linkingUsername: session.username })
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -2172,6 +2194,17 @@
 
     async unlinkDiscord(session) {
       authGuard.verifySession(session);
+      const user = userService.getUserByUsername(session.username);
+      if (!user) throw new Error('Kullanıcı bulunamadı.');
+
+      const hasPassword = Boolean(user.passwordHash && user.passwordHash.length > 0);
+      const hasTelegram = Boolean(user.telegramId);
+      const hasEmailAuth = Boolean(user.email && user.emailVerified && !user.email.endsWith('@discord.user') && !user.email.endsWith('@telegram.org'));
+
+      if (!hasPassword && !hasTelegram && !hasEmailAuth) {
+        throw new Error('Hesap erişimini kaybetmemek için Discord bağlantısını kaldırmadan önce lütfen bir şifre belirleyin veya başka bir giriş yöntemi (Google/Telegram) bağlayın.');
+      }
+
       const res = await fetch('/api/auth/discord/unlink', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2198,6 +2231,10 @@
 
     verifyOtp(email, code) {
       return otpService.verifyOtp(email, code);
+    },
+
+    async verifyOtpWithServer(email, code) {
+      return otpService.verifyOtpWithServer(email, code);
     },
 
     getPendingOtp(email) {
@@ -2433,25 +2470,13 @@
         await cloudSyncService.syncNow().catch(() => {});
       }
 
-      // Mevcut kullanıcıyı ara (asla veri, rütbe veya bakiye kaybı olmadan)
+      // Güvenlik Kuralı: Yalnızca doğrulanmış telegramId ile eşleştirme yapılır.
+      // Asla kullanıcı adı veya e-posta benzerliği ile otomatik birleştirme yapılmaz!
       const allUsers = userService.getAllUsers();
       let matchedUser = null;
 
       if (telegramId) {
-        matchedUser = allUsers.find(u => u && String(u.telegramId) === String(telegramId));
-      }
-      if (!matchedUser && cleanUser) {
-        matchedUser = allUsers.find(
-          u => u && u.telegramUsername && u.telegramUsername.toLowerCase() === cleanUser.toLowerCase()
-        );
-      }
-      if (!matchedUser && cleanUser) {
-        matchedUser = userService.getUserByUsername(cleanUser);
-      }
-      if (!matchedUser) {
-        matchedUser = allUsers.find(
-          u => u && u.email && u.email.toLowerCase() === cleanEmail.toLowerCase()
-        );
+        matchedUser = allUsers.find(u => u && u.telegramId && String(u.telegramId) === String(telegramId));
       }
 
       if (matchedUser) {
@@ -2462,13 +2487,10 @@
           telegramUsername: cleanUser
         };
         if (telegramId && !matchedUser.telegramId) {
-          updates.telegramId = telegramId;
+          updates.telegramId = String(telegramId);
         }
         if (photoUrl && (!matchedUser.avatarUrl || matchedUser.avatarUrl.includes('placeholder'))) {
           updates.avatarUrl = photoUrl;
-        }
-        if (!matchedUser.email) {
-          updates.email = cleanEmail;
         }
         matchedUser = userService.syncUserFields(matchedUser.username, updates);
 
@@ -2493,7 +2515,7 @@
           userId: generateId('USR'),
           username: finalUsername,
           telegramUsername: cleanUser,
-          telegramId: telegramId || null,
+          telegramId: telegramId ? String(telegramId) : null,
           email: cleanEmail,
           emailVerified: true,
           minecraftPlayerName: finalUsername.slice(0, 16),
@@ -2552,9 +2574,9 @@
         );
       }
 
+      // Güvenlik Kuralı: Admin yetkisi yalnızca kanıtlanmış SUPER_ADMIN_EMAIL ile verilebilir
       const isAdmin = Boolean(
-        matchedUser.email === SUPER_ADMIN_EMAIL ||
-        (matchedUser.telegramUsername && matchedUser.telegramUsername.toLowerCase() === 'codingdevelopia')
+        matchedUser.email && matchedUser.email.toLowerCase() === SUPER_ADMIN_EMAIL
       );
 
       const session = buildSessionPayload(matchedUser, isAdmin);
@@ -2565,6 +2587,59 @@
       }
 
       return session;
+    },
+
+    async linkTelegram(session, { telegramId, telegramUsername } = {}) {
+      authGuard.verifySession(session);
+      if (!telegramId) {
+        throw new Error('Geçerli bir Telegram kimliği gereklidir.');
+      }
+      const allUsers = userService.getAllUsers();
+      const existing = allUsers.find(
+        u => u.username.toLowerCase() !== session.username.toLowerCase() && u.telegramId && String(u.telegramId) === String(telegramId)
+      );
+      if (existing) {
+        throw new Error('Bu Telegram hesabı zaten başka bir kullanıcıya bağlanmış.');
+      }
+      const cleanUsername = String(telegramUsername || `tg_${telegramId}`).replace(/^@+/, '');
+      const updatedUser = userService.syncUserFields(session.username, {
+        telegramId: String(telegramId),
+        telegramUsername: cleanUsername
+      });
+      activityService.log('TELEGRAM_LINK', session.username, `${session.username} Telegram hesabını (@${cleanUsername}) başarıyla bağladı.`);
+      return updatedUser;
+    },
+
+    async unlinkTelegram(session) {
+      authGuard.verifySession(session);
+      const user = userService.getUserByUsername(session.username);
+      if (!user) throw new Error('Kullanıcı bulunamadı.');
+
+      const hasPassword = Boolean(user.passwordHash && user.passwordHash.length > 0);
+      const hasDiscord = Boolean(user.discord?.id || user.discordId);
+      const hasEmailAuth = Boolean(user.email && user.emailVerified && !user.email.endsWith('@telegram.org') && !user.email.endsWith('@discord.user'));
+
+      if (!hasPassword && !hasDiscord && !hasEmailAuth) {
+        throw new Error('Hesap erişimini kaybetmemek için Telegram bağlantısını kaldırmadan önce lütfen bir şifre belirleyin veya başka bir giriş yöntemi (Google/Discord) bağlayın.');
+      }
+
+      try {
+        if (typeof fetch === 'function') {
+          await fetch('/api/auth/telegram/unlink', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: session.username })
+          });
+        }
+      } catch (e) {}
+
+      userService.syncUserFields(session.username, {
+        telegramId: null,
+        telegramUsername: null
+      });
+
+      activityService.log('TELEGRAM_UNLINK', session.username, `${session.username} Telegram hesabı bağlantısını kaldırdı.`);
+      return true;
     },
 
     async refreshDrivePermission() {

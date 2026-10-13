@@ -1286,8 +1286,116 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert(testDirtyMsg.cleanText.includes('[sansürlendi]'), 'Küfürler [sansürlendi] etiketiyle değiştirilmeli');
     console.log('✓ Türkçe küfür ve argo filtreleme pipeline’ı başarıyla doğrulandı.');
 
+    // ------------------------------------------------------------------
+    // TEST 39: Güvenli Çoklu Sağlayıcı Bağlama (Telegram & Discord), Çakışma Önleme ve Hesap Kilitleme Koruması (Lockout Prevention)
+    // ------------------------------------------------------------------
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-38 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 39: Güvenli Çoklu Sağlayıcı Bağlama, Çakışma Önleme ve Hesap Kilitleme Koruması');
+    console.log('====================================================');
+
+    // 39.1: Kullanıcı Telegram hesabını bağlayabilmeli
+    const testSession = {
+      username: 'RegularPlayer',
+      role: 'MEMBER',
+      sessionToken: 'test_token_123',
+      drivePermissionGranted: true
+    };
+    const linkedTgUser = await authService.linkTelegram(testSession, {
+      telegramId: '987654321',
+      telegramUsername: 'RegularTgPlayer'
+    });
+    assert.strictEqual(linkedTgUser.telegramId, '987654321');
+    assert.strictEqual(linkedTgUser.telegramUsername, 'RegularTgPlayer');
+    console.log('✓ Telegram hesabı oturum sahibi kullanıcıya başarıyla bağlandı.');
+
+    // 39.2: Başka kullanıcının aynı Telegram kimliğini bağlaması ENGELLENMELİ (Çakışma koruması)
+    const otherSession = {
+      username: 'ModeratorTest',
+      role: 'MODERATOR',
+      sessionToken: 'test_token_456',
+      drivePermissionGranted: true
+    };
+    await assert.rejects(
+      async () => {
+        await authService.linkTelegram(otherSession, {
+          telegramId: '987654321',
+          telegramUsername: 'HackerTg'
+        });
+      },
+      /zaten başka bir kullanıcıya/i,
+      'Zaten bağlı olan Telegram hesabı ikinci bir kullanıcıya bağlanamamalıdır.'
+    );
+    console.log('✓ Başka hesaba bağlı Telegram kimliğinin mükerrer bağlanması güvenle engellendi.');
+
+    // 39.3: Tek giriş yöntemi olan ve şifresi bulunmayan kullanıcının sağlayıcıyı kaldırması engellenmeli (Lockout Koruması)
+    const pureTgUser = {
+      userId: 'USR_TG_ONLY',
+      username: 'PureTgUser',
+      email: 'puretg@telegram.org',
+      emailVerified: true,
+      passwordHash: '',
+      telegramId: '11223344',
+      telegramUsername: 'PureTg',
+      discord: null,
+      rank: 'MEMBER',
+      role: 'MEMBER',
+      status: 'ACTIVE'
+    };
+    const allUsersList = userService.getAllUsers();
+    allUsersList.push(pureTgUser);
+    userService._saveAllUsers(allUsersList);
+
+    const pureTgSession = {
+      username: 'PureTgUser',
+      role: 'MEMBER',
+      sessionToken: 'pure_tg_token',
+      drivePermissionGranted: true
+    };
+
+    await assert.rejects(
+      async () => {
+        await authService.unlinkTelegram(pureTgSession);
+      },
+      /hesap erişimini kaybetmemek/i,
+      'Şifresiz ve alternatifsiz hesabın tek sağlayıcısını kaldırması engellenmelidir.'
+    );
+    console.log('✓ Hesabın kalıcı kilitlenmesini önleyen güvenlik kontrolü başarıyla doğrulandı.');
+
+    // ------------------------------------------------------------------
+    // TEST 40: Sunucu Tarafı Güvenlik Kuralları (Sahte Oturum & Sahte Başarı Reddi)
+    // ------------------------------------------------------------------
+    console.log('\n====================================================');
+    console.log('TEST 40: Sunucu Tarafı Güvenlik Kuralları & Sahte Oturum Reddi');
+    console.log('====================================================');
+
+    // 40.1: loginWithTelegram yalnızca telegramId ile eşleştirme yapmalı; sahte kullanıcı adı eşleşmesi engellenmeli
+    const tgSessionFromId = await authService.loginWithTelegram({
+      username: 'RegularTgPlayer',
+      telegramId: '987654321'
+    });
+    assert.strictEqual(tgSessionFromId.username, 'RegularPlayer', 'Doğru telegramId ile kullanıcı eşleşmelidir.');
+
+    // Telegram ID verilmeden veya eşleşmeyen ID ile admin kullanıcı adı girilse dahi sahte admin olunamaz:
+    const fakeAdminTgSession = await authService.loginWithTelegram({
+      username: 'codingdevelopia',
+      telegramId: '999999999' // Farklı bir Telegram ID
+    });
+    assert.notStrictEqual(fakeAdminTgSession.username, 'CodingDevAdmin', 'Farklı Telegram ID admin hesabını ele geçiremez.');
+    assert.strictEqual(fakeAdminTgSession.isAdminSession, false, 'Doğrulanmamış Telegram ID asla admin olamaz.');
+    console.log('✓ Telegram kullanıcı adı taklidi ile admin hesabını ele geçirme girişimi engellendi.');
+
+    // 40.2: E-posta teslimatı olmadan istemcide sahte OTP oluşturma ve başarı gösterme engellendi
+    await assert.rejects(
+      async () => {
+        // Fetch olmadığı veya teslimat yapılamadığı durumda hata fırlatmalıdır:
+        await window.MCMServices.otpService.sendOtpToGmail('failtest@gmail.com');
+      },
+      'Teslimat sağlanamayan e-posta gönderimi hata fırlatmalıdır.'
+    );
+    console.log('✓ Teslimat sağlanamayan OTP talebinde istemcide sahte başarı üretilmesi kesin olarak engellendi.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-40 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {
