@@ -410,8 +410,8 @@ function parseRequestBody(req) {
 }
 
 function getCorsOrigin(req) {
-  const origin = req?.headers?.origin;
-  if (!origin) return '*';
+  const origin = req?.headers?.origin || req?.socket?._httpMessage?.req?.headers?.origin;
+  if (!origin) return 'https://codingm-eng.github.io';
   const allowedPatterns = [
     /^https:\/\/codingm-eng\.github\.io$/,
     /^http:\/\/localhost(:\d+)?$/,
@@ -425,12 +425,14 @@ function getCorsOrigin(req) {
 
 function sendJson(res, statusCode, data, req = null) {
   const payload = JSON.stringify(data);
-  const allowOrigin = getCorsOrigin(req);
+  const request = req || res.req;
+  const allowOrigin = getCorsOrigin(request);
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=UTF-8',
     'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-    'Access-Control-Allow-Headers': 'Content-Type, stripe-signature, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+    'Access-Control-Allow-Headers': 'Content-Type, stripe-signature, Authorization, Accept, X-Requested-With',
+    'Access-Control-Allow-Credentials': 'true',
     'Vary': 'Origin'
   });
   res.end(payload);
@@ -527,8 +529,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': getCorsOrigin(req),
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-      'Access-Control-Allow-Headers': 'Content-Type, stripe-signature, Authorization',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
+      'Access-Control-Allow-Headers': 'Content-Type, stripe-signature, Authorization, Accept, X-Requested-With',
+      'Access-Control-Allow-Credentials': 'true',
       'Vary': 'Origin'
     });
     return res.end();

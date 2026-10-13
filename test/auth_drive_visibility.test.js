@@ -1395,7 +1395,87 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     console.log('✓ Teslimat sağlanamayan OTP talebinde istemcide sahte başarı üretilmesi kesin olarak engellendi.');
 
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-40 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 41: GitHub Pages 405 Önleme, expiresAt Değişken Tanımı & Güvenlik');
+    console.log('====================================================');
+
+    // 41.1: expiresAt değişkeni güvenle tanımlanmalı ve sunucu yanıtını yansıtmalı
+    const mockNow = 1770000000000;
+    const originalFetch = global.fetch;
+    let fetchCalledWith = null;
+
+    global.fetch = async (url, opts) => {
+      fetchCalledWith = { url, opts };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          delivered: true,
+          expiresAt: mockNow + 180000,
+          activationNeeded: false
+        })
+      };
+    };
+
+    // Harici API tanımlı iken sendOtpToGmail expiresAt değerini eksiksiz döndürür
+    global.window.location = { hostname: 'localhost' };
+    localStorage.setItem('mcm_backend_api_url', 'http://localhost:3000');
+    const test41OtpResult = await window.MCMServices.otpService.sendOtpToGmail('testplayer@gmail.com');
+    assert.strictEqual(typeof test41OtpResult.expiresAt, 'number', 'expiresAt bir sayı olmalıdır.');
+    assert.strictEqual(test41OtpResult.expiresAt, mockNow + 180000, 'expiresAt sunucudan dönen süreyi taşımalıdır.');
+    assert.strictEqual(test41OtpResult.serverSent, true);
+    console.log('✓ expiresAt değişkeni tanımlı ve sunucu yanıtı güvenle işlendi.');
+
+    // 41.2: GitHub Pages ortamında harici backend yokken fetch çağrısı yapılmamalı (HTTP 405 önleme)
+    localStorage.removeItem('mcm_backend_api_url');
+    delete global.window.MCM_API_BASE_URL;
+    global.window.location = { hostname: 'codingm-eng.github.io' };
+    let gitHubFetchAttempted = false;
+    global.fetch = async (url) => {
+      gitHubFetchAttempted = true;
+      throw new Error('HATA: GitHub Pages statik sunucusuna fetch gönderilmemeliydi!');
+    };
+
+    await assert.rejects(
+      async () => {
+        await window.MCMServices.otpService.sendOtpToGmail('testpages@gmail.com');
+      },
+      (err) => err.message.includes('HTTP 405') || err.message.includes('statik'),
+      'GitHub Pages üzerinde backend tanımlı değilken açıklayıcı hata verilmelidir.'
+    );
+    assert.strictEqual(gitHubFetchAttempted, false, 'GitHub Pages üzerine POST fetch isteği gönderilmemiştir.');
+    console.log('✓ GitHub Pages üzerinde backend tanımlı değilken POST fetch isteği engellendi (405 önlendi).');
+
+    // 41.3: verifyOtpWithServer de GitHub Pages üzerinde backend yokken POST yapmamalı
+    let verifyFetchAttempted = false;
+    await assert.rejects(
+      async () => {
+        await window.MCMServices.otpService.verifyOtpWithServer('testpages@gmail.com', '123456');
+      },
+      (err) => err.message.includes('backend bağlantısı tanımlanmamıştır') || err.message.includes('statik')
+    );
+    assert.strictEqual(verifyFetchAttempted, false, 'verifyOtpWithServer GitHub Pages üzerinde fetch çağırmamalıdır.');
+    console.log('✓ verifyOtpWithServer GitHub Pages üzerinde backend yokken POST isteği göndermedi.');
+
+    // 41.4: consumeOrPurchaseLife GitHub Pages üzerinde backend yokken fetch yapmadan yerel atomik çalışmalı
+    let lifeFetchAttempted = false;
+    const lifeTestSession = {
+      username: 'LifeTester',
+      role: 'MEMBER'
+    };
+    const lifeResult = await window.MCMServices.extraLifeService.consumeOrPurchaseLife(lifeTestSession, {
+      hasExtraLife: true,
+      currentLives: 2
+    });
+    assert.strictEqual(lifeFetchAttempted, false, 'consumeOrPurchaseLife GitHub Pages üzerinde POST yapmamalıdır.');
+    assert.strictEqual(lifeResult.success, true);
+    assert.strictEqual(lifeResult.action, 'CONSUMED_EXISTING');
+    console.log('✓ consumeOrPurchaseLife GitHub Pages üzerinde gereksiz fetch yapmadan yerel atomik çalıştı.');
+
+    // fetch fonksiyonunu geri yükle
+    global.fetch = originalFetch;
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-41 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

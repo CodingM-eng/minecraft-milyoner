@@ -124,6 +124,13 @@
   // ==========================================
   // BACKEND API URL YARDIMCISI (GitHub Pages / Canlı Sunucu Uyumluluğu)
   // ==========================================
+  function isGitHubPagesHost() {
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      return String(window.location.hostname).includes('github.io');
+    }
+    return false;
+  }
+
   function getApiBaseUrl() {
     if (typeof window !== 'undefined') {
       if (window.MCM_API_BASE_URL) return String(window.MCM_API_BASE_URL).replace(/\/+$/, '');
@@ -135,6 +142,13 @@
     return '';
   }
 
+  function hasConfiguredBackend() {
+    if (isGitHubPagesHost()) {
+      return Boolean(getApiBaseUrl());
+    }
+    return true;
+  }
+
   function getApiUrl(endpoint) {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
     const base = getApiBaseUrl();
@@ -144,10 +158,14 @@
   if (typeof window !== 'undefined') {
     window.getApiUrl = getApiUrl;
     window.getApiBaseUrl = getApiBaseUrl;
+    window.hasConfiguredBackend = hasConfiguredBackend;
+    window.isGitHubPagesHost = isGitHubPagesHost;
   }
   if (typeof global !== 'undefined') {
     global.getApiUrl = getApiUrl;
     global.getApiBaseUrl = getApiBaseUrl;
+    global.hasConfiguredBackend = hasConfiguredBackend;
+    global.isGitHubPagesHost = isGitHubPagesHost;
   }
 
   // ==========================================
@@ -663,17 +681,17 @@
       let formSubmitSuccess = false;
       let activationNeeded = false;
       let serverErrorNotice = '';
+      let expiresAt = Date.now() + 3 * 60 * 1000;
 
-      // GitHub Pages statik sunucu kontrolü (Eğer harici backend tanımlanmamışsa kullanıcıyı yönlendir)
-      const currentHost = (typeof window !== 'undefined' && window.location) ? window.location.hostname : '';
-      const isGitHubPages = currentHost.includes('github.io');
-      const hasCustomApi = Boolean(getApiBaseUrl());
+      // GitHub Pages statik sunucu kontrolü (Eğer harici backend tanımlanmamışsa POST isteği göndermeden kullanıcıyı yönlendir)
+      const isGitHubPages = isGitHubPagesHost();
+      const apiBase = getApiBaseUrl();
 
-      if (isGitHubPages && !hasCustomApi) {
+      if (isGitHubPages && !apiBase) {
         throw new Error(
-          'GitHub Pages statik bir barındırma sunucusudur ve Node.js backend (server.js) çalıştırmaz. ' +
+          'GitHub Pages statik bir barındırma sunucusudur ve Node.js backend (server.js) çalıştırmaz (HTTP 405). ' +
           'E-posta OTP doğrulamasının çalışabilmesi için lütfen çalışan backend sunucunuzun adresini ' +
-          'giriş ekranındaki "⚙️ Backend Sunucu (API) Bağlantı Ayarı" düğmesinden tanımlayın (Örn: https://... veya yerel test için http://localhost:3000).'
+          'giriş ekranındaki "⚙️ Backend Sunucu (API) Bağlantı Ayarı" düğmesinden tanımlayın (Örn: https://<render-servisi>.onrender.com veya yerel test için http://localhost:3000).'
         );
       }
 
@@ -697,7 +715,7 @@
             }
           } else {
             if (res.status === 404 || res.status === 405) {
-              serverErrorNotice = `E-posta doğrulama servisi bulunamadı (HTTP ${res.status}). GitHub Pages statik bir barındırma sunucusudur ve Node.js backend (server.js) çalıştırmaz. Lütfen giriş ekranındaki '⚙️ Backend Sunucu (API) Bağlantı Ayarı' butonuna tıklayarak sunucu adresinizi (örn. https://... veya yerel test için http://localhost:3000) tanımlayın.`;
+              serverErrorNotice = `E-posta doğrulama servisi bulunamadı (HTTP ${res.status}). GitHub Pages statik bir barındırma sunucusudur ve Node.js backend (server.js) çalıştırmaz. Lütfen giriş ekranındaki '⚙️ Backend Sunucu (API) Bağlantı Ayarı' butonuna tıklayarak sunucu adresinizi (örn. https://<render-servisi>.onrender.com veya yerel test için http://localhost:3000) tanımlayın.`;
             } else {
               try {
                 const errData = await res.json();
@@ -812,6 +830,16 @@
       const cleanInput = String(inputCode || '').replace(/\D/g, '').trim();
       if (!cleanInput || cleanInput.length !== 6) {
         throw new Error('Lütfen 6 haneli onay kodunuzu eksiksiz olarak girin.');
+      }
+
+      const isGitHubPages = isGitHubPagesHost();
+      const hasCustomApi = Boolean(getApiBaseUrl());
+
+      if (isGitHubPages && !hasCustomApi) {
+        throw new Error(
+          'GitHub Pages statik barındırma ortamında backend bağlantısı tanımlanmamıştır. ' +
+          'Lütfen giriş ekranındaki "⚙️ Backend Sunucu (API) Bağlantı Ayarı" düğmesinden çalışan sunucu adresinizi tanımlayın.'
+        );
       }
 
       // 1. Canlı Sunucu Doğrulaması (POST /api/auth/verify-otp)
@@ -5128,7 +5156,7 @@
     async consumeOrPurchaseLife(session, { hasExtraLife = false, currentEmeralds = 0, currentLives = 0 } = {}) {
       authGuard.verifySession(session);
       try {
-        if (typeof fetch === 'function') {
+        if (typeof fetch === 'function' && hasConfiguredBackend()) {
           const res = await fetch(getApiUrl('/api/extra-life/consume'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

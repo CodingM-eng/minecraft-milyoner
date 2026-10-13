@@ -7,6 +7,9 @@
     "start": "node server.js",
     "test": "node test/auth_drive_visibility.test.js"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "nodemailer": "^6.10.0"
   },

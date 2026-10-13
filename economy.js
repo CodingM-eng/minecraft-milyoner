@@ -3155,7 +3155,7 @@
     rankService,
     netheriteService,
     economyService,
-    extraLifeService,
+    extraLifeService: Object.assign({}, window.MCMServices?.extraLifeService || {}, extraLifeService),
     shopService,
     leaderboardService,
     achievementService
