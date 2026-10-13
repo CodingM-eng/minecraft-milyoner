@@ -1882,6 +1882,23 @@
       textSpan.textContent = message;
       el.appendChild(textSpan);
 
+      // Backend / API ayarı gerektiren durumlarda hızlı yapılandırma düğmesi ekle
+      if (message.includes('405') || message.includes('404') || message.includes('GitHub Pages') || message.includes('Backend API') || message.includes('Sunucu')) {
+        const configBtn = document.createElement('button');
+        configBtn.type = 'button';
+        configBtn.className = 'mc-btn mc-btn-primary mc-btn-xs';
+        configBtn.style.cssText =
+          'margin-left: 8px; padding: 2px 6px; font-size: 0.72rem; white-space: nowrap; vertical-align: middle; cursor: pointer; display: inline-block;';
+        configBtn.innerHTML = '⚙️ API Adresini Ayarla';
+        configBtn.title = 'Backend API URL adresini hemen yapılandırın';
+        configBtn.onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          openGateApiConfigModal();
+        };
+        el.appendChild(configBtn);
+      }
+
       const copyBtn = document.createElement('button');
       copyBtn.type = 'button';
       copyBtn.className = 'mc-btn mc-btn-secondary mc-btn-xs';
@@ -1897,6 +1914,95 @@
       el.appendChild(copyBtn);
       el.classList.remove('hidden');
     }
+
+    // ⚙️ Giriş Ekranı Backend API URL Modalı İşleyicileri
+    function openGateApiConfigModal() {
+      const modal = document.getElementById('modal-gate-api-config');
+      if (!modal) return;
+      const inp = document.getElementById('gate-api-url-input');
+      const currentUrl = (typeof localStorage !== 'undefined' ? localStorage.getItem('mcm_backend_api_url') : '') || '';
+      if (inp) inp.value = currentUrl;
+      const statusEl = document.getElementById('gate-api-config-status');
+      if (statusEl) {
+        statusEl.style.display = 'none';
+        statusEl.textContent = '';
+      }
+      modal.classList.remove('hidden');
+    }
+
+    function closeGateApiConfigModal() {
+      const modal = document.getElementById('modal-gate-api-config');
+      modal?.classList.add('hidden');
+    }
+
+    window.openGateApiConfigModal = openGateApiConfigModal;
+
+    document.getElementById('btn-gate-open-api-config')?.addEventListener('click', openGateApiConfigModal);
+    document.getElementById('btn-close-gate-api-config')?.addEventListener('click', closeGateApiConfigModal);
+
+    document.getElementById('btn-test-gate-api')?.addEventListener('click', async () => {
+      const inp = document.getElementById('gate-api-url-input');
+      const statusEl = document.getElementById('gate-api-config-status');
+      const testBtn = document.getElementById('btn-test-gate-api');
+      let rawUrl = String(inp?.value || '').trim().replace(/\/+$/, '');
+      if (!rawUrl) {
+        if (statusEl) {
+          statusEl.style.display = 'block';
+          statusEl.style.background = 'rgba(239, 68, 68, 0.2)';
+          statusEl.style.border = '1px solid #ef4444';
+          statusEl.style.color = '#fca5a5';
+          statusEl.textContent = 'Lütfen geçerli bir API adresi girin (örn. http://localhost:3000 veya https://...).';
+        }
+        return;
+      }
+      if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+        rawUrl = 'https://' + rawUrl;
+        if (inp) inp.value = rawUrl;
+      }
+      if (testBtn) testBtn.textContent = '⏳ Test Ediliyor...';
+      try {
+        const res = await fetch(`${rawUrl}/api/health`, { method: 'GET', headers: { 'Accept': 'application/json' } });
+        if (res.ok) {
+          const d = await res.json().catch(() => ({}));
+          if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.style.background = 'rgba(34, 197, 94, 0.2)';
+            statusEl.style.border = '1px solid #22c55e';
+            statusEl.style.color = '#86efac';
+            statusEl.textContent = `✓ Sunucu bağlantısı başarılı! (${d.version || 'Aktif'})`;
+          }
+        } else {
+          throw new Error(`Sunucu HTTP ${res.status} yanıtı verdi.`);
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.style.display = 'block';
+          statusEl.style.background = 'rgba(239, 68, 68, 0.2)';
+          statusEl.style.border = '1px solid #ef4444';
+          statusEl.style.color = '#fca5a5';
+          statusEl.textContent = `⚠️ Bağlantı hatası: ${err.message}. Lütfen sunucunuzun (server.js) çalıştığından emin olun.`;
+        }
+      } finally {
+        if (testBtn) testBtn.textContent = '🔍 Bağlantıyı Test Et';
+      }
+    });
+
+    document.getElementById('btn-save-gate-api')?.addEventListener('click', () => {
+      const inp = document.getElementById('gate-api-url-input');
+      let rawUrl = String(inp?.value || '').trim().replace(/\/+$/, '');
+      if (rawUrl && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+        rawUrl = 'https://' + rawUrl;
+      }
+      if (typeof localStorage !== 'undefined') {
+        if (rawUrl) localStorage.setItem('mcm_backend_api_url', rawUrl);
+        else localStorage.removeItem('mcm_backend_api_url');
+      }
+      if (typeof window !== 'undefined') {
+        window.MCM_API_BASE_URL = rawUrl;
+      }
+      closeGateApiConfigModal();
+      window.MCMPlatform?.showToast(rawUrl ? `✓ Backend API adresi kaydedildi: ${rawUrl}` : '✓ Varsayılan API adresi etkinleştirildi.', 'success');
+    });
 
     // 1. Birleşik Giriş (Tüm Kullanıcılar, Moderatörler ve Yöneticiler)
     loginForm?.addEventListener('submit', async e => {

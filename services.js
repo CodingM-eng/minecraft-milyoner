@@ -664,6 +664,19 @@
       let activationNeeded = false;
       let serverErrorNotice = '';
 
+      // GitHub Pages statik sunucu kontrolü (Eğer harici backend tanımlanmamışsa kullanıcıyı yönlendir)
+      const currentHost = (typeof window !== 'undefined' && window.location) ? window.location.hostname : '';
+      const isGitHubPages = currentHost.includes('github.io');
+      const hasCustomApi = Boolean(getApiBaseUrl());
+
+      if (isGitHubPages && !hasCustomApi) {
+        throw new Error(
+          'GitHub Pages statik bir barındırma sunucusudur ve Node.js backend (server.js) çalıştırmaz. ' +
+          'E-posta OTP doğrulamasının çalışabilmesi için lütfen çalışan backend sunucunuzun adresini ' +
+          'giriş ekranındaki "⚙️ Backend Sunucu (API) Bağlantı Ayarı" düğmesinden tanımlayın (Örn: https://... veya yerel test için http://localhost:3000).'
+        );
+      }
+
       // 1. Güvenilir Sunucu API çağrısı (POST /api/auth/send-otp)
       try {
         if (typeof fetch === 'function') {
@@ -683,14 +696,14 @@
               serverErrorNotice = data?.error || 'E-posta sağlayıcısı teslimatı onaylamadı. Lütfen sunucu SMTP ayarlarını kontrol edin.';
             }
           } else {
-            if (res.status === 404) {
-              serverErrorNotice = 'E-posta doğrulama servisi bulunamadı (404). GitHub Pages statik sunucusu Node.js backend çalıştırmaz. Lütfen yönetici panelinden canlı Backend API URL adresinizi yapılandırın.';
+            if (res.status === 404 || res.status === 405) {
+              serverErrorNotice = `E-posta doğrulama servisi bulunamadı (HTTP ${res.status}). GitHub Pages statik bir barındırma sunucusudur ve Node.js backend (server.js) çalıştırmaz. Lütfen giriş ekranındaki '⚙️ Backend Sunucu (API) Bağlantı Ayarı' butonuna tıklayarak sunucu adresinizi (örn. https://... veya yerel test için http://localhost:3000) tanımlayın.`;
             } else {
               try {
                 const errData = await res.json();
                 serverErrorNotice = errData?.error || `Sunucu yanıtı: ${res.status}`;
               } catch (e) {
-                serverErrorNotice = `Sunucu hatası: ${res.status}`;
+                serverErrorNotice = `Sunucu yanıtı alınamadı (HTTP ${res.status}).`;
               }
             }
           }
@@ -823,12 +836,12 @@
             }
           } else {
             const errData = await res.json().catch(() => ({}));
-            if (res.status !== 404) {
+            if (res.status !== 404 && res.status !== 405) {
               throw new Error(errData?.error || 'Girdiğiniz 6 haneli onay kodu hatalı veya süresi doldu!');
             }
           }
         } catch (fetchErr) {
-          if (!fetchErr.message.includes('404') && !fetchErr.message.includes('Failed to fetch') && !fetchErr.message.includes('fetch failed')) {
+          if (!fetchErr.message.includes('404') && !fetchErr.message.includes('405') && !fetchErr.message.includes('Failed to fetch') && !fetchErr.message.includes('fetch failed')) {
             throw fetchErr;
           }
         }
@@ -2140,8 +2153,8 @@
           const data = await res.json();
           if (data.success && data.url) return data.url;
         } else {
-          if (res.status === 404) {
-            throw new Error('Discord bağlantı servisi (404) bulunamadı. GitHub Pages statik sunucusu Node.js backend çalıştırmaz. Lütfen Yönetici Paneli -> Ayarlar üzerinden Backend API URL adresinizi yapılandırın veya yerel sunucunuzu (server.js) başlatın.');
+          if (res.status === 404 || res.status === 405) {
+            throw new Error(`Discord bağlantı servisi (HTTP ${res.status}) bulunamadı. GitHub Pages statik sunucusu Node.js backend çalıştırmaz. Lütfen giriş ekranındaki '⚙️ Backend Sunucu (API) Bağlantı Ayarı' üzerinden Backend API URL adresinizi yapılandırın veya sunucunuzu (server.js) başlatın.`);
           }
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData?.error || 'Discord entegrasyonu sunucu tarafında henüz yapılandırılmamış (DISCORD_CLIENT_ID eksik).');
