@@ -4717,6 +4717,68 @@
             </button>
           </div>
 
+          <h3>🔥 Firebase Canlı Yapılandırması (Google Sign-In &amp; Cloud Firestore)</h3>
+          <p class="card-sub">
+            Firebase Console (<a href="https://console.firebase.google.com/" target="_blank" style="color:#38bdf8;">console.firebase.google.com</a>) üzerinden oluşturduğunuz web uygulaması anahtarlarını buraya girerek <strong>Google ile Giriş Yap</strong> özelliğini doğrudan etkinleştirebilirsiniz.
+          </p>
+          <form id="admin-firebase-config-form" class="platform-form" style="margin-bottom: 24px;">
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>FIREBASE API KEY (apiKey)</label>
+                <input type="text" id="adm-fb-api-key" placeholder="AIzaSy..." value="${escapeHtml(
+                  (window.MCMFirebase?.getConfig()?.apiKey && !window.MCMFirebase?.isPlaceholderConfig(window.MCMFirebase?.getConfig())) ? window.MCMFirebase.getConfig().apiKey : ''
+                )}" />
+              </div>
+              <div class="input-group">
+                <label>AUTH DOMAIN (authDomain)</label>
+                <input type="text" id="adm-fb-auth-domain" placeholder="proje-id.firebaseapp.com" value="${escapeHtml(
+                  window.MCMFirebase?.getConfig()?.authDomain || ''
+                )}" />
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>PROJECT ID (projectId)</label>
+                <input type="text" id="adm-fb-project-id" placeholder="proje-id" value="${escapeHtml(
+                  window.MCMFirebase?.getConfig()?.projectId || ''
+                )}" />
+              </div>
+              <div class="input-group">
+                <label>STORAGE BUCKET (storageBucket)</label>
+                <input type="text" id="adm-fb-storage-bucket" placeholder="proje-id.appspot.com" value="${escapeHtml(
+                  window.MCMFirebase?.getConfig()?.storageBucket || ''
+                )}" />
+              </div>
+            </div>
+            <div class="input-row-2">
+              <div class="input-group">
+                <label>MESSAGING SENDER ID (messagingSenderId)</label>
+                <input type="text" id="adm-fb-sender-id" placeholder="1234567890" value="${escapeHtml(
+                  window.MCMFirebase?.getConfig()?.messagingSenderId || ''
+                )}" />
+              </div>
+              <div class="input-group">
+                <label>APP ID (appId)</label>
+                <input type="text" id="adm-fb-app-id" placeholder="1:1234567890:web:abcdef" value="${escapeHtml(
+                  window.MCMFirebase?.getConfig()?.appId || ''
+                )}" />
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;margin-top:8px;">
+              <button type="submit" class="mc-btn mc-btn-primary">💾 Firebase Yapılandırmasını Kaydet</button>
+              <button type="button" id="btn-admin-reset-firebase-config" class="mc-btn mc-btn-secondary mc-btn-sm">
+                Sıfırla (Demo Moduna Dön)
+              </button>
+            </div>
+            <span class="input-hint" style="margin-top:6px;display:block;">
+              Durum: <strong>${
+                window.MCMFirebase && !window.MCMFirebase.isPlaceholderConfig(window.MCMFirebase.getConfig())
+                  ? '✓ Canlı Firebase Anahtarları Kayıtlı'
+                  : '⚠️ Demo/Placeholder Modu (Giriş yapılınca güvenli Gmail OTP ekranına yönlendirilir)'
+              }</strong>
+            </span>
+          </form>
+
           <h3>⚙️ Platform Genel Ayarları &amp; Bakım Modu (Faz 6)</h3>
           <form id="admin-platform-settings-form" class="platform-form">
             <div class="input-group">
@@ -7911,6 +7973,29 @@
         } catch (err) {
           showToast(err.message, 'error');
         }
+      } else if (e.target.id === 'admin-firebase-config-form') {
+        e.preventDefault();
+        try {
+          const apiKey = String(document.getElementById('adm-fb-api-key')?.value || '').trim();
+          const authDomain = String(document.getElementById('adm-fb-auth-domain')?.value || '').trim();
+          const projectId = String(document.getElementById('adm-fb-project-id')?.value || '').trim();
+          const storageBucket = String(document.getElementById('adm-fb-storage-bucket')?.value || '').trim();
+          const messagingSenderId = String(document.getElementById('adm-fb-sender-id')?.value || '').trim();
+          const appId = String(document.getElementById('adm-fb-app-id')?.value || '').trim();
+
+          if (!apiKey || apiKey.length < 20) {
+            throw new Error('Geçerli bir Firebase Web API Anahtarı girilmelidir.');
+          }
+
+          const newCfg = { apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId };
+          if (window.MCMFirebase?.setConfig) {
+            window.MCMFirebase.setConfig(newCfg);
+          }
+          showToast('🔥 Canlı Firebase yapılandırması başarıyla kaydedildi! Google Sign-In aktif.', 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
       } else if (e.target.id === 'admin-platform-settings-form') {
         e.preventDefault();
         try {
@@ -7934,6 +8019,21 @@
         } catch (err) {
           showToast(err.message, 'error');
         }
+      }
+    });
+
+    // Firebase Ayarlarını Sıfırla (#btn-admin-reset-firebase-config)
+    document.addEventListener('click', e => {
+      const resetBtn = e.target.closest('#btn-admin-reset-firebase-config');
+      if (resetBtn) {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('mcm_custom_firebase_config');
+        }
+        if (window.MCMFirebase?.initFirebase) {
+          window.MCMFirebase.initFirebase();
+        }
+        showToast('Firebase yapılandırması varsayılan demo moduna sıfırlandı.', 'info');
+        renderAdmin();
       }
     });
 
