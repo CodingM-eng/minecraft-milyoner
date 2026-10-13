@@ -8343,8 +8343,8 @@ body.screen-game-active #screen-game {
    ========================================== */
 .floating-ai-btn {
   position: fixed;
-  bottom: 84px;
-  right: 20px;
+  bottom: 26px;
+  right: 90px;
   width: 50px;
   height: 50px;
   border-radius: 50%;
@@ -8355,7 +8355,7 @@ body.screen-game-active #screen-game {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 998;
+  z-index: 9989;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
