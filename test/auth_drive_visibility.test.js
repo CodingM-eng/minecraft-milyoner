@@ -59,7 +59,7 @@ const localStorageMock = {
 // Global Browser Mock
 global.window = {
   localStorage: localStorageMock,
-  location: { hash: '' },
+  location: { hash: '', origin: 'http://localhost:3000', hostname: 'localhost' },
   addEventListener: () => {},
   removeEventListener: () => {},
   dispatchEvent: () => {}
@@ -1471,8 +1471,9 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.strictEqual(lifeResult.action, 'CONSUMED_EXISTING');
     console.log('✓ consumeOrPurchaseLife GitHub Pages üzerinde gereksiz fetch yapmadan yerel atomik çalıştı.');
 
-    // fetch fonksiyonunu geri yükle
+    // fetch fonksiyonunu ve window.location'ı geri yükle
     global.fetch = originalFetch;
+    global.window.location = { hash: '', origin: 'http://localhost:3000', hostname: 'localhost' };
 
     console.log('\n====================================================');
     console.log('TEST 42: test1234@Admin Test Admin Hesabı & Tam Yetkilendirme');
@@ -1742,8 +1743,245 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.ok(adminAiRes && adminAiRes.reply);
     console.log('✓ Admin AI Asistanı yetki denetimi ve yönetici istatistikleri doğrulandı.');
 
+    // ====================================================
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-46 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 47: 4 Temel Sorun Regresyon Doğrulaması');
+    console.log('====================================================');
+
+    // 47.1: Sorun 1 - Admin Oturum Doğrulaması, TDZ ve Süre Aşımı Koruması
+    const validAdminSession = {
+      username: 'test1234@Admin',
+      email: 'codingdevelopia@gmail.com',
+      role: 'ADMIN',
+      isAdminSession: true,
+      expiresAt: Date.now() + 86400000
+    };
+    validAdminSession.signature = window.MCMServices.authGuard._signSession(validAdminSession);
+    const verifiedSession = window.MCMServices.authGuard.verifySession(validAdminSession);
+    assert.strictEqual(verifiedSession, true, 'Geçerli admin oturumu başarıyla doğrulanmalıdır.');
+
+    const expiredAdminSession = {
+      username: 'test1234@Admin',
+      email: 'codingdevelopia@gmail.com',
+      role: 'ADMIN',
+      isAdminSession: true,
+      expiresAt: Date.now() - 1000
+    };
+    expiredAdminSession.signature = window.MCMServices.authGuard._signSession(expiredAdminSession);
+    assert.throws(
+      () => window.MCMServices.authGuard.verifySession(expiredAdminSession),
+      /Oturum süresi doldu/i,
+      'Süresi dolmuş admin oturumu Türkçe mesajla reddedilmelidir.'
+    );
+
+    const tamperedSession = { ...validAdminSession, signature: 'invalid_signature_hex' };
+    assert.throws(
+      () => window.MCMServices.authGuard.verifySession(tamperedSession),
+      /Oturum imzası geçersiz/i,
+      'İmzası bozuk oturum reddedilmelidir.'
+    );
+    console.log('✓ Sorun 1 (Admin Oturum): Geçerli oturum doğrulandı, süresi dolan ve sahte oturumlar Türkçe hata ile reddedildi.');
+
+    // 47.2: Sorun 2 - Telegram Test Anketi Teslimatı & LOCAL_FALLBACK Sahte Başarısının Engellenmesi
+    const fallbackPollRes = await window.MCMServices.telegramService.createPoll(
+      'Test Anketi Soru',
+      ['A', 'B']
+    );
+    assert.strictEqual(fallbackPollRes.delivered, false, 'Canlı teslimat olmadan delivered false olmalıdır.');
+    assert.strictEqual(fallbackPollRes.isSimulation, true, 'LOCAL_FALLBACK yerel simülasyon olarak işaretlenmelidir.');
+    assert.strictEqual(fallbackPollRes.source, 'LOCAL_FALLBACK');
+    assert.ok(fallbackPollRes.error, 'Aksiyon alınabilir Türkçe hata açıklaması bulunmalıdır.');
+
+    const oldFetchTg = global.fetch;
+    try {
+      global.fetch = async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          live: true,
+          delivered: true,
+          pollId: 'poll_tg_99999',
+          telegramPoll: { id: 'tg_live_poll_1' }
+        })
+      });
+      const deliveredPoll = await window.MCMServices.telegramService.createPoll('Canlı Soru', ['Evet', 'Hayır']);
+      assert.strictEqual(deliveredPoll.delivered, true, 'Canlı teslimat teyit edildiğinde delivered true olmalıdır.');
+      assert.strictEqual(deliveredPoll.source, 'TELEGRAM_API');
+      assert.strictEqual(deliveredPoll.pollId, 'poll_tg_99999');
+    } finally {
+      global.fetch = oldFetchTg;
+    }
+    console.log('✓ Sorun 2 (Telegram Anketi): Teslim edilmeyen anketlerde sahte başarı (LOCAL_FALLBACK) engellendi, delivered=false verildi ve canlı onay doğrulandı.');
+
+    // 47.3: Sorun 3 - Canlı Sunucu API Durum Teşhisi (4 Durum: NOT_CONFIGURED, OFFLINE_ASLEEP, REACHABLE, FEATURE_NOT_CONFIGURED)
+    const backendStatusService = window.MCMServices.backendStatusService;
+    assert.ok(backendStatusService, 'backendStatusService mevcut olmalıdır.');
+
+    const oldFetch = global.fetch;
+    try {
+      const notConfiguredResult = await backendStatusService.checkStatus('');
+      assert.ok(notConfiguredResult && notConfiguredResult.status, 'Durum nesnesi dönmelidir.');
+
+      // OFFLINE_ASLEEP testi
+      global.fetch = async () => {
+        throw new Error('ECONNREFUSED: Connection refused');
+      };
+      const offlineResult = await backendStatusService.checkStatus('http://localhost:3000');
+      assert.strictEqual(offlineResult.status, 'OFFLINE_ASLEEP', 'Bağlantı hatasında OFFLINE_ASLEEP dönmelidir.');
+      assert.strictEqual(offlineResult.label, 'Çevrimdışı / Uykuda');
+      assert.strictEqual(offlineResult.reachable, false);
+
+      // FEATURE_NOT_CONFIGURED testi
+      global.fetch = async () => ({
+        ok: false,
+        status: 404,
+        json: async () => ({})
+      });
+      const featureNotConfigResult = await backendStatusService.checkStatus('http://localhost:3000');
+      assert.strictEqual(featureNotConfigResult.status, 'FEATURE_NOT_CONFIGURED', '404 durumunda FEATURE_NOT_CONFIGURED dönmelidir.');
+      assert.strictEqual(featureNotConfigResult.label, 'Özellik Yapılandırılmadı');
+      assert.strictEqual(featureNotConfigResult.reachable, false);
+
+      // REACHABLE testi
+      global.fetch = async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', version: 'v10.0', service: 'Node.js Backend' })
+      });
+      const reachableResult = await backendStatusService.checkStatus('http://localhost:3000');
+      assert.strictEqual(reachableResult.status, 'REACHABLE', '200 OK yanıtında REACHABLE dönmelidir.');
+      assert.strictEqual(reachableResult.label, 'Bağlandı & Aktif');
+      assert.strictEqual(reachableResult.reachable, true);
+      assert.strictEqual(reachableResult.version, 'v10.0');
+    } finally {
+      global.fetch = oldFetch;
+    }
+    console.log('✓ Sorun 3 (Backend API Teşhisi): 4 durum (NOT_CONFIGURED, OFFLINE_ASLEEP, FEATURE_NOT_CONFIGURED, REACHABLE) başarıyla ayrıştırıldı.');
+
+    // 47.4: Sorun 4 - Yedek Geri Yüklemede Tüm Hesapların (Üye, VIP, Mod, Ticket, Admin) Eksiksiz Kurtarılması
+    const backupService = window.MCMServices.backupService;
+    assert.ok(backupService, 'backupService mevcut olmalıdır.');
+
+    const sampleFixtureUsers = [
+      {
+        userId: 'USR_TEST_MEMBER_1',
+        username: 'OyuncuAli',
+        email: 'oyuncuali@example.com',
+        role: 'MEMBER',
+        rank: 'MEMBER',
+        playerRank: 'MEMBER',
+        emeraldBalance: 120,
+        netheriteBalance: 5,
+        points: 450,
+        settings: { sound: true }
+      },
+      {
+        userId: 'USR_TEST_VIP_1',
+        username: 'VipVeli',
+        email: 'vipveli@example.com',
+        role: 'MEMBER',
+        rank: 'VIP',
+        playerRank: 'VIP',
+        emeraldBalance: 500,
+        netheriteBalance: 20,
+        points: 1200,
+        settings: { sound: true }
+      },
+      {
+        userId: 'USR_TEST_MOD_1',
+        username: 'ModMaster',
+        email: 'modmaster@example.com',
+        role: 'MODERATOR',
+        staffRole: 'MODERATOR',
+        rank: 'MODERATOR',
+        isModerator: true,
+        emeraldBalance: 250,
+        netheriteBalance: 15,
+        points: 900
+      },
+      {
+        userId: 'USR_TEST_TICKET_1',
+        username: 'DestekUzmani',
+        email: 'destek@example.com',
+        role: 'TICKET',
+        staffRole: 'TICKET',
+        rank: 'MEMBER',
+        isTicketStaff: true,
+        emeraldBalance: 200,
+        netheriteBalance: 10,
+        points: 800
+      },
+      {
+        userId: 'USR_TEST_ADMIN_1',
+        username: 'test1234@Admin',
+        email: 'codingdevelopia@gmail.com',
+        role: 'ADMIN',
+        staffRole: 'ADMIN',
+        rank: 'ADMIN',
+        isAdminSession: true,
+        emeraldBalance: 9999,
+        netheriteBalance: 500,
+        points: 99999
+      }
+    ];
+
+    window.MCMServices.storage.set(window.MCMServices.STORAGE_KEYS.USERS, sampleFixtureUsers);
+    window.MCMServices.storage.set(window.MCMServices.STORAGE_KEYS.USERS_BACKUP, sampleFixtureUsers);
+
+    const snapshot = backupService.createSnapshot(adminSessionTest, 'Tüm Rolleri İçeren Test Yedek');
+    assert.ok(snapshot && snapshot.id, 'Yedekleme başarıyla oluşturulmalıdır.');
+
+    const preview = backupService.getRestorePreview(snapshot.id);
+    assert.strictEqual(preview.totalAccounts, 5, 'Önizleme 5 hesabı göstermelidir.');
+    assert.strictEqual(preview.roles.MEMBER, 1, 'Önizlemede 1 Normal Üye olmalıdır.');
+    assert.strictEqual(preview.roles.VIP, 1, 'Önizlemede 1 VIP olmalıdır.');
+    assert.strictEqual(preview.roles.MODERATOR, 1, 'Önizlemede 1 Moderatör olmalıdır.');
+    assert.strictEqual(preview.roles.TICKET, 1, 'Önizlemede 1 Ticket yetkilisi olmalıdır.');
+    assert.strictEqual(preview.roles.ADMIN, 1, 'Önizlemede 1 Yönetici olmalıdır.');
+
+    // Verileri bozalım: normal kullanıcıları silelim ve mezar taşı (tombstone) oluşturalım
+    window.MCMServices.storage.set(window.MCMServices.STORAGE_KEYS.USERS, [sampleFixtureUsers[4]]);
+    window.MCMServices.cloudSyncService.recordTombstone('deletedUsers', 'oyuncuali');
+    window.MCMServices.cloudSyncService.recordTombstone('deletedUsers', 'vipveli');
+    window.MCMServices.cloudSyncService.recordTombstone('deletedUsers', 'modmaster');
+    window.MCMServices.cloudSyncService.recordTombstone('deletedUsers', 'destekuzmani');
+
+    const restoreRes = await backupService.restoreSnapshot(adminSessionTest, snapshot.id);
+    assert.strictEqual(restoreRes.success, true, 'Geri yükleme başarılı olmalıdır.');
+    assert.strictEqual(restoreRes.restoredUsersCount, 5, '5 hesabın tamamı geri yüklenmelidir.');
+    assert.ok(restoreRes.preRestoreSnapshotId, 'Geri yükleme öncesi emniyet yedeği oluşturulmalıdır.');
+
+    const restoredUsers = window.MCMServices.storage.get(window.MCMServices.STORAGE_KEYS.USERS, []);
+    assert.strictEqual(restoredUsers.length, 5, 'Geri yükleme sonrası tüm 5 hesap depoda bulunmalıdır.');
+
+    const aliUser = restoredUsers.find(u => u.username === 'OyuncuAli');
+    assert.ok(aliUser, 'Normal üye OyuncuAli başarıyla geri gelmelidir.');
+    assert.strictEqual(aliUser.emeraldBalance, 120);
+
+    const veliUser = restoredUsers.find(u => u.username === 'VipVeli');
+    assert.ok(veliUser, 'VIP kullanıcı VipVeli başarıyla geri gelmelidir.');
+    assert.strictEqual(veliUser.rank, 'VIP');
+
+    const modUser = restoredUsers.find(u => u.username === 'ModMaster');
+    assert.ok(modUser, 'Moderatör ModMaster başarıyla geri gelmelidir.');
+    assert.strictEqual(modUser.role, 'MODERATOR');
+
+    const ticketUser = restoredUsers.find(u => u.username === 'DestekUzmani');
+    assert.ok(ticketUser, 'Ticket yetkilisi DestekUzmani başarıyla geri gelmelidir.');
+    assert.strictEqual(ticketUser.role, 'TICKET');
+
+    const tombstones = window.MCMServices.cloudSyncService.getTombstones();
+    assert.strictEqual(tombstones.deletedUsers.includes('oyuncuali'), false, 'OyuncuAli tombstone temizlenmiş olmalıdır.');
+    assert.strictEqual(tombstones.deletedUsers.includes('vipveli'), false, 'VipVeli tombstone temizlenmiş olmalıdır.');
+    assert.strictEqual(tombstones.deletedUsers.includes('destekuzmani'), false, 'DestekUzmani tombstone temizlenmiş olmalıdır.');
+
+    const usersBackup = window.MCMServices.storage.get(window.MCMServices.STORAGE_KEYS.USERS_BACKUP, []);
+    assert.strictEqual(usersBackup.length, 5, 'USERS_BACKUP içinde de 5 hesap yer almalıdır.');
+    console.log('✓ Sorun 4 (Yedek Geri Yükleme): Tüm roller (Üye, VIP, Mod, Ticket, Admin) ve verileri eksiksiz kurtarıldı, tombstone silindi, pre-restore yedeği alındı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-47 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

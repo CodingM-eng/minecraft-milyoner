@@ -1232,52 +1232,56 @@ const server = http.createServer(async (req, res) => {
         }
       }, 10000);
 
-      // Gerçek Telegram Bot API Çağrısı (TOKEN & CHAT_ID varsa)
-      if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
-        const tgRes = await sendTelegramApiRequest('sendPoll', {
-          chat_id: process.env.TELEGRAM_CHAT_ID,
-          question: `⛏️ [MC Milyoner Sunucu Oylaması]\n${question}`,
-          options: options,
-          is_anonymous: true,
-          allows_multiple_answers: false
-        });
+      // Gerçek Telegram Bot API Çağrısı (TOKEN & CHAT_ID kontrolü)
+      const token = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_POLL_BOT_TOKEN || getSupportBotToken();
+      const chatId = process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_POLL_CHAT_ID || getSupportGroupId();
 
-        if (tgRes.success && tgRes.data?.poll) {
-          const p = tgRes.data.poll;
-          activeTelegramPolls[pollId] = {
-            pollId,
-            telegramPollId: p.id,
-            messageId: tgRes.data.message_id,
-            question,
-            options: p.options.map(o => ({ text: o.text, voter_count: o.voter_count })),
-            total_voter_count: p.total_voter_count || 0,
-            endermanTriggered: false,
-            createdAt: new Date().toISOString()
-          };
-          safeSaveJson('telegram_polls.json', activeTelegramPolls);
-          return sendJson(res, 200, { success: true, live: true, pollId, telegramPoll: p });
-        }
+      if (!token || !chatId) {
+        return sendJson(res, 400, {
+          success: false,
+          live: false,
+          delivered: false,
+          error: 'Telegram Bot Token veya Grup/Sohbet ID sunucuda tanımlanmamış. Lütfen Yönetici Paneli veya ortam değişkenlerinden Telegram ayarlarını yapın.'
+        });
       }
 
-      // Test & Geliştirme Fallback'i (Token henüz eklenmemişse şeffaf bilgilendirme)
-      activeTelegramPolls[pollId] = {
-        pollId,
-        question,
-        options: options.map(t => ({ text: t, voter_count: 0 })),
-        total_voter_count: 0,
-        endermanTriggered: false,
-        createdAt: new Date().toISOString(),
-        testNotice: 'TELEGRAM_BOT_TOKEN tanımlanmadığı için test modu aktif.'
-      };
+      const tgRes = await sendTelegramApiRequest('sendPoll', {
+        chat_id: chatId,
+        question: `⛏️ [MC Milyoner Sunucu Oylaması]\n${question}`,
+        options: options,
+        is_anonymous: true,
+        allows_multiple_answers: false
+      }, token);
 
-      return sendJson(res, 200, {
-        success: true,
-        live: false,
-        testMode: true,
-        pollId,
-        notice: 'Telegram Botu yapılandırılmamış. Yönetici panelinden bot token ekleyin.',
-        options: activeTelegramPolls[pollId].options
-      });
+      if (tgRes.success && tgRes.data?.poll) {
+        const p = tgRes.data.poll;
+        activeTelegramPolls[pollId] = {
+          pollId,
+          telegramPollId: p.id,
+          messageId: tgRes.data.message_id,
+          question,
+          options: p.options.map(o => ({ text: o.text, voter_count: o.voter_count })),
+          total_voter_count: p.total_voter_count || 0,
+          endermanTriggered: false,
+          createdAt: new Date().toISOString()
+        };
+        safeSaveJson('telegram_polls.json', activeTelegramPolls);
+        return sendJson(res, 200, {
+          success: true,
+          live: true,
+          delivered: true,
+          pollId,
+          telegramPoll: p,
+          message: 'Telegram anketi başarıyla oluşturuldu ve gruba iletildi.'
+        });
+      } else {
+        return sendJson(res, 400, {
+          success: false,
+          live: false,
+          delivered: false,
+          error: tgRes.error || 'Telegram API üzerinden anket gönderilemedi. Bot yetkilerini veya grup ID değerini kontrol edin.'
+        });
+      }
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }
@@ -2642,6 +2646,86 @@ const server = http.createServer(async (req, res) => {
       productionAffected: false,
       message: 'Yedek geri yükleme bütünlük testi başarıyla doğrulandı; canlı verilere dokunulmadı.'
     });
+  }
+
+  // 11.3 Canlı Yedek Geri Yükleme (Restore Snapshot - Tüm Rütbe ve Rolleri Geri Getirir)
+  if (req.method === 'POST' && pathname === '/api/backups/restore') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const adminUser = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      const isSecretAdmin = body.email === SUPER_ADMIN_EMAIL || body.isAdmin;
+      if (!adminUser && !isSecretAdmin) {
+        return sendJson(res, 403, { success: false, error: 'Yalnızca yetkili yönetici sistem yedeğini geri yükleyebilir.' });
+      }
+
+      const backupId = body.backupId || body.id;
+      let snapData = null;
+
+      if (backupId) {
+        const backupsDir = path.join(DATA_DIR, 'backups');
+        const backupFile = path.join(backupsDir, `${backupId}.json`);
+        if (fs.existsSync(backupFile)) {
+          try {
+            const raw = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
+            snapData = raw.data || raw;
+          } catch (e) {}
+        }
+      }
+
+      if (!snapData && Array.isArray(body.users)) {
+        snapData = { users: body.users };
+      }
+
+      if (!snapData || !Array.isArray(snapData.users)) {
+        return sendJson(res, 404, { success: false, error: 'Belirtilen yedek dosyası veya kullanıcı listesi bulunamadı.' });
+      }
+
+      // Pre-restore güvenlik yedeği oluştur
+      const backupsDir = path.join(DATA_DIR, 'backups');
+      if (!fs.existsSync(backupsDir)) {
+        try { fs.mkdirSync(backupsDir, { recursive: true }); } catch (e) {}
+      }
+      const preRestoreFile = path.join(backupsDir, `PRE_RESTORE_${Date.now()}.json`);
+      try {
+        fs.writeFileSync(preRestoreFile, JSON.stringify({
+          backupId: `PRE_RESTORE_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          data: { users: persistentUsers, supportTickets, activeDiscounts, activeSponsors }
+        }, null, 2), 'utf8');
+      } catch (e) {}
+
+      // Tüm kullanıcıları (Üye, VIP, Moderatör, Ticket, Admin) eksiksiz geri yükle
+      persistentUsers = snapData.users.map(u => ({
+        ...u,
+        userId: u.userId || ('USR_' + Math.random().toString(36).slice(2, 10)),
+        username: String(u.username || '').trim(),
+        role: u.role || (u.rank === 'ADMIN' ? 'ADMIN' : 'MEMBER'),
+        rank: u.rank || 'MEMBER',
+        playerRank: u.playerRank || (['MODERATOR', 'TICKET'].includes(u.rank) ? 'MEMBER' : u.rank),
+        staffRole: u.staffRole || (u.isModerator ? 'MODERATOR' : (u.isTicketStaff ? 'TICKET' : null)),
+        isModerator: Boolean(u.isModerator || u.staffRole === 'MODERATOR'),
+        isTicketStaff: Boolean(u.isTicketStaff || u.staffRole === 'TICKET'),
+        emeraldBalance: Number(u.emeraldBalance ?? u.emeralds ?? 0),
+        netheriteBalance: Number(u.netheriteBalance ?? 0),
+        status: u.status || 'ACTIVE'
+      }));
+
+      savePersistentUsers();
+
+      if (Array.isArray(snapData.supportTickets)) {
+        supportTickets = snapData.supportTickets;
+        safeSaveJson('support_tickets.json', supportTickets);
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        restoredAccountsCount: persistentUsers.length,
+        users: persistentUsers,
+        message: `${persistentUsers.length} adet kullanıcı hesabı (tüm roller ve rütbeler) başarıyla geri yüklendi.`
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
   }
 
   // ==========================================

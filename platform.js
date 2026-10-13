@@ -3098,8 +3098,14 @@
   function renderAdmin() {
     const session = getSession();
     const { authGuard } = svc();
+    if (!session) {
+      showToast('Oturum süresi doldu veya oturum bulunamadı. Lütfen tekrar giriş yapın.', 'warning');
+      navigateToScreen('welcome');
+      return;
+    }
     const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
-    if (!session || (!session.isAdminSession && authGuard?.getEffectiveRankId(session) !== 'ADMIN' && !isTestAdmin)) {
+    if (!session.isAdminSession && authGuard?.getEffectiveRankId(session) !== 'ADMIN' && !isTestAdmin) {
+      showToast('Yönetici paneline yalnızca yetkili yönetici erişebilir!', 'error');
       navigateToScreen('welcome');
       return;
     }
@@ -4853,7 +4859,12 @@
           <h3>⚙️ Platform Genel Ayarları &amp; Bakım Modu (Faz 6)</h3>
           <form id="admin-platform-settings-form" class="platform-form">
             <div class="input-group">
-              <label>CANLI BACKEND API URL (GİTHUB PAGES / NODE.JS SUNUCU ENTEGRASYONU)</label>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label style="margin:0;">CANLI BACKEND API URL (GİTHUB PAGES / NODE.JS SUNUCU ENTEGRASYONU)</label>
+                <span id="adm-api-status-badge" style="font-size:0.75rem;padding:2px 8px;border-radius:4px;background:rgba(15,23,42,0.9);border:1px solid rgba(255,255,255,0.15);color:#94a3b8;">
+                  Durum Sorgulanıyor...
+                </span>
+              </div>
               <div style="display:flex;gap:8px;">
                 <input type="url" id="adm-set-api-url" value="${escapeHtml(
                   (typeof localStorage !== 'undefined' ? localStorage.getItem('mcm_backend_api_url') : '') || ''
@@ -4862,7 +4873,7 @@
                   🔌 Bağlantıyı Test Et
                 </button>
               </div>
-              <span class="input-hint">GitHub Pages statik barındırma sunucusudur. Discord OAuth, OTP e-posta gönderimi ve sohbet küfür filtresi gibi sunucu özellikleri için Node.js backend URL adresinizi buraya kaydedin.</span>
+              <span id="adm-api-status-hint" class="input-hint">GitHub Pages statik barındırma sunucusudur. Discord OAuth, OTP e-posta gönderimi ve sohbet küfür filtresi gibi sunucu özellikleri için Node.js backend URL adresinizi buraya kaydedin.</span>
             </div>
             <div class="input-group">
               <label>PLATFORM BAŞLIĞI</label>
@@ -4891,6 +4902,20 @@
           </form>
         </div>
       `;
+
+      setTimeout(() => {
+        const badgeEl = document.getElementById('adm-api-status-badge');
+        const hintEl = document.getElementById('adm-api-status-hint');
+        svc().backendStatusService?.checkStatus().then(st => {
+          if (badgeEl) {
+            badgeEl.textContent = st.label;
+            badgeEl.style.color = st.color;
+          }
+          if (hintEl && st.actionRequired) {
+            hintEl.innerHTML = `${escapeHtml(st.message)} <strong style="color:#38bdf8;">${escapeHtml(st.actionRequired)}</strong>`;
+          }
+        }).catch(() => {});
+      }, 50);
     }
   }
 
@@ -6439,6 +6464,8 @@
 
     // Genel Tıklama Delegasyonu (Navigasyon, Oyuncu Profili, Mağaza, Bildirimler, Parti Daveti, Admin İşlemleri)
     document.addEventListener('click', async e => {
+      const session = getSession();
+
       // Destek bilet seçimi widget içi ([data-select-ticket])
       const ticketSelectBtn = e.target.closest('[data-select-ticket]');
       if (ticketSelectBtn) {
@@ -6677,15 +6704,24 @@
 
       // 7.5 Admin Telegram Test Anketi Butonu
       if (e.target.closest('#btn-admin-test-telegram-poll')) {
+        const pollBtn = e.target.closest('#btn-admin-test-telegram-poll');
+        if (pollBtn) pollBtn.disabled = true;
+        showToast('📡 Telegram sunucusuna anket gönderiliyor...', 'info');
         try {
           const res = await svc().telegramService.createPoll(
             'Minecraft Milyoner Test Anketi: En sevdiğiniz maden hangisi?',
             ['Elmas', 'Netherite', 'Zümrüt', 'Altın']
           );
-          showToast(`🧪 Test anketi başarıyla oluşturuldu! Kaynak: ${res.source}`, 'success');
+          if (res.delivered || (res.success && res.live)) {
+            showToast(`✅ Telegram anketi gruba başarıyla gönderildi! (Anket ID: ${res.pollId})`, 'success');
+          } else {
+            showToast(`⚠️ Anket Telegram'a ulaştırılamadı: ${res.error || 'Simülasyon modunda.'}`, 'warning');
+          }
           renderAdmin();
         } catch (err) {
-          showToast(err.message, 'error');
+          showToast(`❌ Telegram anket hatası: ${err.message}`, 'error');
+        } finally {
+          if (pollBtn) pollBtn.disabled = false;
         }
         return;
       }
@@ -7489,7 +7525,6 @@
       }
 
       // 16. Admin İşlemleri
-      const session = getSession();
       if (!session) return;
 
       if (e.target.closest('#btn-admin-tab-reset-lb')) {
@@ -7933,12 +7968,12 @@
       if (testRestoreBtn) {
         const snId = testRestoreBtn.getAttribute('data-admin-test-restore-snap');
         try {
-          const res = svc().backupService.verifyRestoreIntegrity(snId);
-          if (res.valid) {
-            showToast(`✓ Yedek (${snId}) başarıyla test edildi! Canlı veri etkilenmedi.`, 'success');
-          } else {
-            showToast(`⚠️ Yedek testi başarısız: ${res.error}`, 'error');
-          }
+          const preview = svc().backupService.getRestorePreview(snId);
+          const breakdownText = Object.entries(preview.rankBreakdown)
+            .filter(([_, count]) => count > 0)
+            .map(([rank, count]) => `${rank}: ${count}`)
+            .join(', ');
+          showToast(`🔍 Yedek Önizlemesi (${snId}): Toplam ${preview.totalAccounts} hesap (${breakdownText}), ${preview.ticketsCount} destek talebi. Canlı verilere dokunulmadı.`, 'info', 7000);
         } catch (err) {
           showToast(err.message, 'error');
         }
@@ -7947,12 +7982,26 @@
 
       const restoreSnapBtn = e.target.closest('[data-admin-restore-snap]');
       if (restoreSnapBtn) {
+        const snId = restoreSnapBtn.getAttribute('data-admin-restore-snap');
         try {
-          svc().backupService.restoreSnapshot(
-            session,
-            restoreSnapBtn.getAttribute('data-admin-restore-snap')
+          const preview = svc().backupService.getRestorePreview(snId);
+          const breakdownText = Object.entries(preview.rankBreakdown)
+            .filter(([_, count]) => count > 0)
+            .map(([rank, count]) => `${rank}: ${count}`)
+            .join(', ');
+
+          const confirmed = window.confirm(
+            `"${preview.label}" yedeği geri yüklenecektir.\n\n` +
+            `• Toplam Hesap Sayısı: ${preview.totalAccounts} (${breakdownText})\n` +
+            `• Destek Talepleri: ${preview.ticketsCount}\n` +
+            `• Partiler: ${preview.partiesCount}\n\n` +
+            `Geri yükleme öncesinde mevcut verilerinizin otomatik bir güvenlik yedeği (PRE_RESTORE) oluşturulacaktır.\n\n` +
+            `Tüm hesapları ve rolleri eksiksiz geri yüklemek istiyor musunuz?`
           );
-          showToast('Yedek başarıyla geri yüklendi!', 'success');
+          if (!confirmed) return;
+
+          const res = await svc().backupService.restoreSnapshot(session, snId);
+          showToast(`✓ Yedek başarıyla geri yüklendi! (${res.restoredAccountsCount || preview.totalAccounts} hesap tüm rollerle kurtarıldı)`, 'success');
           renderAdmin();
           syncHeaderAndDrawer();
         } catch (err) {
@@ -8311,6 +8360,8 @@
       const testBtn = e.target.closest('#btn-admin-test-backend-api');
       if (testBtn) {
         const inp = document.getElementById('adm-set-api-url');
+        const badgeEl = document.getElementById('adm-api-status-badge');
+        const hintEl = document.getElementById('adm-api-status-hint');
         const rawUrl = String(inp?.value || '').trim().replace(/\/+$/, '');
         if (!rawUrl) {
           showToast('Lütfen önce test edilecek bir Backend API URL adresi girin.', 'warning');
@@ -8319,13 +8370,31 @@
         testBtn.disabled = true;
         testBtn.textContent = '⏳ Test Ediliyor...';
         try {
-          const targetUrl = rawUrl.startsWith('http') ? `${rawUrl}/api/health` : `https://${rawUrl}/api/health`;
-          const res = await fetch(targetUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
-          if (res.ok) {
-            const data = await res.json().catch(() => ({}));
-            showToast(`✓ Backend sunucusuna başarıyla bağlanıldı! (${data.version || 'v10'})`, 'success');
+          const statusService = svc().backendStatusService;
+          const result = statusService
+            ? await statusService.checkStatus(rawUrl)
+            : await (async () => {
+                const targetUrl = rawUrl.startsWith('http') ? `${rawUrl}/api/health` : `https://${rawUrl}/api/health`;
+                const res = await fetch(targetUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+                return res.ok ? { status: 'REACHABLE', label: 'Bağlandı & Aktif', color: '#22c55e', message: 'Bağlantı başarılı' } : { status: 'FEATURE_NOT_CONFIGURED', label: `Hata: ${res.status}`, color: '#f59e0b', message: `Durum kodu: ${res.status}` };
+              })();
+
+          if (badgeEl) {
+            badgeEl.textContent = result.label;
+            badgeEl.style.color = result.color;
+          }
+          if (hintEl) {
+            hintEl.innerHTML = `${escapeHtml(result.message || '')} ${result.actionRequired ? `<strong style="color:#38bdf8;">${escapeHtml(result.actionRequired)}</strong>` : ''}`;
+          }
+
+          if (result.status === 'REACHABLE') {
+            showToast(`✓ Backend sunucusuna başarıyla bağlanıldı! (${result.version || 'v10'})`, 'success');
+          } else if (result.status === 'OFFLINE_ASLEEP') {
+            showToast(`⚠️ Sunucu çevrimdışı veya uykuda: Render ücretsiz sunucularının uyanması 30-60 sn sürebilir.`, 'warning');
+          } else if (result.status === 'FEATURE_NOT_CONFIGURED') {
+            showToast(`⚠️ Sunucuya erişildi ancak /api/health uç noktası yanıt vermedi (${result.httpStatus || '404/501'}).`, 'warning');
           } else {
-            showToast(`⚠️ Sunucu yanıt verdi ancak durum kodu: ${res.status}`, 'warning');
+            showToast(result.message || 'Bağlantı testi tamamlandı.', 'info');
           }
         } catch (err) {
           showToast(`❌ Sunucuya erişilemedi: ${err.message}. Lütfen sunucunun (server.js) çalıştığını ve CORS izinlerini kontrol edin.`, 'error');
