@@ -1439,7 +1439,7 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
       async () => {
         await window.MCMServices.otpService.sendOtpToGmail('testpages@gmail.com');
       },
-      (err) => err.message.includes('HTTP 405') || err.message.includes('statik'),
+      (err) => err.message.includes('aktif') || err.message.includes('HTTP 405') || err.message.includes('statik'),
       'GitHub Pages üzerinde backend tanımlı değilken açıklayıcı hata verilmelidir.'
     );
     assert.strictEqual(gitHubFetchAttempted, false, 'GitHub Pages üzerine POST fetch isteği gönderilmemiştir.');
@@ -1451,7 +1451,7 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
       async () => {
         await window.MCMServices.otpService.verifyOtpWithServer('testpages@gmail.com', '123456');
       },
-      (err) => err.message.includes('backend bağlantısı tanımlanmamıştır') || err.message.includes('statik')
+      (err) => err.message.includes('aktif') || err.message.includes('backend bağlantısı') || err.message.includes('statik')
     );
     assert.strictEqual(verifyFetchAttempted, false, 'verifyOtpWithServer GitHub Pages üzerinde fetch çağırmamalıdır.');
     console.log('✓ verifyOtpWithServer GitHub Pages üzerinde backend yokken POST isteği göndermedi.');
@@ -1475,7 +1475,35 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     global.fetch = originalFetch;
 
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-41 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 42: test1234@Admin Test Admin Hesabı & Tam Yetkilendirme');
+    console.log('====================================================');
+
+    // 42.1: Hatalı şifre ile giriş reddedilmeli
+    await assert.rejects(
+      async () => {
+        await authService.login({ username: 'test1234@Admin', password: 'wrongPassword' });
+      },
+      /Kullanıcı adı veya şifre hatalı/,
+      'Hatalı şifre test admin girişini engellemelidir.'
+    );
+    console.log('✓ Hatalı şifre ile test admin girişi güvenle reddedildi.');
+
+    // 42.2: Doğru şifre (test1234@Admin / test1234@Admin) ile tam yetkili ADMIN oturumu açılmalı
+    const testAdminSession = await authService.login({
+      username: 'test1234@Admin',
+      password: 'test1234@Admin'
+    });
+    assert.strictEqual(testAdminSession.username, 'test1234@Admin');
+    assert.strictEqual(testAdminSession.isAdminSession, true, 'isAdminSession true olmalıdır.');
+    assert.strictEqual(testAdminSession.role, 'ADMIN', 'Rol ADMIN olmalıdır.');
+    assert.strictEqual(testAdminSession.rank, 'ADMIN', 'Rütbe ADMIN olmalıdır.');
+    assert.strictEqual(authGuard.getEffectiveRankId(testAdminSession), 'ADMIN', 'Effective rank ADMIN olmalıdır.');
+    assert.strictEqual(authGuard.getEffectiveRole(testAdminSession), 'ADMIN', 'Effective role ADMIN olmalıdır.');
+    assert.strictEqual(authGuard.requireRole(testAdminSession, ['ADMIN']), 'ADMIN', 'Admin yetki kontrolünü geçmelidir.');
+    console.log('✓ test1234@Admin ile tam yetkili ADMIN oturumu başarıyla açıldı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-42 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

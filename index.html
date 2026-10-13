@@ -398,46 +398,6 @@
           </button>
         </div>
       </form>
-
-      <!-- Backend Sunucu (API) Yapılandırma Butonu -->
-      <div style="text-align: center; margin-top: 14px; padding-top: 10px; border-top: 1px dashed rgba(148, 163, 184, 0.25);">
-        <button type="button" id="btn-gate-open-api-config" style="background: none; border: none; color: #38bdf8; font-size: 0.78rem; cursor: pointer; text-decoration: underline; display: inline-flex; align-items: center; gap: 5px;">
-          <span>⚙️</span> <span>Backend Sunucu (API) Bağlantı Ayarı</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Backend API URL Yapılandırma Modalı (Giriş Yapılmadan da Erişilebilir) -->
-  <div id="modal-gate-api-config" class="modal-backdrop hidden" role="dialog" aria-modal="true" style="z-index: 10005;">
-    <div class="modal-card" style="max-width: 480px; text-align: left; background: #111827; border: 2px solid #38bdf8; border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
-      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 10px; margin-bottom: 14px;">
-        <h3 style="margin: 0; color: #38bdf8; display: flex; align-items: center; gap: 8px; font-size: 1.1rem;">
-          <span>⚙️</span> <span>Backend Sunucu (API) Bağlantısı</span>
-        </h3>
-        <button type="button" class="modal-close-btn" id="btn-close-gate-api-config" style="background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer;">&times;</button>
-      </div>
-      <div class="modal-body" style="font-size: 0.84rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 16px;">
-        <p style="margin: 0 0 10px 0;">
-          <strong>GitHub Pages</strong> yalnızca statik dosya sunar ve Node.js backend (<code>server.js</code>) çalıştırmaz.
-        </p>
-        <p style="margin: 0 0 12px 0; color: #94a3b8; font-size: 0.8rem;">
-          E-posta OTP doğrulama kodları, Telegram botu ve Discord entegrasyonu için canlıda barındırılan HTTPS Node.js backend sunucunuzun veya yerel test sunucunuzun adresini girin:
-        </p>
-        <div class="input-group" style="margin-bottom: 10px;">
-          <label for="gate-api-url-input" style="font-size: 0.78rem; color: #facc15; font-weight: bold; display: block; margin-bottom: 4px;">BACKEND API URL ADRESİ</label>
-          <input type="url" id="gate-api-url-input" placeholder="Örn: https://mc-milyoner-api.onrender.com veya http://localhost:3000" style="font-size: 0.85rem; width: 100%; box-sizing: border-box; padding: 8px 10px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc;" />
-        </div>
-        <div id="gate-api-config-status" style="font-size: 0.8rem; display: none; padding: 8px; border-radius: 6px; margin-top: 8px;"></div>
-      </div>
-      <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button type="button" id="btn-test-gate-api" class="mc-btn mc-btn-secondary mc-btn-sm" style="padding: 6px 12px; font-size: 0.8rem;">
-          🔍 Bağlantıyı Test Et
-        </button>
-        <button type="button" id="btn-save-gate-api" class="mc-btn mc-btn-primary mc-btn-sm" style="padding: 6px 12px; font-size: 0.8rem;">
-          💾 Kaydet
-        </button>
-      </div>
     </div>
   </div>
 

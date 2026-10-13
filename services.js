@@ -656,6 +656,8 @@
   };
 
   const SUPER_ADMIN_EMAIL = 'codingdevelopia@gmail.com';
+  const TEST_ADMIN_USERNAME = 'test1234@Admin';
+  const TEST_ADMIN_PASSWORD = 'test1234@Admin';
 
   // ==========================================
   // GMAIL DOĞRULAMA (OTP) SERVİSİ
@@ -689,9 +691,8 @@
 
       if (isGitHubPages && !apiBase) {
         throw new Error(
-          'GitHub Pages statik bir barındırma sunucusudur ve Node.js backend (server.js) çalıştırmaz (HTTP 405). ' +
-          'E-posta OTP doğrulamasının çalışabilmesi için lütfen çalışan backend sunucunuzun adresini ' +
-          'giriş ekranındaki "⚙️ Backend Sunucu (API) Bağlantı Ayarı" düğmesinden tanımlayın (Örn: https://<render-servisi>.onrender.com veya yerel test için http://localhost:3000).'
+          'E-posta doğrulama servisi şu anda aktif değildir. ' +
+          'Lütfen kullanıcı adı ve şifrenizle giriş yapın veya sistem yöneticisiyle iletişime geçin.'
         );
       }
 
@@ -715,7 +716,7 @@
             }
           } else {
             if (res.status === 404 || res.status === 405) {
-              serverErrorNotice = `E-posta doğrulama servisi bulunamadı (HTTP ${res.status}). GitHub Pages statik bir barındırma sunucusudur ve Node.js backend (server.js) çalıştırmaz. Lütfen giriş ekranındaki '⚙️ Backend Sunucu (API) Bağlantı Ayarı' butonuna tıklayarak sunucu adresinizi (örn. https://<render-servisi>.onrender.com veya yerel test için http://localhost:3000) tanımlayın.`;
+              serverErrorNotice = 'E-posta doğrulama servisi şu anda kullanılamıyor. Lütfen kullanıcı adı ve şifrenizle giriş yapın veya sistem yöneticisine başvurun.';
             } else {
               try {
                 const errData = await res.json();
@@ -837,8 +838,7 @@
 
       if (isGitHubPages && !hasCustomApi) {
         throw new Error(
-          'GitHub Pages statik barındırma ortamında backend bağlantısı tanımlanmamıştır. ' +
-          'Lütfen giriş ekranındaki "⚙️ Backend Sunucu (API) Bağlantı Ayarı" düğmesinden çalışan sunucu adresinizi tanımlayın.'
+          'E-posta doğrulama servisi şu anda aktif değildir. Lütfen kullanıcı adı ve şifrenizle giriş yapın.'
         );
       }
 
@@ -1107,12 +1107,15 @@
     getEffectiveRankId(session) {
       if (!session) return 'MEMBER';
       const email = String(session.email || '').trim().toLowerCase();
-      if (session.isAdminSession && email === SUPER_ADMIN_EMAIL) return 'ADMIN';
+      const uName = String(session.username || '').trim();
+      const isTestAdmin = (uName.toLowerCase() === TEST_ADMIN_USERNAME.toLowerCase());
+      if (session.isAdminSession && (email === SUPER_ADMIN_EMAIL || isTestAdmin)) return 'ADMIN';
+      if (isTestAdmin) return 'ADMIN';
       // Always read authoritative rank from stored user record (#20, #25)
       const user = userService.getUserByUsername(session.username);
       if (user) {
         const uEmail = String(user.email || '').trim().toLowerCase();
-        if ((user.role === 'ADMIN' || user.rank === 'ADMIN') && uEmail === SUPER_ADMIN_EMAIL) {
+        if ((user.role === 'ADMIN' || user.rank === 'ADMIN') && (uEmail === SUPER_ADMIN_EMAIL || isTestAdmin)) {
           return 'ADMIN';
         }
         if (user.isModerator || user.role === 'MODERATOR' || user.rank === 'MODERATOR') {
@@ -1124,13 +1127,16 @@
         const norm = normalizeRankId(user.rank || user.role || 'MEMBER');
         return norm === 'ADMIN' ? 'MEMBER' : norm;
       }
-      return 'MEMBER';
+      return normalizeRankId(session.rank || 'MEMBER');
     },
 
     getEffectiveRole(session) {
       if (!session) return 'MEMBER';
       const email = String(session.email || '').trim().toLowerCase();
-      if (session.isAdminSession && email === SUPER_ADMIN_EMAIL) return 'ADMIN';
+      const uName = String(session.username || '').trim();
+      const isTestAdmin = (uName.toLowerCase() === TEST_ADMIN_USERNAME.toLowerCase());
+      if (session.isAdminSession && (email === SUPER_ADMIN_EMAIL || isTestAdmin)) return 'ADMIN';
+      if (isTestAdmin) return 'ADMIN';
       const rankId = this.getEffectiveRankId(session);
       if (rankId === 'ADMIN') return 'ADMIN';
       if (rankId === 'MODERATOR') return 'MODERATOR';
@@ -1196,9 +1202,10 @@
       const sessionEmail = String(session.email || '').trim().toLowerCase();
 
       if (allowedRoles.includes('ADMIN')) {
-        if (sessionEmail !== SUPER_ADMIN_EMAIL || (!session.isAdminSession && effectiveRole !== 'ADMIN')) {
+        const isTestAdmin = String(session.username || '').toLowerCase() === TEST_ADMIN_USERNAME.toLowerCase();
+        if (!isTestAdmin && (sessionEmail !== SUPER_ADMIN_EMAIL || (!session.isAdminSession && effectiveRole !== 'ADMIN'))) {
           throw new Error(
-            'Erişim Reddedildi: Bu işlem yalnızca codingdevelopia@gmail.com doğrulanmış Yönetici oturumu ile yapılabilir.'
+            'Erişim Reddedildi: Bu işlem yalnızca Yönetici oturumu ile yapılabilir.'
           );
         }
         return 'ADMIN';
@@ -1867,7 +1874,8 @@
   // ==========================================
   function buildSessionPayload(user, isAdminSession = false) {
     const userEmail = String(user.email || '').trim().toLowerCase();
-    const verifiedAdmin = Boolean(isAdminSession && userEmail === SUPER_ADMIN_EMAIL);
+    const isTestAdmin = String(user.username || '').toLowerCase() === TEST_ADMIN_USERNAME.toLowerCase();
+    const verifiedAdmin = Boolean(isAdminSession && (userEmail === SUPER_ADMIN_EMAIL || isTestAdmin)) || isTestAdmin;
     const rawRank = normalizeRankId(user.rank || 'MEMBER');
     const safeRank = verifiedAdmin ? 'ADMIN' : (rawRank === 'ADMIN' ? 'MEMBER' : rawRank);
     const safeRole = verifiedAdmin ? 'ADMIN' : (user.role === 'ADMIN' ? 'MEMBER' : (user.role || 'MEMBER'));
@@ -2045,6 +2053,54 @@
 
       if (typeof cloudSyncService !== 'undefined' && cloudSyncService.syncNow) {
         await cloudSyncService.syncNow().catch(() => {});
+      }
+
+      // TEST ADMIN Girişi: test1234@Admin / test1234@Admin
+      if (cleanUser.toLowerCase() === TEST_ADMIN_USERNAME.toLowerCase() && rawPass === TEST_ADMIN_PASSWORD) {
+        let testAdminUser = userService.getUserByUsername(TEST_ADMIN_USERNAME) || userService.getUserByUsername('test1234@admin');
+        const expectedHash = await sha256Async(`${AUTH_SALT}::PWD::test1234@admin::${TEST_ADMIN_PASSWORD}`);
+        if (!testAdminUser) {
+          testAdminUser = {
+            userId: 'USR_TEST_ADMIN_V10',
+            username: TEST_ADMIN_USERNAME,
+            email: 'test1234@admin.local',
+            minecraftPlayerName: 'AdminTest',
+            rank: 'ADMIN',
+            role: 'ADMIN',
+            isModerator: true,
+            status: 'ACTIVE',
+            coins: 1000000,
+            emeralds: 1000000,
+            netheriteBalance: 10000,
+            passwordHash: expectedHash,
+            createdAt: new Date().toISOString()
+          };
+          const users = userService.getAllUsers();
+          users.push(testAdminUser);
+          storage.set(STORAGE_KEYS.USERS, users);
+        } else {
+          userService.syncUserFields(testAdminUser.username, {
+            role: 'ADMIN',
+            rank: 'ADMIN',
+            isModerator: true,
+            status: 'ACTIVE',
+            passwordHash: expectedHash
+          });
+        }
+
+        const session = buildSessionPayload(testAdminUser, true);
+        session.isAdminSession = true;
+        session.role = 'ADMIN';
+        session.rank = 'ADMIN';
+        session.isModerator = true;
+        session.signature = computeTokenSignature(session);
+        storage.set(STORAGE_KEYS.ACTIVE_SESSION, session);
+
+        activityService.log('ADMIN_LOGIN', TEST_ADMIN_USERNAME, `${TEST_ADMIN_USERNAME} (ADMIN) giriş yaptı.`);
+        if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
+          cloudSyncService.pushNow().catch(() => {});
+        }
+        return session;
       }
 
       // Kullanıcı / Moderatör / Admin Giriş Doğrulaması (Kullanıcı Adı veya E-posta)

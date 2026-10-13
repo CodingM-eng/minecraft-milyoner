@@ -457,10 +457,12 @@
     const dNetherite = document.getElementById('drawer-netherite-count');
     if (dNetherite) dNetherite.textContent = netherites.toLocaleString('tr-TR');
 
-    // Admin butonu görünürlüğü (Yalnızca codingdevelopia@gmail.com)
+    // Admin butonu görünürlüğü (codingdevelopia@gmail.com veya test1234@Admin)
     const sessionEmail = String(session.email || '').trim().toLowerCase();
+    const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
     const isAdmin = Boolean(
-      (session.isAdminSession || rank.id === 'ADMIN') && sessionEmail === 'codingdevelopia@gmail.com'
+      ((session.isAdminSession || rank.id === 'ADMIN') && sessionEmail === 'codingdevelopia@gmail.com') ||
+      isTestAdmin
     );
     if (drawerAdminBtn) drawerAdminBtn.classList.toggle('hidden', !isAdmin);
 
@@ -701,15 +703,17 @@
       return;
     }
 
-    // Admin ekranı güvenlik kontrolü (Yalnızca codingdevelopia@gmail.com)
+    // Admin ekranı güvenlik kontrolü (codingdevelopia@gmail.com veya test1234@Admin)
     if (screenKey === 'admin') {
       const email = String(session.email || '').trim().toLowerCase();
       const rankId = svc().authGuard?.getEffectiveRankId(session);
+      const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
       const isVerifiedAdmin = Boolean(
-        (session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com'
+        ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
+        isTestAdmin
       );
       if (!isVerifiedAdmin) {
-        showToast('Yönetici paneline yalnızca yetkili yönetici (codingdevelopia@gmail.com) erişebilir!', 'error');
+        showToast('Yönetici paneline yalnızca yetkili yönetici erişebilir!', 'error');
         navigateToScreen('welcome');
         return;
       }
@@ -737,13 +741,15 @@
 
     // Faz 6: BAKIM MODU KONTROLÜ
     // Kalıcı bayrak PLATFORM_SETTINGS altında tutulur.
-    // Yalnızca ADMIN (codingdevelopia@gmail.com) ve MODERATOR rolleri hariç tüm kullanıcılar tam ekran bloklanır.
+    // Yalnızca ADMIN ve MODERATOR rolleri hariç tüm kullanıcılar tam ekran bloklanır.
     const maintenanceStatus = svc().maintenanceService?.getMaintenanceStatus?.() || { enabled: false };
     const maintenanceOverlay = document.getElementById('maintenance-overlay');
     const sessionEmail = String(session.email || '').trim().toLowerCase();
+    const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
     const isMaintenanceExempt = Boolean(
-      (session.isAdminSession || session.role === 'ADMIN' || session.rank === 'ADMIN') &&
-      sessionEmail === 'codingdevelopia@gmail.com'
+      ((session.isAdminSession || session.role === 'ADMIN' || session.rank === 'ADMIN') &&
+      sessionEmail === 'codingdevelopia@gmail.com') ||
+      isTestAdmin
     ) || Boolean(session.isModerator || session.role === 'MODERATOR' || session.rank === 'MODERATOR');
 
     if (maintenanceStatus.enabled && !isMaintenanceExempt) {
@@ -3049,7 +3055,8 @@
   function renderAdmin() {
     const session = getSession();
     const { authGuard } = svc();
-    if (!session || (!session.isAdminSession && authGuard?.getEffectiveRankId(session) !== 'ADMIN')) {
+    const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
+    if (!session || (!session.isAdminSession && authGuard?.getEffectiveRankId(session) !== 'ADMIN' && !isTestAdmin)) {
       navigateToScreen('welcome');
       return;
     }
