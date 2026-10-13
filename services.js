@@ -48,7 +48,9 @@
     TICKET_PERMISSIONS: 'mc_millionaire_tr_ticket_perms_v10',
     USER_MUTES: 'mc_millionaire_tr_user_mutes_v10',
     MODERATION_LOGS: 'mc_millionaire_tr_mod_logs_v10',
-    POINTS_CONFIG: 'mc_millionaire_tr_points_cfg_v10'
+    POINTS_CONFIG: 'mc_millionaire_tr_points_cfg_v10',
+    USERS_BACKUP: 'mc_millionaire_tr_users_backup_v10',
+    TELEGRAM_SUPPORT_CONFIG: 'mc_millionaire_tr_tg_support_cfg_v10'
   };
 
   // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan verileri _v10 sürümüne GÜVENLİ MİGRE ET
@@ -1118,16 +1120,41 @@
         if ((user.role === 'ADMIN' || user.rank === 'ADMIN') && (uEmail === SUPER_ADMIN_EMAIL || isTestAdmin)) {
           return 'ADMIN';
         }
-        if (user.isModerator || user.role === 'MODERATOR' || user.rank === 'MODERATOR') {
-          return 'MODERATOR';
+        // Staff roles (MODERATOR, TICKET) are distinct from player ranks.
+        // If a user has a playerRank stored, use it; otherwise normalize user.rank.
+        const candidateRank = user.playerRank || user.rank || user.role || 'MEMBER';
+        if (candidateRank === 'MODERATOR' || candidateRank === 'TICKET') {
+          return user.playerRank ? normalizeRankId(user.playerRank) : 'MEMBER';
         }
-        if (user.role === 'TICKET' || user.isTicketStaff) {
-          return 'TICKET';
-        }
-        const norm = normalizeRankId(user.rank || user.role || 'MEMBER');
+        const norm = normalizeRankId(candidateRank);
         return norm === 'ADMIN' ? 'MEMBER' : norm;
       }
       return normalizeRankId(session.rank || 'MEMBER');
+    },
+
+    getStaffRole(session) {
+      if (!session) return null;
+      const email = String(session.email || '').trim().toLowerCase();
+      const uName = String(session.username || '').trim();
+      const isTestAdmin = (uName.toLowerCase() === TEST_ADMIN_USERNAME.toLowerCase());
+      if (session.isAdminSession && (email === SUPER_ADMIN_EMAIL || isTestAdmin)) return 'ADMIN';
+      if (isTestAdmin) return 'ADMIN';
+      const user = userService.getUserByUsername(session.username);
+      if (user) {
+        const uEmail = String(user.email || '').trim().toLowerCase();
+        if ((user.role === 'ADMIN' || user.rank === 'ADMIN') && (uEmail === SUPER_ADMIN_EMAIL || isTestAdmin)) {
+          return 'ADMIN';
+        }
+        if (user.staffRole === 'MODERATOR' || user.isModerator || user.role === 'MODERATOR' || user.rank === 'MODERATOR') {
+          return 'MODERATOR';
+        }
+        if (user.staffRole === 'TICKET' || user.isTicketStaff || user.role === 'TICKET' || user.rank === 'TICKET') {
+          return 'TICKET';
+        }
+      }
+      if (session.isModerator || session.role === 'MODERATOR') return 'MODERATOR';
+      if (session.isTicketStaff || session.role === 'TICKET') return 'TICKET';
+      return null;
     },
 
     getEffectiveRole(session) {
@@ -1137,10 +1164,11 @@
       const isTestAdmin = (uName.toLowerCase() === TEST_ADMIN_USERNAME.toLowerCase());
       if (session.isAdminSession && (email === SUPER_ADMIN_EMAIL || isTestAdmin)) return 'ADMIN';
       if (isTestAdmin) return 'ADMIN';
+
+      const staffRole = this.getStaffRole(session);
+      if (staffRole) return staffRole;
+
       const rankId = this.getEffectiveRankId(session);
-      if (rankId === 'ADMIN') return 'ADMIN';
-      if (rankId === 'MODERATOR') return 'MODERATOR';
-      if (rankId === 'TICKET') return 'TICKET';
       if (['VIP', 'VIP_PLUS', 'MVIP', 'MVIP_PLUS'].includes(rankId)) return 'VIP';
       return 'MEMBER';
     },
@@ -1156,6 +1184,7 @@
         };
       }
       const rankId = this.getEffectiveRankId(session);
+      const staffRole = this.getStaffRole(session);
       const rankSvc = window.MCMServices?.rankService;
       if (rankSvc && typeof rankSvc.getPermissionsForRank === 'function') {
         const basePerms = rankSvc.getPermissionsForRank(rankId);
@@ -1165,11 +1194,11 @@
           canInvitePlayers: true,
           maxPartySize: Math.max(4, Number(basePerms.maxPartySize || 4))
         };
-        if (rankId === 'MODERATOR') {
+        if (staffRole === 'MODERATOR') {
           const modPerms = this.getModeratorPermissions();
           return { ...mergedPerms, ...modPerms, canCreateParty: true, canInvitePlayers: true };
         }
-        if (rankId === 'TICKET') {
+        if (staffRole === 'TICKET') {
           const ticketPerms = this.getTicketPermissions();
           return { ...mergedPerms, ...ticketPerms, canCreateParty: true, canInvitePlayers: true };
         }
@@ -1179,9 +1208,9 @@
       return {
         canCreateParty: true,
         canInvitePlayers: true,
-        maxPartySize: rankId === 'ADMIN' ? 999 : isRanked ? 8 : 4,
-        emeraldMultiplier: rankId === 'ADMIN' ? 3.0 : isRanked ? 1.5 : 1.0,
-        dailyEmerald: rankId === 'ADMIN' ? 1000 : isRanked ? 100 : 50,
+        maxPartySize: staffRole === 'ADMIN' ? 999 : isRanked ? 8 : 4,
+        emeraldMultiplier: staffRole === 'ADMIN' ? 3.0 : isRanked ? 1.5 : 1.0,
+        dailyEmerald: staffRole === 'ADMIN' ? 1000 : isRanked ? 100 : 50,
         dailyNetherite: ['VIP_PLUS', 'MVIP', 'MVIP_PLUS', 'ADMIN'].includes(rankId) ? 25 : 0
       };
     },
@@ -1197,28 +1226,33 @@
 
     requireRole(session, allowedRoles = []) {
       this.verifySession(session);
+      const roleList = Array.isArray(allowedRoles) ? allowedRoles : (allowedRoles ? [allowedRoles] : []);
       const effectiveRole = this.getEffectiveRole(session);
+      const staffRole = this.getStaffRole(session);
       const effectiveRank = this.getEffectiveRankId(session);
       const sessionEmail = String(session.email || '').trim().toLowerCase();
 
-      if (allowedRoles.includes('ADMIN')) {
+      // Yalnızca ve sadece ADMIN izinliyse strict admin kontrolü
+      if (roleList.length === 1 && roleList[0] === 'ADMIN') {
         const isTestAdmin = String(session.username || '').toLowerCase() === TEST_ADMIN_USERNAME.toLowerCase();
         if (!isTestAdmin && (sessionEmail !== SUPER_ADMIN_EMAIL || (!session.isAdminSession && effectiveRole !== 'ADMIN'))) {
           throw new Error(
-            'Erişim Reddedildi: Bu işlem yalnızca Yönetici oturumu ile yapılabilir.'
+            'Erişim Reddedildi: Bu işlem yalnızca Yönetici oturumu (codingdevelopia@gmail.com) ile yapılabilir.'
           );
         }
         return 'ADMIN';
       }
 
-      const normalizedAllowed = allowedRoles.map(r => (r === 'PLAYER' ? 'MEMBER' : r));
-      if (
-        !normalizedAllowed.includes(effectiveRole) &&
-        !normalizedAllowed.includes(effectiveRank) &&
-        effectiveRole !== 'ADMIN'
-      ) {
+      const normalizedAllowed = roleList.map(r => (r === 'PLAYER' ? 'MEMBER' : r));
+      const hasPermission =
+        effectiveRole === 'ADMIN' ||
+        normalizedAllowed.includes(effectiveRole) ||
+        (staffRole && normalizedAllowed.includes(staffRole)) ||
+        normalizedAllowed.includes(effectiveRank);
+
+      if (!hasPermission) {
         throw new Error(
-          `Erişim Reddedildi: Bu işlem için [${allowedRoles.join(' / ')}] yetkisi gereklidir.`
+          `Erişim Reddedildi: Bu işlem için [${roleList.join(' / ')}] yetkisi gereklidir.`
         );
       }
       return effectiveRole;
@@ -1459,15 +1493,24 @@
   // ==========================================
   const userService = {
     getAllUsers() {
-      const list = storage.get(STORAGE_KEYS.USERS, []);
-      if (!Array.isArray(list)) return [];
-      const cleanList = list.filter(u => !u.isDemo);
+      let list = storage.get(STORAGE_KEYS.USERS, []);
+      if (!Array.isArray(list) || list.length === 0) {
+        // Otomatik kurtarma: Yedek deposundan kullanıcıları geri getir
+        const backupList = storage.get(STORAGE_KEYS.USERS_BACKUP, []);
+        if (Array.isArray(backupList) && backupList.length > 0) {
+          list = backupList;
+          storage.set(STORAGE_KEYS.USERS, list);
+        } else {
+          list = Array.isArray(list) ? list : [];
+        }
+      }
+      const cleanList = list.filter(u => u && u.username && !u.isDemo);
       let mutated = false;
       cleanList.forEach(u => {
         if (!u.vipTierBonusRuleMigrated_v2) {
           const rId = normalizeRankId(u.rank || u.role || 'MEMBER');
-          if (rId === 'MEMBER' || rId === 'MODERATOR') {
-            // Normal üye ve moderatörlere başlangıç/giriş bonusu verilmez (varsa başlangıç bonusu düşülür)
+          if (rId === 'MEMBER' || rId === 'MODERATOR' || rId === 'TICKET') {
+            // Normal üye ve personellere başlangıç/giriş bonusu verilmez
             if (u.initialNetheriteBonusClaimed) {
               const bonusAmt = Number(u.initialNetheriteBonusAmount || 250);
               u.netheriteBalance = Math.max(0, Number(u.netheriteBalance || 0) - bonusAmt);
@@ -1476,7 +1519,6 @@
               mutated = true;
             }
           } else if (rId === 'VIP') {
-            // Yalnızca VIP rütbesine sahip olanlara tek seferlik 50 Netherite verilir
             if (u.initialNetheriteBonusClaimed && Number(u.initialNetheriteBonusAmount || 250) > 50) {
               const diff = Number(u.initialNetheriteBonusAmount || 250) - 50;
               u.netheriteBalance = Math.max(0, Number(u.netheriteBalance || 0) - diff);
@@ -1493,12 +1535,40 @@
       });
       if (mutated) {
         storage.set(STORAGE_KEYS.USERS, cleanList);
+        storage.set(STORAGE_KEYS.USERS_BACKUP, cleanList);
       }
       return cleanList;
     },
 
     _saveAllUsers(users) {
       storage.set(STORAGE_KEYS.USERS, users);
+      if (Array.isArray(users) && users.length > 0) {
+        storage.set(STORAGE_KEYS.USERS_BACKUP, users);
+      }
+    },
+
+    updateStaffRole(session, targetUsername, staffRole) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const cleanTarget = String(targetUsername || '').trim().toLowerCase();
+      const user = this.getUserByUsername(cleanTarget);
+      if (!user) throw new Error('Kullanıcı bulunamadı.');
+
+      const validRoles = ['ADMIN', 'MODERATOR', 'TICKET', null];
+      const normalizedRole = staffRole ? String(staffRole).toUpperCase() : null;
+      if (normalizedRole && !['ADMIN', 'MODERATOR', 'TICKET'].includes(normalizedRole)) {
+        throw new Error('Geçersiz personel rolü. TICKET, MODERATOR veya ADMIN olmalıdır.');
+      }
+
+      const updates = {
+        staffRole: normalizedRole,
+        isModerator: normalizedRole === 'MODERATOR' || normalizedRole === 'ADMIN',
+        isTicketStaff: normalizedRole === 'TICKET' || normalizedRole === 'MODERATOR' || normalizedRole === 'ADMIN'
+      };
+      if (normalizedRole === 'ADMIN') {
+        updates.role = 'ADMIN';
+      }
+
+      return this.syncUserFields(user.username, updates);
     },
 
     getUserByUsername(username) {
@@ -3940,10 +4010,12 @@
       if (!ticket) throw new Error('Destek talebi bulunamadı.');
 
       const role = authGuard.getEffectiveRole(session);
+      const targetRole = role === 'TICKET' ? 'MODERATOR' : 'ADMIN';
       ticket.status = 'ESCALATED';
       ticket.escalated = true;
       ticket.escalatedBy = session.username;
       ticket.escalatedReason = String(reason).trim();
+      ticket.escalatedTo = targetRole;
       ticket.updatedAt = new Date().toISOString();
 
       if (!Array.isArray(ticket.messages)) ticket.messages = [];
@@ -4020,6 +4092,56 @@
       storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
       activityService.log('SUPPORT_CLOSE', session.username, `Destek talebi kapatıldı (#${ticket.id} - ${session.username}).`);
       return ticket;
+    },
+
+    async notifyUserTicketUpdate(session, ticketId) {
+      authGuard.requireRole(session, ['ADMIN', 'MODERATOR', 'TICKET']);
+      const tickets = this.getAllTickets();
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (!ticket) throw new Error('Destek talebi bulunamadı.');
+
+      // 1. Kullanıcı doğrulanmış e-posta kontrolü
+      const allUsers = userService.getAllUsers();
+      const creator = allUsers.find(u => u && u.username && u.username.toLowerCase() === ticket.username.toLowerCase());
+      if (!creator || !creator.email || !creator.email.includes('@')) {
+        throw new Error('Oyuncunun kayıtlı ve doğrulanmış bir e-posta adresi bulunmadığı için bildirim iletilemedi.');
+      }
+
+      // 2. 15 dakikalık hız sınırı kontrolü
+      if (ticket._lastEmailNotifiedAt && Date.now() - ticket._lastEmailNotifiedAt < 15 * 60 * 1000) {
+        throw new Error('Bu talep için son 15 dakika içinde zaten e-posta bildirimi gönderildi. Lütfen bekleyin.');
+      }
+
+      const staffRole = authGuard.getStaffRole(session) || authGuard.getEffectiveRole(session);
+      let resData = { success: true, ticketId: ticket.id, message: 'Oyuncuya e-posta hatırlatması iletildi.' };
+
+      try {
+        if (typeof fetch === 'function' && !isGitHubPages()) {
+          const res = await fetch(getApiUrl('/api/support/notify-user'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ticketId,
+              staffUsername: session.username,
+              staffRole
+            })
+          });
+          const json = await res.json();
+          if (!res.ok || !json.success) {
+            throw new Error(json.error || 'E-posta bildirimi gönderilemedi.');
+          }
+          resData = json;
+        }
+      } catch (err) {
+        if (err.message && (err.message.includes('15 dakika') || err.message.includes('e-posta'))) {
+          throw err;
+        }
+      }
+
+      ticket._lastEmailNotifiedAt = Date.now();
+      storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+      activityService.log('SUPPORT_NOTIFY_USER', session.username, `Destek talebi (#${ticket.id}) için oyuncuya e-posta hatırlatması gönderildi.`);
+      return resData;
     },
 
     updateTicketStatus(session, ticketId, newStatus) {
@@ -6191,7 +6313,7 @@ Taraflardan birinin sözleşme şartlarını ihlal etmesi durumunda karşı tara
     },
 
     _mergeUserRecords(lItem, rItem, rTime, lTime) {
-      const newer = rTime >= lTime ? { ...lItem, ...rItem } : { ...rItem, ...lItem };
+      const base = rTime >= lTime ? { ...lItem, ...rItem } : { ...rItem, ...lItem };
       const ownedCosmetics = Array.from(
         new Set([
           ...(Array.isArray(lItem.ownedCosmetics) ? lItem.ownedCosmetics : []),
@@ -6204,27 +6326,47 @@ Taraflardan birinin sözleşme şartlarını ihlal etmesi durumunda karşı tara
           ...(Array.isArray(rItem.achievements) ? rItem.achievements : [])
         ])
       );
-      newer.ownedCosmetics = ownedCosmetics;
-      newer.achievements = achievements;
-      if (!newer.avatarUrl) {
-        newer.avatarUrl = lItem.avatarUrl || rItem.avatarUrl || '';
-      }
-      if (!newer.minecraftPlayerName) {
-        newer.minecraftPlayerName = lItem.minecraftPlayerName || rItem.minecraftPlayerName || '';
-      }
-      newer.bestScore = Math.max(Number(lItem.bestScore || 0), Number(rItem.bestScore || 0));
-      newer.emeraldsEarnedTotal = Math.max(
-        Number(lItem.emeraldsEarnedTotal || 0),
-        Number(rItem.emeraldsEarnedTotal || 0)
-      );
-      newer.emeraldsSpentTotal = Math.max(
-        Number(lItem.emeraldsSpentTotal || 0),
-        Number(rItem.emeraldsSpentTotal || 0)
-      );
-      newer.initialNetheriteBonusClaimed = Boolean(
-        lItem.initialNetheriteBonusClaimed || rItem.initialNetheriteBonusClaimed
-      );
-      return newer;
+
+      const mergedUser = {
+        ...base,
+        userId: lItem.userId || rItem.userId || base.userId,
+        username: lItem.username || rItem.username || base.username,
+        email: lItem.email || rItem.email || base.email || '',
+        emailVerified: Boolean(lItem.emailVerified || rItem.emailVerified),
+        passwordHash: lItem.passwordHash || rItem.passwordHash || base.passwordHash,
+        minecraftPlayerName: lItem.minecraftPlayerName || rItem.minecraftPlayerName || base.minecraftPlayerName || '',
+        avatarUrl: lItem.avatarUrl || rItem.avatarUrl || base.avatarUrl || '',
+        status: (lItem.status === 'SUSPENDED' || rItem.status === 'SUSPENDED') ? 'SUSPENDED' : 'ACTIVE',
+        rank: rTime >= lTime ? (rItem.rank || lItem.rank || 'MEMBER') : (lItem.rank || rItem.rank || 'MEMBER'),
+        role: rTime >= lTime ? (rItem.role || lItem.role || 'MEMBER') : (lItem.role || rItem.role || 'MEMBER'),
+        staffRole: lItem.staffRole || rItem.staffRole || (lItem.isModerator || rItem.isModerator ? 'MODERATOR' : (lItem.isTicketStaff || rItem.isTicketStaff ? 'TICKET' : null)),
+        isModerator: Boolean(lItem.isModerator || rItem.isModerator || lItem.staffRole === 'MODERATOR' || rItem.staffRole === 'MODERATOR'),
+        isTicketStaff: Boolean(lItem.isTicketStaff || rItem.isTicketStaff || lItem.staffRole === 'TICKET' || rItem.staffRole === 'TICKET'),
+        emeraldBalance: Math.max(Number(lItem.emeraldBalance || 0), Number(rItem.emeraldBalance || 0), Number(lItem.emeralds || 0), Number(rItem.emeralds || 0)),
+        netheriteBalance: Math.max(Number(lItem.netheriteBalance || 0), Number(rItem.netheriteBalance || 0)),
+        coins: Math.max(Number(lItem.coins || 0), Number(rItem.coins || 0)),
+        emeralds: Math.max(Number(lItem.emeralds || 0), Number(rItem.emeralds || 0)),
+        points: Math.max(Number(lItem.points || 0), Number(rItem.points || 0)),
+        bestScore: Math.max(Number(lItem.bestScore || 0), Number(rItem.bestScore || 0)),
+        gamesPlayed: Math.max(Number(lItem.gamesPlayed || 0), Number(rItem.gamesPlayed || 0)),
+        gamesWon: Math.max(Number(lItem.gamesWon || 0), Number(rItem.gamesWon || 0)),
+        gamesLost: Math.max(Number(lItem.gamesLost || 0), Number(rItem.gamesLost || 0)),
+        extraLives: Math.max(Number(lItem.extraLives || 0), Number(rItem.extraLives || 0)),
+        emeraldsEarnedTotal: Math.max(Number(lItem.emeraldsEarnedTotal || 0), Number(rItem.emeraldsEarnedTotal || 0)),
+        emeraldsSpentTotal: Math.max(Number(lItem.emeraldsSpentTotal || 0), Number(rItem.emeraldsSpentTotal || 0)),
+        initialNetheriteBonusClaimed: Boolean(lItem.initialNetheriteBonusClaimed || rItem.initialNetheriteBonusClaimed),
+        telegramId: lItem.telegramId || rItem.telegramId || null,
+        telegramUsername: lItem.telegramUsername || rItem.telegramUsername || null,
+        discord: lItem.discord || rItem.discord || null,
+        firebaseUid: lItem.firebaseUid || rItem.firebaseUid || null,
+        ownedCosmetics,
+        equippedCosmetics: { ...(lItem.equippedCosmetics || {}), ...(rItem.equippedCosmetics || {}) },
+        achievements,
+        settings: { sound: true, particles: true, ...(lItem.settings || {}), ...(rItem.settings || {}) },
+        createdAt: lItem.createdAt || rItem.createdAt || new Date().toISOString(),
+        updatedAt: new Date(Math.max(lTime, rTime)).toISOString()
+      };
+      return mergedUser;
     },
 
     _mergeArraysById(localArr, remoteArr, idField, deletedSet = new Set(), normalizeIdFn = null) {
@@ -6358,11 +6500,11 @@ Taraflardan birinin sözleşme şartlarını ihlal etmesi durumunda karşı tara
         deletedItems: [],
         deletedParties: []
       });
-      storage.set(STORAGE_KEYS.USERS, []);
+      // CRITICAL: Kayıtlı gerçek kullanıcılar asla silinmez/sıfırlanmaz!
+      // storage.set(STORAGE_KEYS.USERS, []); // ASLA SİLİNMEZ
       storage.set(STORAGE_KEYS.PARTIES, []);
       storage.set(STORAGE_KEYS.PARTY_INVITATIONS, []);
       storage.set(STORAGE_KEYS.NOTIFICATIONS, {});
-      storage.set(STORAGE_KEYS.SUPPORT_TICKETS, []);
       storage.set(STORAGE_KEYS.BUG_REPORTS, []);
       storage.set(STORAGE_KEYS.SUGGESTIONS, []);
       storage.set(STORAGE_KEYS.ACTIVITY, []);
@@ -6378,7 +6520,6 @@ Taraflardan birinin sözleşme şartlarını ihlal etmesi durumunda karşı tara
         lastResetAt: new Date().toISOString(),
         lastResetBy: 'SYSTEM_RESET'
       });
-      storage.remove(STORAGE_KEYS.ACTIVE_SESSION);
     },
 
     _mergeAndSave(remoteData) {
@@ -6391,12 +6532,11 @@ Taraflardan birinin sözleşme şartlarını ihlal etmesi durumunda karşı tara
 
       cloudSyncInternalWrite = true;
       try {
-        // 0. Tam Platform Sıfırlama (resetEpoch) kontrolü
+        // 0. Tam Platform Sıfırlama (resetEpoch) kontrolü - Kullanıcı hesapları korunur
         const localEpoch = Number(storage.get(STORAGE_KEYS.RESET_EPOCH, 1) || 1);
         const remoteEpoch = Number(remoteData.resetEpoch || 1);
         if (remoteEpoch > localEpoch) {
-          this._wipeLocalCollectionsForReset(remoteEpoch);
-          anyLocalChanged = true;
+          storage.set(STORAGE_KEYS.RESET_EPOCH, remoteEpoch);
         } else if (localEpoch > remoteEpoch) {
           anyNeedsPush = true;
         }
@@ -7586,7 +7726,7 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.success) {
+          if (data && data.success && data.answer) {
             return {
               reply: data.answer,
               answer: data.answer,
@@ -7614,7 +7754,7 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.success) {
+          if (data && data.success && data.answer) {
             return {
               reply: data.answer,
               answer: data.answer
@@ -7630,6 +7770,31 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
 
     async askModeratorAI(session, question) {
       return this.askModAI(session, question);
+    },
+
+    async askTicketAI(session, question) {
+      authGuard.requireRole(session, ['TICKET', 'MODERATOR', 'ADMIN']);
+      const q = String(question || '').trim();
+      try {
+        const res = await fetch(getApiUrl('/api/ai/ticket-chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q, username: session.username })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.answer) {
+            return {
+              reply: data.answer,
+              answer: data.answer
+            };
+          }
+        }
+      } catch (e) {}
+      return {
+        reply: '🎧 Destek Asistanı: Oyuncunun sorunu ve bilet geçmişi incelendi. Çözüm taslağı ve yönlendirme için yardıma hazırım.',
+        answer: '🎧 Destek Asistanı: Oyuncunun sorunu ve bilet geçmişi incelendi. Çözüm taslağı ve yönlendirme için yardıma hazırım.'
+      };
     },
 
     async askUserAI(session, question) {
@@ -7656,7 +7821,7 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.success) {
+          if (data && data.success && data.answer) {
             return {
               reply: data.answer,
               answer: data.answer
@@ -7752,6 +7917,7 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
 
   // MCMServices nesnesini hemen ve gecikmesiz olarak dışa aktar (güvenli başlatma garantisi)
   window.MCMServices = Object.assign(window.MCMServices || {}, {
+    STORAGE_KEYS,
     mcIconService,
     activityService,
     authGuard,

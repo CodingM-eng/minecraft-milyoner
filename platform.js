@@ -464,26 +464,33 @@
       ((session.isAdminSession || rank.id === 'ADMIN') && sessionEmail === 'codingdevelopia@gmail.com') ||
       isTestAdmin
     );
-    if (drawerAdminBtn) drawerAdminBtn.classList.toggle('hidden', !isAdmin);
-
-    // Moderatör ve Destek Butonu Görünürlüğü
-    const effectiveRole = svc().authGuard?.getEffectiveRole(session);
-    const drawerModBtn = document.getElementById('drawer-btn-moderator');
-    const drawerTicketBtn = document.getElementById('drawer-btn-ticket');
-    if (drawerModBtn) {
-      drawerModBtn.classList.toggle('hidden', !(effectiveRole === 'MODERATOR' || effectiveRole === 'ADMIN'));
+    if (isAdmin) {
+      if (drawerAdminBtn) drawerAdminBtn.classList.remove('hidden');
+      if (drawerModBtn) drawerModBtn.classList.add('hidden');
+      if (drawerTicketBtn) drawerTicketBtn.classList.add('hidden');
+    } else {
+      if (drawerAdminBtn) drawerAdminBtn.classList.add('hidden');
+      const effectiveRole = svc().authGuard?.getEffectiveRole(session);
+      if (effectiveRole === 'MODERATOR') {
+        if (drawerModBtn) drawerModBtn.classList.remove('hidden');
+        if (drawerTicketBtn) drawerTicketBtn.classList.add('hidden');
+      } else if (effectiveRole === 'TICKET') {
+        if (drawerModBtn) drawerModBtn.classList.add('hidden');
+        if (drawerTicketBtn) drawerTicketBtn.classList.remove('hidden');
+      } else {
+        if (drawerModBtn) drawerModBtn.classList.add('hidden');
+        if (drawerTicketBtn) drawerTicketBtn.classList.add('hidden');
+      }
     }
-    if (drawerTicketBtn) {
-      drawerTicketBtn.classList.toggle('hidden', !(effectiveRole === 'TICKET' || effectiveRole === 'MODERATOR' || effectiveRole === 'ADMIN'));
-    }
 
-    // MVP / MVIP Bilge Asistan Yüzen Butonu Görünürlüğü (order >= 4 veya staff)
+    // Bilge / AI Asistan Butonları Görünürlüğü (Başlık ve Yüzen Buton)
     const floatingAiBtn = document.getElementById('floating-ai-btn');
-    if (floatingAiBtn) {
-      const userRank = svc().rankService?.getUserRank(user.username);
-      const canAccessAi = (userRank && userRank.order >= 4) || effectiveRole === 'ADMIN' || effectiveRole === 'MODERATOR';
-      floatingAiBtn.classList.toggle('hidden', !canAccessAi);
-    }
+    const headerAiBtn = document.getElementById('btn-header-ai-bot');
+    const userRank = svc().rankService?.getUserRank(user.username);
+    const effRole = svc().authGuard?.getEffectiveRole(session);
+    const canAccessAi = (userRank && userRank.order >= 4) || ['ADMIN', 'MODERATOR', 'TICKET'].includes(effRole);
+    if (floatingAiBtn) floatingAiBtn.classList.toggle('hidden', !canAccessAi);
+    if (headerAiBtn) headerAiBtn.classList.toggle('hidden', !session);
 
     const lbResetBtn = document.getElementById('btn-leaderboard-admin-reset');
     if (lbResetBtn) lbResetBtn.classList.toggle('hidden', !isAdmin);
@@ -719,21 +726,45 @@
       }
     }
 
-    // Moderatör ekranı güvenlik kontrolü
+    // Moderatör ekranı güvenlik kontrolü (#1: Yöneticiler için tüm araçlar Admin panelindedir)
     if (screenKey === 'moderator') {
+      const email = String(session.email || '').trim().toLowerCase();
+      const rankId = svc().authGuard?.getEffectiveRankId(session);
+      const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
+      const isVerifiedAdmin = Boolean(
+        ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
+        isTestAdmin
+      );
+      if (isVerifiedAdmin) {
+        showToast('Yönetici olarak tüm yönetim ve denetim araçları Yönetici Paneli içerisindedir.', 'info');
+        navigateToScreen('admin');
+        return;
+      }
       const effRole = svc().authGuard?.getEffectiveRole(session);
-      if (effRole !== 'MODERATOR' && effRole !== 'ADMIN') {
-        showToast('Moderatör paneline yalnızca yetkili moderatör veya yöneticiler erişebilir!', 'error');
+      if (effRole !== 'MODERATOR') {
+        showToast('Moderatör paneline yalnızca yetkili moderatörler erişebilir!', 'error');
         navigateToScreen('welcome');
         return;
       }
     }
 
-    // Destek Yetkili ekranı güvenlik kontrolü
+    // Destek Yetkili ekranı güvenlik kontrolü (#1: Yöneticiler için tüm araçlar Admin panelindedir)
     if (screenKey === 'ticket') {
+      const email = String(session.email || '').trim().toLowerCase();
+      const rankId = svc().authGuard?.getEffectiveRankId(session);
+      const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
+      const isVerifiedAdmin = Boolean(
+        ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
+        isTestAdmin
+      );
+      if (isVerifiedAdmin) {
+        showToast('Yönetici olarak tüm destek yönetimi Yönetici Paneli içerisindedir.', 'info');
+        navigateToScreen('admin');
+        return;
+      }
       const effRole = svc().authGuard?.getEffectiveRole(session);
-      if (effRole !== 'TICKET' && effRole !== 'MODERATOR' && effRole !== 'ADMIN') {
-        showToast('Destek yetkili paneline yalnızca yetkili personel erişebilir!', 'error');
+      if (effRole !== 'TICKET') {
+        showToast('Destek yetkili paneline yalnızca yetkili destek personeli erişebilir!', 'error');
         navigateToScreen('welcome');
         return;
       }
@@ -2729,11 +2760,16 @@
           .map(
             t => `
             <div class="ticket-card" style="cursor:pointer;" onclick="window.MCMPlatform?.openSupportWidgetWithTicket?.('${escapeHtml(t.id)}')">
-              <div class="ticket-header">
+              <div class="ticket-header" style="display:flex;justify-content:space-between;align-items:center;">
                 <strong>#${escapeHtml(t.id)} — ${escapeHtml(t.subject)}</strong>
-                <span class="status-pill status-${escapeHtml(t.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(
-              t.status
-            )}</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span class="status-pill status-${escapeHtml(t.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(t.status)}</span>
+                  ${t.status !== 'KAPANDI' && t.status !== 'ÇÖZÜLDÜ' ? `
+                    <button type="button" class="mc-btn mc-btn-xs mc-btn-danger" data-ticket-action="close-by-creator" data-ticket-id="${escapeHtml(t.id)}" onclick="event.stopPropagation();">
+                      🔒 Kapat
+                    </button>
+                  ` : ''}
+                </div>
               </div>
               <p class="ticket-meta">Kategori: ${escapeHtml(t.category)} • ${t.claimedBy ? `Yetkili: <strong>${escapeHtml(t.claimedBy)}</strong> • ` : ''}${formatDateTR(t.createdAt)}</p>
               <div class="ticket-messages">
@@ -2795,7 +2831,14 @@
           <div style="background:rgba(15,23,42,0.6); padding:8px 10px; border-radius:6px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <strong style="color:#6ee7b7; font-size:0.88rem;">#${escapeHtml(selectedTicket.id)}: ${escapeHtml(selectedTicket.subject)}</strong>
-              <span class="status-pill status-${escapeHtml(selectedTicket.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(selectedTicket.status)}</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="status-pill status-${escapeHtml(selectedTicket.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(selectedTicket.status)}</span>
+                ${selectedTicket.status !== 'KAPANDI' && selectedTicket.status !== 'ÇÖZÜLDÜ' ? `
+                  <button type="button" class="mc-btn mc-btn-xs mc-btn-danger" data-ticket-action="close-by-creator" data-ticket-id="${escapeHtml(selectedTicket.id)}">
+                    🔒 Talebi Kapat
+                  </button>
+                ` : ''}
+              </div>
             </div>
             <div style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">
               Kategori: <strong>${escapeHtml(selectedTicket.category)}</strong> ${selectedTicket.claimedBy ? `• Yetkili: <strong style="color:#fde047;">${escapeHtml(selectedTicket.claimedBy)}</strong>` : '• <em>Yetkili atanması bekleniyor</em>'}
@@ -5232,6 +5275,9 @@
                 <button type="button" class="mc-btn mc-btn-xs mc-btn-emerald" data-ticket-action="resolve" data-ticket-id="${selectedTicket.id}">
                   ✓ Çözüldü
                 </button>
+                <button type="button" class="mc-btn mc-btn-xs mc-btn-secondary" data-ticket-action="notify-user" data-ticket-id="${selectedTicket.id}" title="Oyuncuya e-posta hatırlatma bildirimi gönder (/bildir)">
+                  📧 E-posta Bildir
+                </button>
               </div>
             </div>
 
@@ -6097,7 +6143,109 @@
       }
     });
 
-    // MVIP Bilge Asistan Soru Sorma Formu (#ai-chat-form — #5)
+    // ==========================================
+    // 🧙‍♂️ ÇOKLU YAPAY ZEKA ASİSTANLARI (#4 & #5: Bilge, Ticket, Mod, Admin)
+    // ==========================================
+    const AI_BOT_CONFIGS = {
+      user: {
+        id: 'user',
+        name: 'Bilge Bot',
+        icon: '🧙‍♂️',
+        title: 'BİLGE ASİSTAN',
+        placeholder: 'Minecraft stratejileri, jokerler veya ekonomi hakkında sorun...',
+        greeting: 'Merhaba! Ben Minecraft Milyoner arenasında sana rehberlik eden <strong>Bilge Asistan</strong>\'ım. Stratejiler, tüyolar, ekonomi veya rütbe avantajları hakkında bana soru sorabilirsin!'
+      },
+      ticket: {
+        id: 'ticket',
+        name: 'Ticket Bot',
+        icon: '🎫',
+        title: 'DESTEK MASASI ASİSTANI (TICKET AI)',
+        placeholder: 'Destek bileti yanıt taslağı veya çözüm önerisi isteyin...',
+        greeting: 'Merhaba Destek Yetkilisi! Bilet yanıtları hazırlarken sana yardımcı olmak için buradayım. Oyuncu sorunlarına profesyonel ve nazik taslak yanıtlar üretebilirim.'
+      },
+      mod: {
+        id: 'mod',
+        name: 'Moderatör Bot',
+        icon: '⚔️',
+        title: 'MODERATÖR ASİSTANI (MOD AI)',
+        placeholder: 'Susturma sınırları, sohbet kuralları veya ceza politikaları...',
+        greeting: 'Selam Moderatör! Topluluk düzeni, küfür/argo sansür kayıtları, susturma sınırları ve rapor incelemeleri konusunda sana destek olabilirim.'
+      },
+      admin: {
+        id: 'admin',
+        name: 'Admin Bot',
+        icon: '🛡️',
+        title: 'BAŞ YÖNETİCİ ASİSTANI (ADMIN AI)',
+        placeholder: 'Yedekleme durumu, sunucu cirosu, bot bağlantıları veya sistem...',
+        greeting: 'Hoş geldiniz Yönetici. Sunucu gelirleri, anlık oyuncu ve bilet istatistikleri, Google Drive yedek durumları ve sistem bütünlüğü raporunu sunabilirim.'
+      }
+    };
+
+    let activeAiBotType = 'user';
+
+    function switchAiBot(botId) {
+      const config = AI_BOT_CONFIGS[botId] || AI_BOT_CONFIGS.user;
+      activeAiBotType = config.id;
+
+      const iconEl = document.getElementById('modal-ai-icon');
+      const titleEl = document.getElementById('modal-ai-title');
+      const inpEl = document.getElementById('ai-chat-input');
+      const msgsBox = document.getElementById('ai-chat-messages');
+
+      if (iconEl) iconEl.textContent = config.icon;
+      if (titleEl) titleEl.textContent = config.title;
+      if (inpEl) inpEl.placeholder = config.placeholder;
+
+      document.querySelectorAll('#ai-bot-switcher-tabs button').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-ai-bot') === config.id);
+      });
+
+      if (msgsBox) {
+        msgsBox.innerHTML = `
+          <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#f8fafc;">
+            ${config.greeting}
+          </div>
+        `;
+      }
+    }
+
+    window.openAiAssistantModal = function() {
+      const session = getSession();
+      if (!session) return;
+      const effRole = svc().authGuard?.getEffectiveRole(session);
+      const userRank = svc().rankService?.getUserRank(session.username) || { order: 1 };
+
+      const tabUser = document.getElementById('tab-bot-user');
+      const tabTicket = document.getElementById('tab-bot-ticket');
+      const tabMod = document.getElementById('tab-bot-mod');
+      const tabAdmin = document.getElementById('tab-bot-admin');
+
+      const canTicket = effRole === 'TICKET' || effRole === 'MODERATOR' || effRole === 'ADMIN';
+      const canMod = effRole === 'MODERATOR' || effRole === 'ADMIN';
+      const canAdmin = effRole === 'ADMIN';
+
+      if (tabTicket) tabTicket.classList.toggle('hidden', !canTicket);
+      if (tabMod) tabMod.classList.toggle('hidden', !canMod);
+      if (tabAdmin) tabAdmin.classList.toggle('hidden', !canAdmin);
+
+      if (activeAiBotType === 'admin' && !canAdmin) activeAiBotType = canMod ? 'mod' : (canTicket ? 'ticket' : 'user');
+      if (activeAiBotType === 'mod' && !canMod) activeAiBotType = canTicket ? 'ticket' : 'user';
+      if (activeAiBotType === 'ticket' && !canTicket) activeAiBotType = 'user';
+
+      switchAiBot(activeAiBotType);
+      document.getElementById('modal-ai-assistant')?.classList.remove('hidden');
+    };
+
+    // Bot Değiştirici Sekme Tıklamaları
+    document.getElementById('ai-bot-switcher-tabs')?.addEventListener('click', e => {
+      const tabBtn = e.target.closest('[data-ai-bot]');
+      if (tabBtn) {
+        const botId = tabBtn.getAttribute('data-ai-bot');
+        switchAiBot(botId);
+      }
+    });
+
+    // Yapay Zeka Soru Sorma Formu (#ai-chat-form)
     document.getElementById('ai-chat-form')?.addEventListener('submit', async e => {
       e.preventDefault();
       const session = getSession();
@@ -6108,13 +6256,15 @@
       const btn = document.getElementById('btn-send-ai-chat');
       if (!q) return;
 
+      const botConfig = AI_BOT_CONFIGS[activeAiBotType] || AI_BOT_CONFIGS.user;
+
       if (msgsBox) {
         msgsBox.innerHTML += `
           <div style="background:rgba(30,41,59,0.9);padding:8px 12px;border-radius:8px;border-left:3px solid #38bdf8;font-size:0.88rem;color:#f8fafc;align-self:flex-end;max-width:85%;">
             <strong>Siz:</strong> ${escapeHtml(q)}
           </div>
           <div id="ai-user-loading" style="background:#1e293b;padding:8px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#facc15;font-style:italic;">
-            ⏳ Bilge Asistan düşünüyor...
+            ⏳ ${botConfig.name} düşünüyor...
           </div>
         `;
         msgsBox.scrollTop = msgsBox.scrollHeight;
@@ -6123,12 +6273,25 @@
 
       try {
         if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
-        const res = await svc().aiAssistantService.askUserAssistant(session, q);
+        let res;
+        if (activeAiBotType === 'admin') {
+          res = await svc().aiAssistantService.askAdminAI(session, q);
+        } else if (activeAiBotType === 'mod') {
+          res = await svc().aiAssistantService.askModAI(session, q);
+        } else if (activeAiBotType === 'ticket') {
+          res = await svc().aiAssistantService.askTicketAI(session, q);
+        } else {
+          res = await svc().aiAssistantService.askUserAI(session, q);
+        }
+
         document.getElementById('ai-user-loading')?.remove();
         if (msgsBox) {
           msgsBox.innerHTML += `
             <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#f8fafc;">
-              🧙‍♂️ <strong>Bilge Asistan:</strong> ${escapeHtml(res.reply)}
+              ${botConfig.icon} <strong>${botConfig.name}:</strong> ${escapeHtml(res.reply || res.answer || '')}
+              <div style="font-size:0.72rem;color:#94a3b8;margin-top:6px;border-top:1px solid #334155;padding-top:4px;">
+                ⚠️ AI yalnızca taslak önerisi sunar; sistemsel değişiklikler yetkili onayı gerektirir.
+              </div>
             </div>
           `;
           msgsBox.scrollTop = msgsBox.scrollHeight;
@@ -6921,7 +7084,7 @@
         return;
       }
 
-      // Destek Talebi Sahiplen, Yöneticiye İlet, Çözüldü Yap ([data-ticket-action])
+      // Destek Talebi Sahiplen, Yöneticiye İlet, Çözüldü Yap, E-posta Bildir ([data-ticket-action])
       const ticketActionBtn = e.target.closest('[data-ticket-action]');
       if (ticketActionBtn) {
         const session = getSession();
@@ -6932,14 +7095,29 @@
           if (act === 'claim') {
             svc().supportService.claimTicket(session, tId);
             showToast(`🎯 #${tId} numaralı talep sahiplenildi!`, 'success');
+            renderTicket();
           } else if (act === 'escalate') {
-            svc().supportService.escalateTicket(session, tId, 'Yönetici incelemesi talep edildi.');
+            svc().supportService.escalateTicket(session, tId, 'Üst yetkili incelemesi gerekiyor');
             showToast(`🚨 #${tId} numaralı talep üst yöneticiye iletildi.`, 'info');
+            renderTicket();
           } else if (act === 'resolve') {
             svc().supportService.closeTicket(session, tId);
             showToast(`✓ #${tId} numaralı talep çözüldü olarak kapatıldı.`, 'success');
+            renderTicket();
+          } else if (act === 'notify-user') {
+            ticketActionBtn.disabled = true;
+            svc().supportService.notifyUserTicketUpdate(session, tId).then(res => {
+              showToast(res?.message || 'Oyuncuya e-posta hatırlatma bildirimi başarıyla gönderildi.', 'success');
+            }).catch(err => {
+              showToast(err.message, 'error');
+            }).finally(() => {
+              ticketActionBtn.disabled = false;
+            });
+          } else if (act === 'close-by-creator') {
+            svc().supportService.closeTicket(session, tId);
+            showToast(`🔒 #${tId} numaralı destek talebiniz başarıyla kapatıldı.`, 'success');
+            renderSupport();
           }
-          renderTicket();
         } catch (err) {
           showToast(err.message, 'error');
         }
@@ -6971,18 +7149,19 @@
       }
 
       // ==========================================
-      // 🧙‍♂️ MVIP BİLGE ASİSTAN MODALI (#5)
+      // 🧙‍♂️ ÇOKLU YAPAY ZEKA ASİSTAN MODALI (#4 & #5)
       // ==========================================
-      if (e.target.closest('#floating-ai-btn')) {
+      if (e.target.closest('#floating-ai-btn') || e.target.closest('#btn-header-ai-bot')) {
         const session = getSession();
-        if (!session) return;
-        const userRank = svc().rankService.getUserRank(session.username);
-        const effRole = svc().authGuard?.getEffectiveRole(session);
-        if (userRank.order < 4 && effRole !== 'ADMIN' && effRole !== 'MODERATOR') {
-          showToast('Bilge Asistan ayrıcalığı MVP ve MVIP+ üyelerine özeldir. Mağazadan rütbenizi yükseltebilirsiniz!', 'warning');
+        if (!session) {
+          showToast('Yapay zeka asistanını kullanmak için lütfen oturum açın.', 'info');
           return;
         }
-        document.getElementById('modal-ai-assistant')?.classList.remove('hidden');
+        if (typeof window.openAiAssistantModal === 'function') {
+          window.openAiAssistantModal();
+        } else {
+          document.getElementById('modal-ai-assistant')?.classList.remove('hidden');
+        }
         return;
       }
 

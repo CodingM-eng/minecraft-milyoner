@@ -449,6 +449,12 @@
           <span id="header-notif-badge" class="notif-unread-badge hidden">0</span>
         </button>
 
+        <!-- Bilge / AI Asistan Başlık Butonu (Belirgin ve Hızlı Erişim) -->
+        <button type="button" id="btn-header-ai-bot" class="mc-btn mc-btn-icon ai-bot-header-btn"
+          aria-label="AI Asistan" title="AI Asistanı Aç (Bilge / Ticket / Mod / Admin)">
+          <span style="font-size:1.15rem;">🧙‍♂️</span>
+        </button>
+
         <!-- Kompakt 3 Çizgili Menü Butonu (#5) -->
         <button type="button" id="btn-toggle-menu" class="mc-btn mc-btn-icon hamburger-menu-btn"
           aria-label="Menüyü Aç/Kapat" aria-expanded="false" aria-controls="main-menu-drawer" title="Menü">
@@ -2310,16 +2316,31 @@
     </div>
   </div>
 
-  <!-- 7. 🧙‍♂️ MVIP Bilge Asistan Modalı (#5) -->
+  <!-- 7. 🧙‍♂️ Yapay Zeka Asistan Modalı (Bilge / Ticket / Mod / Admin Çoklu Bot Değiştirici - #4 & #5) -->
   <div id="modal-ai-assistant" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-ai-title">
-    <div class="mc-modal-card" style="max-width: 540px; height: 580px; display:flex; flex-direction:column;">
+    <div class="mc-modal-card" style="max-width: 580px; height: 600px; display:flex; flex-direction:column;">
       <div class="mc-modal-header" style="background:linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%);">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:1.3rem;">🧙‍♂️</span>
-          <h3 id="modal-ai-title" style="margin:0;color:#facc15;">BİLGE ASİSTAN (MVP / MVIP ÖZEL)</h3>
+          <span id="modal-ai-icon" style="font-size:1.3rem;">🧙‍♂️</span>
+          <h3 id="modal-ai-title" style="margin:0;color:#facc15;">BİLGE ASİSTAN</h3>
         </div>
         <button type="button" id="btn-close-ai-assistant" class="drawer-close-btn" aria-label="Kapat">✕</button>
       </div>
+
+      <!-- Yetkiye Göre Filtrelenen Bot Değiştirici Sekmeleri -->
+      <div id="ai-bot-switcher-tabs" style="display:flex;gap:6px;padding:8px 14px;background:#0f172a;border-bottom:1px solid #334155;overflow-x:auto;">
+        <button type="button" class="mc-tab-btn active" data-ai-bot="user" id="tab-bot-user">🧙‍♂️ Bilge Bot</button>
+        <button type="button" class="mc-tab-btn hidden" data-ai-bot="ticket" id="tab-bot-ticket">🎫 Ticket Bot</button>
+        <button type="button" class="mc-tab-btn hidden" data-ai-bot="mod" id="tab-bot-mod">⚔️ Mod Bot</button>
+        <button type="button" class="mc-tab-btn hidden" data-ai-bot="admin" id="tab-bot-admin">🛡️ Admin Bot</button>
+      </div>
+
+      <!-- Bilgi & Güvenlik Uyarısı (AI Asla Otomatik İşlem Yürütmez) -->
+      <div id="ai-safety-notice" style="background:#1e1b4b;padding:6px 14px;border-bottom:1px solid #312e81;font-size:0.78rem;color:#cbd5e1;display:flex;align-items:center;gap:6px;">
+        <span>ℹ️</span>
+        <span id="ai-safety-notice-text">Yapay zeka yalnızca öneri ve taslak hazırlar; hiçbir işlem otomatik yürütülmez.</span>
+      </div>
+
       <div class="mc-modal-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden;padding:14px;">
         <div id="ai-chat-messages" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px;padding:10px;background:rgba(15,23,42,0.8);border-radius:8px;border:1px solid #334155;">
           <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#f8fafc;">
@@ -2328,7 +2349,7 @@
           </div>
         </div>
         <form id="ai-chat-form" style="display:flex;gap:8px;">
-          <input type="text" id="ai-chat-input" class="mc-input" placeholder="Bir soru sorun... (Örn: Netherite nasıl biriktirilir?)" style="flex:1;" maxlength="200" required />
+          <input type="text" id="ai-chat-input" class="mc-input" placeholder="Bir soru sorun... (Örn: Netherite nasıl biriktirilir?)" style="flex:1;" maxlength="250" required />
           <button type="submit" id="btn-send-ai-chat" class="mc-btn mc-btn-primary mc-btn-sm" style="white-space:nowrap;">
             🚀 Sor
           </button>

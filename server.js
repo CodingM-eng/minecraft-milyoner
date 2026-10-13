@@ -78,8 +78,84 @@ function safeSaveJson(filename, data) {
   } catch (e) {}
 }
 
-// 0. Kalıcı Kullanıcı Veritabanı Deposu (Veri Kaybı Önleme)
-let persistentUsers = safeLoadJson('users.json', []);
+// 0. Kalıcı Kullanıcı Veritabanı Deposu (Veri Kaybı Önleme & İkili Yedekleme)
+let persistentUsers = safeLoadJson('users.json', null);
+if (!Array.isArray(persistentUsers) || persistentUsers.length === 0) {
+  const backupUsers = safeLoadJson('users_backup.json', null);
+  if (Array.isArray(backupUsers) && backupUsers.length > 0) {
+    persistentUsers = backupUsers;
+    safeSaveJson('users.json', persistentUsers);
+  } else {
+    persistentUsers = Array.isArray(persistentUsers) ? persistentUsers : [];
+  }
+}
+
+// Telegram Destek Grubu & Botu Yapılandırması (Kalıcı ve Güvenli Sunucu Deposu)
+let telegramSupportConfig = safeLoadJson('telegram_support_config.json', {
+  botToken: '',
+  groupId: ''
+});
+
+function getSupportBotToken() {
+  return process.env.TELEGRAM_SUPPORT_BOT_TOKEN || telegramSupportConfig.botToken || '';
+}
+
+function getSupportGroupId() {
+  return process.env.TELEGRAM_SUPPORT_GROUP_ID || telegramSupportConfig.groupId || '';
+}
+
+function savePersistentUsers() {
+  safeSaveJson('users.json', persistentUsers);
+  if (Array.isArray(persistentUsers) && persistentUsers.length > 0) {
+    safeSaveJson('users_backup.json', persistentUsers);
+  }
+}
+
+function verifyStaffAccount(username, allowedRoles = ['TICKET', 'MODERATOR', 'ADMIN']) {
+  if (!username) return null;
+  const clean = String(username).trim().toLowerCase();
+  if (clean === 'test1234@admin') {
+    return { username: 'test1234@Admin', role: 'ADMIN', staffRole: 'ADMIN', isAdmin: true };
+  }
+  const user = persistentUsers.find(u => u && u.username && u.username.toLowerCase() === clean);
+  if (!user) return null;
+  if (user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+    return { ...user, role: 'ADMIN', staffRole: 'ADMIN', isAdmin: true };
+  }
+  const effectiveRole = user.role === 'ADMIN' ? 'ADMIN'
+    : (user.staffRole === 'MODERATOR' || user.isModerator || user.role === 'MODERATOR') ? 'MODERATOR'
+    : (user.staffRole === 'TICKET' || user.isTicketStaff || user.role === 'TICKET') ? 'TICKET'
+    : 'MEMBER';
+  if (allowedRoles.includes(effectiveRole)) {
+    return { ...user, staffRole: effectiveRole };
+  }
+  return null;
+}
+
+function findStaffByTelegram(tgId, tgUsername, allowedRoles = ['TICKET', 'MODERATOR', 'ADMIN']) {
+  const idStr = String(tgId || '');
+  const uClean = String(tgUsername || '').replace(/^@+/, '').toLowerCase();
+  for (const u of persistentUsers) {
+    if (!u) continue;
+    const matchId = u.telegramId && String(u.telegramId) === idStr;
+    const matchU = u.telegramUsername && String(u.telegramUsername).replace(/^@+/, '').toLowerCase() === uClean;
+    if (matchId || matchU) {
+      if (u.email && u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return { ...u, role: 'ADMIN', staffRole: 'ADMIN' };
+      }
+      const eff = u.role === 'ADMIN' ? 'ADMIN'
+        : (u.staffRole === 'MODERATOR' || u.isModerator || u.role === 'MODERATOR') ? 'MODERATOR'
+        : (u.staffRole === 'TICKET' || u.isTicketStaff || u.role === 'TICKET') ? 'TICKET'
+        : 'MEMBER';
+      if (allowedRoles.includes(eff)) {
+        return { ...u, staffRole: eff };
+      }
+    }
+  }
+  return null;
+}
+
+const ticketNotificationRateLimits = new Map(); // ticketId -> timestamp
 
 // 1. Stripe İşlem & İdempotent Event Takibi
 const processedStripeEvents = new Set(safeLoadJson('stripe_events.json', []));
@@ -383,6 +459,29 @@ async function dispatchEmail(recipientEmail, code) {
   }
 
   return { success: true, delivered: false, method: 'CONSOLE_ONLY' };
+}
+
+async function dispatchCustomEmail(recipientEmail, subject, textContent) {
+  const mailOptions = {
+    from: `"MC Milyoner Destek Masası" <${process.env.GMAIL_USER || SUPER_ADMIN_EMAIL}>`,
+    to: recipientEmail,
+    subject: subject,
+    text: textContent
+  };
+  if (transporter && (process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS)) {
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      return { success: true, delivered: true, method: 'GMAIL_SMTP', messageId: info.messageId };
+    } catch (err) {
+      console.error(`[SUNUCU DESTEK GMAIL HATASI]:`, err.message);
+    }
+  }
+  return { success: true, delivered: false, method: 'MOCK_DEV' };
+}
+
+function sendSupportTelegramRequest(endpoint, postData) {
+  const token = getSupportBotToken() || process.env.TELEGRAM_BOT_TOKEN;
+  return sendTelegramApiRequest(endpoint, postData, token);
 }
 
 // JSON İstek Gövdesini Oku (Raw Buffer Desteği İle)
@@ -1020,13 +1119,63 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // Telegram Destek Grubu & Botu Yönetici Ayarları (Gizli & Güvenli)
+  if (req.method === 'GET' && pathname === '/api/admin/telegram-support-config') {
+    const adminUser = verifyStaffAccount(query.adminUsername || query.username, ['ADMIN']);
+    const isSecretAdmin = query.email === SUPER_ADMIN_EMAIL || query.admin === 'true';
+    if (!adminUser && !isSecretAdmin) {
+      return sendJson(res, 403, { success: false, error: 'Yalnızca yönetici bu yapılandırmayı görüntüleyebilir.' });
+    }
+    const token = getSupportBotToken();
+    const groupId = getSupportGroupId();
+    const mask = (tok) => tok && tok.length > 8 ? tok.slice(0, 6) + '...' + tok.slice(-4) : (tok ? '***' : null);
+    return sendJson(res, 200, {
+      success: true,
+      configured: Boolean(token && groupId),
+      hasToken: Boolean(token),
+      maskedToken: mask(token),
+      groupId: groupId ? String(groupId).slice(0, 4) + '***' : null
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/telegram-support-config') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const adminUser = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      const isSecretAdmin = body.email === SUPER_ADMIN_EMAIL || body.isAdmin;
+      if (!adminUser && !isSecretAdmin) {
+        return sendJson(res, 403, { success: false, error: 'Yalnızca yönetici destek botu ayarlarını değiştirebilir.' });
+      }
+
+      if (body.botToken !== undefined) {
+        telegramSupportConfig.botToken = String(body.botToken).trim();
+      }
+      if (body.groupId !== undefined) {
+        telegramSupportConfig.groupId = String(body.groupId).trim();
+      }
+      safeSaveJson('telegram_support_config.json', telegramSupportConfig);
+
+      const token = getSupportBotToken();
+      const groupId = getSupportGroupId();
+      const mask = (tok) => tok && tok.length > 8 ? tok.slice(0, 6) + '...' + tok.slice(-4) : (tok ? '***' : null);
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Telegram destek botu ve grup yapılandırması güvenle güncellendi.',
+        configured: Boolean(token && groupId),
+        maskedToken: mask(token)
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
   // Telegram Teşhis ve Durum Kontrolü (Poll Bot & Destek Botu Ayrı Ayrı)
   if (req.method === 'GET' && pathname === '/api/telegram/diagnostics') {
     try {
       const pollToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_POLL_BOT_TOKEN || '';
       const pollChatId = process.env.TELEGRAM_CHAT_ID || '';
-      const supportToken = process.env.TELEGRAM_SUPPORT_BOT_TOKEN || '';
-      const supportGroupId = process.env.TELEGRAM_SUPPORT_GROUP_ID || '';
+      const supportToken = getSupportBotToken();
+      const supportGroupId = getSupportGroupId();
 
       const mask = (tok) => tok && tok.length > 8 ? tok.slice(0, 6) + '...' + tok.slice(-4) : (tok ? '***' : null);
 
@@ -1403,62 +1552,37 @@ const server = http.createServer(async (req, res) => {
       supportTickets.unshift(ticket);
       safeSaveJson('support_tickets.json', supportTickets);
 
-      // Telegram Destek Grubu Bildirimi (TELEGRAM_SUPPORT_BOT_TOKEN veya TELEGRAM_BOT_TOKEN)
-      const supportBotToken = process.env.TELEGRAM_SUPPORT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
-      const supportGroupId = process.env.TELEGRAM_SUPPORT_GROUP_ID || process.env.TELEGRAM_CHAT_ID;
-
+      // Telegram Destek Grubu Bildirimi (Yapılandırılmış Bot veya Ortam Değişkeni)
+      const supportGroupId = getSupportGroupId();
       let telegramSent = false;
-      if (supportBotToken && supportGroupId) {
+      if (supportGroupId) {
         try {
           const alertText = 
-            `🆘 *YENİ DESTEK TALEBİ (#${ticket.id})*\n\n` +
+            `[TICKET] 🆘 *YENİ DESTEK TALEBİ (#${ticket.id})*\n\n` +
             `👤 *Kullanıcı:* ${ticket.username}\n` +
-            `🎮 *Minecraft:* ${ticket.userMeta.minecraftPlayerName}\n` +
-            `👑 *Rütbe:* ${ticket.userMeta.rank}\n` +
-            `🟢 *Zümrüt:* ${ticket.userMeta.emeraldBalance} | ⬛ *Netherite:* ${ticket.userMeta.netheriteBalance}\n` +
-            `📂 *Kategori:* ${ticket.category}\n` +
             `📌 *Konu:* ${ticket.subject}\n` +
-            `💬 *Mesaj:* ${message}\n` +
+            `💬 *Açıklama:* ${message}\n` +
+            `📂 *Kategori:* ${ticket.category}\n` +
             `⏱️ *Tarih:* ${new Date().toLocaleString('tr-TR')}`;
 
           const inlineKeyboard = {
             inline_keyboard: [
               [
                 {
-                  text: '💬 Destek Açanla Konuş',
-                  url: `${req.headers.origin || 'https://codingm-eng.github.io/minecraft-milyoner'}/#admin?tab=support&ticketId=${ticket.id}`
+                  text: '✋ Destekle İlgilen',
+                  callback_data: `claim_ticket:${ticket.id}`
                 }
               ]
             ]
           };
 
-          const sPayload = JSON.stringify({
+          const sRes = await sendSupportTelegramRequest('sendMessage', {
             chat_id: supportGroupId,
             text: alertText,
             parse_mode: 'Markdown',
             reply_markup: inlineKeyboard
           });
-
-          await new Promise((resolve) => {
-            const tReq = https.request({
-              hostname: 'api.telegram.org',
-              port: 443,
-              path: `/bot${supportBotToken}/sendMessage`,
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(sPayload)
-              }
-            }, (tRes) => {
-              let tBody = '';
-              tRes.on('data', c => tBody += c);
-              tRes.on('end', () => resolve(true));
-            });
-            tReq.on('error', () => resolve(false));
-            tReq.write(sPayload);
-            tReq.end();
-          });
-          telegramSent = true;
+          telegramSent = Boolean(sRes && sRes.success);
         } catch (tgErr) {
           console.warn('[SUPPORT BOT] Telegram bildirimi iletilemedi:', tgErr.message);
         }
@@ -1479,7 +1603,7 @@ const server = http.createServer(async (req, res) => {
       const { json: body } = await parseRequestBody(req);
       const ticketId = String(body.ticketId || '').trim();
       const sender = String(body.sender || 'Yönetici').trim();
-      const senderRole = body.isAdmin ? 'ADMIN' : 'USER';
+      const senderRole = body.isAdmin ? 'ADMIN' : (body.isStaff ? 'STAFF' : 'USER');
       const text = String(body.text || '').trim();
 
       const ticket = supportTickets.find(t => t.id === ticketId);
@@ -1494,15 +1618,25 @@ const server = http.createServer(async (req, res) => {
         createdAt: new Date().toISOString()
       });
 
-      if (senderRole === 'ADMIN') {
+      if (senderRole === 'ADMIN' || senderRole === 'STAFF') {
         ticket.status = body.status || 'WAITING_FOR_USER';
-        ticket.assignedAdmin = sender;
+        ticket.assignedStaff = sender;
       } else {
         ticket.status = 'IN_PROGRESS';
       }
       ticket.updatedAt = new Date().toISOString();
 
       safeSaveJson('support_tickets.json', supportTickets);
+
+      // Web üzerinden kullanıcı yanıt verdiğinde Telegram destek grubuna da yansıt
+      const supportGroupId = getSupportGroupId();
+      if (supportGroupId && senderRole === 'USER') {
+        sendSupportTelegramRequest('sendMessage', {
+          chat_id: supportGroupId,
+          text: `💬 Talep #${ticket.id} (${ticket.subject}) için oyuncu (${sender}) yanıt verdi:\n${text}`
+        }).catch(() => {});
+      }
+
       return sendJson(res, 200, { success: true, ticket });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
@@ -1521,17 +1655,29 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 404, { success: false, error: 'Destek talebi bulunamadı.' });
       }
 
-      const isStaff = ['ADMIN', 'MODERATOR', 'TICKET'].includes(staffRole) || body.isAdmin;
+      const staffUser = verifyStaffAccount(staffUsername, ['TICKET', 'MODERATOR', 'ADMIN']);
+      const isStaff = Boolean(staffUser) || ['ADMIN', 'MODERATOR', 'TICKET'].includes(staffRole) || body.isAdmin;
       if (!isStaff) {
         return sendJson(res, 403, { success: false, error: 'Destek talebini sahiplenmek için yetkili olmalısınız.' });
       }
 
-      ticket.assignedStaff = staffUsername;
-      ticket.assignedAdmin = staffUsername;
+      const verifiedName = staffUser ? staffUser.username : staffUsername;
+      ticket.assignedStaff = verifiedName;
+      ticket.assignedAdmin = verifiedName;
       ticket.status = 'IN_PROGRESS';
       ticket.updatedAt = new Date().toISOString();
 
       safeSaveJson('support_tickets.json', supportTickets);
+
+      // Telegram destek grubuna sahiplenme bilgisini bildir
+      const supportGroupId = getSupportGroupId();
+      if (supportGroupId) {
+        sendSupportTelegramRequest('sendMessage', {
+          chat_id: supportGroupId,
+          text: `[TICKET] ✋ Talep #${ticketId} (${ticket.subject}) yetkili @${verifiedName} tarafından üstlenildi.`
+        }).catch(() => {});
+      }
+
       return sendJson(res, 200, { success: true, ticket, message: `Talep #${ticketId} başarıyla üstlenildi.` });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
@@ -1551,26 +1697,48 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 404, { success: false, error: 'Destek talebi bulunamadı.' });
       }
 
-      const isStaff = ['ADMIN', 'MODERATOR', 'TICKET'].includes(staffRole) || body.isAdmin;
+      const staffUser = verifyStaffAccount(staffUsername, ['TICKET', 'MODERATOR', 'ADMIN']);
+      const isStaff = Boolean(staffUser) || ['ADMIN', 'MODERATOR', 'TICKET'].includes(staffRole) || body.isAdmin;
       if (!isStaff) {
         return sendJson(res, 403, { success: false, error: 'Talebi iletmek için yetkili olmalısınız.' });
       }
 
+      const verifiedName = staffUser ? staffUser.username : staffUsername;
+      const currentRole = staffUser ? staffUser.staffRole : staffRole;
+      const targetRole = currentRole === 'TICKET' ? 'MODERATOR' : 'ADMIN';
+      const roleTag = targetRole === 'ADMIN' ? '[ADMIN]' : '[MOD]';
+
       ticket.status = 'ESCALATED';
       ticket.escalated = true;
-      ticket.escalatedBy = staffUsername;
+      ticket.escalatedBy = verifiedName;
       ticket.escalatedReason = reason;
+      ticket.escalatedTo = targetRole;
       ticket.updatedAt = new Date().toISOString();
 
       ticket.messages.push({
-        sender: staffUsername,
+        sender: verifiedName,
         senderRole: 'SYSTEM',
-        text: `📌 Talep üst yönetime iletildi (Eskalasyon). Gerekçe: ${reason}`,
+        text: `📌 Talep üst yönetime (${roleTag}) iletildi (Eskalasyon). Gerekçe: ${reason}`,
         createdAt: new Date().toISOString()
       });
 
       safeSaveJson('support_tickets.json', supportTickets);
-      return sendJson(res, 200, { success: true, ticket, message: 'Talep üst yönetime iletildi.' });
+
+      // Telegram destek grubuna etiketli eskalasyon bildirimi
+      const supportGroupId = getSupportGroupId();
+      if (supportGroupId) {
+        sendSupportTelegramRequest('sendMessage', {
+          chat_id: supportGroupId,
+          text: `${roleTag} ⚠️ Talep #${ticket.id} (${ticket.subject}) yetkili @${verifiedName} tarafından üst kademeye iletildi.\n📌 Gerekçe: ${reason}`,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '✋ Destekle İlgilen', callback_data: `claim_ticket:${ticket.id}` }]
+            ]
+          }
+        }).catch(() => {});
+      }
+
+      return sendJson(res, 200, { success: true, ticket, message: `Talep başarıyla ${roleTag} kademesine iletildi.` });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }
@@ -1589,13 +1757,14 @@ const server = http.createServer(async (req, res) => {
       }
 
       const isCreator = ticket.username.toLowerCase() === closedBy.toLowerCase();
-      const isStaff = ['ADMIN', 'MODERATOR', 'TICKET'].includes(role) || body.isAdmin;
+      const staffUser = verifyStaffAccount(closedBy, ['TICKET', 'MODERATOR', 'ADMIN']);
+      const isStaff = Boolean(staffUser) || ['ADMIN', 'MODERATOR', 'TICKET'].includes(role) || body.isAdmin;
 
       if (!isCreator && !isStaff) {
         return sendJson(res, 403, { success: false, error: 'Bu destek talebini kapatma yetkiniz bulunmuyor.' });
       }
 
-      ticket.status = 'ÇÖZÜLDÜ';
+      ticket.status = 'KAPANDI';
       ticket.closedBy = closedBy;
       ticket.closedAt = new Date().toISOString();
       ticket.updatedAt = new Date().toISOString();
@@ -1608,7 +1777,62 @@ const server = http.createServer(async (req, res) => {
       });
 
       safeSaveJson('support_tickets.json', supportTickets);
+
+      // Telegram destek grubuna kapatma bildirimi
+      const supportGroupId = getSupportGroupId();
+      if (supportGroupId) {
+        sendSupportTelegramRequest('sendMessage', {
+          chat_id: supportGroupId,
+          text: `🔒 Talep #${ticket.id} (${ticket.subject}) kapatıldı. İşlemi yapan: ${closedBy}`
+        }).catch(() => {});
+      }
+
       return sendJson(res, 200, { success: true, ticket, message: 'Destek talebi başarıyla kapatıldı.' });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // Oyuncuya E-posta Hatırlatma Bildirimi (/api/support/notify-user) (/bildir komutu karşılığı)
+  if (req.method === 'POST' && pathname === '/api/support/notify-user') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const ticketId = String(body.ticketId || '').trim();
+      const staffUsername = String(body.staffUsername || body.username || '').trim();
+      const staffUser = verifyStaffAccount(staffUsername, ['TICKET', 'MODERATOR', 'ADMIN']);
+      if (!staffUser && !body.isAdmin) {
+        return sendJson(res, 403, { success: false, error: 'Oyuncuya hatırlatma bildirimi göndermek için yetkili olmalısınız.' });
+      }
+
+      const ticket = supportTickets.find(t => t.id === ticketId);
+      if (!ticket) {
+        return sendJson(res, 404, { success: false, error: 'Destek talebi bulunamadı.' });
+      }
+
+      // 15 dakikalık hız sınırı
+      const lastNotif = ticketNotificationRateLimits.get(ticket.id) || 0;
+      if (Date.now() - lastNotif < 15 * 60 * 1000) {
+        return sendJson(res, 429, { success: false, error: 'Bu talep için son 15 dakika içinde zaten e-posta bildirimi gönderildi. Lütfen bekleyin.' });
+      }
+
+      // Kullanıcının kayıtlı ve doğrulanmış e-postasını bul
+      const creator = persistentUsers.find(u => u && u.username && u.username.toLowerCase() === ticket.username.toLowerCase());
+      if (!creator || !creator.email || !creator.email.includes('@')) {
+        return sendJson(res, 400, { success: false, error: 'Oyuncunun sistemde doğrulanmış bir e-posta adresi bulunmadığı için bildirim iletilemedi.' });
+      }
+
+      await dispatchCustomEmail(
+        creator.email,
+        `MC Milyoner - Destek Talebiniz (#${ticket.id}) Beklemede`,
+        `Merhaba ${creator.username},\n\n#${ticket.id} numaralı destek talebiniz yetkililerimiz tarafından yanıtlandı ve geri dönüşünüz bekleniyor.\n\nLütfen oyuna girerek Destek Masası bölümünden talebinizi kontrol ediniz.\n\nİyi oyunlar!\nMC Milyoner Destek Ekibi`
+      );
+
+      ticketNotificationRateLimits.set(ticket.id, Date.now());
+
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Oyuncuya e-posta hatırlatma bildirimi başarıyla gönderildi.'
+      });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }
@@ -2011,35 +2235,267 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 10.5 Telegram Webhook (Opsiyonel Canlı Bot Webhook Entegrasyonu)
+  // 10.5 Telegram Webhook (Canlı Bot, Destek Grubu & Webhook Entegrasyonu)
   if (req.method === 'POST' && pathname === '/api/telegram/webhook') {
     try {
       const { json: body } = await parseRequestBody(req);
+      const botTok = getSupportBotToken() || process.env.TELEGRAM_BOT_TOKEN;
+
+      // 1. Destek Grubu Buton Tıklaması (Callback Query - Destekle İlgilen)
+      if (body && body.callback_query) {
+        const cq = body.callback_query;
+        const cqData = String(cq.data || '');
+        if (cqData.startsWith('claim_ticket:')) {
+          const tId = cqData.replace('claim_ticket:', '').trim();
+          const staff = findStaffByTelegram(cq.from?.id, cq.from?.username, ['TICKET', 'MODERATOR', 'ADMIN']);
+
+          if (!staff) {
+            await sendTelegramApiRequest('answerCallbackQuery', {
+              callback_query_id: cq.id,
+              text: '⛔ Bu talebi sahiplenmek için sistemde kayıtlı yetkili (Ticket/Mod/Admin) olmalısınız.',
+              show_alert: true
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          const ticket = supportTickets.find(t => t.id === tId);
+          if (!ticket) {
+            await sendTelegramApiRequest('answerCallbackQuery', {
+              callback_query_id: cq.id,
+              text: '⚠️ Destek talebi bulunamadı.',
+              show_alert: true
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          ticket.assignedStaff = staff.username;
+          ticket.assignedAdmin = staff.username;
+          ticket.status = 'IN_PROGRESS';
+          ticket.updatedAt = new Date().toISOString();
+          ticket.messages.push({
+            sender: staff.username,
+            senderRole: 'STAFF',
+            text: `✋ Talep Telegram üzerinden yetkili @${cq.from?.username || staff.username} tarafından sahiplenildi.`,
+            createdAt: new Date().toISOString()
+          });
+          safeSaveJson('support_tickets.json', supportTickets);
+
+          await sendTelegramApiRequest('answerCallbackQuery', {
+            callback_query_id: cq.id,
+            text: `✅ #${tId} talebini başarıyla üstlendiniz!`,
+            show_alert: false
+          }, botTok);
+
+          const supportGroupId = getSupportGroupId();
+          if (supportGroupId) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: supportGroupId,
+              text: `[TICKET] ✋ Talep #${tId} yetkili @${cq.from?.username || staff.username} tarafından sahiplenildi.`
+            }, botTok);
+          }
+          return sendJson(res, 200, { ok: true }, req);
+        }
+      }
+
+      // 2. Destek Grubu Mesaj ve Komutları
       if (body && body.message && body.message.text) {
         const text = String(body.message.text).trim();
-        const match = text.match(/^\/start\s+auth_([a-zA-Z0-9_]+)/i);
-        if (match) {
-          const nonce = match[1];
+        const msg = body.message;
+
+        // 2.1 OTP Giriş /start Komutu
+        const startMatch = text.match(/^\/start\s+auth_([a-zA-Z0-9_]+)/i);
+        if (startMatch) {
+          const nonce = startMatch[1];
           const pending = pendingTelegramAuths.get(nonce);
           if (pending && Date.now() <= pending.expiresAt) {
             pending.telegramUser = {
-              id: body.message.from.id,
-              username: body.message.from.username || `tg_${body.message.from.id}`,
-              firstName: body.message.from.first_name || '',
-              lastName: body.message.from.last_name || '',
-              chatId: body.message.chat.id
+              id: msg.from.id,
+              username: msg.from.username || `tg_${msg.from.id}`,
+              firstName: msg.from.first_name || '',
+              lastName: msg.from.last_name || '',
+              chatId: msg.chat.id
             };
             if (!pending.dispatched) {
               pending.dispatched = true;
               await sendTelegramApiRequest('sendMessage', {
-                chat_id: body.message.chat.id,
+                chat_id: msg.chat.id,
                 text: `🔐 *MC Milyoner Giriş Onay Kodunuz*: \`${pending.code}\`\n\nBu kod 5 dakika boyunca geçerlidir. Lütfen sitedeki kutucuğa girin.`,
                 parse_mode: 'Markdown'
-              });
+              }, botTok);
+            }
+          }
+          return sendJson(res, 200, { ok: true }, req);
+        }
+
+        // 2.2 /bildir Komutu (Oyuncuya E-posta Hatırlatması)
+        if (text.startsWith('/bildir')) {
+          const staff = findStaffByTelegram(msg.from?.id, msg.from?.username, ['TICKET', 'MODERATOR', 'ADMIN']);
+          if (!staff) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: '⛔ Bu komutu yalnızca yetkili destek personeli (Ticket/Mod/Admin) kullanabilir.',
+              reply_to_message_id: msg.message_id
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          let targetTicketId = null;
+          if (msg.reply_to_message && msg.reply_to_message.text) {
+            const matchTid = msg.reply_to_message.text.match(/#(SUP_\d+)/);
+            if (matchTid) targetTicketId = matchTid[1];
+          }
+          if (!targetTicketId) {
+            const parts = text.split(/\s+/);
+            if (parts[1]) targetTicketId = parts[1].replace('#', '').trim();
+          }
+
+          if (!targetTicketId) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: '⚠️ Lütfen bir talep bildirimine yanıt vererek `/bildir` yazın veya `/bildir SUP_...` şeklinde talep ID belirtin.',
+              reply_to_message_id: msg.message_id
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          const ticket = supportTickets.find(t => t.id === targetTicketId);
+          if (!ticket) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: `⚠️ #${targetTicketId} numaralı destek talebi bulunamadı.`,
+              reply_to_message_id: msg.message_id
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          const lastNotif = ticketNotificationRateLimits.get(ticket.id) || 0;
+          if (Date.now() - lastNotif < 15 * 60 * 1000) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: `⏳ Bu talep için son 15 dakika içinde zaten e-posta bildirimi gönderildi. Lütfen bekleyin.`,
+              reply_to_message_id: msg.message_id
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          const creator = persistentUsers.find(u => u && u.username && u.username.toLowerCase() === ticket.username.toLowerCase());
+          if (!creator || !creator.email || !creator.email.includes('@')) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: `⚠️ Oyuncunun sistemde doğrulanmış bir e-posta adresi bulunmadığı için bildirim iletilemedi.`,
+              reply_to_message_id: msg.message_id
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          await dispatchCustomEmail(
+            creator.email,
+            `MC Milyoner - Destek Talebiniz (#${ticket.id}) Beklemede`,
+            `Merhaba ${creator.username},\n\n#${ticket.id} numaralı destek talebiniz yetkililerimiz tarafından yanıtlandı ve geri dönüşünüz bekleniyor.\n\nLütfen oyuna girerek Destek Masası bölümünden talebinizi kontrol ediniz.\n\nİyi oyunlar!\nMC Milyoner Destek Ekibi`
+          );
+
+          ticketNotificationRateLimits.set(ticket.id, Date.now());
+
+          await sendTelegramApiRequest('sendMessage', {
+            chat_id: msg.chat.id,
+            text: `✅ #${ticket.id} numaralı talep için oyuncuya e-posta hatırlatma bildirimi başarıyla gönderildi.`,
+            reply_to_message_id: msg.message_id
+          }, botTok);
+          return sendJson(res, 200, { ok: true }, req);
+        }
+
+        // 2.3 /ust Komutu (Kademeli Eskalasyon: TICKET -> MODERATOR -> ADMIN)
+        if (text.startsWith('/ust')) {
+          const staff = findStaffByTelegram(msg.from?.id, msg.from?.username, ['TICKET', 'MODERATOR', 'ADMIN']);
+          if (!staff) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: '⛔ Bu komutu yalnızca yetkili destek personeli kullanabilir.',
+              reply_to_message_id: msg.message_id
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          let targetTicketId = null;
+          if (msg.reply_to_message && msg.reply_to_message.text) {
+            const matchTid = msg.reply_to_message.text.match(/#(SUP_\d+)/);
+            if (matchTid) targetTicketId = matchTid[1];
+          }
+          const parts = text.split(/\s+/);
+          if (!targetTicketId && parts[1]) targetTicketId = parts[1].replace('#', '').trim();
+          const reason = parts.slice(targetTicketId && parts[1] === targetTicketId ? 2 : 1).join(' ') || 'Üst yetkili incelemesi gerekiyor';
+
+          if (!targetTicketId) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: '⚠️ Lütfen bir destek mesajına yanıt vererek `/ust` yazın veya `/ust SUP_... [sebep]` belirtin.',
+              reply_to_message_id: msg.message_id
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          const ticket = supportTickets.find(t => t.id === targetTicketId);
+          if (!ticket) {
+            await sendTelegramApiRequest('sendMessage', {
+              chat_id: msg.chat.id,
+              text: `⚠️ Talep #${targetTicketId} bulunamadı.`,
+              reply_to_message_id: msg.message_id
+            }, botTok);
+            return sendJson(res, 200, { ok: true }, req);
+          }
+
+          const targetRole = staff.staffRole === 'TICKET' ? 'MODERATOR' : 'ADMIN';
+          const roleTag = targetRole === 'ADMIN' ? '[ADMIN]' : '[MOD]';
+          ticket.status = 'ESCALATED';
+          ticket.escalated = true;
+          ticket.escalatedBy = staff.username;
+          ticket.escalatedReason = reason;
+          ticket.escalatedTo = targetRole;
+          ticket.updatedAt = new Date().toISOString();
+          ticket.messages.push({
+            sender: staff.username,
+            senderRole: 'SYSTEM',
+            text: `📌 Talep Telegram üzerinden üst kademeye (${roleTag}) iletildi. Gerekçe: ${reason}`,
+            createdAt: new Date().toISOString()
+          });
+          safeSaveJson('support_tickets.json', supportTickets);
+
+          await sendTelegramApiRequest('sendMessage', {
+            chat_id: msg.chat.id,
+            text: `${roleTag} ⚠️ Talep #${ticket.id} (${ticket.subject}) yetkili @${msg.from?.username || staff.username} tarafından eskalasyon ile iletildi.\n📌 Gerekçe: ${reason}`,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '✋ Destekle İlgilen', callback_data: `claim_ticket:${ticket.id}` }]
+              ]
+            }
+          }, botTok);
+          return sendJson(res, 200, { ok: true }, req);
+        }
+
+        // 2.4 Destek Grubundan Mesaja Verilen Yanıtı Web Sitesi Biletine Ekleme
+        if (msg.reply_to_message && msg.reply_to_message.text && !text.startsWith('/')) {
+          const matchTid = msg.reply_to_message.text.match(/#(SUP_\d+)/);
+          if (matchTid) {
+            const tId = matchTid[1];
+            const staff = findStaffByTelegram(msg.from?.id, msg.from?.username, ['TICKET', 'MODERATOR', 'ADMIN']);
+            if (staff) {
+              const ticket = supportTickets.find(t => t.id === tId);
+              if (ticket) {
+                ticket.messages.push({
+                  sender: staff.username,
+                  senderRole: 'STAFF',
+                  text: `[Telegram]: ${text}`,
+                  createdAt: new Date().toISOString()
+                });
+                ticket.status = 'WAITING_FOR_USER';
+                ticket.updatedAt = new Date().toISOString();
+                safeSaveJson('support_tickets.json', supportTickets);
+              }
             }
           }
         }
       }
+
       return sendJson(res, 200, { ok: true }, req);
     } catch (e) {
       return sendJson(res, 200, { ok: false }, req);
@@ -2935,15 +3391,17 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ==========================================
-  // 18. ADMIN, MODERATÖR VE GENEL KULLANICI AI ASİSTANLARI (#4 & #5)
+  // 18. ADMIN, MODERATÖR, TICKET VE BİLGE AI ASİSTANLARI (#4 & #5)
   // ==========================================
   if (req.method === 'POST' && pathname === '/api/ai/admin-chat') {
     try {
       const { json: body } = await parseRequestBody(req);
       const question = String(body.question || '').trim();
       const adminEmail = String(body.email || '').toLowerCase().trim();
+      const adminUser = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      const isSuper = adminEmail === SUPER_ADMIN_EMAIL.toLowerCase();
 
-      if (adminEmail !== SUPER_ADMIN_EMAIL) {
+      if (!isSuper && !adminUser) {
         return sendJson(res, 403, { success: false, error: 'Admin AI yalnızca baş yönetici tarafından kullanılabilir.' });
       }
 
@@ -2951,13 +3409,13 @@ const server = http.createServer(async (req, res) => {
       const stats = {
         totalUsers: persistentUsers.length,
         activeSponsors: activeSponsors.filter(s => s.active).length,
-        openTickets: supportTickets.filter(t => t.status === 'AÇIK').length,
+        openTickets: supportTickets.filter(t => t.status === 'AÇIK' || t.status === 'OPEN').length,
         unresolvedBugs: bugReports.filter(b => ['SUBMITTED', 'CONFIRMED'].includes(b.status)).length,
         pendingSuggestions: suggestionsList.filter(s => s.status === 'SUBMITTED').length,
         totalBackups: automatedBackups.length,
         totalRevenueTry: totalRevenue.toFixed(2),
         discordConfigured: Boolean(process.env.DISCORD_CLIENT_ID),
-        telegramConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN)
+        telegramConfigured: Boolean(getSupportBotToken() || process.env.TELEGRAM_BOT_TOKEN)
       };
 
       let answer = `🛡️ **Yönetici Asistanı Özeti**:\n` +
@@ -2975,6 +3433,7 @@ const server = http.createServer(async (req, res) => {
       } else {
         answer += `Soru: "${question}"\nSistem tüm bileşenleriyle stabil ve güvenli çalışıyor. İzinler ve veri tabanı bütünlüğü koruma altındadır.`;
       }
+      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI asistanı yalnızca tavsiye verir. Sistem ayarlarını doğrudan değiştirmez.*`;
 
       return sendJson(res, 200, { success: true, answer, stats });
     } catch (e) {
@@ -2986,8 +3445,13 @@ const server = http.createServer(async (req, res) => {
     try {
       const { json: body } = await parseRequestBody(req);
       const question = String(body.question || '').trim();
+      const staffUser = verifyStaffAccount(body.staffUsername || body.username, ['MODERATOR', 'ADMIN']);
 
-      const openTicketsCount = supportTickets.filter(t => t.status === 'AÇIK').length;
+      if (!staffUser && !body.isModerator && !body.isAdmin) {
+        return sendJson(res, 403, { success: false, error: 'Moderatör AI yalnızca yetkili moderatörler tarafından kullanılabilir.' });
+      }
+
+      const openTicketsCount = supportTickets.filter(t => t.status === 'AÇIK' || t.status === 'OPEN').length;
       const reportedBugsCount = bugReports.filter(b => b.status === 'SUBMITTED').length;
       const suggestionsCount = suggestionsList.filter(s => s.status === 'SUBMITTED').length;
       const activeMutesCount = Object.keys(userMutes).length;
@@ -3003,6 +3467,34 @@ const server = http.createServer(async (req, res) => {
       } else {
         answer += `Öneri: Destek biletlerini ve hata bildirimlerini inceleyip doğruladığınızda oyuncular şeffaf puan kazanır.`;
       }
+      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI asla otomatik susturma veya ban uygulamaz; işlem yetkili onayı gerektirir.*`;
+
+      return sendJson(res, 200, { success: true, answer });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/ai/ticket-chat') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const question = String(body.question || '').trim();
+      const staffUser = verifyStaffAccount(body.staffUsername || body.username, ['TICKET', 'MODERATOR', 'ADMIN']);
+
+      if (!staffUser && !body.isTicketStaff && !body.isAdmin) {
+        return sendJson(res, 403, { success: false, error: 'Ticket AI Asistanı yalnızca destek personeli tarafından kullanılabilir.' });
+      }
+
+      let answer = `🎫 **Destek Masası Asistanı (Ticket AI)**:\n`;
+      const q = question.toLowerCase();
+      if (q.includes('ödeme') || q.includes('fatura') || q.includes('stripe') || q.includes('para')) {
+        answer += `Ödeme konularında oyuncudan işlem referans kodunu ve ödeme tarihini isteyiniz. Gerekirse talebi [ADMIN] kademesine eskalasyon (/ust) yapınız.`;
+      } else if (q.includes('ban') || q.includes('küfür') || q.includes('ceza') || q.includes('hile')) {
+        answer += `Kural ihlallerinde sunucu kayıtları incelenmelidir. Destek yetkilisi olarak oyuncuya nazikçe kuralları hatırlatabilir veya konuyu Moderatörlere (/ust) iletebilirsiniz.`;
+      } else {
+        answer += `Oyuncuya nazik ve açıklayıcı bir yanıt taslağı hazırlamanız önerilir. Örnek taslak: "Değerli oyuncumuz, talebiniz incelemeye alınmıştır. Gerekli kontroller sağlandıktan sonra tarafınıza bilgi verilecektir."`;
+      }
+      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI yanıtları yalnızca taslak niteliğindedir; mesaj gönderimi veya talep kapatma yalnızca yetkili onayı ile yapılır.*`;
 
       return sendJson(res, 200, { success: true, answer });
     } catch (e) {

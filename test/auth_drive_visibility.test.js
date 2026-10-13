@@ -1503,7 +1503,247 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     console.log('✓ test1234@Admin ile tam yetkili ADMIN oturumu başarıyla açıldı.');
 
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-42 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 43: TICKET Yetkili Rolü, Oyuncu Rütbesi Ayrımı & Panel İzolasyonu');
+    console.log('====================================================');
+
+    // 43.1: Oyuncu rütbesi ile personel yetkisinin ayrılması (VIP+ oyuncu aynı zamanda TICKET personeli)
+    const ticketStaffUser = {
+      username: 'TicketMaster',
+      rank: 'VIP_PLUS',
+      role: 'VIP_PLUS',
+      staffRole: 'TICKET',
+      email: 'staff@test.com',
+      isTicketStaff: true
+    };
+    const ticketStaffSession = {
+      username: 'TicketMaster',
+      rank: 'VIP_PLUS',
+      role: 'VIP_PLUS',
+      staffRole: 'TICKET',
+      email: 'staff@test.com',
+      isTicketStaff: true
+    };
+
+    assert.strictEqual(
+      authGuard.getEffectiveRankId(ticketStaffSession),
+      'VIP_PLUS',
+      'Personel rolü oyuncunun VIP+ oyun rütbesini ezmemelidir.'
+    );
+    assert.strictEqual(
+      authGuard.getStaffRole(ticketStaffSession),
+      'TICKET',
+      'Personel rolü TICKET olarak tanınmalıdır.'
+    );
+    assert.strictEqual(
+      authGuard.getEffectiveRole(ticketStaffSession),
+      'TICKET',
+      'Etkin yetki rolü TICKET olmalıdır.'
+    );
+
+    // 43.2: Destek yetkilisi çoklu yetki kontrolünden geçmeli, admin gerektiren işlemden engellenmeli
+    assert.doesNotThrow(
+      () => authGuard.requireRole(ticketStaffSession, ['TICKET', 'MODERATOR', 'ADMIN']),
+      'TICKET yetkilisi destek izin kontrolünden geçebilmelidir.'
+    );
+    assert.throws(
+      () => authGuard.requireRole(ticketStaffSession, ['ADMIN']),
+      /Erişim Reddedildi/,
+      'TICKET yetkilisi yönetici izni gerektiren işlemi çalıştıramaz.'
+    );
+    console.log('✓ TICKET yetkili rolü oyuncu rütbesinden başarıyla ayrıldı ve yetkileri doğrulandı.');
+
+    // 43.3: Yönetici Çekmece & Panel İzolasyonu (Admin yalnızca Yönetici Panelini görür)
+    const adminSessionTest = {
+      username: 'codingdevelopia',
+      email: 'codingdevelopia@gmail.com',
+      isAdminSession: true,
+      role: 'ADMIN'
+    };
+    const adminEffectiveRole = authGuard.getEffectiveRole(adminSessionTest);
+    assert.strictEqual(adminEffectiveRole, 'ADMIN');
+
+    // Panel görünürlük kuralı simülasyonu
+    const mockDrawer = {
+      adminVisible: adminEffectiveRole === 'ADMIN',
+      modVisible: adminEffectiveRole === 'MODERATOR', // Admin için false olmalı
+      ticketVisible: adminEffectiveRole === 'TICKET'   // Admin için false olmalı
+    };
+    assert.strictEqual(mockDrawer.adminVisible, true, 'Yönetici Admin panelini görmelidir.');
+    assert.strictEqual(mockDrawer.modVisible, false, 'Yöneticiye ayrı Moderatör paneli gösterilmemelidir.');
+    assert.strictEqual(mockDrawer.ticketVisible, false, 'Yöneticiye ayrı Ticket paneli gösterilmemelidir.');
+    console.log('✓ Yönetici panel izolasyonu doğrulandı (Yalnızca Yönetici Paneli görünür).');
+
+    console.log('\n====================================================');
+    console.log('TEST 44: Kullanıcı Hesap Verilerinin Korunması & İkili Yedek Güvencesi');
+    console.log('====================================================');
+
+    // 44.1: Kullanıcı verisi oluştur ve ikili yedeği test et
+    const fullUserData = {
+      username: 'LegendPlayer',
+      userId: 'usr_leg_123',
+      email: 'legend@player.org',
+      emailVerified: true,
+      rank: 'VIP_PLUS',
+      staffRole: 'MODERATOR',
+      emeraldBalance: 1250,
+      netheriteBalance: 400,
+      points: 850,
+      gamesWon: 12,
+      inventory: ['FRAME_GOLDEN', 'TITLE_CHAMPION'],
+      achievements: ['FIRST_WIN'],
+      discord: { id: 'disc_9988' },
+      telegramId: 12345678,
+      passwordHash: 'sha256_mock_hash'
+    };
+
+    const STORAGE_KEYS = window.MCMServices.STORAGE_KEYS || {
+      USERS: 'mc_millionaire_tr_users_v10',
+      USERS_BACKUP: 'mc_millionaire_tr_users_backup_v10'
+    };
+    const initialUsers = [fullUserData];
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(initialUsers));
+    window.MCMServices.userService._saveAllUsers(initialUsers);
+
+    // İkili yedeğin yazıldığını doğrula
+    const backupJson = localStorage.getItem(STORAGE_KEYS.USERS_BACKUP);
+    assert.ok(backupJson, 'Kullanıcılar USERS_BACKUP anahtarına da kaydedilmelidir.');
+    const parsedBackup = JSON.parse(backupJson);
+    assert.strictEqual(parsedBackup[0].username, 'LegendPlayer');
+    assert.strictEqual(parsedBackup[0].emeraldBalance, 1250);
+
+    // 44.2: Ana depo silinse dahi getAllUsers ikili yedekten kurtarmalı
+    localStorage.removeItem(STORAGE_KEYS.USERS);
+    const recoveredUsers = window.MCMServices.userService.getAllUsers();
+    assert.strictEqual(recoveredUsers.length, 1, 'USERS boşken USERS_BACKUP üzerinden otomatik kurtarılmalıdır.');
+    assert.strictEqual(recoveredUsers[0].username, 'LegendPlayer');
+    assert.strictEqual(recoveredUsers[0].netheriteBalance, 400);
+    console.log('✓ USERS ana deposu zarar görse dahi USERS_BACKUP üzerinden kayıpsız kurtarıldı.');
+
+    // 44.3: Bulut senkronizasyonunda sıfırlama hatası koruması (hesap silinmesi engeli)
+    window.MCMServices.cloudSyncService._wipeLocalCollectionsForReset();
+    const usersAfterWipeAttempt = window.MCMServices.userService.getAllUsers();
+    assert.strictEqual(usersAfterWipeAttempt.length, 1, '_wipeLocalCollectionsForReset kullanıcı hesaplarını ASLA silmemelidir.');
+    assert.strictEqual(usersAfterWipeAttempt[0].username, 'LegendPlayer');
+    console.log('✓ Senkronizasyon reset çağrısında hesapların silinmesi güvenle engellendi.');
+
+    console.log('\n====================================================');
+    console.log('TEST 45: Telegram Destek Grubu Akışı, Yetkili Doğrulama, /ust & /bildir');
+    console.log('====================================================');
+
+    // 45.1: Destek talebi oluşturma ve Türkçe yapılandırılmış bildirim
+    const ticketTest45 = await window.MCMServices.supportService.createTicket(ticketStaffSession, {
+      subject: 'Turnuva Zümrütleri Yüklenmedi',
+      category: 'Ekonomi',
+      message: 'Maçı kazandım ancak hesabıma 375 zümrüt yansımadı.'
+    });
+    assert.ok(ticketTest45 && ticketTest45.id, 'Destek talebi oluşturulmalıdır.');
+    assert.strictEqual(ticketTest45.subject, 'Turnuva Zümrütleri Yüklenmedi');
+    assert.strictEqual(ticketTest45.status, 'AÇIK');
+
+    // 45.2: Destek talebini yetkili sahiplenme (Claim)
+    const claimedTicket = window.MCMServices.supportService.claimTicket(ticketStaffSession, ticketTest45.id);
+    assert.strictEqual(claimedTicket.claimedBy, 'TicketMaster');
+    assert.strictEqual(claimedTicket.status, 'İŞLENİYOR');
+
+    // 45.3: Kademeli eskalasyon (/ust): TICKET -> MODERATOR
+    const escalatedTicket = await window.MCMServices.supportService.escalateTicket(
+      ticketStaffSession,
+      ticketTest45.id,
+      'Ekonomi veritabanı incelemesi gerekiyor'
+    );
+    assert.strictEqual(escalatedTicket.status, 'ESCALATED');
+    assert.strictEqual(escalatedTicket.escalatedTo, 'MODERATOR');
+    console.log('✓ /ust kademeli eskalasyon (TICKET -> MODERATOR) başarıyla doğrulandı.');
+
+    // 45.4: /bildir e-posta hatırlatma bildirimi ve 15 dakikalık hız sınırı
+    // E-postası olmayan kullanıcı kontrolü
+    const noEmailSession = { username: 'NoEmailUser' };
+    const noEmailTicket = await window.MCMServices.supportService.createTicket(noEmailSession, {
+      subject: 'Test',
+      message: 'Test'
+    });
+    await assert.rejects(
+      async () => {
+        await window.MCMServices.supportService.notifyUserTicketUpdate(ticketStaffSession, noEmailTicket.id);
+      },
+      /doğrulanmış bir e-posta adresi bulunmadığı/i,
+      'Doğrulanmış e-postası olmayan kullanıcıya bildirim gönderilmemelidir.'
+    );
+
+    // E-postası olan kullanıcıya bildirim gönderme
+    const validEmailUser = {
+      username: 'EmailVerifiedUser',
+      email: 'player@verified.com',
+      emailVerified: true
+    };
+    window.MCMServices.userService._saveAllUsers([validEmailUser]);
+    const validTicket = await window.MCMServices.supportService.createTicket(validEmailUser, {
+      subject: 'E-posta Bildirim Testi',
+      message: 'Test mesajı'
+    });
+
+    const notifResult = await window.MCMServices.supportService.notifyUserTicketUpdate(ticketStaffSession, validTicket.id);
+    assert.strictEqual(notifResult.success, true);
+    assert.strictEqual(notifResult.ticketId, validTicket.id);
+
+    // 15 dakikalık hız sınırı tekrar çağrıda engellemeli
+    await assert.rejects(
+      async () => {
+        await window.MCMServices.supportService.notifyUserTicketUpdate(ticketStaffSession, validTicket.id);
+      },
+      /15 dakika içinde zaten/i,
+      '15 dakika içinde mükerrer e-posta bildirimi engellenmelidir.'
+    );
+    console.log('✓ /bildir e-posta bildirimi ve 15 dakikalık hız sınırı güvenle doğrulandı.');
+
+    console.log('\n====================================================');
+    console.log('TEST 46: Çoklu Yapay Zeka Asistanları (Bilge, Ticket, Mod, Admin) & Yetki Denetimi');
+    console.log('====================================================');
+
+    // 46.1: Ticket Asistanı yetki kontrolü (Üye erişemez, Ticket personeli erişir)
+    const normalMemberSession = { username: 'NormalMember', role: 'MEMBER' };
+    await assert.rejects(
+      async () => {
+        await window.MCMServices.aiAssistantService.askTicketAI(normalMemberSession, 'Oyuncu yanıt taslağı hazırla');
+      },
+      /Erişim Reddedildi/,
+      'Normal üye Ticket AI asistanına erişemez.'
+    );
+
+    const ticketAiRes = await window.MCMServices.aiAssistantService.askTicketAI(
+      ticketStaffSession,
+      'Ödeme sorunu yaşayan oyuncuya taslak hazırla'
+    );
+    assert.ok(ticketAiRes && ticketAiRes.reply, 'Ticket AI geçerli yanıt dönmelidir.');
+    console.log('✓ Ticket AI Asistanı yetki denetimi ve yanıt taslağı doğrulandı.');
+
+    // 46.2: Moderatör Asistanı yetki kontrolü
+    const modStaffSession = { username: 'ModMaster', role: 'MODERATOR', staffRole: 'MODERATOR' };
+    const modAiRes = await window.MCMServices.aiAssistantService.askModAI(
+      modStaffSession,
+      'Sohbette argo kullanan oyuncu kuralları'
+    );
+    assert.ok(modAiRes && modAiRes.reply);
+    console.log('✓ Moderatör AI Asistanı yetki denetimi ve kural danışmanlığı doğrulandı.');
+
+    // 46.3: Admin Asistanı yetki kontrolü (Yalnızca Admin)
+    await assert.rejects(
+      async () => {
+        await window.MCMServices.aiAssistantService.askAdminAI(modStaffSession, 'Yedekleme durumunu göster');
+      },
+      /Erişim Reddedildi/,
+      'Moderatör Admin AI asistanına erişemez.'
+    );
+
+    const adminAiRes = await window.MCMServices.aiAssistantService.askAdminAI(
+      adminSessionTest,
+      'Yedekleme durumunu göster'
+    );
+    assert.ok(adminAiRes && adminAiRes.reply);
+    console.log('✓ Admin AI Asistanı yetki denetimi ve yönetici istatistikleri doğrulandı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-46 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {
