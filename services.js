@@ -50,7 +50,8 @@
     MODERATION_LOGS: 'mc_millionaire_tr_mod_logs_v10',
     POINTS_CONFIG: 'mc_millionaire_tr_points_cfg_v10',
     USERS_BACKUP: 'mc_millionaire_tr_users_backup_v10',
-    TELEGRAM_SUPPORT_CONFIG: 'mc_millionaire_tr_tg_support_cfg_v10'
+    TELEGRAM_SUPPORT_CONFIG: 'mc_millionaire_tr_tg_support_cfg_v10',
+    USER_NOTES: 'mc_millionaire_tr_user_notes_v10'
   };
 
   // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan verileri _v10 sürümüne GÜVENLİ MİGRE ET
@@ -8161,7 +8162,194 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
   // ==========================================
   // YAPAY ZEKA ASİSTAN SERVİSİ (aiAssistantService - Admin, Mod, MVIP Özel)
   // ==========================================
+  // ==========================================
+  // KULLANICI NOTLARI SERVİSİ (noteService — /kaydet ve /notlar komutları)
+  // Notlar hiçbir istem (prompt) üretilmeden doğrudan güvenle saklanır.
+  // ==========================================
+  const noteService = {
+    getUserNotes(username) {
+      if (!username) return [];
+      const allNotes = storage.get(STORAGE_KEYS.USER_NOTES, {});
+      const list = allNotes[String(username).toLowerCase()];
+      return Array.isArray(list) ? list : [];
+    },
+
+    saveUserNote(username, text, botType = 'user') {
+      if (!username || !text) return null;
+      const allNotes = storage.get(STORAGE_KEYS.USER_NOTES, {});
+      const uKey = String(username).toLowerCase();
+      if (!Array.isArray(allNotes[uKey])) allNotes[uKey] = [];
+      const note = {
+        id: 'NOTE_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        text: String(text).trim(),
+        botType: String(botType || 'user'),
+        createdAt: new Date().toISOString()
+      };
+      allNotes[uKey].unshift(note);
+      if (allNotes[uKey].length > 50) allNotes[uKey].length = 50;
+      storage.set(STORAGE_KEYS.USER_NOTES, allNotes);
+      return note;
+    },
+
+    deleteUserNote(username, noteId) {
+      if (!username || !noteId) return false;
+      const allNotes = storage.get(STORAGE_KEYS.USER_NOTES, {});
+      const uKey = String(username).toLowerCase();
+      if (!Array.isArray(allNotes[uKey])) return false;
+      allNotes[uKey] = allNotes[uKey].filter(n => n.id !== noteId);
+      storage.set(STORAGE_KEYS.USER_NOTES, allNotes);
+      return true;
+    },
+
+    clearUserNotes(username) {
+      if (!username) return;
+      const allNotes = storage.get(STORAGE_KEYS.USER_NOTES, {});
+      delete allNotes[String(username).toLowerCase()];
+      storage.set(STORAGE_KEYS.USER_NOTES, allNotes);
+    }
+  };
+
+  // ==========================================
+  // YAPAY ZEKA ASİSTAN SERVİSİ (aiAssistantService - Admin, Mod, MVIP Özel)
+  // ==========================================
   const aiAssistantService = {
+    _buildAdminResponse(question) {
+      const q = String(question || '').trim().toLowerCase();
+      const backups = storage.get(STORAGE_KEYS.BACKUPS, []);
+      const users = storage.get(STORAGE_KEYS.USERS, []);
+      const tickets = storage.get(STORAGE_KEYS.SUPPORT_TICKETS, []);
+      const bugs = storage.get(STORAGE_KEYS.BUG_REPORTS, []);
+      const suggestions = storage.get(STORAGE_KEYS.SUGGESTIONS, []);
+      const isMaint = maintenanceService?.isMaintenanceActive ? maintenanceService.isMaintenanceActive() : false;
+      const transactions = storage.get(STORAGE_KEYS.STRIPE_SESSIONS, []);
+      const totalRev = transactions.reduce((acc, t) => acc + (t.amountTry || t.amount || 0), 0);
+
+      const stats = {
+        totalUsers: users.length,
+        openTickets: tickets.filter(t => t.status === 'AÇIK' || t.status === 'OPEN').length,
+        unresolvedBugs: bugs.filter(b => ['SUBMITTED', 'CONFIRMED'].includes(b.status)).length,
+        pendingSuggestions: suggestions.filter(s => s.status === 'SUBMITTED').length,
+        totalBackups: backups.length,
+        totalRevenueTry: totalRev.toFixed(2),
+        maintenanceActive: isMaint
+      };
+
+      if (q.includes('yedek') || q.includes('backup') || q.includes('snapshot') || q.includes('drive')) {
+        const lastBackup = backups[0];
+        const dateStr = lastBackup ? new Date(lastBackup.createdAt).toLocaleString('tr-TR') : 'Henüz yedek alınmadı';
+        const reply = `🛡️ **Yönetici Asistanı — Bulut Yedekleme Durumu**:\n` +
+          `• Toplam Yedek Sayısı: ${backups.length}\n` +
+          `• En Son Alınan Yedek: ${dateStr}\n` +
+          `• Bütünlük Durumu: SHA-256 sağlama toplamı doğrulanmış Google Drive formatında hazır.\n\n` +
+          `Aşağıdaki buton ile istediğiniz an tüm kullanıcı ve platform verilerini içeren yeni bir bulut yedeği oluşturabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          stats,
+          action: {
+            type: 'BACKUP_TRIGGER',
+            label: '💾 Yeni Bulut Yedeği Al',
+            title: 'Sistem Yedeği Oluştur',
+            requiresConfirmation: true,
+            confirmPrompt: 'Tüm sistem veritabanı (kullanıcılar, biletler, işlemler, rütbeler) Google Drive uyumlu JSON paketi olarak yedeklensin mi?'
+          }
+        };
+      }
+
+      if (q.includes('bakım') || q.includes('maintenance')) {
+        const reply = `🛡️ **Yönetici Asistanı — Bakım Modu Durumu**:\n` +
+          `• Bakım Modu: ${isMaint ? '🔴 AKTİF (Yalnızca yöneticiler giriş yapabilir)' : '🟢 KAPALI (Platform tüm oyunculara açık)'}\n\n` +
+          `Bakım modunu açtığınızda normal oyuncular bilgilendirme ekranıyla karşılaşır ve veritabanı güvenle kilitlenir.`;
+        return {
+          reply,
+          answer: reply,
+          stats,
+          action: {
+            type: 'TOGGLE_MAINTENANCE',
+            label: isMaint ? '🟢 Bakım Modunu Kapat' : '🔴 Bakım Modunu Aç',
+            title: 'Bakım Modu Değiştir',
+            requiresConfirmation: true,
+            confirmPrompt: `Bakım modunu ${isMaint ? 'kapatmak' : 'açmak'} istediğinize emin misiniz?`
+          }
+        };
+      }
+
+      if (q.includes('gelir') || q.includes('para') || q.includes('stripe') || q.includes('ciro') || q.includes('kazanç') || q.includes('satış')) {
+        const reply = `🛡️ **Yönetici Asistanı — Finans ve Gelir Özeti**:\n` +
+          `• Toplam Satış Hacmi: ${totalRev.toFixed(2)} ₺\n` +
+          `• Başarılı İşlem Adedi: ${transactions.length}\n` +
+          `• Stripe Webhook & İdempotency: Aktif ve çift çekim korumalı.\n\n` +
+          `Detaylı ödeme dökümünü ve kupon kullanımlarını incelemek için Finans sekmesini açabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          stats,
+          action: {
+            type: 'ADMIN_TAB',
+            target: 'stripe',
+            label: '💳 Finans Tablosunu Aç',
+            title: 'Stripe Finans Yönetimi'
+          }
+        };
+      }
+
+      if (q.includes('kullanıcı') || q.includes('üye') || q.includes('yetki') || q.includes('hesap') || q.includes('oyuncu')) {
+        const reply = `🛡️ **Yönetici Asistanı — Kullanıcı Yönetimi**:\n` +
+          `• Toplam Kayıtlı Oyuncu: ${users.length}\n` +
+          `• İkili Yedek Güvencesi: Hem birincil depoda hem users_backup.json üzerinde senkronize.\n\n` +
+          `Oyuncu rütbelerini değiştirmek veya hesapları yönetmek için Kullanıcılar sekmesine gidebilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          stats,
+          action: {
+            type: 'ADMIN_TAB',
+            target: 'users',
+            label: '👥 Kullanıcı Yönetimini Aç',
+            title: 'Kullanıcı Listesi'
+          }
+        };
+      }
+
+      if (q.includes('rota') || q.includes('yol') || q.includes('git') || q.includes('ekran') || q.includes('panel')) {
+        const reply = `🛡️ **Yönetici Asistanı — Yönetim Paneli Rotaları**:\n` +
+          `• Kullanıcı Yönetimi: Rütbe ve hesap yetkileri.\n` +
+          `• Biletler & Moderasyon: Destek biletleri ve ceza logları.\n` +
+          `• Finans & Stripe: Gelirler, kuponlar ve işlemler.\n` +
+          `• Yedekleme: Google Drive formatında anlık snapshotlar.\n` +
+          `• Platform Ayarları: Site başlığı, duyuru ve bakım modu.`;
+        return {
+          reply,
+          answer: reply,
+          stats,
+          action: {
+            type: 'NAVIGATE',
+            target: 'admin',
+            label: '🛡️ Yönetici Paneline Git',
+            title: 'Yönetici Paneli'
+          }
+        };
+      }
+
+      // Genel / Varsayılan Admin Yanıtı
+      const reply = `🛡️ **Yönetici Asistanı Değerlendirmesi**:\n` +
+        `Soru: "${question}"\n\n` +
+        `• Sistem Durumu: Veritabanı ve tüm modüller stabil çalışıyor.\n` +
+        `• Açık Bilet: ${stats.openTickets} | Bekleyen Hata: ${stats.unresolvedBugs} | Yedekler: ${stats.totalBackups} adet.\n` +
+        `Detaylı ayarlar ve yönetimsel işlemler için Yönetici Paneline geçiş yapabilirsiniz.`;
+      return {
+        reply,
+        answer: reply,
+        stats,
+        action: {
+          type: 'NAVIGATE',
+          target: 'admin',
+          label: '🛡️ Yönetici Paneline Git',
+          title: 'Yönetim Paneli'
+        }
+      };
+    },
+
     async askAdminAI(session, question) {
       authGuard.requireRole(session, ['ADMIN']);
       const q = String(question || '').trim();
@@ -8169,24 +8357,133 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         const res = await fetch(getApiUrl('/api/ai/admin-chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: q, email: session.email })
+          body: JSON.stringify({ question: q, email: session.email, adminUsername: session.username })
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.success && data.answer) {
+          if (data && data.success && (data.answer || data.reply)) {
             return {
-              reply: data.answer,
-              answer: data.answer,
+              reply: data.answer || data.reply,
+              answer: data.answer || data.reply,
               stats: data.stats || null,
+              action: data.action || null,
               requiresConfirmation: Boolean(data.requiresConfirmation)
             };
           }
         }
       } catch (e) {}
+
+      return this._buildAdminResponse(q);
+    },
+
+    _buildModResponse(question) {
+      const q = String(question || '').trim().toLowerCase();
+      const tickets = storage.get(STORAGE_KEYS.SUPPORT_TICKETS, []);
+      const bugs = storage.get(STORAGE_KEYS.BUG_REPORTS, []);
+      const suggestions = storage.get(STORAGE_KEYS.SUGGESTIONS, []);
+      const mutes = storage.get(STORAGE_KEYS.USER_MUTES, {});
+
+      if (q.includes('kural') || q.includes('küfür') || q.includes('argo') || q.includes('hakaret') || q.includes('sohbet')) {
+        const reply = `⚔️ **Moderatör Asistanı — Sohbet Kuralları ve Ceza Matrisi**:\n` +
+          `• Otomatik Filtre: Küfür ve argo içeren mesajlar otomatik olarak [sansürlendi] ile maskelenir ve günlük kaydına işlenir.\n` +
+          `• 1. İhlal: 15 Dakika Susturma (Uyarı cezası).\n` +
+          `• 2. İhlal: 60 Dakika Susturma (Tekrar eden ihlal).\n` +
+          `• Ağır Hakaret / Ailevi Küfür: 1440 Dakika (24 Saat) Susturma.\n\n` +
+          `Sohbet kayıtlarını incelemek ve ihlalleri denetlemek için aşağıdaki butonu kullanabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'ADMIN_TAB',
+            target: 'chatlogs',
+            label: '💬 Sohbet Kayıtlarını İncele',
+            title: 'Sohbet Denetimi'
+          }
+        };
+      }
+
+      if (q.includes('sustur') || q.includes('mute') || q.includes('ceza') || q.includes('ban')) {
+        const activeMuteCount = Object.keys(mutes).length;
+        const reply = `⚔️ **Moderatör Asistanı — Ceza Yönetimi**:\n` +
+          `• Aktif Susturulan Oyuncu: ${activeMuteCount} kişi.\n` +
+          `• Kural Hatırlatması: Moderatör yetkilileri oyuncuları maksimum 1440 dakika (24 saat) susturabilir. Kalıcı ban yetkisi Baş Yöneticiye aittir.\n\n` +
+          `Aktif cezaları görüntülemek veya ceza kaldırmak için Ceza Listesini açabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'ADMIN_TAB',
+            target: 'mutes',
+            label: '⚔️ Susturulan Oyuncuları Aç',
+            title: 'Ceza Yönetimi'
+          }
+        };
+      }
+
+      if (q.includes('hata') || q.includes('bug')) {
+        const pendingBugs = bugs.filter(b => b.status === 'SUBMITTED').length;
+        const reply = `⚔️ **Moderatör Asistanı — Hata Bildirim İncelemesi**:\n` +
+          `• İncelenmeyi Bekleyen Hata Bildirimi: ${pendingBugs} adet.\n` +
+          `• Puanlama Kuralları: Onaylanan hata bildirimleri oyuncuya +50 Puan, çözülenler +100 Puan kazandırır.\n\n` +
+          `Hataları inceleyip durumlarını güncellemek için Hata sekmesine gidebilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'ADMIN_TAB',
+            target: 'bugs',
+            label: '🐛 Bekleyen Hataları İncele',
+            title: 'Hata İncelemesi'
+          }
+        };
+      }
+
+      if (q.includes('öneri') || q.includes('suggestion') || q.includes('fikir')) {
+        const pendingSuggs = suggestions.filter(s => s.status === 'SUBMITTED').length;
+        const reply = `⚔️ **Moderatör Asistanı — Öneri İnceleme Kılavuzu**:\n` +
+          `• Değerlendirilmeyi Bekleyen Öneri: ${pendingSuggs} adet.\n` +
+          `• Puanlama: Onaylanan öneriler oyuncuya +30 Puan, hayata geçirilenler +75 Puan kazandırır. Ayrıca Zümrüt ödülü tanımlayabilirsiniz.\n\n` +
+          `Öneri listesini açmak için aşağıdaki butona tıklayın.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'ADMIN_TAB',
+            target: 'suggestions',
+            label: '💡 Önerileri İncele',
+            title: 'Öneri İncelemesi'
+          }
+        };
+      }
+
+      if (q.includes('rota') || q.includes('panel') || q.includes('git')) {
+        const reply = `⚔️ **Moderatör Asistanı — Panel Yönlendirmesi**:\n` +
+          `Moderatör yetkilerinizle biletleri yanıtlayabilir, sohbet loglarını kontrol edebilir, oyuncuları susturabilir ve hata/öneri bildirimlerini onaylayabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'admin',
+            label: '⚔️ Moderatör Paneline Git',
+            title: 'Moderatör Paneli'
+          }
+        };
+      }
+
+      // Genel Mod Yanıtı
+      const reply = `⚔️ **Moderatör Asistanı Tavsiyesi**:\n` +
+        `Soru: "${question}"\n\n` +
+        `Moderatör ekibi olarak oyuncular arası saygıyı korumak, küfürlü sohbeti denetlemek ve bilet/hata süreçlerini adil yönetmek esastır. İlgili modüle hızlıca erişmek için paneli açabilirsiniz.`;
       return {
-        reply: '🛡️ Yönetici Asistanı: Sistem veritabanı aktif, tüm modüller ve yedeklemeler çalışıyor.',
-        answer: '🛡️ Yönetici Asistanı: Sistem veritabanı aktif, tüm modüller ve yedeklemeler çalışıyor.',
-        requiresConfirmation: false
+        reply,
+        answer: reply,
+        action: {
+          type: 'NAVIGATE',
+          target: 'admin',
+          label: '⚔️ Moderatör Paneline Git',
+          title: 'Moderatör Paneli'
+        }
       };
     },
 
@@ -8197,26 +8494,110 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         const res = await fetch(getApiUrl('/api/ai/mod-chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: q, username: session.username })
+          body: JSON.stringify({ question: q, staffUsername: session.username, username: session.username })
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.success && data.answer) {
+          if (data && data.success && (data.answer || data.reply)) {
             return {
-              reply: data.answer,
-              answer: data.answer
+              reply: data.answer || data.reply,
+              answer: data.answer || data.reply,
+              action: data.action || null
             };
           }
         }
       } catch (e) {}
-      return {
-        reply: '⚔️ Moderatör Asistanı: Bilet ve sohbet kuyruğu kontrol edildi, aktif ihlal tespit edilmedi.',
-        answer: '⚔️ Moderatör Asistanı: Bilet ve sohbet kuyruğu kontrol edildi, aktif ihlal tespit edilmedi.'
-      };
+
+      return this._buildModResponse(q);
     },
 
     async askModeratorAI(session, question) {
       return this.askModAI(session, question);
+    },
+
+    _buildTicketResponse(question) {
+      const q = String(question || '').trim().toLowerCase();
+
+      if (q.includes('ödeme') || q.includes('fatura') || q.includes('stripe') || q.includes('para') || q.includes('kart')) {
+        const reply = `🎫 **Destek Asistanı (Ticket AI) — Ödeme Sorunu Çözüm Rehberi**:\n` +
+          `1. Oyuncudan Stripe işlem referans kodunu (TX_...) veya ödeme e-posta adresini isteyiniz.\n` +
+          `2. Eğer bakiye veya rütbe hesaba otomatik yansımadıysa, işlem kaydını Stripe sekmesinden sorgulayınız.\n` +
+          `3. İade veya ters ibraz taleplerinde bileti \`/ust\` komutu ile Baş Yönetici kademesine eskalasyon yapınız.\n\n` +
+          `Açık biletleri incelemek için Destek Masasını açabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'support',
+            label: '🎫 Bilet Kuyruğunu Aç',
+            title: 'Destek Masası'
+          }
+        };
+      }
+
+      if (q.includes('şifre') || q.includes('parola') || q.includes('hesap') || q.includes('giriş') || q.includes('otp')) {
+        const reply = `🎫 **Destek Asistanı (Ticket AI) — Hesap ve Güvenlik Protokolü**:\n` +
+          `• Asla oyuncudan şifresini istemeyiniz.\n` +
+          `• E-posta OTP kodu ulaşmayan oyunculara spam/gereksiz klasörünü kontrol etmelerini veya Discord ile giriş yapmalarını öneriniz.\n` +
+          `• Şifresini unutan oyuncuları giriş ekranındaki "Parolamı Unuttum (OTP)" akışına yönlendiriniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'support',
+            label: '🎧 Destek Masasına Git',
+            title: 'Destek Ekranı'
+          }
+        };
+      }
+
+      if (q.includes('hata') || q.includes('bug')) {
+        const reply = `🎫 **Destek Asistanı (Ticket AI) — Hata Bildirimi Yönlendirmesi**:\n` +
+          `Oyuncu bir oyun hatası bildiriyorsa, hatanın Hata Bildirimi (#bug-report) modülünden iletilmesini sağlayınız. Bu sayede hata onaylandığında oyuncunun hesabına otomatik puan ve Zümrüt tanımlanır.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'bug-report',
+            label: '🐛 Hata Bildirimlerine Git',
+            title: 'Hata Bildirimleri'
+          }
+        };
+      }
+
+      if (q.includes('eskalasyon') || q.includes('/ust') || q.includes('yönetici') || q.includes('moderatör')) {
+        const reply = `🎫 **Destek Asistanı (Ticket AI) — Kademeli Eskalasyon (/ust)**:\n` +
+          `• TICKET yetkisi aşan durumlarda bilet yanıtına \`/ust\` yazarak bileti Moderatör kademesine yükseltebilirsiniz.\n` +
+          `• Mali iadeler veya kritik veritabanı sorunlarında \`/ust\` ile bileti Baş Yönetici (ADMIN) havuzuna aktarabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'support',
+            label: '🎫 Destek Masasını Aç',
+            title: 'Destek Biletleri'
+          }
+        };
+      }
+
+      // Genel Ticket Yanıtı
+      const reply = `🎫 **Destek Masası Asistanı Yanıt Taslağı**:\n` +
+        `Değerli oyuncumuz, konuyu titizlikle incelemeye aldık. Sorununuz en kısa sürede çözüme kavuşturulacaktır.\n\n` +
+        `Tavsiye: Oyuncuya nazik ve açıklayıcı yanıt veriniz. Destek biletini sahiplenip yanıtlamak için Destek Masasını açabilirsiniz.`;
+      return {
+        reply,
+        answer: reply,
+        action: {
+          type: 'NAVIGATE',
+          target: 'support',
+          label: '🎫 Destek Masasını Aç',
+          title: 'Destek Biletleri'
+        }
+      };
     },
 
     async askTicketAI(session, question) {
@@ -8226,21 +8607,238 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         const res = await fetch(getApiUrl('/api/ai/ticket-chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: q, username: session.username })
+          body: JSON.stringify({ question: q, staffUsername: session.username, username: session.username })
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.success && data.answer) {
+          if (data && data.success && (data.answer || data.reply)) {
             return {
-              reply: data.answer,
-              answer: data.answer
+              reply: data.answer || data.reply,
+              answer: data.answer || data.reply,
+              action: data.action || null
             };
           }
         }
       } catch (e) {}
+
+      return this._buildTicketResponse(q);
+    },
+
+    _buildUserResponse(question) {
+      const q = String(question || '').trim().toLowerCase();
+
+      // 1. ROTA VE NAVİGASYON TALEPLERİ ("rotayı bul", "rota", "nereye gideyim", "harita", "yol")
+      if (q.includes('rota') || q.includes('harita') || q.includes('yol') || q.includes('nereye') || q.includes('navigasyon') || q.includes('nasıl giderim')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Minecraft Milyoner Arenası ve Rotaları**:\n` +
+          `Hrmmm! İşte zümrüt ve şan dolu zirve rotası:\n\n` +
+          `• 🗺️ **1. Yarışma Rotası (#quiz)**: 15 sorudan oluşan büyük parkur! Baraj noktaları: 5. Soru (5.000 ₺) ve 10. Soru (100.000 ₺). Zirvede 1.000.000 ₺ ve Netherite ödülü!\n` +
+          `• 🛒 **2. Mağaza Rotası (#shop)**: Zümrüt, Netherite, VIP rütbeleri ve profil unvanları.\n` +
+          `• 🏆 **3. Sıralama Rotası (#leaderboard)**: Sunucunun en bilgili milyonerleri.\n` +
+          `• 👥 **4. Parti Rotası (#parties)**: 2 turlu jürili canlı arkadaş düelloları.\n` +
+          `• 🎧 **5. Destek & Bildirim Rotası (#support, #bug-report)**: 24/7 bilet ve hata bildirimi.\n\n` +
+          `Yarışma arenasına doğrudan adım atmak için aşağıdaki butona basabilirsiniz!`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'quiz',
+            label: '🗺️ Yarışma Rotasına Başla',
+            title: 'Yarışma Arenasına Git'
+          }
+        };
+      }
+
+      // 2. ŞİFRE VE GÜVENLİK
+      if (q.includes('şifre') || q.includes('sifre') || q.includes('parola') || q.includes('password')) {
+        const reply = `🔒 **Güvenlik Bildirimi**:\n` +
+          `Bilge Asistan asla şifrenizi sormaz ve sohbet üzerinden şifre değiştirmez. Hesabınızı güvende tutmak için aşağıdaki butona tıklayarak Profil ekranına gidebilir ve "Parolayı Değiştir" seçeneğini kullanabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'profile',
+            label: '🔑 Profile & Şifre Değiştir Ekranına Git',
+            title: 'Profil Ekranı'
+          }
+        };
+      }
+
+      // 3. MAĞAZA, RÜTBE VE MARKET
+      if (q.includes('mağaza') || q.includes('market') || q.includes('rütbe') || q.includes('vip') || q.includes('satın al') || q.includes('kozmetik')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Mağaza ve Rütbe Rehberi**:\n` +
+          `Hrmmm! Sunucumuzda 7 kademeli rütbe sistemi mevcuttur:\n` +
+          `• **VIP & VIP+**: Özel yeşil/açık mavi sohbet rengi, ilk alımda Netherite ve günlük giriş hediyeleri.\n` +
+          `• **MVIP & MVIP+**: Bilge Asistan yapay zeka ayrıcalığı, animasyonlu profil çerçevesi ve Ekstra Can indirimleri.\n` +
+          `• Kozmetikler: Profil rozetleri, unvanlar ve Minecraft temaları.\n\n` +
+          `Mağazayı incelemek veya rütbenizi yükseltmek için butona tıklayabilirsiniz.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'shop',
+            label: '🛒 Mağazayı Aç',
+            title: 'Mağaza Ekranı'
+          }
+        };
+      }
+
+      // 4. LİDERLİK TABLOSU
+      if (q.includes('liderlik') || q.includes('sıralama') || q.includes('skor') || q.includes('en iyi') || q.includes('birinci')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Liderlik Tablosu**:\n` +
+          `Hrmmm! Arenada en çok kazanan milyonerler ve en yüksek puanlı yarışmacılar Liderlik Tablosunda listelenir. Şeffaf ve adil sıralama sistemimizle nerede olduğunu görebilirsin!`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'leaderboard',
+            label: '🏆 Liderlik Tablosuna Git',
+            title: 'Liderlik Tablosu'
+          }
+        };
+      }
+
+      // 5. PARTİ VE TURNUVA
+      if (q.includes('parti') || q.includes('turnuva') || q.includes('arkadaş') || q.includes('jüri') || q.includes('düello')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Parti & Turnuva Arenası**:\n` +
+          `Hrmmm! Parti modunda arkadaşlarınla 2 turlu jürili düellolara katılabilirsin:\n` +
+          `• 1. Turda davet edilen oyuncu jüri iken lider yarışır.\n` +
+          `• 2. Turda roller değişir ve lider jüri olur!\n` +
+          `• Hızlı sesli reaksiyonlar (Horn, Bell, Anvil, Pop) ile heyecan zirveye çıkar!`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'parties',
+            label: '👥 Parti Arenasına Git',
+            title: 'Partiler Ekranı'
+          }
+        };
+      }
+
+      // 6. DESTEK VE BİLET
+      if (q.includes('destek') || q.includes('bilet') || q.includes('ticket') || q.includes('yardım')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Destek Sistemi**:\n` +
+          `Hrmmm! Bir problemle mi karşılaştın? 24/7 Destek Masamız üzerinden yetkili personele özel bilet açabilir ve talebinin durumunu canlı takip edebilirsin.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'support',
+            label: '🎧 Destek Masasını Aç',
+            title: 'Destek Ekranı'
+          }
+        };
+      }
+
+      // 7. HATA BİLDİRİMİ
+      if (q.includes('hata') || q.includes('bug')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Hata Bildirimi**:\n` +
+          `Hrmmm! Gördüğün bir hatayı ekran görüntüsüyle bildirirsen, yetkililer onayladığında hesabına ödül puanları ve Zümrüt tanımlanır!`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'bug-report',
+            label: '🐛 Hata Bildirimi Ekranına Git',
+            title: 'Hata Bildirimi'
+          }
+        };
+      }
+
+      // 8. ÖNERİ SİSTEMİ
+      if (q.includes('öneri') || q.includes('suggestion') || q.includes('fikir')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Öneri Sistemi**:\n` +
+          `Hrmmm! Harika bir fikrin mi var? Önerini topluluğun oylamasına sunabilir, diğer yarışmacıların desteğini alarak sunucuya katkı sağlayabilirsin.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'suggestions',
+            label: '💡 Öneri Ekranına Git',
+            title: 'Öneri Ekranı'
+          }
+        };
+      }
+
+      // 9. NETHERITE, ZÜMRÜT VE EKONOMİ
+      if (q.includes('netherite') || q.includes('zümrüt') || q.includes('can') || q.includes('totem') || q.includes('ekonomi') || q.includes('para')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Ekonomi & Maden Tüyoları**:\n` +
+          `Hrmmm! Zümrüt köylülerin en sevdiği madendir ama Netherite yarışmanın gerçek hazinesidir!\n` +
+          `• **Netherite**: Arenada ilk VIP alımında +50, VIP+ ve üzerinde +250 Netherite ilk alım hediyesi verilir.\n` +
+          `• **Zümrüt**: Doğru cevaplanan sorularla birikir ve Ölümsüzlük Totemi (Ekstra Can) almak için kullanılır.\n` +
+          `• **Ekstra Can**: Yanlış cevap verdiğinde yarışmadan elenmeden devam etmeni sağlar!`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'shop',
+            label: '💎 Mağazayı Ziyaret Et',
+            title: 'Mağaza Ekranı'
+          }
+        };
+      }
+
+      // 10. JOKERLER VE YARIŞMA TAKTİKLERİ
+      if (q.includes('joker') || q.includes('ipucu') || q.includes('50:50') || q.includes('seyirci') || q.includes('taktik') || q.includes('strateji')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Joker Taktikleri**:\n` +
+          `Hrmmm! 3 güçlü jokerin var:\n` +
+          `• **50:50 (Creeper Patlaması)**: Yanlış 2 şıkkı patlatır. 10. sorudan sonra hayat kurtarır.\n` +
+          `• **Sunucuya Sor (Telegram Canlı Anket)**: Topluluğun oylarını canlı getirir.\n` +
+          `• **Bilge Köylü İpucu**: 1 Zümrüt takasıyla sana en olası doğru şıkkı fısıldarım!\n` +
+          `• Barajlar: 5. Soru (5.000 ₺) ve 10. Soru (100.000 ₺) garanti barajlarıdır.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'quiz',
+            label: '⚔️ Arenaya Çık',
+            title: 'Yarışma Ekranı'
+          }
+        };
+      }
+
+      // 11. MINECRAFT CANAVARLARI VE MOBLAR
+      if (q.includes('ejderha') || q.includes('dragon') || q.includes('wither') || q.includes('warden') || q.includes('creeper') || q.includes('enderman')) {
+        const reply = `🧙‍♂️ **Bilge Asistan — Canavar Savaş Taktikleri**:\n` +
+          `Hrmmm! Tehlikeli yaratıklara karşı Bilge Köylü tavsiyeleri:\n` +
+          `• **Ender Ejderhası**: Yatak patlatma taktiği en yüksek hasarı verir. Önce kulelerdeki kristalleri okla patlat!\n` +
+          `• **Warden**: Asla doğrudan dövüşme; kartopu atarak yönünü şaşırt ve gizlice eğilerek ilerle.\n` +
+          `• **Wither**: Dar kapalı alanda savaşarak kafalarının yayılmasını önle.`;
+        return {
+          reply,
+          answer: reply,
+          action: {
+            type: 'NAVIGATE',
+            target: 'quiz',
+            label: '🎮 Arenaya Git',
+            title: 'Yarışma Arenası'
+          }
+        };
+      }
+
+      // Genel Minecraft Yanıtı
+      const reply = `🧙‍♂️ **Bilge Asistan Yanıtı**:\n` +
+        `Hrmmm! "${question}" hakkında harika bir soru sordun!\n\n` +
+        `Minecraft Milyoner arenasında başarıya ulaşmak için sakin olmalı, soruları dikkatle okumalı ve jokerlerini baraj soruları (5 ve 10) sonrasına saklamalısın. Arenaya çıkıp şansını denemek ister misin?`;
       return {
-        reply: '🎧 Destek Asistanı: Oyuncunun sorunu ve bilet geçmişi incelendi. Çözüm taslağı ve yönlendirme için yardıma hazırım.',
-        answer: '🎧 Destek Asistanı: Oyuncunun sorunu ve bilet geçmişi incelendi. Çözüm taslağı ve yönlendirme için yardıma hazırım.'
+        reply,
+        answer: reply,
+        action: {
+          type: 'NAVIGATE',
+          target: 'quiz',
+          label: '⚔️ Arenaya Çık',
+          title: 'Yarışma Arenası'
+        }
       };
     },
 
@@ -8251,35 +8849,27 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         throw new Error('Bu özellik yalnızca MVP / MVIP ve üzeri rütbelere özeldir. Lütfen mağazadan rütbenizi yükseltin.');
       }
 
-      const q = String(question || '').trim().toLowerCase();
-      // Güvenlik Kuralı: Şifre/Parola sorularında asla şifre talep etmez, doğrudan Parola Değiştir ekranına yönlendirir.
-      if (q.includes('şifre') || q.includes('sifre') || q.includes('parola') || q.includes('password')) {
-        return {
-          reply: '🔒 Güvenlik Bildirimi: Bilge Asistan asla parolanızı sormaz ve sohbet üzerinden parola değiştirmez. Parolanızı değiştirmek için sağ üstteki Profil menüsüne gidin ve "Parolayı Değiştir" seçeneğini kullanın.',
-          answer: '🔒 Güvenlik Bildirimi: Bilge Asistan asla parolanızı sormaz ve sohbet üzerinden parola değiştirmez. Parolanızı değiştirmek için sağ üstteki Profil menüsüne gidin ve "Parolayı Değiştir" seçeneğini kullanın.'
-        };
-      }
+      const q = String(question || '').trim();
 
       try {
         const res = await fetch(getApiUrl('/api/ai/user-chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: question, rankOrder: userRank.order, username: session.username })
+          body: JSON.stringify({ question: q, rankOrder: userRank.order, username: session.username })
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.success && data.answer) {
+          if (data && data.success && (data.answer || data.reply)) {
             return {
-              reply: data.answer,
-              answer: data.answer
+              reply: data.answer || data.reply,
+              answer: data.answer || data.reply,
+              action: data.action || null
             };
           }
         }
       } catch (e) {}
-      return {
-        reply: '🧙‍♂️ Bilge Asistan: Minecraft Milyoner yarışmasında 15 soruya ulaşmak için can hakkınızı stratejik kullanın! Netherite madenleri yarışma ekonomisindeki en değerli ödülleri sunar.',
-        answer: '🧙‍♂️ Bilge Asistan: Minecraft Milyoner yarışmasında 15 soruya ulaşmak için can hakkınızı stratejik kullanın! Netherite madenleri yarışma ekonomisindeki en değerli ödülleri sunar.'
-      };
+
+      return this._buildUserResponse(q);
     },
 
     async askUserAssistant(session, question) {
@@ -8484,7 +9074,8 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     pointsService,
     aiAssistantService,
     chatModerationService,
-    backendStatusService
+    backendStatusService,
+    noteService
   });
 
   // Bulut senkronizasyonunu güvenle başlat

@@ -2153,8 +2153,66 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.strictEqual(window.MCMPlatform.isValidHttpUrl('javascript:alert(1)'), false);
     console.log('✓ Navigasyon & Yönlendirme: #bug-report, #bugs, #suggestions, #support alias çözümlemeleri ve arayüz fonksiyonları doğrulandı.');
 
+    // ====================================================
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-48 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 49: Çoklu Yapay Zeka Asistanları, Eyleme Geçirilebilir Butonlar & /kaydet Komutu');
+    console.log('====================================================');
+
+    // 49.1: /kaydet komutu ile not kaydetme (Prompt üretilmeden doğrudan hafızaya işlenir)
+    const noteUser = 'SteveTester';
+    assert.ok(window.MCMServices.noteService, 'noteService tanımlı olmalıdır.');
+    const savedNote = window.MCMServices.noteService.saveUserNote(noteUser, 'Elmas kazma ile obsidyen kırılır', 'user');
+    assert.ok(savedNote && savedNote.id, 'Not kaydedilmeli ve kimlik almalıdır.');
+    assert.strictEqual(savedNote.text, 'Elmas kazma ile obsidyen kırılır');
+
+    const retrievedNotes = window.MCMServices.noteService.getUserNotes(noteUser);
+    assert.strictEqual(retrievedNotes.length, 1);
+    assert.strictEqual(retrievedNotes[0].text, 'Elmas kazma ile obsidyen kırılır');
+
+    // Not silme testi
+    const delResult = window.MCMServices.noteService.deleteUserNote(noteUser, savedNote.id);
+    assert.strictEqual(delResult, true);
+    assert.strictEqual(window.MCMServices.noteService.getUserNotes(noteUser).length, 0);
+    console.log('✓ /kaydet komut mantığı: Not defteri istem üretmeden güvenle kaydetti, listeledi ve sildi.');
+
+    // 49.2: Bilge Bot rota ve eylem butonu testi
+    await window.MCMServices.authService.registerAccount({ username: 'MVIPPlayer', password: 'MvipPass123!' });
+    window.MCMServices.userService.syncUserFields('MVIPPlayer', { rank: 'MVIP' });
+    const mvipSession = { username: 'MVIPPlayer', role: 'MEMBER' };
+    const routeRes = await window.MCMServices.aiAssistantService.askUserAI(mvipSession, 'rotayı bul nereye gideyim');
+    assert.ok(routeRes && routeRes.reply);
+    assert.ok(routeRes.reply.includes('Yarışma Rotası'), 'Rota açıklaması içermelidir.');
+    assert.ok(routeRes.action && routeRes.action.type === 'NAVIGATE', 'Eyleme dönüştürülebilir navigasyon butonu dönmelidir.');
+    assert.strictEqual(routeRes.action.target, 'quiz');
+    console.log('✓ Bilge Bot: "rotayı bul" sorusuna özel rota rehberi ve eylem butonu ([NAVIGATE quiz]) döndü.');
+
+    // 49.3: Bilge Bot şifre güvenliği ve profil butonu
+    const passRes = await window.MCMServices.aiAssistantService.askUserAI(mvipSession, 'şifremi nasıl değiştiririm');
+    assert.ok(passRes.action && passRes.action.target === 'profile');
+    console.log('✓ Bilge Bot: Şifre sorusunda parola talep etmedi, doğrudan profil eylem butonu sundu.');
+
+    // 49.4: Admin Bot ve onay gerektiren eylemler (consequential actions)
+    const adminYedekRes = await window.MCMServices.aiAssistantService.askAdminAI(adminSessionTest, 'yedekleme durumunu göster');
+    assert.ok(adminYedekRes.action && adminYedekRes.action.type === 'BACKUP_TRIGGER');
+    assert.strictEqual(adminYedekRes.action.requiresConfirmation, true, 'Yedek alma işlemi onay gerektirmelidir.');
+
+    const adminMaintRes = await window.MCMServices.aiAssistantService.askAdminAI(adminSessionTest, 'bakım modunu aç');
+    assert.ok(adminMaintRes.action && adminMaintRes.action.type === 'TOGGLE_MAINTENANCE');
+    assert.strictEqual(adminMaintRes.action.requiresConfirmation, true, 'Bakım modu işlemi onay gerektirmelidir.');
+    console.log('✓ Admin Bot: Yedekleme ve bakım modu işlemlerinde açık onay gereksinimi (requiresConfirmation=true) doğrulandı.');
+
+    // 49.5: Mod Bot ve Ticket Bot eylem butonları
+    const modKuralRes = await window.MCMServices.aiAssistantService.askModAI(modStaffSession, 'küfür eden oyuncuya ne yapılır');
+    assert.ok(modKuralRes.action && modKuralRes.action.type === 'ADMIN_TAB');
+    assert.strictEqual(modKuralRes.action.target, 'chatlogs');
+
+    const ticketOdemeRes = await window.MCMServices.aiAssistantService.askTicketAI(ticketStaffSession, 'ödeme sorunu yaşayan oyuncu');
+    assert.ok(ticketOdemeRes.action && ticketOdemeRes.action.type === 'NAVIGATE');
+    assert.strictEqual(ticketOdemeRes.action.target, 'support');
+    console.log('✓ Mod & Ticket Bot: Rollerine özgü eylem butonları ve detaylı çözümler doğrulandı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-49 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

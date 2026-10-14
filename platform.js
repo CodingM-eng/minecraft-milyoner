@@ -6398,6 +6398,40 @@
       }
     });
 
+    function renderNotesInChat(msgsBox, username) {
+      if (!msgsBox) return;
+      const notes = svc().noteService ? svc().noteService.getUserNotes(username) : [];
+      if (notes.length === 0) {
+        msgsBox.innerHTML += `
+          <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #38bdf8;font-size:0.88rem;color:#f8fafc;">
+            📝 <strong>Not Defteri:</strong> Henüz kayıtlı bir notunuz bulunmuyor.<br>
+            <span style="font-size:0.78rem;color:#94a3b8;">Not eklemek için <code>/kaydet &lt;notunuz&gt;</code> komutunu yazabilirsiniz.</span>
+          </div>
+        `;
+      } else {
+        const notesHtml = notes.map((n, idx) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(15,23,42,0.7);border:1px solid #334155;border-radius:6px;padding:6px 10px;margin-top:6px;">
+            <div style="flex:1;overflow:hidden;text-overflow:ellipsis;padding-right:8px;">
+              <span style="color:#facc15;font-weight:bold;margin-right:6px;">#${idx + 1}</span>
+              <span style="color:#e2e8f0;">${escapeHtml(n.text)}</span>
+              <div style="font-size:0.7rem;color:#64748b;">${new Date(n.createdAt).toLocaleDateString('tr-TR')} ${new Date(n.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</div>
+            </div>
+            <button type="button" class="mc-btn mc-btn-secondary mc-btn-xs btn-ai-delete-note" data-note-id="${escapeHtml(n.id)}" style="color:#f87171;border-color:#ef4444;" title="Notu Sil">🗑️</button>
+          </div>
+        `).join('');
+        msgsBox.innerHTML += `
+          <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #38bdf8;font-size:0.88rem;color:#f8fafc;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span>📝 <strong>Kayıtlı Notlarınız (${notes.length}):</strong></span>
+              <button type="button" class="mc-btn mc-btn-secondary mc-btn-xs btn-ai-clear-all-notes" style="color:#fca5a5;border-color:#ef4444;font-size:0.7rem;">Tümünü Temizle</button>
+            </div>
+            <div style="max-height:180px;overflow-y:auto;margin-top:6px;">${notesHtml}</div>
+          </div>
+        `;
+      }
+      msgsBox.scrollTop = msgsBox.scrollHeight;
+    }
+
     // Yapay Zeka Soru Sorma Formu (#ai-chat-form)
     document.getElementById('ai-chat-form')?.addEventListener('submit', async e => {
       e.preventDefault();
@@ -6410,6 +6444,51 @@
       if (!q) return;
 
       const botConfig = AI_BOT_CONFIGS[activeAiBotType] || AI_BOT_CONFIGS.user;
+
+      // ==========================================
+      // /kaydet, /not, /notlar KOMUTLARI (İstem Üretmeden Doğrudan Hafızaya Kaydeder)
+      // ==========================================
+      const isKaydetCommand = q.startsWith('/kaydet') || q.startsWith('/not ') || q === '/notlar';
+      if (isKaydetCommand) {
+        if (inp) inp.value = '';
+        if (msgsBox) {
+          msgsBox.innerHTML += `
+            <div style="background:rgba(30,41,59,0.9);padding:8px 12px;border-radius:8px;border-left:3px solid #38bdf8;font-size:0.88rem;color:#f8fafc;align-self:flex-end;max-width:85%;">
+              <strong>Siz:</strong> ${escapeHtml(q)}
+            </div>
+          `;
+        }
+
+        const noteText = q.replace(/^\/(kaydet|not)\s*/i, '').trim();
+        if (q === '/notlar' || (q === '/kaydet' && !noteText)) {
+          renderNotesInChat(msgsBox, session.username);
+          return;
+        }
+
+        // Notu hiçbir istem/prompt üretmeden doğrudan hafızaya kaydet
+        if (svc().noteService) {
+          svc().noteService.saveUserNote(session.username, noteText, activeAiBotType);
+        }
+
+        if (msgsBox) {
+          msgsBox.innerHTML += `
+            <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #10b981;font-size:0.88rem;color:#f8fafc;">
+              📝 <strong>Notunuz Başarıyla Kaydedildi!</strong>
+              <div style="margin:6px 0;padding:8px 10px;background:rgba(15,23,42,0.8);border:1px solid #334155;border-radius:6px;color:#86efac;font-style:italic;">
+                "${escapeHtml(noteText)}"
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:0.75rem;color:#94a3b8;">
+                <span>🕒 ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} (Prompt üretilmedi, not defterine işlendi)</span>
+                <button type="button" class="mc-btn mc-btn-secondary mc-btn-xs btn-ai-action-exec" data-action-type="VIEW_NOTES">
+                  📋 Tüm Notları Gör
+                </button>
+              </div>
+            </div>
+          `;
+          msgsBox.scrollTop = msgsBox.scrollHeight;
+        }
+        return;
+      }
 
       if (msgsBox) {
         msgsBox.innerHTML += `
@@ -6439,11 +6518,26 @@
 
         document.getElementById('ai-user-loading')?.remove();
         if (msgsBox) {
+          const actionHtml = res.action ? `
+            <div class="ai-action-box" style="margin-top:10px;padding:8px 10px;background:rgba(15,23,42,0.7);border:1px solid #38bdf8;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="font-size:0.82rem;color:#bae6fd;">📌 <strong>Önerilen Eylem:</strong> ${escapeHtml(res.action.title || res.action.label)}</span>
+              <button type="button" class="mc-btn mc-btn-primary mc-btn-sm btn-ai-action-exec"
+                data-action-type="${escapeHtml(res.action.type)}"
+                data-action-target="${escapeHtml(res.action.target || '')}"
+                data-action-confirm="${res.action.requiresConfirmation ? 'true' : 'false'}"
+                data-action-prompt="${escapeHtml(res.action.confirmPrompt || '')}">
+                ${escapeHtml(res.action.label || 'İşlemi Gerçekleştir')}
+              </button>
+            </div>
+          ` : '';
+
           msgsBox.innerHTML += `
             <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#f8fafc;">
-              ${botConfig.icon} <strong>${botConfig.name}:</strong> ${escapeHtml(res.reply || res.answer || '')}
+              ${botConfig.icon} <strong>${botConfig.name}:</strong>
+              <div style="margin-top:6px;line-height:1.5;">${escapeHtml(res.reply || res.answer || '').replace(/\n/g, '<br>')}</div>
+              ${actionHtml}
               <div style="font-size:0.72rem;color:#94a3b8;margin-top:6px;border-top:1px solid #334155;padding-top:4px;">
-                ⚠️ AI yalnızca taslak önerisi sunar; sistemsel değişiklikler yetkili onayı gerektirir.
+                ⚠️ AI yalnızca öneri ve danışmanlık sunar; sistemsel değişiklikler yetkili onayı ile yürütülür.
               </div>
             </div>
           `;
@@ -6460,6 +6554,98 @@
         }
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = '🚀 Sor'; }
+      }
+    });
+
+    // Yapay Zeka Eylem Butonu Tıklamaları & Not Silme
+    document.getElementById('ai-chat-messages')?.addEventListener('click', async e => {
+      const actionBtn = e.target.closest('.btn-ai-action-exec');
+      if (actionBtn) {
+        const type = actionBtn.getAttribute('data-action-type');
+        const target = actionBtn.getAttribute('data-action-target');
+        const confirmFlag = actionBtn.getAttribute('data-action-confirm') === 'true';
+        const confirmPrompt = actionBtn.getAttribute('data-action-prompt') || 'Bu işlemi gerçekleştirmek istediğinize emin misiniz?';
+
+        if (confirmFlag) {
+          const confirmed = window.confirm(confirmPrompt);
+          if (!confirmed) return;
+        }
+
+        actionBtn.disabled = true;
+        const origText = actionBtn.textContent;
+        actionBtn.textContent = '⏳';
+
+        try {
+          if (type === 'NAVIGATE') {
+            if (target) {
+              window.location.hash = '#' + target;
+              if (typeof window.navigateToSection === 'function') {
+                window.navigateToSection(target);
+              }
+              document.getElementById('modal-ai-assistant')?.classList.add('hidden');
+              showToast(`'${target}' ekranına yönlendirildiniz.`, 'success');
+            }
+          } else if (type === 'ADMIN_TAB') {
+            window.location.hash = '#admin';
+            if (typeof window.navigateToSection === 'function') {
+              window.navigateToSection('admin');
+            }
+            if (typeof window.setAdminTab === 'function') {
+              window.setAdminTab(target);
+            }
+            document.getElementById('modal-ai-assistant')?.classList.add('hidden');
+            showToast(`Yönetici paneli '${target}' sekmesine geçildi.`, 'success');
+          } else if (type === 'BACKUP_TRIGGER') {
+            const session = getSession();
+            if (session && svc().backupService) {
+              const res = svc().backupService.createFullBackup(session, 'AI Yönetici Asistanı Manuel Tetikleme');
+              showToast(`Bulut yedeği (#${res.id}) başarıyla oluşturuldu!`, 'success');
+            }
+          } else if (type === 'TOGGLE_MAINTENANCE') {
+            const session = getSession();
+            if (session && svc().maintenanceService) {
+              const isCurrentlyActive = svc().maintenanceService.isMaintenanceActive();
+              svc().maintenanceService.setMaintenanceMode(session, !isCurrentlyActive);
+              showToast(`Bakım modu ${!isCurrentlyActive ? 'AKTİF EDİLDİ' : 'KAPATILDI'}.`, 'success');
+            }
+          } else if (type === 'VIEW_NOTES') {
+            const session = getSession();
+            if (session) {
+              renderNotesInChat(document.getElementById('ai-chat-messages'), session.username);
+            }
+          }
+        } catch (err) {
+          showToast('Eylem yürütülemedi: ' + err.message, 'error');
+        } finally {
+          actionBtn.disabled = false;
+          actionBtn.textContent = origText;
+        }
+        return;
+      }
+
+      const delBtn = e.target.closest('.btn-ai-delete-note');
+      if (delBtn) {
+        const noteId = delBtn.getAttribute('data-note-id');
+        const session = getSession();
+        if (session && noteId && svc().noteService) {
+          svc().noteService.deleteUserNote(session.username, noteId);
+          delBtn.closest('div[style*="display:flex"]')?.remove();
+          showToast('Not silindi.', 'info');
+        }
+        return;
+      }
+
+      const clearAllBtn = e.target.closest('.btn-ai-clear-all-notes');
+      if (clearAllBtn) {
+        const session = getSession();
+        if (session && svc().noteService) {
+          if (window.confirm('Tüm kayıtlı notlarınızı silmek istediğinize emin misiniz?')) {
+            svc().noteService.clearUserNotes(session.username);
+            clearAllBtn.closest('div[style*="border-left"]')?.remove();
+            showToast('Tüm notlar temizlendi.', 'info');
+          }
+        }
+        return;
       }
     });
 

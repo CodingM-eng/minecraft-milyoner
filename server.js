@@ -3516,6 +3516,50 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (req.method === 'POST' && pathname === '/api/suggestions/vote') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const suggId = body.suggestionId || body.id;
+      const username = String(body.username || '').trim();
+      const direction = String(body.direction || 'UP').toUpperCase();
+      if (!username) {
+        return sendJson(res, 400, { success: false, error: 'Oturum kullanıcı adı zorunludur.' });
+      }
+      const sugg = suggestionsList.find(s => s.id === suggId);
+      if (!sugg) {
+        return sendJson(res, 404, { success: false, error: 'Öneri kaydı bulunamadı.' });
+      }
+
+      if (!Array.isArray(sugg.upvotes)) sugg.upvotes = [];
+      if (!Array.isArray(sugg.downvotes)) sugg.downvotes = [];
+
+      const uLower = username.toLowerCase();
+      const alreadyUp = sugg.upvotes.some(x => String(x).toLowerCase() === uLower);
+      const alreadyDown = sugg.downvotes.some(x => String(x).toLowerCase() === uLower);
+
+      sugg.upvotes = sugg.upvotes.filter(x => String(x).toLowerCase() !== uLower);
+      sugg.downvotes = sugg.downvotes.filter(x => String(x).toLowerCase() !== uLower);
+
+      if (direction === 'UP' && !alreadyUp) {
+        sugg.upvotes.push(username);
+      } else if (direction === 'DOWN' && !alreadyDown) {
+        sugg.downvotes.push(username);
+      }
+
+      sugg.voters = Array.from(new Set([...sugg.upvotes, ...sugg.downvotes]));
+      safeSaveJson('suggestions.json', suggestionsList);
+      return sendJson(res, 200, {
+        success: true,
+        suggestion: sugg,
+        upCount: sugg.upvotes.length,
+        downCount: sugg.downvotes.length,
+        netScore: sugg.upvotes.length - sugg.downvotes.length
+      });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
   // ==========================================
   // 18. ADMIN, MODERATÖR, TICKET VE BİLGE AI ASİSTANLARI (#4 & #5)
   // ==========================================
@@ -3544,24 +3588,86 @@ const server = http.createServer(async (req, res) => {
         telegramConfigured: Boolean(getSupportBotToken() || process.env.TELEGRAM_BOT_TOKEN)
       };
 
-      let answer = `🛡️ **Yönetici Asistanı Özeti**:\n` +
-        `• Kayıtlı Kullanıcılar: ${stats.totalUsers}\n` +
-        `• Açık Destek Biletleri: ${stats.openTickets}\n` +
-        `• Bekleyen Hata Bildirimleri: ${stats.unresolvedBugs}\n` +
-        `• Toplam Stripe Geliri: ${stats.totalRevenueTry} ₺\n` +
-        `• Aktif Sponsorlar: ${stats.activeSponsors}\n` +
-        `• Bulut Yedekleri: ${stats.totalBackups} adet onaylı snapshot.\n\n`;
+      const q = question.toLowerCase();
+      let answer = '';
+      let action = null;
 
-      if (question.toLowerCase().includes('yedek')) {
-        answer += `Son yedek ${automatedBackups[0]?.createdAt || 'bilinmiyor'} tarihinde alındı. Tüm veriler Google Drive formatında hazırdır.`;
-      } else if (question.toLowerCase().includes('gelir') || question.toLowerCase().includes('para')) {
-        answer += `Platform üzerinde toplam ${stripeTransactions.length} başarılı ödeme işlemi gerçekleşti. Toplam ciro: ${stats.totalRevenueTry} ₺.`;
+      if (q.includes('yedek') || q.includes('backup') || q.includes('snapshot') || q.includes('drive')) {
+        const lastBackup = automatedBackups[0];
+        const dateStr = lastBackup ? new Date(lastBackup.createdAt).toLocaleString('tr-TR') : 'Henüz alınmadı';
+        answer = `🛡️ **Yönetici Asistanı — Bulut Yedekleme Raporu**:\n` +
+          `• Toplam Onaylı Yedek: ${stats.totalBackups} adet snapshot.\n` +
+          `• En Son Alınan Yedek: ${dateStr}\n` +
+          `• Format: Google Drive uyumlu JSON ve SHA-256 sağlama korumalı.\n\n` +
+          `Aşağıdaki buton ile istediğiniz an tüm kullanıcı ve platform verilerini içeren yeni bir bulut yedeği oluşturabilirsiniz.`;
+        action = {
+          type: 'BACKUP_TRIGGER',
+          label: '💾 Yeni Bulut Yedeği Al',
+          title: 'Bulut Yedeği Al',
+          requiresConfirmation: true,
+          confirmPrompt: 'Tüm sistem veritabanı Google Drive uyumlu JSON paketi olarak yedeklensin mi?'
+        };
+      } else if (q.includes('bakım') || q.includes('maintenance')) {
+        answer = `🛡️ **Yönetici Asistanı — Bakım Modu Yönetimi**:\n` +
+          `Bakım modu platformu normal oyunculara kapatır ve veritabanını kilitler. Yalnızca baş yönetici oturum açabilir.\n\n` +
+          `Bakım modunu açmak veya kapatmak için onaylı eylem butonunu kullanabilirsiniz.`;
+        action = {
+          type: 'TOGGLE_MAINTENANCE',
+          label: '🛠️ Bakım Modunu Değiştir',
+          title: 'Bakım Modu',
+          requiresConfirmation: true,
+          confirmPrompt: 'Bakım modu durumunu değiştirmek istediğinize emin misiniz?'
+        };
+      } else if (q.includes('gelir') || q.includes('para') || q.includes('stripe') || q.includes('ciro')) {
+        answer = `🛡️ **Yönetici Asistanı — Stripe Finans Dökümü**:\n` +
+          `• Toplam Ciro: ${stats.totalRevenueTry} ₺\n` +
+          `• Başarılı İşlem: ${stripeTransactions.length} adet.\n` +
+          `• İdempotency Koruması: Aktif.\n\n` +
+          `Ayrıntılı ödeme ve fatura dökümü için Finans Tablosunu açabilirsiniz.`;
+        action = {
+          type: 'ADMIN_TAB',
+          target: 'stripe',
+          label: '💳 Finans Tablosunu Aç',
+          title: 'Stripe Finans'
+        };
+      } else if (q.includes('kullanıcı') || q.includes('üye') || q.includes('hesap')) {
+        answer = `🛡️ **Yönetici Asistanı — Kullanıcı İstatistikleri**:\n` +
+          `• Toplam Kayıtlı Kullanıcı: ${stats.totalUsers}\n` +
+          `• users.json ve users_backup.json ikili koruma altında.\n\n` +
+          `Kullanıcı hesaplarını ve yetkilerini yönetmek için Kullanıcılar sekmesine gidebilirsiniz.`;
+        action = {
+          type: 'ADMIN_TAB',
+          target: 'users',
+          label: '👥 Kullanıcı Yönetimini Aç',
+          title: 'Kullanıcı Listesi'
+        };
+      } else if (q.includes('rota') || q.includes('git') || q.includes('panel')) {
+        answer = `🛡️ **Yönetici Asistanı — Yönetim Paneli Yönlendirmesi**:\n` +
+          `Yönetici panelinden rütbe, ekonomi, sponsorluk, bakım modu ve API yapılandırmalarını yönetebilirsiniz.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'admin',
+          label: '🛡️ Yönetici Paneline Git',
+          title: 'Yönetici Paneli'
+        };
       } else {
-        answer += `Soru: "${question}"\nSistem tüm bileşenleriyle stabil ve güvenli çalışıyor. İzinler ve veri tabanı bütünlüğü koruma altındadır.`;
+        answer = `🛡️ **Yönetici Asistanı Özeti**:\n` +
+          `Soru: "${question}"\n\n` +
+          `• Kayıtlı Kullanıcılar: ${stats.totalUsers}\n` +
+          `• Açık Destek Biletleri: ${stats.openTickets} | Bekleyen Hatalar: ${stats.unresolvedBugs}\n` +
+          `• Toplam Stripe Geliri: ${stats.totalRevenueTry} ₺ | Bulut Yedekleri: ${stats.totalBackups} adet.\n\n` +
+          `Sistem tüm bileşenleriyle stabil ve güvenli çalışıyor.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'admin',
+          label: '🛡️ Yönetici Paneline Git',
+          title: 'Yönetici Paneli'
+        };
       }
-      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI asistanı yalnızca tavsiye verir. Sistem ayarlarını doğrudan değiştirmez.*`;
 
-      return sendJson(res, 200, { success: true, answer, stats });
+      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI asistanı yalnızca öneri verir; sistemsel değişiklikler onayınızla yürütülür.*`;
+
+      return sendJson(res, 200, { success: true, answer, reply: answer, stats, action });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }
@@ -3582,20 +3688,70 @@ const server = http.createServer(async (req, res) => {
       const suggestionsCount = suggestionsList.filter(s => s.status === 'SUBMITTED').length;
       const activeMutesCount = Object.keys(userMutes).length;
 
-      let answer = `⚔️ **Moderatör Asistanı Yanıtı**:\n` +
-        `• İncelenmeyi bekleyen bilet: ${openTicketsCount}\n` +
-        `• Yeni hata bildirimi: ${reportedBugsCount}\n` +
-        `• Bekleyen öneri: ${suggestionsCount}\n` +
-        `• Aktif susturulan oyuncu: ${activeMutesCount}\n\n`;
+      const q = question.toLowerCase();
+      let answer = '';
+      let action = null;
 
-      if (question.toLowerCase().includes('kural') || question.toLowerCase().includes('küfür')) {
-        answer += `Sohbette hakaret veya argo kullanan oyuncular otomatik olarak sansürlenir ve günlük kaydı tutulur. Moderatör olarak oyuncuyu maksimum ${staffPermissions.moderator?.maxMuteMinutes || 1440} dakika susturabilirsiniz.`;
+      if (q.includes('kural') || q.includes('küfür') || q.includes('argo') || q.includes('sohbet')) {
+        answer = `⚔️ **Moderatör Asistanı — Sohbet Kuralları Kılavuzu**:\n` +
+          `• Otomatik sansürleme sistemi devrededir ve loglar tutulur.\n` +
+          `• 1. İhlal: 15 Dakika Susturma\n` +
+          `• 2. İhlal: 60 Dakika Susturma\n` +
+          `• Ağır Hakaret: 1440 Dakika (24 Saat) Susturma.\n\n` +
+          `Sohbet kayıtlarını incelemek için aşağıdaki butonu kullanabilirsiniz.`;
+        action = {
+          type: 'ADMIN_TAB',
+          target: 'chatlogs',
+          label: '💬 Sohbet Kayıtlarını İncele',
+          title: 'Sohbet Denetimi'
+        };
+      } else if (q.includes('sustur') || q.includes('mute') || q.includes('ceza')) {
+        answer = `⚔️ **Moderatör Asistanı — Ceza Yönetimi**:\n` +
+          `• Aktif Susturulan Oyuncu: ${activeMutesCount} kişi.\n` +
+          `Moderatör olarak maksimum ${staffPermissions.moderator?.maxMuteMinutes || 1440} dakika susturma uygulayabilirsiniz.`;
+        action = {
+          type: 'ADMIN_TAB',
+          target: 'mutes',
+          label: '⚔️ Susturulan Oyuncuları Aç',
+          title: 'Ceza Yönetimi'
+        };
+      } else if (q.includes('hata') || q.includes('bug')) {
+        answer = `⚔️ **Moderatör Asistanı — Hata İncelemesi**:\n` +
+          `• Bekleyen Hata Bildirimi: ${reportedBugsCount} adet.\n` +
+          `Hataları onayladığınızda oyuncular şeffaf puan kazanır (Onay: +50, Çözüldü: +100).`;
+        action = {
+          type: 'ADMIN_TAB',
+          target: 'bugs',
+          label: '🐛 Hataları İncele',
+          title: 'Hata İncelemesi'
+        };
+      } else if (q.includes('öneri') || q.includes('suggestion')) {
+        answer = `⚔️ **Moderatör Asistanı — Öneri İncelemesi**:\n` +
+          `• Bekleyen Öneri: ${suggestionsCount} adet.\n` +
+          `Önerileri onaylayarak topluluğa katkı sağlayabilirsiniz.`;
+        action = {
+          type: 'ADMIN_TAB',
+          target: 'suggestions',
+          label: '💡 Önerileri İncele',
+          title: 'Öneri İncelemesi'
+        };
       } else {
-        answer += `Öneri: Destek biletlerini ve hata bildirimlerini inceleyip doğruladığınızda oyuncular şeffaf puan kazanır.`;
+        answer = `⚔️ **Moderatör Asistanı Yanıtı**:\n` +
+          `Soru: "${question}"\n\n` +
+          `• Bekleyen Bilet: ${openTicketsCount} | Hata: ${reportedBugsCount} | Öneri: ${suggestionsCount}\n` +
+          `• Aktif Cezalar: ${activeMutesCount} oyuncu.\n\n` +
+          `Tüm moderasyon araçlarına erişmek için paneli açabilirsiniz.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'admin',
+          label: '⚔️ Moderatör Paneline Git',
+          title: 'Moderatör Paneli'
+        };
       }
-      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI asla otomatik susturma veya ban uygulamaz; işlem yetkili onayı gerektirir.*`;
 
-      return sendJson(res, 200, { success: true, answer });
+      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI asla otomatik ceza uygulamaz; işlem yetkili onayı gerektirir.*`;
+
+      return sendJson(res, 200, { success: true, answer, reply: answer, action });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }
@@ -3611,18 +3767,46 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 403, { success: false, error: 'Ticket AI Asistanı yalnızca destek personeli tarafından kullanılabilir.' });
       }
 
-      let answer = `🎫 **Destek Masası Asistanı (Ticket AI)**:\n`;
       const q = question.toLowerCase();
+      let answer = `🎫 **Destek Masası Asistanı (Ticket AI)**:\n`;
+      let action = null;
+
       if (q.includes('ödeme') || q.includes('fatura') || q.includes('stripe') || q.includes('para')) {
         answer += `Ödeme konularında oyuncudan işlem referans kodunu ve ödeme tarihini isteyiniz. Gerekirse talebi [ADMIN] kademesine eskalasyon (/ust) yapınız.`;
-      } else if (q.includes('ban') || q.includes('küfür') || q.includes('ceza') || q.includes('hile')) {
-        answer += `Kural ihlallerinde sunucu kayıtları incelenmelidir. Destek yetkilisi olarak oyuncuya nazikçe kuralları hatırlatabilir veya konuyu Moderatörlere (/ust) iletebilirsiniz.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'support',
+          label: '🎫 Bilet Kuyruğunu Aç',
+          title: 'Destek Masası'
+        };
+      } else if (q.includes('şifre') || q.includes('hesap') || q.includes('otp')) {
+        answer += `Asla oyuncudan şifre talep etmeyiniz. E-posta OTP veya Discord bağlantısı ile parola yenileme adımlarını iletiniz.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'support',
+          label: '🎧 Destek Masasına Git',
+          title: 'Destek Masası'
+        };
+      } else if (q.includes('hata') || q.includes('bug')) {
+        answer += `Oyuncunun hatasını Hata Bildirimi (#bug-report) modülüne yönlendiriniz; onaylandığında puan kazanır.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'bug-report',
+          label: '🐛 Hata Bildirimlerine Git',
+          title: 'Hata Bildirimleri'
+        };
       } else {
-        answer += `Oyuncuya nazik ve açıklayıcı bir yanıt taslağı hazırlamanız önerilir. Örnek taslak: "Değerli oyuncumuz, talebiniz incelemeye alınmıştır. Gerekli kontroller sağlandıktan sonra tarafınıza bilgi verilecektir."`;
+        answer += `Soru: "${question}"\n\nOyuncuya nazik ve açıklayıcı bir yanıt taslağı hazırlamanız önerilir. Biletleri incelemek için Destek Masasını açabilirsiniz.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'support',
+          label: '🎫 Destek Masasını Aç',
+          title: 'Destek Masası'
+        };
       }
-      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI yanıtları yalnızca taslak niteliğindedir; mesaj gönderimi veya talep kapatma yalnızca yetkili onayı ile yapılır.*`;
+      answer += `\n\n⚠️ *Güvenlik Uyarısı: AI yanıtları yalnızca taslaktır; bilet işlemleri yetkili onayı ile yürütülür.*`;
 
-      return sendJson(res, 200, { success: true, answer });
+      return sendJson(res, 200, { success: true, answer, reply: answer, action });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }
@@ -3641,20 +3825,82 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      let answer = `🧙‍♂️ **Bilge Asistan (MVIP Özel)**:\n`;
       const q = question.toLowerCase();
+      let answer = `🧙‍♂️ **Bilge Asistan (MVIP Özel)**:\n`;
+      let action = null;
 
-      if (q.includes('netherite') || q.includes('zümrüt')) {
+      if (q.includes('rota') || q.includes('harita') || q.includes('yol') || q.includes('nereye') || q.includes('nasıl')) {
+        answer += `Hrmmm! İşte zümrüt ve şan dolu zirve rotası:\n` +
+          `• 🗺️ 1. Yarışma Rotası (#quiz): 15 soru! Barajlar: 5. Soru (5.000 ₺) ve 10. Soru (100.000 ₺). Zirvede 1.000.000 ₺ + Netherite!\n` +
+          `• 🛒 2. Mağaza (#shop): Zümrüt, Netherite, VIP rütbeleri.\n` +
+          `• 🏆 3. Sıralama (#leaderboard): En iyi milyonerler.\n` +
+          `• 👥 4. Parti (#parties): 2 turlu jürili arkadaş düelloları.\n\n` +
+          `Yarışma arenasına doğrudan adım atmak için butona basabilirsiniz!`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'quiz',
+          label: '🗺️ Yarışma Rotasına Başla',
+          title: 'Yarışma Arenasına Git'
+        };
+      } else if (q.includes('şifre') || q.includes('parola')) {
+        answer += `🔒 Güvenlik: Asla şifrenizi kimseyle paylaşmayın. Şifrenizi değiştirmek için Profil ekranındaki Parolayı Değiştir butonunu kullanın.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'profile',
+          label: '🔑 Profile & Şifre Değiştir Ekranına Git',
+          title: 'Profil Ekranı'
+        };
+      } else if (q.includes('mağaza') || q.includes('market') || q.includes('rütbe') || q.includes('vip')) {
+        answer += `Mağazadan VIP, VIP+, MVIP veya MVIP+ rütbeleri alarak günlük Netherite, özel rozetler ve joker indirimleri kazanabilirsiniz!`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'shop',
+          label: '🛒 Mağazayı Aç',
+          title: 'Mağaza Ekranı'
+        };
+      } else if (q.includes('liderlik') || q.includes('sıralama')) {
+        answer += `Liderlik tablosu en yüksek puan ve kazanca sahip oyuncuları sıralar.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'leaderboard',
+          label: '🏆 Liderlik Tablosuna Git',
+          title: 'Liderlik Tablosu'
+        };
+      } else if (q.includes('parti') || q.includes('turnuva') || q.includes('jüri')) {
+        answer += `Parti turnuvalarında dönüşümlü jüri sistemi uygulanır! 1. turda davet edilen oyuncu jüri iken, 2. turda lider jüri koltuğuna geçer.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'parties',
+          label: '👥 Parti Arenasına Git',
+          title: 'Partiler Ekranı'
+        };
+      } else if (q.includes('netherite') || q.includes('zümrüt')) {
         answer += `Netherite en değerli madendir! İlk VIP alımında +50, VIP+ ve üzeri alımlarda +250 Netherite ilk alım bonusu verilir. Zümrütlerle Ölümsüzlük Totemi (Ekstra Can) ve özel mağaza kozmetikleri edinebilirsiniz.`;
-      } else if (q.includes('parti') || q.includes('jüri') || q.includes('turnuva')) {
-        answer += `Parti turnuvalarında dönüşümlü jüri sistemi uygulanır! 1. turda davet edilen oyuncu jüri iken, 2. turda lider jüri koltuğuna geçer. Bu sayede tüm oyuncular adil yarışır.`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'shop',
+          label: '💎 Mağazayı Ziyaret Et',
+          title: 'Mağaza Ekranı'
+        };
       } else if (q.includes('ender') || q.includes('dragon') || q.includes('ejderha')) {
         answer += `Ender Ejderhası'nı yenmek için yatak patlatma taktiğini kullanabilir veya kristallerini patlatarak can yenilemesini durdurabilirsiniz!`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'quiz',
+          label: '🎮 Arenaya Git',
+          title: 'Yarışma Ekranı'
+        };
       } else {
-        answer += `Harika bir Minecraft sorusu! Yarışmada 15. soruya ulaşmak için can hakkınızı ve seyirci/jüri jokerlerinizi kritik anlara saklamanızı öneririm! Bol şans! 🌟`;
+        answer += `"${question}" hakkında harika bir soru! Yarışmada 15. soruya ulaşmak için can hakkınızı ve seyirci/jüri jokerlerinizi kritik anlara saklamanızı öneririm! Bol şans! 🌟`;
+        action = {
+          type: 'NAVIGATE',
+          target: 'quiz',
+          label: '⚔️ Arenaya Çık',
+          title: 'Yarışma Arenası'
+        };
       }
 
-      return sendJson(res, 200, { success: true, answer });
+      return sendJson(res, 200, { success: true, answer, reply: answer, action });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }
