@@ -54,7 +54,9 @@
     USER_NOTES: 'mc_millionaire_tr_user_notes_v10',
     WHITELIST: 'mc_millionaire_tr_whitelist_v10',
     EVENTS: 'mc_millionaire_tr_events_v10',
-    EVENT_CLAIMS: 'mc_millionaire_tr_event_claims_v10'
+    EVENT_CLAIMS: 'mc_millionaire_tr_event_claims_v10',
+    USER_EXTRA_LIVES: 'mc_millionaire_tr_user_extra_lives_v10',
+    MATCH_USED_LIVES: 'mc_millionaire_tr_match_used_lives_v10'
   };
 
   // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan verileri _v10 sürümüne GÜVENLİ MİGRE ET
@@ -5589,23 +5591,78 @@
 
     getUserExtraLives(username) {
       if (!username) return 0;
-      const all = storage.get(STORAGE_KEYS.USER_EXTRA_LIVES, {});
       const clean = String(username).trim().toLowerCase();
-      return Math.max(0, Number(all[clean] || 0));
+      let all = storage.get(STORAGE_KEYS.USER_EXTRA_LIVES, {});
+      if (typeof all !== 'object' || all === null || Array.isArray(all)) all = {};
+      if (all[clean] !== undefined && all[clean] !== null) {
+        return Math.max(0, Number(all[clean] || 0));
+      }
+      try {
+        const u = window.MCMServices?.userService?.getUserByUsername(clean);
+        if (u && u.extraLives !== undefined && u.extraLives !== null) {
+          return Math.max(0, Number(u.extraLives || 0));
+        }
+      } catch (e) {}
+      return 0;
     },
 
     setUserExtraLives(username, count) {
       if (!username) return 0;
-      const all = storage.get(STORAGE_KEYS.USER_EXTRA_LIVES, {});
       const clean = String(username).trim().toLowerCase();
-      all[clean] = Math.max(0, Number(count || 0));
+      const val = Math.max(0, Number(count || 0));
+      let all = storage.get(STORAGE_KEYS.USER_EXTRA_LIVES, {});
+      if (typeof all !== 'object' || all === null || Array.isArray(all)) all = {};
+      all[clean] = val;
       storage.set(STORAGE_KEYS.USER_EXTRA_LIVES, all);
-      return all[clean];
+      try {
+        if (window.MCMServices?.userService?.syncUserFields) {
+          window.MCMServices.userService.syncUserFields(clean, { extraLives: val });
+        }
+      } catch (e) {}
+      return val;
     },
 
-    purchaseExtraLifeWithEmeralds(username) {
+    hasUsedLifeInMatch(username, matchId) {
+      if (!username || !matchId) return false;
+      const cleanUser = String(username).trim().toLowerCase();
+      const cleanMatch = String(matchId).trim();
+      const usedMap = storage.get(STORAGE_KEYS.MATCH_USED_LIVES, {});
+      const record = usedMap[cleanMatch];
+      if (!record) return false;
+      return record.username?.toLowerCase() === cleanUser;
+    },
+
+    recordMatchLifeUsed(username, matchId, method = 'INVENTORY_LIFE') {
+      if (!username || !matchId) return;
+      const cleanUser = String(username).trim().toLowerCase();
+      const cleanMatch = String(matchId).trim();
+      const usedMap = storage.get(STORAGE_KEYS.MATCH_USED_LIVES, {});
+      usedMap[cleanMatch] = {
+        username: cleanUser,
+        matchId: cleanMatch,
+        method,
+        usedAt: new Date().toISOString()
+      };
+      storage.set(STORAGE_KEYS.MATCH_USED_LIVES, usedMap);
+    },
+
+    _spendEmeralds(eco, username, amount, reason) {
+      if (typeof eco.spendEmeralds === 'function') {
+        return eco.spendEmeralds(username, amount, reason);
+      }
+      if (typeof eco.deductEmeralds === 'function') {
+        return eco.deductEmeralds(username, amount, reason);
+      }
+      throw new Error('Ekonomi servisinde harcama metodu bulunamadı.');
+    },
+
+    purchaseExtraLifeWithEmeralds(username, matchId = null) {
       const cleanUser = typeof username === 'object' && username.username ? username.username : String(username || '').trim();
       if (!cleanUser) throw new Error('Kullanıcı adı belirtilmelidir.');
+
+      if (matchId && this.hasUsedLifeInMatch(cleanUser, matchId)) {
+        throw new Error('Bu yarışmada zaten 1 adet ekstra can hakkı kullanılmıştır. Her oyunda en fazla 1 kez kullanılabilir.');
+      }
 
       const eco = window.MCMServices?.economyService;
       if (!eco) throw new Error('Ekonomi servisi bulunamadı.');
@@ -5615,9 +5672,13 @@
         throw new Error(`Yetersiz Zümrüt bakiyesi! Ekstra can için en az ${this.LIFE_PRICE_EMERALDS} Zümrüt gereklidir.`);
       }
 
-      eco.deductEmeralds(cleanUser, this.LIFE_PRICE_EMERALDS, 'Ekstra Can (Ölümsüzlük Totemi) Satın Alma');
+      this._spendEmeralds(eco, cleanUser, this.LIFE_PRICE_EMERALDS, 'Ekstra Can (Ölümsüzlük Totemi) Satın Alma');
       const currentLives = this.getUserExtraLives(cleanUser);
       const newLives = this.setUserExtraLives(cleanUser, currentLives + 1);
+
+      if (matchId) {
+        this.recordMatchLifeUsed(cleanUser, matchId, 'EMERALDS');
+      }
 
       return {
         success: true,
@@ -5627,51 +5688,132 @@
       };
     },
 
-    consumeExtraLifeInMatch(username) {
+    purchaseAndConsumeLifeInMatch(username, matchId) {
       const cleanUser = typeof username === 'object' && username.username ? username.username : String(username || '').trim();
+      if (!cleanUser) throw new Error('Kullanıcı adı belirtilmelidir.');
+
+      if (matchId && this.hasUsedLifeInMatch(cleanUser, matchId)) {
+        throw new Error('Bu yarışmada zaten 1 adet ekstra can hakkı kullanılmıştır. Her oyunda en fazla 1 kez kullanılabilir.');
+      }
+
+      const availableLives = this.getUserExtraLives(cleanUser);
+      if (availableLives > 0) {
+        throw new Error('Zaten kullanılabilir 1 veya daha fazla ekstra canınız bulunmaktadır. Önce mevcut ekstra canınızı kullanmalısınız.');
+      }
+
+      const eco = window.MCMServices?.economyService;
+      if (!eco) throw new Error('Ekonomi servisi bulunamadı.');
+
+      const bal = eco.getBalance(cleanUser);
+      if (bal < this.LIFE_PRICE_EMERALDS) {
+        throw new Error(`Yetersiz Zümrüt bakiyesi! Devam etmek için en az ${this.LIFE_PRICE_EMERALDS} Zümrüt gereklidir. Mevcut bakiye: ${bal}`);
+      }
+
+      this._spendEmeralds(eco, cleanUser, this.LIFE_PRICE_EMERALDS, 'İkinci Şans (Ölümsüzlük Totemi) ile Devam Etme');
+
+      if (matchId) {
+        this.recordMatchLifeUsed(cleanUser, matchId, 'EMERALDS');
+      }
+
+      return {
+        success: true,
+        action: 'PURCHASED_AND_CONSUMED',
+        cost: this.LIFE_PRICE_EMERALDS,
+        emeraldsSpent: this.LIFE_PRICE_EMERALDS,
+        remainingEmeralds: eco.getBalance(cleanUser)
+      };
+    },
+
+    consumeExtraLifeInMatch(username, matchId = null) {
+      const cleanUser = typeof username === 'object' && username.username ? username.username : String(username || '').trim();
+      if (!cleanUser) throw new Error('Kullanıcı adı belirtilmelidir.');
+
+      if (matchId && this.hasUsedLifeInMatch(cleanUser, matchId)) {
+        throw new Error('Bu yarışmada zaten 1 adet ekstra can hakkı kullanılmıştır. Her oyunda en fazla 1 kez kullanılabilir.');
+      }
+
       const currentLives = this.getUserExtraLives(cleanUser);
       if (currentLives <= 0) {
-        throw new Error('Kullanılabilir ekstra can bulunmamaktadır.');
+        throw new Error('Kullanılabilir ekstra canınız kalmadı.');
       }
       const newLives = this.setUserExtraLives(cleanUser, currentLives - 1);
+      if (matchId) {
+        this.recordMatchLifeUsed(cleanUser, matchId, 'INVENTORY_LIFE');
+      }
       return { success: true, remainingLives: newLives };
     },
 
-    async consumeOrPurchaseLife(session, { hasExtraLife = false, currentEmeralds = 0, currentLives = 0 } = {}) {
+    async consumeOrPurchaseLife(session, { hasExtraLife = false, currentEmeralds = 0, currentLives = 0, matchId = null } = {}) {
       authGuard.verifySession(session);
+      const username = session.username;
+
+      if (matchId && this.hasUsedLifeInMatch(username, matchId)) {
+        throw new Error('Bu yarışmada zaten 1 adet ekstra can hakkı kullanılmıştır. Her oyunda en fazla 1 kez kullanılabilir.');
+      }
+
       try {
         if (typeof fetch === 'function' && hasConfiguredBackend()) {
           const res = await fetch(getApiUrl('/api/extra-life/consume'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              username,
+              matchId,
               hasExtraLife,
               currentEmeralds,
               extraLivesCount: currentLives
             })
           });
           if (res.ok) {
-            return await res.json();
+            const data = await res.json();
+            if (matchId) {
+              this.recordMatchLifeUsed(username, matchId, hasExtraLife ? 'INVENTORY_LIFE' : 'EMERALDS');
+            }
+            return data;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            if (errData.error) throw new Error(errData.error);
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        if (e.message && e.message.includes('Bu yarışmada zaten')) throw e;
+      }
 
       // Yerel Atomik Fallback
       if (hasExtraLife) {
+        const storedLives = this.getUserExtraLives(username);
+        const lives = storedLives > 0 ? storedLives : (Number(currentLives) || 0);
+        if (lives <= 0) {
+          throw new Error('Kullanılabilir ekstra canınız kalmadı.');
+        }
+        const remaining = Math.max(0, lives - 1);
+        this.setUserExtraLives(username, remaining);
+        if (matchId) {
+          this.recordMatchLifeUsed(username, matchId, 'INVENTORY_LIFE');
+        }
         return {
           success: true,
           action: 'CONSUMED_EXISTING',
           cost: 0,
-          remainingLives: Math.max(0, currentLives - 1)
+          remainingLives: remaining
         };
       }
 
-      if (currentEmeralds >= this.LIFE_PRICE_EMERALDS) {
+      const eco = window.MCMServices?.economyService;
+      const ecoBal = (eco && typeof eco.getBalance === 'function') ? eco.getBalance(username) : 0;
+      const effectiveBal = ecoBal > 0 ? ecoBal : (Number(currentEmeralds) || 0);
+      if (effectiveBal >= this.LIFE_PRICE_EMERALDS) {
+        if (eco && ecoBal >= this.LIFE_PRICE_EMERALDS) {
+          this._spendEmeralds(eco, username, this.LIFE_PRICE_EMERALDS, 'İkinci Şans (Ölümsüzlük Totemi)');
+        }
+        if (matchId) {
+          this.recordMatchLifeUsed(username, matchId, 'EMERALDS');
+        }
         return {
           success: true,
           action: 'PURCHASED_AND_CONSUMED',
           cost: this.LIFE_PRICE_EMERALDS,
-          newEmeraldBalance: currentEmeralds - this.LIFE_PRICE_EMERALDS
+          newEmeraldBalance: effectiveBal - this.LIFE_PRICE_EMERALDS
         };
       }
 
@@ -5690,8 +5832,10 @@
   const maintenanceService = {
     getMaintenanceStatus() {
       const settings = storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {});
+      const rawMode = settings ? settings.maintenanceMode : false;
+      const isEnabled = rawMode === true || rawMode === 'true' || rawMode === 1;
       return {
-        enabled: Boolean(settings.maintenanceMode),
+        enabled: Boolean(isEnabled),
         title: settings.maintenanceTitle || 'BAKIM MODU',
         message:
           settings.maintenanceMessage ||
@@ -5712,17 +5856,18 @@
       const isSuperAdmin = email === 'codingdevelopia@gmail.com';
       const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
       const effRole = authGuard.getEffectiveRole(session);
-      return Boolean(isSuperAdmin || isTestAdmin || effRole === 'ADMIN' || effRole === 'MODERATOR');
+      return Boolean(isSuperAdmin || isTestAdmin || session.isAdminSession || effRole === 'ADMIN' || effRole === 'MODERATOR');
     },
 
     setMaintenanceMode(session, enabled, options = {}) {
       authGuard.requireRole(session, ['ADMIN']);
+      const isEnabled = enabled === true || enabled === 'true' || enabled === 1;
       const opts = typeof options === 'string' ? { message: options } : (options || {});
       const current = storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {});
       const next = {
         ...current,
-        maintenanceMode: Boolean(enabled),
-        maintenanceStartedAt: enabled ? new Date().toISOString() : null,
+        maintenanceMode: Boolean(isEnabled),
+        maintenanceStartedAt: isEnabled ? new Date().toISOString() : null,
         maintenanceTitle: opts.title || 'BAKIM MODU',
         maintenanceMessage:
           opts.message ||
@@ -5733,7 +5878,7 @@
       activityService.log(
         'MAINTENANCE_TOGGLE',
         session.username,
-        `Yönetici ${session.username} bakım modunu ${enabled ? 'AKTİF' : 'DEVRE DIŞI'} yaptı.`
+        `Yönetici ${session.username} bakım modunu ${isEnabled ? 'AKTİF' : 'DEVRE DIŞI'} yaptı.`
       );
       if (typeof cloudSyncService !== 'undefined' && cloudSyncService.pushNow) {
         cloudSyncService.pushNow().catch(() => {});
@@ -8389,11 +8534,17 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         enabled: false,
         allowedUsers: ['admin', 'efekan', 'codingdevelopia@gmail.com']
       });
+      const raw = stored ? stored.enabled : false;
+      const isEnabled = raw === true || raw === 'true' || raw === 1;
       return {
-        enabled: Boolean(stored.enabled),
+        enabled: Boolean(isEnabled),
         count: Array.isArray(stored.allowedUsers) ? stored.allowedUsers.length : 0,
         allowedUsers: Array.isArray(stored.allowedUsers) ? [...stored.allowedUsers] : []
       };
+    },
+
+    isWhitelistActive() {
+      return Boolean(this.getStatus().enabled);
     },
 
     isUserAllowed(usernameOrEmail, role = 'MEMBER') {

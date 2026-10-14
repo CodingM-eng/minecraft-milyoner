@@ -2163,6 +2163,9 @@
     },
 
     getUserExtraLives(username) {
+      if (window.MCMServices?.extraLifeService && typeof window.MCMServices.extraLifeService.getUserExtraLives === 'function' && window.MCMServices.extraLifeService.getUserExtraLives !== extraLifeService.getUserExtraLives) {
+        return window.MCMServices.extraLifeService.getUserExtraLives(username);
+      }
       const { userService } = getServices();
       const user = userService?.getUserByUsername(username);
       return user ? Math.max(0, Number(user.extraLives || 0)) : 0;
@@ -3155,7 +3158,7 @@
     rankService,
     netheriteService,
     economyService,
-    extraLifeService: Object.assign({}, window.MCMServices?.extraLifeService || {}, extraLifeService),
+    extraLifeService: Object.assign({}, extraLifeService, window.MCMServices?.extraLifeService || {}),
     shopService,
     leaderboardService,
     achievementService

@@ -643,7 +643,13 @@
     gameState.active = true;
     gameState.isPartyMatch = Boolean(isParty);
     gameState.isJudgeMode = false;
-    gameState.activeMatchId = null;
+    const matchId = 'match_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    gameState.activeMatchId = matchId;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('mcm_current_active_match_id', matchId);
+      }
+    } catch (_e) {}
     gameState.questions = buildMatchQuestions();
     const userTier = svc().tierService?.getUserTier(session);
     gameState.userTier = userTier;
@@ -658,7 +664,7 @@
     gameState.safePrize = 0;
     gameState.emeraldEarnedThisMatch = 0;
     gameState.streak = 0;
-    gameState.extraLifeUsedInMatch = false;
+    gameState.extraLifeUsedInMatch = svc().extraLifeService?.hasUsedLifeInMatch(session?.username, matchId) || false;
     gameState._endermanIntroAcknowledged = false;
     gameState.lifelines = {
       fifty: true,
@@ -1270,45 +1276,76 @@
 
   function handleWrongOrTimeout(chosenIndex, reasonText) {
     const session = svc().authService?.getActiveSession();
-    const availableLives = session
-      ? svc().extraLifeService?.getUserExtraLives(session.username) || 0
-      : 0;
-    const userEmeralds = session
-      ? svc().economyService?.getBalance(session.username) || 0
-      : 0;
+    const matchId = gameState.activeMatchId || (function() {
+      const nid = 'match_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      gameState.activeMatchId = nid;
+      return nid;
+    })();
 
-    // Ekstra Can kontrolü (#9):
-    // 1) Envanterde ekstra can varsa sun
-    // 2) Envanterde yok ama >= 200 Zümrüt varsa satın alma seçeneği sun
-    // 3) Can yok ve < 200 Zümrüt ise teklif sunma, doğrudan elenmeye geç
-    const canUseLife = availableLives > 0;
-    const canAffordLife = userEmeralds >= 200;
+    const alreadyUsed = gameState.extraLifeUsedInMatch || 
+      (session ? (svc().extraLifeService?.hasUsedLifeInMatch(session.username, matchId) || false) : false);
 
-    if (!gameState.extraLifeUsedInMatch && chosenIndex >= 0 && (canUseLife || canAffordLife)) {
-      const modal = document.getElementById('extra-life-modal');
-      const countEl = document.getElementById('extra-life-modal-count');
-      const emEl = document.getElementById('extra-life-modal-emeralds');
-      const btnUse = document.getElementById('btn-use-extra-life');
-      const btnBuy = document.getElementById('btn-buy-extra-life');
+    // Her yarışmada en fazla 1 adet ekstra can kullanılabilir
+    if (!alreadyUsed) {
+      const availableLives = session
+        ? svc().extraLifeService?.getUserExtraLives(session.username) || 0
+        : 0;
+      const userEmeralds = session
+        ? svc().economyService?.getBalance(session.username) || 0
+        : 0;
 
-      if (countEl) countEl.textContent = String(availableLives);
-      if (emEl) emEl.textContent = userEmeralds.toLocaleString('tr-TR');
+      const canUseLife = availableLives > 0;
+      // Kural: Envanterde ekstra can varken 200 zümrüt seçeneği gösterilmez ve teklif edilmez
+      const canAffordLife = !canUseLife && (userEmeralds >= 200);
 
-      if (canUseLife) {
-        btnUse?.classList.remove('hidden');
-        btnBuy?.classList.add('hidden');
-      } else {
-        btnUse?.classList.add('hidden');
-        btnBuy?.classList.remove('hidden');
-      }
+      if (canUseLife || canAffordLife) {
+        stopQuestionTimer();
+        const modal = document.getElementById('extra-life-modal');
+        const titleEl = document.getElementById('extra-life-modal-title');
+        const descEl = document.getElementById('extra-life-modal-desc');
+        const countEl = document.getElementById('extra-life-modal-count');
+        const emEl = document.getElementById('extra-life-modal-emeralds');
+        const btnUse = document.getElementById('btn-use-extra-life');
+        const btnBuy = document.getElementById('btn-buy-extra-life');
+        const btnSkip = document.getElementById('btn-skip-extra-life');
 
-      if (modal) {
-        modal.dataset.wrongIndex = String(chosenIndex);
-        modal.classList.remove('hidden');
-        return;
+        if (countEl) countEl.textContent = String(availableLives);
+        if (emEl) emEl.textContent = userEmeralds.toLocaleString('tr-TR');
+
+        if (canUseLife) {
+          if (titleEl) titleEl.textContent = '🛡️ İKİNCİ ŞANS: ÖLÜMSÜZLÜK TOTEMİ!';
+          if (descEl) {
+            descEl.innerHTML = `Elenmek üzeresiniz! Envanterinizde <strong>${availableLives} Adet Ekstra Can (Ölümsüzlük Totemi)</strong> bulunmaktadır. <strong>1 adet ekstra can</strong> kullanarak elenmekten kurtulmak ve yarışmaya devam etmek istiyor musunuz?<br/><small style="color:#94a3b8;">(Her yarışmada en fazla 1 adet ekstra can kullanılabilir.)</small>`;
+          }
+          btnUse?.classList.remove('hidden');
+          btnBuy?.classList.add('hidden');
+        } else {
+          if (titleEl) titleEl.textContent = '💎 İKİNCİ ŞANS: 200 ZÜMRÜT İLE DEVAM ET';
+          if (descEl) {
+            descEl.innerHTML = `Elenmek üzeresiniz! Envanterinizde ekstra can bulunmuyor. <strong>200 Zümrüt</strong> harcayarak Ölümsüzlük Totemi edinmek ve yarışmaya devam etmek istiyor musunuz?<br/><small style="color:#94a3b8;">(Mevcut bakiyeniz: <strong>${userEmeralds.toLocaleString('tr-TR')}</strong> 🟢 | Her yarışmada en fazla 1 kez kullanılabilir.)</small>`;
+          }
+          btnUse?.classList.add('hidden');
+          btnBuy?.classList.remove('hidden');
+        }
+
+        if (btnSkip) {
+          btnSkip.textContent = '❌ Vazgeç (Yarışmayı Bitir)';
+        }
+
+        if (modal) {
+          modal.dataset.wrongIndex = String(chosenIndex);
+          modal.dataset.reasonText = String(reasonText || '');
+          modal.classList.remove('hidden');
+          return;
+        }
       }
     }
 
+    proceedToGameOver(chosenIndex, reasonText);
+  }
+
+  function proceedToGameOver(chosenIndex, reasonText) {
+    const session = svc().authService?.getActiveSession();
     // Elenme durumunu partiye bildir
     if (gameState.isPartyMatch && !gameState.isJudgeMode && session && svc().partyService) {
       svc().partyService.updateMemberProgress(session.username, {
@@ -2609,13 +2646,25 @@
     });
 
     // Ekstra Can İkinci Şans Modalı
+    let isProcessingExtraLife = false;
+
     document.getElementById('btn-use-extra-life')?.addEventListener('click', () => {
+      if (isProcessingExtraLife) return;
+      isProcessingExtraLife = true;
       const modal = document.getElementById('extra-life-modal');
       const session = svc().authService?.getActiveSession();
-      if (!modal || !session) return;
+      if (!modal || !session) {
+        isProcessingExtraLife = false;
+        return;
+      }
 
+      const matchId = gameState.activeMatchId;
       try {
-        svc().extraLifeService.consumeExtraLifeInMatch(session.username);
+        if (gameState.extraLifeUsedInMatch || (matchId && svc().extraLifeService?.hasUsedLifeInMatch(session.username, matchId))) {
+          throw new Error('Bu yarışmada zaten 1 adet ekstra can kullanılmıştır.');
+        }
+
+        svc().extraLifeService.consumeExtraLifeInMatch(session.username, matchId);
         gameState.extraLifeUsedInMatch = true;
         modal.classList.add('hidden');
 
@@ -2639,23 +2688,39 @@
 
         window.MCMPlatform?.syncHeaderAndDrawer();
         window.MCMPlatform?.showToast(
-          '🛡️ Ölümsüzlük Totemi kullanıldı! Yanlış şık elendi, yarışmaya devam edebilirsiniz!',
+          '🛡️ Ölümsüzlük Totemi kullanıldı! 1 can harcandı, yarışmaya devam ediyorsunuz!',
           'success'
         );
         startQuestionTimer();
       } catch (err) {
         window.MCMPlatform?.showToast(err.message, 'error');
+      } finally {
+        isProcessingExtraLife = false;
       }
     });
 
     document.getElementById('btn-buy-extra-life')?.addEventListener('click', () => {
+      if (isProcessingExtraLife) return;
+      isProcessingExtraLife = true;
       const modal = document.getElementById('extra-life-modal');
       const session = svc().authService?.getActiveSession();
-      if (!modal || !session) return;
+      if (!modal || !session) {
+        isProcessingExtraLife = false;
+        return;
+      }
 
+      const matchId = gameState.activeMatchId;
       try {
-        svc().extraLifeService.purchaseExtraLifeWithEmeralds(session.username);
-        svc().extraLifeService.consumeExtraLifeInMatch(session.username);
+        if (gameState.extraLifeUsedInMatch || (matchId && svc().extraLifeService?.hasUsedLifeInMatch(session.username, matchId))) {
+          throw new Error('Bu yarışmada zaten 1 adet ekstra can kullanılmıştır.');
+        }
+
+        const avLives = svc().extraLifeService?.getUserExtraLives(session.username) || 0;
+        if (avLives > 0) {
+          throw new Error('Envanterinizde kullanılabilir ekstra can bulunmaktadır. Lütfen mevcut canınızı kullanın.');
+        }
+
+        svc().extraLifeService.purchaseAndConsumeLifeInMatch(session.username, matchId);
         gameState.extraLifeUsedInMatch = true;
         modal.classList.add('hidden');
 
@@ -2679,24 +2744,23 @@
 
         window.MCMPlatform?.syncHeaderAndDrawer();
         window.MCMPlatform?.showToast(
-          '🛡️ 200 Zümrüt ile Ölümsüzlük Totemi alındı ve kullanıldı! Yarışmaya devam ediyorsunuz!',
+          '💎 200 Zümrüt karşılığında Ölümsüzlük Totemi kullanıldı! Yarışmaya devam ediyorsunuz!',
           'success'
         );
         startQuestionTimer();
       } catch (err) {
         window.MCMPlatform?.showToast(err.message, 'error');
+      } finally {
+        isProcessingExtraLife = false;
       }
     });
 
     document.getElementById('btn-skip-extra-life')?.addEventListener('click', () => {
       const modal = document.getElementById('extra-life-modal');
       modal?.classList.add('hidden');
-      const qObj = gameState.questions[gameState.currentIndex];
-      finishGameSession({
-        didWin: false,
-        walkedAway: false,
-        explanation: qObj?.explanation || ''
-      });
+      const wrongIdx = Number(modal?.dataset.wrongIndex ?? -1);
+      const reasonText = modal?.dataset.reasonText || '';
+      proceedToGameOver(wrongIdx, reasonText);
     });
 
     // Jüri Canlı Oyuncu Sekme Geçişi

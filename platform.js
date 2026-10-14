@@ -862,11 +862,15 @@
     const maintenanceOverlay = document.getElementById('maintenance-overlay');
     const sessionEmail = String(session?.email || '').trim().toLowerCase();
     const isTestAdmin = String(session?.username || '').toLowerCase() === 'test1234@admin';
+    const isSuperAdminEmail = sessionEmail === 'codingdevelopia@gmail.com';
     const isMaintenanceExempt = Boolean(
-      ((session?.isAdminSession || session?.role === 'ADMIN' || session?.rank === 'ADMIN') &&
-      sessionEmail === 'codingdevelopia@gmail.com') ||
-      isTestAdmin
-    ) || Boolean(session?.isModerator || session?.role === 'MODERATOR' || session?.rank === 'MODERATOR');
+      ((session?.isAdminSession || session?.role === 'ADMIN' || session?.rank === 'ADMIN') && isSuperAdminEmail) ||
+      isTestAdmin ||
+      session?.isAdminSession ||
+      session?.role === 'ADMIN' ||
+      session?.rank === 'ADMIN' ||
+      session?.isModerator || session?.role === 'MODERATOR' || session?.rank === 'MODERATOR'
+    );
 
     if (maintenanceStatus.enabled && !isMaintenanceExempt && !isPublicScreen) {
       if (maintenanceOverlay) {
@@ -5167,6 +5171,55 @@
       `;
     }
 
+    // 16b. YENİDEN TASARLANMIŞ BAKIM MODU YÖNETİMİ (state.adminTab === 'maintenance' - Requirement 6)
+    if (state.adminTab === 'maintenance') {
+      const maintService = svc().maintenanceService;
+      const mStatus = maintService?.getMaintenanceStatus() || { enabled: false, message: '' };
+
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <div class="card-title-row">
+            <h3>🚨 Bakım Modu Yönetimi</h3>
+            <span class="role-badge" id="adm-maint-status-badge" style="font-size:0.85rem;padding:6px 12px;background:${mStatus.enabled ? '#ef4444' : '#22c55e'};color:#fff;border-radius:6px;font-weight:bold;">
+              ${mStatus.enabled ? '🚨 BAKIM MODU AKTİF (Tüm Oyuncular Kilitli)' : '🟢 SİSTEM ÇEVRİMİÇİ (Oyunculara Açık)'}
+            </span>
+          </div>
+          <p class="card-sub">
+            Bakım modu aktif edildiğinde, yetkili yöneticiler (<code>codingdevelopia@gmail.com</code> / <code>test1234@Admin</code>) ve moderatörler haricindeki tüm oyuncular tam ekran Türkçe bakım ekranı ile karşılanır. Yöneticiler sisteme kesintisiz erişip bakım modunu kapatabilir.
+          </p>
+
+          <div style="background:rgba(15,23,42,0.7);border:2px solid ${mStatus.enabled ? '#ef4444' : '#22c55e'};border-radius:8px;padding:16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <strong style="color:#f8fafc;font-size:1.05rem;">Hızlı Bakım Modu Aç / Kapat</strong>
+              <div style="font-size:0.82rem;color:#cbd5e1;margin-top:4px;">
+                Mevcut Durum: <strong style="color:${mStatus.enabled ? '#fca5a5' : '#86efac'};">${mStatus.enabled ? 'Bakım Ekranı Yayında (Ziyaretçiler Engelleniyor)' : 'Sunucu Herkese Açık (Normal Oyun Aktif)'}</strong>
+              </div>
+            </div>
+            <button type="button" id="btn-admin-instant-toggle-maintenance" class="mc-btn ${mStatus.enabled ? 'mc-btn-success' : 'mc-btn-danger'}" style="font-size:0.95rem;padding:10px 20px;">
+              ${mStatus.enabled ? '🟢 Bakım Modunu Kapat (Sistemi Herkese Aç)' : '🛑 Bakım Modunu Aç (Tüm Ziyaretçileri Kilitle)'}
+            </button>
+          </div>
+
+          <!-- Bakım Bildirimi & Açıklama Formu -->
+          <div class="platform-card" style="margin-bottom:20px;">
+            <h4>📝 Ziyaretçilere Gösterilecek Bakım Mesajı</h4>
+            <form id="admin-maintenance-msg-form" class="platform-form" style="margin-top:10px;">
+              <div class="input-group">
+                <label>BAKIM BAŞLIĞI</label>
+                <input type="text" id="adm-maint-input-title" value="${escapeHtml(mStatus.title || 'BAKIM MODU')}" required />
+              </div>
+              <div class="input-group">
+                <label>AÇIKLAMA METNİ</label>
+                <textarea id="adm-maint-input-msg" rows="3" style="width:100%;padding:10px;border-radius:6px;background:rgba(15,23,42,0.8);border:1px solid #334155;color:#f8fafc;font-family:inherit;font-size:0.88rem;" placeholder="Ziyaretçilere gösterilecek açıklama metni...">${escapeHtml(mStatus.message || 'Sunucumuzda bakım ve altyapı güncellemeleri yapılmaktadır. Lütfen daha sonra tekrar ziyaret ediniz.')}</textarea>
+              </div>
+              <button type="submit" class="mc-btn mc-btn-primary">💾 Bakım Mesajını Güncelle</button>
+            </form>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
     // 17. ETKİNLİK VE TURNUVA YÖNETİMİ (state.adminTab === 'events' - Requirement 4)
     if (state.adminTab === 'events') {
       const evService = svc().eventService;
@@ -6005,6 +6058,35 @@
       if (gate) {
         gate.classList.remove('hidden');
         document.getElementById('tab-btn-login')?.click();
+      }
+    });
+
+    // Bakım Modu: Hızlı Kapatma Butonu (Doğrudan Ekrandan Yönetici Müdahalesi)
+    document.getElementById('btn-maintenance-quick-toggle')?.addEventListener('click', () => {
+      const session = getSession();
+      const sessionEmail = String(session?.email || '').trim().toLowerCase();
+      const isTestAdmin = String(session?.username || '').toLowerCase() === 'test1234@admin';
+      const isSuperAdminEmail = sessionEmail === 'codingdevelopia@gmail.com';
+      const isAuthorized = Boolean(
+        isSuperAdminEmail ||
+        isTestAdmin ||
+        session?.isAdminSession ||
+        session?.role === 'ADMIN' ||
+        session?.rank === 'ADMIN'
+      );
+      if (session && isAuthorized) {
+        svc().maintenanceService?.setMaintenanceMode(session, false);
+        document.getElementById('maintenance-overlay')?.classList.add('hidden');
+        showToast('🟢 Bakım modu başarıyla kapatıldı ve sistem açıldı!', 'success');
+        navigateToScreen('welcome');
+      } else {
+        document.getElementById('maintenance-overlay')?.classList.add('hidden');
+        const gate = document.getElementById('access-gate');
+        if (gate) {
+          gate.classList.remove('hidden');
+          document.getElementById('tab-btn-login')?.click();
+          showToast('Bakım modunu kapatmak için lütfen Yönetici hesabınızla giriş yapınız.', 'info');
+        }
       }
     });
 
@@ -8473,6 +8555,24 @@
         return;
       }
 
+      // Bakım Modu Aç/Kapat Butonu (#btn-admin-instant-toggle-maintenance)
+      if (e.target.closest('#btn-admin-instant-toggle-maintenance')) {
+        try {
+          const maintService = svc().maintenanceService;
+          const currentStatus = maintService?.isMaintenanceActive();
+          const nextState = !currentStatus;
+          maintService?.setMaintenanceMode(session, nextState);
+          if (!nextState) {
+            document.getElementById('maintenance-overlay')?.classList.add('hidden');
+          }
+          showToast(`Bakım modu ${nextState ? 'AKTİF EDİLDİ (Kilitli)' : 'DEVRE DIŞI BIRAKILDI (Açık)'}.`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
       // Beyaz Listeden Kullanıcı Kaldır (.btn-admin-remove-whitelist)
       const wlRemBtn = e.target.closest('.btn-admin-remove-whitelist');
       if (wlRemBtn) {
@@ -9248,7 +9348,23 @@
           if (svc().maintenanceService) {
             svc().maintenanceService.setMaintenanceMode(session, maintenanceActive, maintenanceMsg);
           }
+          if (!maintenanceActive) {
+            document.getElementById('maintenance-overlay')?.classList.add('hidden');
+          }
           showToast('Platform ayarları, Backend API URL ve Bakım Modu başarıyla güncellendi.', 'success');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-maintenance-msg-form') {
+        e.preventDefault();
+        try {
+          const title = String(document.getElementById('adm-maint-input-title')?.value || '').trim();
+          const message = String(document.getElementById('adm-maint-input-msg')?.value || '').trim();
+          const maintService = svc().maintenanceService;
+          const current = maintService ? maintService.isMaintenanceActive() : false;
+          maintService?.setMaintenanceMode(session, current, { title, message });
+          showToast('Bakım bilgilendirme metni başarıyla güncellendi!', 'success');
+          renderAdmin();
         } catch (err) {
           showToast(err.message, 'error');
         }

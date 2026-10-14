@@ -2242,7 +2242,7 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.ok(indexHtmlSource.includes('Discord OAuth2 Entegrasyonu'), 'Terms ekranında Discord OAuth2 açıklaması yer almalıdır.');
     assert.ok(indexHtmlSource.includes('identify email'), 'Terms ve Privacy içinde Discord identify email yetkisi dürüstçe belirtilmelidir.');
     assert.ok(!indexHtmlSource.includes('botumuz sunucunuzda komut çalıştırır'), 'Var olmayan Discord bot yetenekleri uydurulmamalıdır.');
-    assert.ok(indexHtmlSource.includes('codingdevelopia@gmail.com'), 'İletişim ve veri silme adresi belirtilmelidir.');
+    assert.ok(indexHtmlSource.includes('destek.mcmilyoner@gmail.com'), 'İletişim ve veri silme adresi belirtilmelidir.');
     assert.ok(indexHtmlSource.includes('Mojang Synergies AB'), 'Minecraft bağımsız hayran projesi uyarısı bulunmalıdır.');
     console.log('✓ Dürüst Hukuki ve Teknik Metinler: Gerçek Discord OAuth2 kapsamı ve veri politikası şeffaflıkla doğrulandı.');
 
@@ -2546,10 +2546,142 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     // 57.3: Hukuki Bağlantıların Korunması
     assert.ok(indexHtmlFresh.includes('href="#terms"'), 'Footer Kullanım Koşulları bağlantısını korumalıdır.');
     assert.ok(indexHtmlFresh.includes('href="#privacy"'), 'Footer Gizlilik Politikası bağlantısını korumalıdır.');
-    console.log('✓ Global Footer Telif Hakkı Metni, Okunabilir Boyutlandırma ve Bağlantılar başarıyla doğrulandı.');
+    // ====================================================
+    // TEST 58: İkinci Şans (Ekstra Can / Ölümsüzlük Totemi) & 200 Zümrüt Koruması ve Destek E-Postası
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 58: İkinci Şans (Ekstra Can / Ölümsüzlük Totemi) & 200 Zümrüt Koruması');
+    console.log('====================================================');
+
+    // 58.1: Genel Destek E-postası Güncellemesi ve Yönetici Kimliğinin Korunması
+    assert.ok(
+      indexHtmlFresh.includes('destek.mcmilyoner@gmail.com'),
+      'index.html içerisinde kamuya açık destek e-postası (destek.mcmilyoner@gmail.com) yer almalıdır.'
+    );
+    assert.ok(
+      !indexHtmlFresh.includes('codingdevelopia@gmail.com'),
+      'index.html içerisinde halka açık alanda codingdevelopia@gmail.com görünmemelidir.'
+    );
+    // Yönetici kimliğinin backend/platform sisteminde korunduğunu teyit et
+    assert.strictEqual(
+      SUPER_ADMIN,
+      'codingdevelopia@gmail.com',
+      'Yönetici oturumu, yetkilendirme ve admin kimliği (codingdevelopia@gmail.com) kesin olarak korunmalıdır.'
+    );
+    console.log('✓ 58.1: Kamusal destek e-postası (destek.mcmilyoner@gmail.com) ve korunan yönetici kimliği doğrulandı.');
+
+    // 58.2: Senaryo A - Ekstra Canı Olan Oyuncu (Totem Kullanımı)
+    const playerA = 'TotemPlayer_A';
+    const playerB = 'EmeraldPlayer_B';
+    const playerC = 'BrokePlayer_C';
+    const playerD = 'GiveUpPlayer_D';
+
+    await authService.registerAccount({ username: playerA, password: 'pass123', passwordConfirm: 'pass123' });
+    await authService.registerAccount({ username: playerB, password: 'pass123', passwordConfirm: 'pass123' });
+    await authService.registerAccount({ username: playerC, password: 'pass123', passwordConfirm: 'pass123' });
+    await authService.registerAccount({ username: playerD, password: 'pass123', passwordConfirm: 'pass123' });
+
+    // Oyuncunun 1 ekstra canı ve 500 zümrüdü olsun
+    ecoSvc.adminModifyEmeralds(adminSession, playerA, 500, 'SET');
+    extraLifeSvc.setUserExtraLives(playerA, 2);
+    const matchId_A = 'match_test_a_' + Date.now();
+
+    assert.strictEqual(extraLifeSvc.getUserExtraLives(playerA), 2, 'Oyuncunun 2 ekstra canı olmalıdır.');
+    assert.strictEqual(ecoSvc.getBalance(playerA), 500, 'Oyuncunun 500 zümrüdü olmalıdır.');
+
+    // Ekstra can varken 200 zümrütle devam etme engellenmeli (önce mevcut ekstra can kullanılmalıdır)
+    assert.throws(() => {
+      extraLifeSvc.purchaseAndConsumeLifeInMatch(playerA, matchId_A);
+    }, /Zaten kullanılabilir 1 veya daha fazla ekstra canınız bulunmaktadır/);
+
+    // Can kullanıldığında: 1 can tüketilmeli, zümrüt bakiyesi (500) DEĞİŞMEMELİ
+    const consumeResA = extraLifeSvc.consumeExtraLifeInMatch(playerA, matchId_A);
+    assert.strictEqual(consumeResA.success, true);
+    assert.strictEqual(extraLifeSvc.getUserExtraLives(playerA), 1, '1 can kullanıldıktan sonra kalan can 1 olmalıdır.');
+    assert.strictEqual(ecoSvc.getBalance(playerA), 500, 'Ekstra can kullanımında zümrüt bakiyesi asla eksilmemelidir.');
+    assert.strictEqual(extraLifeSvc.hasUsedLifeInMatch(playerA, matchId_A), true, 'Maçta can kullanıldığı kaydedilmelidir.');
+    console.log('✓ 58.2 (Senaryo A): Ekstra can varken 200 zümrüt harcanması engellendi, 1 can tüketildi ve zümrüt korundu.');
+
+    // 58.3: Senaryo B - Ekstra Canı Olmayan ve >= 200 Zümrüdü Olan Oyuncu
+    ecoSvc.adminModifyEmeralds(adminSession, playerB, 350, 'SET');
+    extraLifeSvc.setUserExtraLives(playerB, 0);
+    const matchId_B = 'match_test_b_' + Date.now();
+
+    assert.strictEqual(extraLifeSvc.getUserExtraLives(playerB), 0, 'Oyuncunun hiç ekstra canı olmamalıdır.');
+    assert.strictEqual(ecoSvc.getBalance(playerB), 350, 'Oyuncunun 350 zümrüdü olmalıdır.');
+
+    // Ekstra can olmadığı için doğrudan can tüketimi hata vermelidir
+    assert.throws(() => {
+      extraLifeSvc.consumeExtraLifeInMatch(playerB, matchId_B);
+    }, /Kullanılabilir ekstra canınız kalmadı/);
+
+    // 200 Zümrüt ile maça devam et
+    const buyResB = extraLifeSvc.purchaseAndConsumeLifeInMatch(playerB, matchId_B);
+    assert.strictEqual(buyResB.success, true);
+    assert.strictEqual(buyResB.emeraldsSpent, 200);
+    assert.strictEqual(ecoSvc.getBalance(playerB), 150, '350 - 200 = 150 zümrüt kalmalıdır.');
+    assert.strictEqual(extraLifeSvc.getUserExtraLives(playerB), 0, 'Envanterdeki can sayısı sıfır kalmalıdır (maçta anında tüketildi).');
+    assert.strictEqual(extraLifeSvc.hasUsedLifeInMatch(playerB, matchId_B), true, 'Maçta devam hakkı kullanıldığı kaydedilmelidir.');
+    console.log('✓ 58.3 (Senaryo B): Ekstra canı olmayan oyuncu 200 zümrüt karşılığı devam etti, zümrüt güvenle düşüldü.');
+
+    // 58.4: Senaryo C - Ekstra Canı Olmayan ve < 200 Zümrüdü Olan Oyuncu
+    ecoSvc.adminModifyEmeralds(adminSession, playerC, 95, 'SET');
+    extraLifeSvc.setUserExtraLives(playerC, 0);
+    const matchId_C = 'match_test_c_' + Date.now();
+
+    // Hem can tüketimi hem de zümrütle devam engellenmelidir
+    assert.throws(() => {
+      extraLifeSvc.consumeExtraLifeInMatch(playerC, matchId_C);
+    }, /Kullanılabilir ekstra canınız kalmadı/);
+
+    assert.throws(() => {
+      extraLifeSvc.purchaseAndConsumeLifeInMatch(playerC, matchId_C);
+    }, /Yetersiz Zümrüt bakiyesi/);
+
+    assert.strictEqual(ecoSvc.getBalance(playerC), 95, 'Yetersiz bakiye durumunda zümrüt eksilmemelidir.');
+    assert.strictEqual(extraLifeSvc.getUserExtraLives(playerC), 0, 'Can sayısı sıfır kalmalıdır.');
+    console.log('✓ 58.4 (Senaryo C): Yetersiz zümrüt (< 200) ve cansız oyuncunun devam talebi güvenle engellendi.');
+
+    // 58.5: Senaryo D - Vazgeç / Yarışmayı Bitir (Cancel / Give up)
+    ecoSvc.adminModifyEmeralds(adminSession, playerD, 500, 'SET');
+    extraLifeSvc.setUserExtraLives(playerD, 3);
+    const matchId_D = 'match_test_d_' + Date.now();
+
+    // Vazgeçildiğinde servis çağrılmaz veya devam tüketilmez; bakiye ve can korunur
+    const balanceBeforeD = ecoSvc.getBalance(playerD);
+    const livesBeforeD = extraLifeSvc.getUserExtraLives(playerD);
+    assert.strictEqual(extraLifeSvc.hasUsedLifeInMatch(playerD, matchId_D), false, 'Vazgeçildiğinde hak kullanılmış sayılmamalıdır.');
+    assert.strictEqual(balanceBeforeD, 500, 'Zümrüt bakiyesi sıfır harcamayla korunmalıdır.');
+    assert.strictEqual(livesBeforeD, 3, 'Can envanteri dokunulmadan korunmalıdır.');
+    console.log('✓ 58.5 (Senaryo D): Vazgeç durumunda zümrüt harcanmadı, can eksilmedi.');
+
+    // 58.6: Senaryo E - Her Oyunda En Fazla 1 Kez Kullanım & Tekrarlı Kullanım Engeli (Single-Use per Match)
+    // playerA zaten matchId_A'da can kullanmıştı, envanterinde hala 1 canı var
+    assert.strictEqual(extraLifeSvc.getUserExtraLives(playerA), 1, 'Player A hala 1 cana sahiptir.');
+    assert.strictEqual(extraLifeSvc.hasUsedLifeInMatch(playerA, matchId_A), true, 'Match A için can zaten kullanıldı.');
+
+    // Aynı maçta ikinci kez can tüketmeye çalışırsa engellenmelidir
+    assert.throws(() => {
+      extraLifeSvc.consumeExtraLifeInMatch(playerA, matchId_A);
+    }, /Bu yarışmada zaten 1 adet ekstra can hakkı kullanılmıştır/);
+
+    // Aynı maçta 200 zümrütle devam etmeye çalışırsa da engellenmelidir
+    assert.throws(() => {
+      extraLifeSvc.purchaseAndConsumeLifeInMatch(playerA, matchId_A);
+    }, /Bu yarışmada zaten 1 adet ekstra can hakkı kullanılmıştır/);
+
+    assert.strictEqual(extraLifeSvc.getUserExtraLives(playerA), 1, 'Tekrarlı denemede can harcanmamalıdır.');
+    assert.strictEqual(ecoSvc.getBalance(playerA), 500, 'Tekrarlı denemede zümrüt harcanmamalıdır.');
+
+    // Farklı / Yeni bir maçta (matchId_A2) kalan 1 canını başarıyla kullanabilir
+    const matchId_A2 = 'match_test_a2_' + Date.now();
+    const consumeResA2 = extraLifeSvc.consumeExtraLifeInMatch(playerA, matchId_A2);
+    assert.strictEqual(consumeResA2.success, true);
+    assert.strictEqual(extraLifeSvc.getUserExtraLives(playerA), 0, 'Yeni maçta kalan son can kullanıldı.');
+    console.log('✓ 58.6 (Senaryo E): Maç başına en fazla 1 kez kullanım kuralı ve tekrarlı kullanım engeli başarıyla doğrulandı.');
 
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-57 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-58 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {
@@ -2557,4 +2689,5 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     process.exit(1);
   }
 })();
+
 

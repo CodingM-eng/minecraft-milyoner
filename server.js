@@ -139,6 +139,12 @@ function saveMaintenanceConfig() {
   safeSaveJson('maintenance.json', maintenanceConfig);
 }
 
+// Yarışma Başına 1 Ekstra Can Denetimi Deposu
+let persistentMatchLives = safeLoadJson('match_used_lives.json', {});
+function savePersistentMatchLives() {
+  safeSaveJson('match_used_lives.json', persistentMatchLives);
+}
+
 function verifyStaffAccount(username, allowedRoles = ['TICKET', 'MODERATOR', 'ADMIN']) {
   if (!username) return null;
   const clean = String(username).trim().toLowerCase();
@@ -1391,11 +1397,26 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/api/extra-life/consume') {
     try {
       const { json: body } = await parseRequestBody(req);
+      const matchId = body.matchId ? String(body.matchId).trim() : null;
+      const username = body.username ? String(body.username).trim().toLowerCase() : null;
+
+      // Her yarışmada en fazla 1 adet ekstra can kullanım denetimi
+      if (matchId && persistentMatchLives[matchId]) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Bu yarışmada zaten 1 adet ekstra can hakkı kullanılmıştır. Her oyunda en fazla 1 kez kullanılabilir.'
+        });
+      }
+
       const hasLife = Boolean(body.hasExtraLife);
       const currentEmeralds = Number(body.currentEmeralds || 0);
       const LIFE_PRICE_EMERALDS = 200;
 
       if (hasLife) {
+        if (matchId) {
+          persistentMatchLives[matchId] = { username, method: 'INVENTORY_LIFE', usedAt: new Date().toISOString() };
+          savePersistentMatchLives();
+        }
         return sendJson(res, 200, {
           success: true,
           action: 'CONSUMED_EXISTING',
@@ -1406,6 +1427,10 @@ const server = http.createServer(async (req, res) => {
 
       // Canı yoksa bakiye yeterli mi?
       if (currentEmeralds >= LIFE_PRICE_EMERALDS) {
+        if (matchId) {
+          persistentMatchLives[matchId] = { username, method: 'EMERALDS', usedAt: new Date().toISOString() };
+          savePersistentMatchLives();
+        }
         return sendJson(res, 200, {
           success: true,
           action: 'PURCHASED_AND_CONSUMED',

@@ -1484,6 +1484,7 @@
         <div class="platform-grid-2">
           <div class="platform-card">
             <h3>✉️ Yeni Destek Talebi Oluştur</h3>
+            <p class="card-sub" style="margin-bottom:12px;">Sorularınız ve talepleriniz için bilet oluşturabilir veya resmi destek e-posta adresimiz <code style="color:#60a5fa;">destek.mcmilyoner@gmail.com</code> üzerinden bizimle iletişime geçebilirsiniz.</p>
             <form id="support-create-form" class="platform-form">
               <div class="input-group">
                 <label for="support-category">KATEGORİ</label>
@@ -1767,6 +1768,7 @@
             <button type="button" class="admin-nav-btn" data-admin-tab="parties">🎉 Partiler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="leaderboard">🏆 Liderlik Tablosu</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="whitelist">📋 Beyaz Liste</button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="maintenance">🚨 Bakım Modu</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="events">🎪 Etkinlikler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="economy">💎 Ekonomi</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="shop">🛒 Mağaza</button>
@@ -1962,7 +1964,7 @@
           <div class="platform-card">
             <h3>7. İletişim ve Destek</h3>
             <p>
-              Kullanım koşullarına dair soru, itiraz veya geri bildirimleriniz için oyun içi <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a> üzerinden bilet oluşturabilir veya resmi iletişim e-posta adresimiz olan <code style="color:#60a5fa;">codingdevelopia@gmail.com</code> üzerinden bizimle iletişime geçebilirsiniz.
+              Kullanım koşullarına dair soru, itiraz veya geri bildirimleriniz için oyun içi <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a> üzerinden bilet oluşturabilir veya resmi iletişim e-posta adresimiz olan <code style="color:#60a5fa;">destek.mcmilyoner@gmail.com</code> üzerinden bizimle iletişime geçebilirsiniz.
             </p>
           </div>
         </div>
@@ -2078,7 +2080,7 @@
             <ul class="guide-list">
               <li><strong>Discord Bağlantısını Kaldırma:</strong> Profilim ekranına giderek istediğiniz an Discord hesabınızın bağlantısını kesebilirsiniz.</li>
               <li><strong>Verileri Görüntüleme ve Düzeltme:</strong> Profil ekranından Minecraft kullanıcı adınızı, şifrenizi veya tercihlerinizi dilediğiniz zaman güncelleyebilirsiniz.</li>
-              <li><strong>Hesap ve Veri Silme Talebi:</strong> Hesabınızın, destek biletlerinizin veya sistemdeki kayıtlarınızın kalıcı olarak silinmesini talep etmek için oyun içi <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a> üzerinden talep açabilir veya <code style="color:#60a5fa;">codingdevelopia@gmail.com</code> adresine e-posta gönderebilirsiniz. Talebiniz makul süre içerisinde incelenerek sonuçlandırılır.</li>
+              <li><strong>Hesap ve Veri Silme Talebi:</strong> Hesabınızın, destek biletlerinizin veya sistemdeki kayıtlarınızın kalıcı olarak silinmesini talep etmek için oyun içi <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a> üzerinden talep açabilir veya <code style="color:#60a5fa;">destek.mcmilyoner@gmail.com</code> adresine e-posta gönderebilirsiniz. Talebiniz makul süre içerisinde incelenerek sonuçlandırılır.</li>
             </ul>
           </div>
 
@@ -2089,7 +2091,7 @@
               Bu Gizlilik Politikası bilgilendirme amaçlı olup yasal bir garanti veya hukuki danışmanlık teşkil etmez. Politikamızda zaman zaman güncellemeler yapılabilir ve bu sayfada yayınlandığı tarihte yürürlüğe girer.
             </p>
             <p style="margin:0;">
-              Gizlilik konularına dair her türlü soru, öneri ve talepleriniz için resmi iletişim adresimiz: <code style="color:#38bdf8;">codingdevelopia@gmail.com</code>.
+              Gizlilik konularına dair her türlü soru, öneri ve talepleriniz için resmi iletişim adresimiz: <code style="color:#38bdf8;">destek.mcmilyoner@gmail.com</code>.
             </p>
           </div>
         </div>
@@ -2196,6 +2198,8 @@
           <span class="footer-separator">•</span>
           <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a>
           <span class="footer-separator">•</span>
+          <a href="mailto:destek.mcmilyoner@gmail.com" class="footer-link" title="E-posta İletişim &amp; Destek">destek.mcmilyoner@gmail.com</a>
+          <span class="footer-separator">•</span>
           <a href="#bug-report" class="footer-link" data-nav-screen="bug-report">Hata Bildir</a>
           <span class="footer-separator">•</span>
           <a href="#suggestions" class="footer-link" data-nav-screen="suggestions">Öneri Gönder</a>
@@ -2288,10 +2292,10 @@
   </div>
 
   <!-- 3. 🛡️ Ölümsüzlük Totemi (Ekstra Can) İkinci Şans Modalı (#7, #9) -->
-  <div id="extra-life-modal" class="mc-modal-overlay hidden" role="dialog" aria-modal="true">
+  <div id="extra-life-modal" class="mc-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="extra-life-modal-title">
     <div class="mc-modal-card">
       <div class="mc-modal-header">
-        <h3>🛡️ İKİNCİ ŞANS: ÖLÜMSÜZLÜK TOTEMİ!</h3>
+        <h3 id="extra-life-modal-title">🛡️ İKİNCİ ŞANS: ÖLÜMSÜZLÜK TOTEMİ!</h3>
       </div>
       <div class="mc-modal-body">
         <div style="text-align:center;margin-bottom:12px;">
@@ -2345,18 +2349,18 @@
           </svg>
         </div>
         <p id="extra-life-modal-desc">
-          Yanlış cevap verdiniz! <strong>Ölümsüzlük Totemi (Ekstra Can)</strong> gücünü kullanarak elenmekten kurtulmak ve soruya devam etmek ister misiniz?
+          Yanlış cevap verdiniz! <strong>Ölümsüzlük Totemi (Ekstra Can)</strong> gücünü kullanarak elenmekten kurtulmak ve yarışmaya devam etmek ister misiniz?
         </p>
         <p class="card-sub">Envanterdeki Ekstra Can: <strong id="extra-life-modal-count">0</strong> | Zümrüt Bakiyeniz: <strong id="extra-life-modal-emeralds">0</strong> 🟢</p>
         <div class="mc-modal-actions">
           <button type="button" id="btn-skip-extra-life" class="mc-btn mc-btn-secondary">
-            Hayır, Yarışmayı Bitir
+            ❌ Vazgeç (Yarışmayı Bitir)
           </button>
           <button type="button" id="btn-use-extra-life" class="mc-btn mc-btn-gold">
-            🛡️ Totem Kullan ve Devam Et!
+            🛡️ 1 Ekstra Can Kullan &amp; Devam Et
           </button>
           <button type="button" id="btn-buy-extra-life" class="mc-btn mc-btn-emerald hidden">
-            🟢 200 Zümrüt ile Totem Al &amp; Devam Et
+            💎 200 Zümrüt Öde &amp; Devam Et
           </button>
         </div>
       </div>
@@ -2504,9 +2508,12 @@
       <div class="maintenance-footer-note">
         <span>🛡️ Yalnızca Yetkili Yönetici ve Moderatörler Giriş Yapabilir</span>
       </div>
-      <div style="margin-top:16px;">
+      <div style="margin-top:16px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
         <button type="button" id="btn-maintenance-admin-login" class="mc-btn mc-btn-secondary mc-btn-sm">
           🔑 Yönetici Olarak Giriş Yap
+        </button>
+        <button type="button" id="btn-maintenance-quick-toggle" class="mc-btn mc-btn-danger mc-btn-sm">
+          🛑 Bakım Modunu Kapat
         </button>
       </div>
     </div>
