@@ -1937,7 +1937,8 @@
             'success'
           );
         } else {
-          window.MCMPlatform?.navigateToScreen('welcome');
+          const targetScreen = window.MCMPlatform?.resolveScreenFromHash?.() || 'welcome';
+          window.MCMPlatform?.navigateToScreen(targetScreen);
           window.MCMPlatform?.showToast(
             session.isModerator
               ? `🛡️ Hoş geldin Moderatör ${session.username}!`
@@ -2464,10 +2465,8 @@
     if (activeSession) {
       gate?.classList.add('hidden');
       window.MCMPlatform?.syncHeaderAndDrawer();
-      const hash = (window.location.hash || '').replace(/^#/, '');
-      if (hash && document.getElementById(`screen-${hash}`)) {
-        window.MCMPlatform?.navigateToScreen(hash, { skipHistory: true });
-      }
+      const targetScreen = window.MCMPlatform?.resolveScreenFromHash?.() || 'welcome';
+      window.MCMPlatform?.navigateToScreen(targetScreen, { skipHistory: true });
     } else {
       gate?.classList.remove('hidden');
     }

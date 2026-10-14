@@ -3351,12 +3351,23 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/api/bugs/submit') {
     try {
       const { json: body } = await parseRequestBody(req);
+      const title = String(body.title || 'Hata Bildirimi').trim();
+      const description = String(body.description || '').trim();
+      const screenshot = String(body.screenshot || '').trim();
+      const relatedParty = String(body.relatedParty || '').trim().toUpperCase();
+
+      if (!title || !description) {
+        return sendJson(res, 400, { success: false, error: 'Hata başlığı ve açıklaması zorunludur.' });
+      }
+
       const newBug = {
         id: 'BUG_' + Date.now(),
-        title: String(body.title || 'Hata Bildirimi').trim(),
-        description: String(body.description || '').trim(),
+        title,
+        description,
         category: String(body.category || 'Arayüz (UI)').trim(),
         severity: String(body.severity || 'Orta').trim(),
+        screenshot,
+        relatedParty,
         username: String(body.username || 'Oyuncu').trim(),
         status: 'SUBMITTED', // SUBMITTED, CONFIRMED, FIXED, VERIFIED, REJECTED
         pointsAwarded: 0,
@@ -3417,15 +3428,24 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/api/suggestions/submit') {
     try {
       const { json: body } = await parseRequestBody(req);
+      const title = String(body.title || 'Yeni Öneri').trim();
+      const details = String(body.details || '').trim();
+      const username = String(body.username || 'Oyuncu').trim();
+
+      if (!title || !details) {
+        return sendJson(res, 400, { success: false, error: 'Öneri başlığı ve açıklaması zorunludur.' });
+      }
+
       const newSuggestion = {
         id: 'SUGG_' + Date.now(),
-        title: String(body.title || 'Yeni Öneri').trim(),
-        details: String(body.details || '').trim(),
+        title,
+        details,
         category: String(body.category || 'Genel').trim(),
-        username: String(body.username || 'Oyuncu').trim(),
+        username,
         status: 'SUBMITTED', // SUBMITTED, APPROVED, IMPLEMENTED, REJECTED
-        upvotes: 1,
-        voters: [String(body.username || 'Oyuncu')],
+        upvotes: [username],
+        downvotes: [],
+        voters: [username],
         pointsAwarded: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()

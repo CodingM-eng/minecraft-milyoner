@@ -48,6 +48,63 @@
       .replace(/'/g, '&#39;');
   }
 
+  function isValidHttpUrl(string) {
+    if (!string || typeof string !== 'string') return false;
+    try {
+      const parsed = new URL(string.trim());
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function resolveScreenFromHash(rawHash) {
+    const raw = String(rawHash || (typeof window !== 'undefined' ? window.location?.hash : '') || '')
+      .replace(/^#/, '')
+      .trim()
+      .toLowerCase();
+    if (!raw) return null;
+    const aliasMap = {
+      'bug-report': 'bug-report',
+      'bug': 'bug-report',
+      'bugs': 'bug-report',
+      'hata': 'bug-report',
+      'hata-bildir': 'bug-report',
+      'suggestions': 'suggestions',
+      'suggestion': 'suggestions',
+      'oneri': 'suggestions',
+      'oneriler': 'suggestions',
+      'support': 'support',
+      'destek': 'support',
+      'profile': 'profile',
+      'profil': 'profile',
+      'shop': 'shop',
+      'market': 'shop',
+      'magaza': 'shop',
+      'party': 'party',
+      'parti': 'party',
+      'stats': 'stats',
+      'istatistik': 'stats',
+      'leaderboard': 'leaderboard',
+      'siralama': 'leaderboard',
+      'notifications': 'notifications',
+      'bildirimler': 'notifications',
+      'settings': 'settings',
+      'ayarlar': 'settings',
+      'sponsors': 'sponsors',
+      'sponsorlar': 'sponsors',
+      'admin': 'admin',
+      'moderator': 'moderator',
+      'ticket': 'ticket',
+      'welcome': 'welcome'
+    };
+    const target = aliasMap[raw] || raw;
+    if (typeof document !== 'undefined' && document.getElementById(`screen-${target}`)) {
+      return target;
+    }
+    return null;
+  }
+
   function formatDateTR(iso) {
     if (!iso) return '-';
     try {
@@ -2765,10 +2822,14 @@
           .map(
             t => `
             <div class="ticket-card" style="cursor:pointer;" onclick="window.MCMPlatform?.openSupportWidgetWithTicket?.('${escapeHtml(t.id)}')">
-              <div class="ticket-header" style="display:flex;justify-content:space-between;align-items:center;">
+              <div class="ticket-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <strong>#${escapeHtml(t.id)} — ${escapeHtml(t.subject)}</strong>
                 <div style="display:flex;align-items:center;gap:6px;">
+                  ${t.telegramNotificationSent ? '<span class="status-pill" style="background:#0284c7;color:#fff;font-size:0.75rem;" title="Telegram Destek Ekibine İletildi">✈️ Telegram İletildi</span>' : '<span class="status-pill" style="background:#334155;color:#94a3b8;font-size:0.75rem;" title="Yerel / Platform Destek Veritabanı">📡 Kaydedildi</span>'}
                   <span class="status-pill status-${escapeHtml(t.status.toLowerCase().replace(/\s+/g, '-'))}">${escapeHtml(t.status)}</span>
+                  <button type="button" class="mc-btn mc-btn-xs mc-btn-primary" onclick="event.stopPropagation(); window.MCMPlatform?.openSupportWidgetWithTicket?.('${escapeHtml(t.id)}');">
+                    💬 Sohbeti Aç
+                  </button>
                   ${t.status !== 'KAPANDI' && t.status !== 'ÇÖZÜLDÜ' ? `
                     <button type="button" class="mc-btn mc-btn-xs mc-btn-danger" data-ticket-action="close-by-creator" data-ticket-id="${escapeHtml(t.id)}" onclick="event.stopPropagation();">
                       🔒 Kapat
@@ -2976,6 +3037,7 @@
       .map(b => {
         const stLower = String(b.status || 'OPEN').toLowerCase();
         const isResolved = stLower.includes('çözüldü') || stLower === 'resolved';
+        const hasValidUrl = b.screenshot && isValidHttpUrl(b.screenshot);
         return `
         <div class="ticket-card">
           <div class="ticket-header">
@@ -2991,11 +3053,11 @@
         } • ${formatDateTR(b.createdAt)}</p>
           <p>${escapeHtml(b.description)}</p>
           ${
-            b.screenshot
+            hasValidUrl
               ? `<p class="ticket-meta">📷 Ekran Görüntüsü: <a href="${escapeHtml(
                   b.screenshot
                 )}" target="_blank" rel="noopener noreferrer">${escapeHtml(b.screenshot)}</a></p>`
-              : ''
+              : (b.screenshot ? `<p class="ticket-meta">📷 Ekran Görüntüsü: <code>${escapeHtml(b.screenshot)}</code></p>` : '')
           }
           ${
             b.adminNote
@@ -3016,11 +3078,10 @@
   // ==========================================
   function renderSuggestions() {
     const session = getSession();
-    if (!session) return;
     const listEl = document.getElementById('suggestions-list-container');
     if (!listEl) return;
 
-    const uLower = session.username.toLowerCase();
+    const uLower = session ? String(session.username || '').toLowerCase() : '';
     const rawSuggestions = svc().suggestionService.getAllSuggestions();
     const suggestions = [...rawSuggestions].sort((a, b) => {
       const scoreA = (Array.isArray(a.upvotes) ? a.upvotes.length : 0) - (Array.isArray(a.downvotes) ? a.downvotes.length : 0);
@@ -3041,8 +3102,8 @@
         const upCount = upvotes.length;
         const downCount = downvotes.length;
         const netScore = upCount - downCount;
-        const hasVotedUp = upvotes.includes(uLower);
-        const hasVotedDown = downvotes.includes(uLower);
+        const hasVotedUp = uLower ? upvotes.some(x => String(x).toLowerCase() === uLower) : false;
+        const hasVotedDown = uLower ? downvotes.some(x => String(x).toLowerCase() === uLower) : false;
 
         return `
           <div class="ticket-card">
@@ -6017,30 +6078,59 @@
     });
 
     // Destek, Hata ve Öneri Formları
-    document.getElementById('support-create-form')?.addEventListener('submit', e => {
+    document.getElementById('support-create-form')?.addEventListener('submit', async e => {
       e.preventDefault();
+      const form = e.target;
       const session = getSession();
-      if (!session) return;
+      if (!session) {
+        showToast('Destek talebi oluşturmak için lütfen giriş yapın.', 'warning');
+        return;
+      }
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn?.disabled) return;
+      const originalText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Gönderiliyor...';
+      }
+
       try {
-        svc().supportService.createTicket(session, {
+        await svc().supportService.createTicket(session, {
           category: document.getElementById('support-category')?.value,
           subject: document.getElementById('support-subject')?.value,
           message: document.getElementById('support-message')?.value
         });
-        e.target.reset();
-        showToast('Destek talebiniz başarıyla oluşturuldu.', 'success');
+        form.reset();
+        showToast('Destek talebiniz başarıyla oluşturuldu ve kayda alındı.', 'success');
         renderSupport();
       } catch (err) {
         showToast(err.message, 'error');
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
       }
     });
 
-    document.getElementById('bug-report-form')?.addEventListener('submit', e => {
+    document.getElementById('bug-report-form')?.addEventListener('submit', async e => {
       e.preventDefault();
+      const form = e.target;
       const session = getSession();
-      if (!session) return;
+      if (!session) {
+        showToast('Hata bildiriminde bulunmak için lütfen giriş yapın.', 'warning');
+        return;
+      }
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn?.disabled) return;
+      const originalText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Gönderiliyor...';
+      }
+
       try {
-        svc().bugService.createBugReport(session, {
+        await svc().bugService.createBugReport(session, {
           title: document.getElementById('bug-title')?.value,
           category: document.getElementById('bug-category')?.value,
           severity: document.getElementById('bug-severity')?.value,
@@ -6048,29 +6138,51 @@
           relatedParty: document.getElementById('bug-related-party')?.value || '',
           description: document.getElementById('bug-description')?.value
         });
-        e.target.reset();
-        showToast('Hata bildiriminiz kaydedildi. Teşekkür ederiz!', 'success');
+        form.reset();
+        showToast('Hata bildiriminiz kaydedildi. Katkınız için teşekkür ederiz!', 'success');
         renderBugReports();
       } catch (err) {
         showToast(err.message, 'error');
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
       }
     });
 
-    document.getElementById('suggestion-create-form')?.addEventListener('submit', e => {
+    document.getElementById('suggestion-create-form')?.addEventListener('submit', async e => {
       e.preventDefault();
+      const form = e.target;
       const session = getSession();
-      if (!session) return;
+      if (!session) {
+        showToast('Öneri paylaşmak için lütfen giriş yapın.', 'warning');
+        return;
+      }
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn?.disabled) return;
+      const originalText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Gönderiliyor...';
+      }
+
       try {
-        svc().suggestionService.createSuggestion(session, {
+        await svc().suggestionService.createSuggestion(session, {
           category: document.getElementById('sug-category')?.value,
           title: document.getElementById('sug-title')?.value,
           details: document.getElementById('sug-details')?.value
         });
-        e.target.reset();
-        showToast('Öneriniz toplulukla paylaşıldı!', 'success');
+        form.reset();
+        showToast('Öneriniz toplulukla başarıyla paylaşıldı!', 'success');
         renderSuggestions();
       } catch (err) {
         showToast(err.message, 'error');
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
       }
     });
 
@@ -7533,7 +7645,12 @@
       const voteBtn = e.target.closest('[data-vote-sug]');
       if (voteBtn) {
         const session = getSession();
-        if (!session) return;
+        if (!session) {
+          showToast('Önerileri oylamak ve katkıda bulunmak için lütfen giriş yapın.', 'warning');
+          const gate = document.getElementById('access-gate');
+          if (gate) gate.classList.remove('hidden');
+          return;
+        }
         try {
           svc().suggestionService.voteSuggestion(
             session,
@@ -8527,12 +8644,8 @@
       }
 
       // 3. Ekrana geçiş yap
-      const hash = (window.location.hash || '').replace(/^#/, '');
-      if (hash && document.getElementById(`screen-${hash}`)) {
-        navigateToScreen(hash, { skipHistory: true });
-      } else {
-        navigateToScreen('welcome', { skipHistory: true });
-      }
+      const target = resolveScreenFromHash(window.location.hash) || 'welcome';
+      navigateToScreen(target, { skipHistory: true });
     });
 
     // Her 1 saniyede bir Günlük Netherite geri sayımını güncelle
@@ -8570,6 +8683,14 @@
     renderStats,
     renderLeaderboard,
     renderAdmin,
+    renderModerator,
+    renderTicket,
+    renderSupport,
+    renderBugReports,
+    renderSuggestions,
+    openSupportWidgetWithTicket,
+    resolveScreenFromHash,
+    isValidHttpUrl,
     showToast,
     copyDiagnosticsReport
   };

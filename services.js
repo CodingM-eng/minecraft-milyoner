@@ -3836,6 +3836,26 @@
   };
 
   // ==========================================
+  // URL DOĞRULAMA VE İSTEMCİ SPAM ÖNLEME YARDIMCILARI
+  // ==========================================
+  function isValidHttpUrl(string) {
+    if (!string || typeof string !== 'string') return false;
+    try {
+      const parsed = new URL(string.trim());
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  const _antiSpamTracker = {
+    bugs: new Map(),
+    suggestions: new Map(),
+    tickets: new Map(),
+    replies: new Map()
+  };
+
+  // ==========================================
   // DESTEK SİSTEMİ (supportService — 24/7 Destek & Telegram Bot Senkronizasyonu)
   // Kategoriler: Ödeme, Hesap, Zümrüt & Netherite, Parti, Teknik, Diğer
   // ==========================================
@@ -3846,11 +3866,20 @@
 
     getUserTickets(username) {
       const clean = String(username || '').trim().toLowerCase();
-      return this.getAllTickets().filter(t => t.username.toLowerCase() === clean);
+      return this.getAllTickets().filter(t => t && t.username && t.username.toLowerCase() === clean);
     },
 
-    getTicketById(ticketId) {
-      return this.getAllTickets().find(t => t && t.id === ticketId) || null;
+    getTicketById(ticketId, session = null) {
+      const ticket = this.getAllTickets().find(t => t && t.id === ticketId) || null;
+      if (!ticket) return null;
+      if (session) {
+        const effRole = authGuard.getEffectiveRole(session);
+        const isStaff = Boolean(session.isAdminSession || ['ADMIN', 'MODERATOR', 'TICKET'].includes(effRole));
+        if (!isStaff && String(ticket.username || '').toLowerCase() !== String(session.username || '').toLowerCase()) {
+          throw new Error('Bu destek talebini görüntüleme yetkiniz bulunmuyor.');
+        }
+      }
+      return ticket;
     },
 
     async createTicket(session, { category = 'Genel', subject, message }) {
@@ -3859,6 +3888,26 @@
       const cleanMsg = String(message || '').trim();
       if (!cleanSub || !cleanMsg) {
         throw new Error('Lütfen konu başlığını ve mesajınızı eksiksiz yazın.');
+      }
+      if (cleanSub.length < 3 || cleanSub.length > 120) {
+        throw new Error('Destek konu başlığı en az 3, en fazla 120 karakter olmalıdır.');
+      }
+      if (cleanMsg.length < 3 || cleanMsg.length > 3000) {
+        throw new Error('Destek mesajınız en az 3, en fazla 3000 karakter olmalıdır.');
+      }
+
+      // Spam ve Mükerrer Gönderim Engeli (10 saniyelik bekleme)
+      const uKey = String(session.username).toLowerCase();
+      const now = Date.now();
+      const lastTicket = _antiSpamTracker.tickets.get(uKey);
+      if (lastTicket) {
+        if (now - lastTicket.time < 10000) {
+          const remSec = Math.ceil((10000 - (now - lastTicket.time)) / 1000);
+          throw new Error(`Lütfen yeni bir destek talebi göndermeden önce ${remSec} saniye bekleyin.`);
+        }
+        if (lastTicket.subject.toLowerCase() === cleanSub.toLowerCase() && now - lastTicket.time < 120000) {
+          throw new Error('Aynı konu başlığı ile kısa süre önce bir talep oluşturdunuz. Lütfen mevcut talebinizi kontrol edin.');
+        }
       }
 
       const user = userService.getUserByUsername(session.username) || {};
@@ -3878,7 +3927,7 @@
         status: 'AÇIK', // AÇIK / OPEN, İŞLENİYOR / IN_PROGRESS, KULLANICI_BEKLENİYOR / WAITING_FOR_USER, ÇÖZÜLDÜ / RESOLVED
         assignedAdmin: null,
         claimedBy: null,
-        telegramNotificationSent: true,
+        telegramNotificationSent: false, // Gerçek sunucu onayı alınana kadar false
         userMeta,
         messages: [
           {
@@ -3907,9 +3956,12 @@
             })
           });
           if (res.ok) {
-            const data = await res.json();
+            const data = await res.json().catch(() => null);
             if (data && data.ticket) {
-              newTicket.id = data.ticket.id;
+              newTicket.id = data.ticket.id || newTicket.id;
+            }
+            if (data && (data.telegramNotified || data.telegramSent || data.ticket?.telegramNotificationSent)) {
+              newTicket.telegramNotificationSent = true;
             }
           }
         }
@@ -3920,6 +3972,7 @@
       const tickets = this.getAllTickets();
       tickets.unshift(newTicket);
       storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+      _antiSpamTracker.tickets.set(uKey, { time: now, subject: cleanSub });
 
       activityService.log(
         'SUPPORT_CREATE',
@@ -3933,13 +3986,33 @@
       authGuard.verifySession(session);
       const cleanReply = String(replyText || '').trim();
       if (!cleanReply) throw new Error('Yanıt metni boş olamaz.');
+      if (cleanReply.length > 3000) throw new Error('Yanıt metni en fazla 3000 karakter olabilir.');
 
       const tickets = this.getAllTickets();
       const ticket = tickets.find(t => t.id === ticketId);
       if (!ticket) throw new Error('Destek talebi bulunamadı.');
 
-      const isSenderAdmin = Boolean(isAdmin || session.isAdminSession || session.role === 'ADMIN');
-      const senderRole = isSenderAdmin ? 'ADMIN' : 'USER';
+      // Yetkilendirme ve Gizlilik Kontrolü: Yalnızca talep sahibi veya personel yanıt verebilir
+      const effRole = authGuard.getEffectiveRole(session);
+      const isSenderStaff = Boolean(isAdmin || session.isAdminSession || ['ADMIN', 'MODERATOR', 'TICKET'].includes(effRole));
+      if (!isSenderStaff && String(ticket.username || '').toLowerCase() !== String(session.username || '').toLowerCase()) {
+        throw new Error('Yalnızca kendi destek taleplerinize yanıt verebilirsiniz.');
+      }
+
+      if (ticket.status === 'KAPANDI' || ticket.status === 'ÇÖZÜLDÜ') {
+        throw new Error('Kapanmış bir destek talebine yeni yanıt eklenemez. Lütfen yeni bir talep oluşturun.');
+      }
+
+      // Spam yanıt engeli (3 saniye)
+      const uKey = String(session.username).toLowerCase();
+      const now = Date.now();
+      const lastRep = _antiSpamTracker.replies.get(uKey);
+      if (lastRep && now - lastRep.time < 3000) {
+        throw new Error('Lütfen bir sonraki yanıtınızı göndermeden önce 3 saniye bekleyin.');
+      }
+
+      const isSenderAdmin = Boolean(isSenderStaff && (isAdmin || session.isAdminSession || effRole === 'ADMIN'));
+      const senderRole = isSenderStaff ? 'ADMIN' : 'USER';
 
       ticket.messages.push({
         sender: session.username,
@@ -3948,7 +4021,7 @@
         createdAt: new Date().toISOString()
       });
 
-      if (isSenderAdmin) {
+      if (isSenderStaff) {
         ticket.status = 'KULLANICI_BEKLENİYOR';
         ticket.assignedAdmin = session.username;
         ticket.claimedBy = ticket.claimedBy || session.username;
@@ -3965,7 +4038,7 @@
             body: JSON.stringify({
               ticketId,
               sender: session.username,
-              isAdmin: isSenderAdmin,
+              isAdmin: isSenderStaff,
               text: cleanReply,
               status: ticket.status
             })
@@ -3974,6 +4047,7 @@
       } catch (err) {}
 
       storage.set(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+      _antiSpamTracker.replies.set(uKey, { time: now, text: cleanReply });
 
       if (isSenderAdmin) {
         notificationService.notifyUser(ticket.username, {
@@ -4211,7 +4285,7 @@
       return this.getAllBugs().filter(b => b.username.toLowerCase() === clean);
     },
 
-    createBugReport(
+    async createBugReport(
       session,
       {
         title,
@@ -4225,8 +4299,39 @@
       authGuard.verifySession(session);
       const cleanTitle = String(title || '').trim();
       const cleanDesc = String(description || '').trim();
+      const cleanShot = String(screenshot || '').trim();
+      const cleanParty = String(relatedParty || '').trim().toUpperCase();
+
       if (!cleanTitle || !cleanDesc) {
         throw new Error('Lütfen hata başlığını ve açıklamasını girin.');
+      }
+      if (cleanTitle.length < 5 || cleanTitle.length > 120) {
+        throw new Error('Hata başlığı en az 5, en fazla 120 karakter olmalıdır.');
+      }
+      if (cleanDesc.length < 10 || cleanDesc.length > 3000) {
+        throw new Error('Hata açıklaması en az 10, en fazla 3000 karakter olmalıdır.');
+      }
+      if (cleanShot) {
+        if (!isValidHttpUrl(cleanShot)) {
+          throw new Error('Geçersiz ekran görüntüsü URL adresi. Bağlantı http:// veya https:// ile başlamalıdır.');
+        }
+      }
+      if (cleanParty && cleanParty.length > 20) {
+        throw new Error('İlgili parti kodu en fazla 20 karakter olabilir.');
+      }
+
+      // Spam ve Mükerrer Gönderim Engeli (10 saniye bekleme)
+      const uKey = String(session.username).toLowerCase();
+      const now = Date.now();
+      const lastBug = _antiSpamTracker.bugs.get(uKey);
+      if (lastBug) {
+        if (now - lastBug.time < 10000) {
+          const remSec = Math.ceil((10000 - (now - lastBug.time)) / 1000);
+          throw new Error(`Lütfen yeni bir hata bildirimi göndermeden önce ${remSec} saniye bekleyin.`);
+        }
+        if (lastBug.title.toLowerCase() === cleanTitle.toLowerCase() && now - lastBug.time < 120000) {
+          throw new Error('Aynı başlık ile kısa süre önce bir hata bildirimi gönderdiniz. Lütfen mevcut bildiriminizi takip edin.');
+        }
       }
 
       const perms = authGuard.getUserPermissions(session);
@@ -4235,20 +4340,46 @@
         id: generateId('BUG'),
         username: session.username,
         title: cleanTitle,
-        category: String(category),
-        severity: String(severity),
+        category: String(category || 'Arayüz (UI)'),
+        severity: String(severity || 'Orta'),
         priority: perms.bugPriority || 'NORMAL',
         description: cleanDesc,
-        screenshot: String(screenshot || '').trim(),
-        relatedParty: String(relatedParty || '').trim().toUpperCase(),
+        screenshot: cleanShot,
+        relatedParty: cleanParty,
         status: 'İNCELENİYOR',
         adminNote: '',
         rewardEmerald: 0,
         createdAt: new Date().toISOString()
       };
 
+      try {
+        if (typeof fetch === 'function') {
+          const res = await fetch(getApiUrl('/api/bugs/submit'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: cleanTitle,
+              category: report.category,
+              severity: report.severity,
+              description: cleanDesc,
+              screenshot: cleanShot,
+              relatedParty: cleanParty,
+              username: session.username
+            })
+          });
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data && data.bug && data.bug.id) {
+              report.id = data.bug.id;
+            }
+          }
+        }
+      } catch (_e) {}
+
       bugs.unshift(report);
       storage.set(STORAGE_KEYS.BUG_REPORTS, bugs);
+      _antiSpamTracker.bugs.set(uKey, { time: now, title: cleanTitle });
+
       activityService.log(
         'BUG_REPORT',
         session.username,
@@ -4388,12 +4519,32 @@
       return storage.get(STORAGE_KEYS.SUGGESTIONS, []);
     },
 
-    createSuggestion(session, { category = 'Yeni Özellik', title, details }) {
+    async createSuggestion(session, { category = 'Yeni Özellik', title, details }) {
       authGuard.verifySession(session);
       const cleanTitle = String(title || '').trim();
       const cleanDetails = String(details || '').trim();
       if (!cleanTitle || !cleanDetails) {
         throw new Error('Lütfen öneri başlığını ve açıklamasını yazın.');
+      }
+      if (cleanTitle.length < 5 || cleanTitle.length > 120) {
+        throw new Error('Öneri başlığı en az 5, en fazla 120 karakter olmalıdır.');
+      }
+      if (cleanDetails.length < 10 || cleanDetails.length > 3000) {
+        throw new Error('Öneri açıklaması en az 10, en fazla 3000 karakter olmalıdır.');
+      }
+
+      // Spam ve Mükerrer Gönderim Engeli (10 saniye bekleme)
+      const uKey = String(session.username).toLowerCase();
+      const now = Date.now();
+      const lastSug = _antiSpamTracker.suggestions.get(uKey);
+      if (lastSug) {
+        if (now - lastSug.time < 10000) {
+          const remSec = Math.ceil((10000 - (now - lastSug.time)) / 1000);
+          throw new Error(`Lütfen yeni bir öneri göndermeden önce ${remSec} saniye bekleyin.`);
+        }
+        if (lastSug.title.toLowerCase() === cleanTitle.toLowerCase() && now - lastSug.time < 120000) {
+          throw new Error('Aynı başlık ile kısa süre önce bir öneri paylaştınız. Lütfen mevcut önerinizi takip edin.');
+        }
       }
 
       const perms = authGuard.getUserPermissions(session);
@@ -4401,7 +4552,7 @@
       const item = {
         id: generateId('SUG'),
         username: session.username,
-        category: String(category),
+        category: String(category || 'Yeni Özellik'),
         priority: perms.suggestionPriority || 'NORMAL',
         title: cleanTitle,
         details: cleanDetails,
@@ -4413,8 +4564,31 @@
         createdAt: new Date().toISOString()
       };
 
+      try {
+        if (typeof fetch === 'function') {
+          const res = await fetch(getApiUrl('/api/suggestions/submit'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: cleanTitle,
+              details: cleanDetails,
+              category: item.category,
+              username: session.username
+            })
+          });
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data && data.suggestion && data.suggestion.id) {
+              item.id = data.suggestion.id;
+            }
+          }
+        }
+      } catch (_e) {}
+
       list.unshift(item);
       storage.set(STORAGE_KEYS.SUGGESTIONS, list);
+      _antiSpamTracker.suggestions.set(uKey, { time: now, title: cleanTitle });
+
       activityService.log(
         'SUGGESTION_CREATE',
         session.username,
@@ -4429,12 +4603,16 @@
       const item = list.find(s => s.id === sugId);
       if (!item) throw new Error('Öneri bulunamadı.');
 
-      const u = session.username;
-      const alreadyUp = (item.upvotes || []).some(x => x.toLowerCase() === u.toLowerCase());
-      const alreadyDown = (item.downvotes || []).some(x => x.toLowerCase() === u.toLowerCase());
+      if (!Array.isArray(item.upvotes)) item.upvotes = [];
+      if (!Array.isArray(item.downvotes)) item.downvotes = [];
 
-      item.upvotes = (item.upvotes || []).filter(x => x.toLowerCase() !== u.toLowerCase());
-      item.downvotes = (item.downvotes || []).filter(x => x.toLowerCase() !== u.toLowerCase());
+      const u = session.username;
+      const uLower = String(u).toLowerCase();
+      const alreadyUp = item.upvotes.some(x => String(x).toLowerCase() === uLower);
+      const alreadyDown = item.downvotes.some(x => String(x).toLowerCase() === uLower);
+
+      item.upvotes = item.upvotes.filter(x => String(x).toLowerCase() !== uLower);
+      item.downvotes = item.downvotes.filter(x => String(x).toLowerCase() !== uLower);
 
       if (direction === 'UP' && !alreadyUp) {
         item.upvotes.push(u);
@@ -4443,7 +4621,12 @@
       }
 
       storage.set(STORAGE_KEYS.SUGGESTIONS, list);
-      return item;
+      return {
+        item,
+        upCount: item.upvotes.length,
+        downCount: item.downvotes.length,
+        netScore: item.upvotes.length - item.downvotes.length
+      };
     },
 
     adminUpdateSuggestion(session, sugId, { status, adminNote, rewardEmerald = 0 }) {

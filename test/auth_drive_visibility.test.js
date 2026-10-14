@@ -1980,8 +1980,181 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.strictEqual(usersBackup.length, 5, 'USERS_BACKUP içinde de 5 hesap yer almalıdır.');
     console.log('✓ Sorun 4 (Yedek Geri Yükleme): Tüm roller (Üye, VIP, Mod, Ticket, Admin) ve verileri eksiksiz kurtarıldı, tombstone silindi, pre-restore yedeği alındı.');
 
+    // ====================================================
+    // TEST 48: Hata Bildirimi, Öneri ve Destek Sistemi Güvenlik & Denetim Doğrulaması
+    // ====================================================
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-47 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 48: Hata Bildirimi, Öneri ve Destek Sistemi Güvenlik & Denetim Doğrulaması');
+    console.log('====================================================');
+
+    const testMemberSession = {
+      username: 'TestOyuncu48',
+      role: 'MEMBER',
+      rank: 'MEMBER',
+      email: 'testoyuncu48@example.com',
+      isAdminSession: false
+    };
+
+    const testOtherUserSession = {
+      username: 'BaskaOyuncu48',
+      role: 'MEMBER',
+      rank: 'MEMBER',
+      email: 'baskaoyuncu48@example.com',
+      isAdminSession: false
+    };
+
+    const testStaffSession = {
+      username: 'DestekGorevlisi48',
+      role: 'TICKET',
+      rank: 'VIP',
+      email: 'destek48@example.com',
+      isAdminSession: false
+    };
+
+    // 1. HATA BİLDİRİMİ DENETİMİ (Bug Reports)
+    // Eksik alan ve kısa metin kontrolü
+    await assert.rejects(
+      async () => window.MCMServices.bugService.createBugReport(testMemberSession, { title: 'Kısa', description: 'Az' }),
+      /en az 5/i,
+      'Kısa hata başlığı reddedilmelidir.'
+    );
+
+    // Kötü amaçlı javascript: protokolü kontrolü
+    await assert.rejects(
+      async () => window.MCMServices.bugService.createBugReport(testMemberSession, {
+        title: 'Harita Yükleme Hatası',
+        description: 'Bölgeye girince harita dokuları geç yükleniyor.',
+        screenshot: 'javascript:alert(document.cookie)'
+      }),
+      /Geçersiz ekran görüntüsü URL adresi/i,
+      'javascript: protokolü içeren kötü niyetli ekran görüntüsü reddedilmelidir.'
+    );
+
+    // Geçerli ekran görüntüsü ve kayıt oluşturma
+    const createdBug = await window.MCMServices.bugService.createBugReport(testMemberSession, {
+      title: 'Harita Yükleme Hatası',
+      description: 'Bölgeye girince harita dokuları geç yükleniyor ve bloklar görünmüyor.',
+      category: 'Dünya / Harita',
+      severity: 'Yüksek',
+      screenshot: 'https://cdn.example.com/screens/bug1.png',
+      relatedParty: 'PARTY123'
+    });
+    assert.ok(createdBug && createdBug.id, 'Geçerli hata bildirimi başarıyla oluşturulmalıdır.');
+    assert.strictEqual(createdBug.screenshot, 'https://cdn.example.com/screens/bug1.png');
+
+    // Anti-spam bekleme süresi kontrolü
+    await assert.rejects(
+      async () => window.MCMServices.bugService.createBugReport(testMemberSession, {
+        title: 'Başka Bir Hata Başlığı',
+        description: 'Test amaçlı hızlı gönderilen ikinci bildirim.'
+      }),
+      /bekleyin/i,
+      '10 saniye dolmadan yeni hata bildirimi gönderilmemelidir (Spam engeli).'
+    );
+    console.log('✓ Hata Bildirimi: Başlık/açıklama doğrulaması, javascript: XSS koruması ve anti-spam filtresi başarıyla doğrulandı.');
+
+    // 2. ÖNERİ SİSTEMİ DENETİMİ (Suggestions)
+    await assert.rejects(
+      async () => window.MCMServices.suggestionService.createSuggestion(testMemberSession, { title: 'Öneri', details: 'Kısa' }),
+      /en az/i,
+      'Kısa öneri metinleri reddedilmelidir.'
+    );
+
+    const createdSug = await window.MCMServices.suggestionService.createSuggestion(testMemberSession, {
+      title: 'Gece Modu Arayüz Teması',
+      details: 'Karanlık maden temasında göz yormayan yeni bir arayüz stili eklensin.',
+      category: 'Görsel & Arayüz'
+    });
+    assert.ok(createdSug && createdSug.id, 'Öneri başarıyla kaydedilmelidir.');
+
+    // Büyük/küçük harf duyarsız oylama ve mükerrer oy kontrolü
+    const voteRes = window.MCMServices.suggestionService.voteSuggestion(
+      { username: 'testoyuncu48' }, // küçük harfle oy kullanma
+      createdSug.id,
+      'UP'
+    );
+    // İlk oluşturulduğunda zaten upvotes'da vardı, tekrar UP verince geri çekilmeli (toggle)
+    assert.strictEqual(voteRes.upCount, 0, 'Aynı yönde tekrar oy vermek oyu geri çekmelidir (toggle).');
+
+    const voteRes2 = window.MCMServices.suggestionService.voteSuggestion(
+      { username: 'TestOyuncu48' },
+      createdSug.id,
+      'UP'
+    );
+    assert.strictEqual(voteRes2.upCount, 1, 'Tekrar oy verince oy eklenmelidir.');
+    console.log('✓ Öneri Sistemi: Validasyon, büyük/küçük harf duyarsız oy takibi ve net skor hesabı doğrulandı.');
+
+    // 3. DESTEK SİSTEMİ VE GİZLİLİK DENETİMİ (Support Privacy & Roles)
+    const createdTicket = await window.MCMServices.supportService.createTicket(testMemberSession, {
+      category: 'Hesap & Güvenlik',
+      subject: 'İki Aşamalı Doğrulama Sorunu',
+      message: 'Telegram kodumu girerken zaman aşımına uğruyorum, yardımcı olabilir misiniz?'
+    });
+    assert.ok(createdTicket && createdTicket.id, 'Destek talebi başarıyla oluşturulmalıdır.');
+    assert.strictEqual(createdTicket.telegramNotificationSent, false, 'Gerçek bot teslimi olmadan sahte telegram başarısı verilmemelidir.');
+
+    // Başka bir normal kullanıcı bu talebi görememeli veya yanıtlayamamalı
+    assert.throws(
+      () => window.MCMServices.supportService.getTicketById(createdTicket.id, testOtherUserSession),
+      /yetkiniz bulunmuyor/i,
+      'Başka bir kullanıcı başkasının özel destek talebini görüntüleyememelidir.'
+    );
+
+    await assert.rejects(
+      async () => window.MCMServices.supportService.replyToTicket(testOtherUserSession, createdTicket.id, 'Araya giren mesaj'),
+      /Yalnızca kendi destek taleplerinize/i,
+      'Yetkisiz kullanıcının başkasının talebine yanıt yazması engellenmelidir.'
+    );
+
+    // Destek personeli veya yönetici yanıtlayabilmeli
+    const staffReply = await window.MCMServices.supportService.replyToTicket(
+      testStaffSession,
+      createdTicket.id,
+      'Merhaba, Telegram doğrulama ayarlarınızı inceledik, lütfen tekrar deneyin.'
+    );
+    assert.strictEqual(staffReply.status, 'KULLANICI_BEKLENİYOR', 'Yetkili yanıt verince durum KULLANICI_BEKLENİYOR olmalıdır.');
+    assert.strictEqual(staffReply.messages.length, 2, 'Yetkili yanıtı mesaj geçmişine eklenmelidir.');
+
+    // Talep sahibi kendi biletini görüntüleyebilmeli ve yanıtlayabilmeli
+    const ownerView = window.MCMServices.supportService.getTicketById(createdTicket.id, testMemberSession);
+    assert.ok(ownerView, 'Talep sahibi kendi biletini görüntüleyebilmelidir.');
+
+    const ownerReply = await window.MCMServices.supportService.replyToTicket(
+      testMemberSession,
+      createdTicket.id,
+      'Teşekkürler, şimdi kod ile giriş yapabildim.'
+    );
+    assert.strictEqual(ownerReply.status, 'İŞLENİYOR', 'Oyuncu yanıt verince durum İŞLENİYOR olmalıdır.');
+    console.log('✓ Destek Sistemi: Gizlilik izolasyonu, yetkisiz erişim engeli, personel yanıt döngüsü ve dürüst Telegram durumu doğrulandı.');
+
+    // 4. HASH VE NAVİGASYON YÖNLENDİRME DENETİMİ (Hash Routing & Exports)
+    if (!window.MCMPlatform) {
+      const platformCode = fs.readFileSync(path.join(__dirname, '..', 'platform.js'), 'utf8');
+      global.document.getElementById = (id) => ({
+        id,
+        style: {},
+        dataset: {},
+        classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
+        addEventListener: () => {},
+        setAttribute: () => {},
+        getAttribute: () => null,
+        appendChild: () => {}
+      });
+      global.navigator = { userAgent: 'NodeTest' };
+      eval(platformCode);
+    }
+    assert.strictEqual(typeof window.MCMPlatform?.resolveScreenFromHash, 'function', 'resolveScreenFromHash dışa aktarılmalıdır.');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#bug-report'), 'bug-report');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#bugs'), 'bug-report');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#suggestions'), 'suggestions');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#support'), 'support');
+    assert.strictEqual(typeof window.MCMPlatform?.openSupportWidgetWithTicket, 'function', 'openSupportWidgetWithTicket dışa aktarılmalıdır.');
+    assert.strictEqual(window.MCMPlatform.isValidHttpUrl('https://example.com/shot.png'), true);
+    assert.strictEqual(window.MCMPlatform.isValidHttpUrl('javascript:alert(1)'), false);
+    console.log('✓ Navigasyon & Yönlendirme: #bug-report, #bugs, #suggestions, #support alias çözümlemeleri ve arayüz fonksiyonları doğrulandı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-48 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {
