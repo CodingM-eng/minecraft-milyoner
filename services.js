@@ -133,12 +133,28 @@
     return false;
   }
 
+  function isPlaceholderApiUrl(url) {
+    if (!url) return true;
+    const clean = String(url).toLowerCase().trim();
+    return clean === '' ||
+      clean.includes('your-render-service-name') ||
+      clean.includes('your-service-name') ||
+      clean.includes('example.com') ||
+      clean.includes('placeholder') ||
+      clean.includes('<') ||
+      clean.includes('>');
+  }
+
   function getApiBaseUrl() {
     if (typeof window !== 'undefined') {
-      if (window.MCM_API_BASE_URL) return String(window.MCM_API_BASE_URL).replace(/\/+$/, '');
+      if (window.MCM_API_BASE_URL && !isPlaceholderApiUrl(window.MCM_API_BASE_URL)) {
+        return String(window.MCM_API_BASE_URL).replace(/\/+$/, '');
+      }
       try {
         const stored = localStorage.getItem('mcm_backend_api_url');
-        if (stored) return String(stored).replace(/\/+$/, '');
+        if (stored && !isPlaceholderApiUrl(stored)) {
+          return String(stored).replace(/\/+$/, '');
+        }
       } catch (e) {}
     }
     return '';
@@ -166,12 +182,14 @@
     window.getApiBaseUrl = getApiBaseUrl;
     window.hasConfiguredBackend = hasConfiguredBackend;
     window.isGitHubPagesHost = isGitHubPagesHost;
+    window.isPlaceholderApiUrl = isPlaceholderApiUrl;
   }
   if (typeof global !== 'undefined') {
     global.getApiUrl = getApiUrl;
     global.getApiBaseUrl = getApiBaseUrl;
     global.hasConfiguredBackend = hasConfiguredBackend;
     global.isGitHubPagesHost = isGitHubPagesHost;
+    global.isPlaceholderApiUrl = isPlaceholderApiUrl;
   }
 
   // ==========================================

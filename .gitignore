@@ -12,6 +12,7 @@ world_the_end/
 !manifest.json
 !package.json
 !package-lock.json
+data/
 node_modules/
 *.properties
 *.bat

@@ -49,6 +49,7 @@ try {
 }
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 const ROOT_DIR = __dirname;
 const SUPER_ADMIN_EMAIL = 'codingdevelopia@gmail.com';
 
@@ -510,15 +511,36 @@ function parseRequestBody(req) {
 
 function getCorsOrigin(req) {
   const origin = req?.headers?.origin || req?.socket?._httpMessage?.req?.headers?.origin;
-  if (!origin) return 'https://codingm-eng.github.io';
+  const configuredCors = (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '').trim();
+  const configuredList = configuredCors
+    ? configuredCors.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+
   const allowedPatterns = [
     /^https:\/\/codingm-eng\.github\.io$/,
+    /^https:\/\/[a-z0-9_-]+\.github\.io$/,
+    /^https:\/\/[a-z0-9_-]+\.onrender\.com$/,
     /^http:\/\/localhost(:\d+)?$/,
     /^http:\/\/127\.0\.0\.1(:\d+)?$/
   ];
-  if (allowedPatterns.some(p => p.test(origin))) {
-    return origin;
+
+  if (configuredList.includes('*')) {
+    return origin || '*';
   }
+
+  if (origin) {
+    if (configuredList.includes(origin)) {
+      return origin;
+    }
+    if (allowedPatterns.some(p => p.test(origin))) {
+      return origin;
+    }
+  }
+
+  if (configuredList.length > 0 && configuredList[0] !== '*') {
+    return configuredList[0];
+  }
+
   return 'https://codingm-eng.github.io';
 }
 
@@ -639,7 +661,7 @@ const server = http.createServer(async (req, res) => {
   // ==========================================
   // 1. TEMEL API & SAĞLIK KONTROLÜ
   // ==========================================
-  if (req.method === 'GET' && pathname === '/api/health') {
+  if (req.method === 'GET' && (pathname === '/health' || pathname === '/api/health')) {
     return sendJson(res, 200, {
       status: 'ok',
       service: 'MC Milyoner Node.js Backend Server',
@@ -3824,10 +3846,10 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log('===============================================================');
   console.log('🚀 MC MİLYONER NODE.JS SUNUCUSU AKTİF! (v2.0.0)');
-  console.log(`🌐 Web Platformu:        http://localhost:${PORT}`);
+  console.log(`🌐 Web Platformu:        http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT} (${HOST}:${PORT})`);
   console.log(`💳 Stripe Checkout API:  http://localhost:${PORT}/api/stripe/create-checkout-session`);
   console.log(`📨 Stripe Webhook:       http://localhost:${PORT}/api/stripe/webhook`);
   console.log(`🤖 Telegram Poll API:    http://localhost:${PORT}/api/telegram/create-poll`);
