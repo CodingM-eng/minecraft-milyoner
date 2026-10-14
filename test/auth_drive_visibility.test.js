@@ -2211,8 +2211,81 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.strictEqual(ticketOdemeRes.action.target, 'support');
     console.log('✓ Mod & Ticket Bot: Rollerine özgü eylem butonları ve detaylı çözümler doğrulandı.');
 
+    // ====================================================
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-49 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 50: Kullanım Koşulları (Terms of Service), Gizlilik Politikası (Privacy Policy) & Footer Denetimi');
+    console.log('====================================================');
+
+    // 50.1: Hash Yönlendirme ve Alias Çözümlemesi
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#terms'), 'terms', '#terms çözümlenmelidir.');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#tos'), 'terms', '#tos alias çözümlenmelidir.');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#kullanim-kosullari'), 'terms', '#kullanim-kosullari alias çözümlenmelidir.');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#kullanim-sartlari'), 'terms', '#kullanim-sartlari alias çözümlenmelidir.');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#privacy'), 'privacy', '#privacy çözümlenmelidir.');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#privacy-policy'), 'privacy', '#privacy-policy alias çözümlenmelidir.');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#gizlilik'), 'privacy', '#gizlilik alias çözümlenmelidir.');
+    assert.strictEqual(window.MCMPlatform.resolveScreenFromHash('#gizlilik-politikasi'), 'privacy', '#gizlilik-politikasi alias çözümlenmelidir.');
+    console.log('✓ Hash Yönlendirme: #terms, #tos, #kullanim-kosullari, #privacy, #gizlilik vb. alias çözümlemeleri başarıyla doğrulandı.');
+
+    // 50.2: index.html Dosyasında Ekran ve Footer Varlığı
+    const indexHtmlSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    assert.ok(indexHtmlSource.includes('id="screen-terms"'), 'index.html içerisinde screen-terms ekranı bulunmalıdır.');
+    assert.ok(indexHtmlSource.includes('id="screen-privacy"'), 'index.html içerisinde screen-privacy ekranı bulunmalıdır.');
+    assert.ok(indexHtmlSource.includes('id="site-global-footer"'), 'index.html içerisinde site-global-footer bulunmalıdır.');
+    assert.ok(indexHtmlSource.includes('href="#terms"'), 'index.html içerisinde #terms bağlantısı bulunmalıdır.');
+    assert.ok(indexHtmlSource.includes('href="#privacy"'), 'index.html içerisinde #privacy bağlantısı bulunmalıdır.');
+    assert.ok(indexHtmlSource.includes('data-nav-screen="terms"'), 'index.html içerisinde data-nav-screen="terms" bulunmalıdır.');
+    assert.ok(indexHtmlSource.includes('data-nav-screen="privacy"'), 'index.html içerisinde data-nav-screen="privacy" bulunmalıdır.');
+    console.log('✓ Arayüz Bütünlüğü: screen-terms, screen-privacy ekranları, menü ve global footer bağlantıları doğrulandı.');
+
+    // 50.3: Discord Entegrasyonu ve Veri Toplama Şeffaflığı
+    assert.ok(indexHtmlSource.includes('Discord OAuth2 Entegrasyonu'), 'Terms ekranında Discord OAuth2 açıklaması yer almalıdır.');
+    assert.ok(indexHtmlSource.includes('identify email'), 'Terms ve Privacy içinde Discord identify email yetkisi dürüstçe belirtilmelidir.');
+    assert.ok(!indexHtmlSource.includes('botumuz sunucunuzda komut çalıştırır'), 'Var olmayan Discord bot yetenekleri uydurulmamalıdır.');
+    assert.ok(indexHtmlSource.includes('codingdevelopia@gmail.com'), 'İletişim ve veri silme adresi belirtilmelidir.');
+    assert.ok(indexHtmlSource.includes('Mojang Synergies AB'), 'Minecraft bağımsız hayran projesi uyarısı bulunmalıdır.');
+    console.log('✓ Dürüst Hukuki ve Teknik Metinler: Gerçek Discord OAuth2 kapsamı ve veri politikası şeffaflıkla doğrulandı.');
+
+    // 50.4: Oturumsuz (Misafir / Dış Bağlantı) Doğrudan Erişim Denetimi
+    // terms ve privacy ekranları oturum açmadan (access-gate olmadan) görüntülenebilmelidir
+    let gateHidden = false;
+    global.document.getElementById = (id) => {
+      if (id === 'access-gate') {
+        return {
+          id,
+          style: {},
+          dataset: {},
+          classList: {
+            add: (cls) => { if (cls === 'hidden') gateHidden = true; },
+            remove: () => {},
+            toggle: () => {},
+            contains: () => false
+          },
+          addEventListener: () => {},
+          setAttribute: () => {},
+          getAttribute: () => null,
+          appendChild: () => {}
+        };
+      }
+      return {
+        id,
+        style: {},
+        dataset: {},
+        classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
+        addEventListener: () => {},
+        setAttribute: () => {},
+        getAttribute: () => null,
+        appendChild: () => {}
+      };
+    };
+    const updatedPlatformCode = fs.readFileSync(path.join(__dirname, '..', 'platform.js'), 'utf8');
+    eval(updatedPlatformCode);
+    window.MCMPlatform.navigateToScreen('terms', { skipHistory: true });
+    assert.strictEqual(gateHidden, true, 'terms ekranı oturumsuz ziyaret edildiğinde access-gate gizlenmelidir.');
+    console.log('✓ Herkese Açık Erişim: Oturumsuz ziyaretçiler için Kullanım Koşulları ve Gizlilik Politikası doğrudan erişilebilir.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-50 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

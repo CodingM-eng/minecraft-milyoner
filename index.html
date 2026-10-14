@@ -398,6 +398,13 @@
           </button>
         </div>
       </form>
+
+      <!-- Giriş / Kayıt Altı Yasal Bilgilendirme Bağlantıları -->
+      <div class="gate-legal-footer" style="text-align: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 0.78rem; color: #64748b;">
+        <a href="#terms" class="footer-link" data-nav-screen="terms" style="color: #94a3b8; text-decoration: none;">Kullanım Koşulları</a>
+        <span style="margin: 0 8px; color: #475569;">•</span>
+        <a href="#privacy" class="footer-link" data-nav-screen="privacy" style="color: #94a3b8; text-decoration: none;">Gizlilik Politikası</a>
+      </div>
     </div>
   </div>
 
@@ -547,6 +554,14 @@
           <button type="button" class="drawer-item" data-nav-screen="settings">
             <span class="drawer-item-icon">⚙️</span>
             <span class="drawer-item-text">Ayarlar</span>
+          </button>
+          <button type="button" class="drawer-item" data-nav-screen="terms">
+            <span class="drawer-item-icon">📜</span>
+            <span class="drawer-item-text">Kullanım Koşulları</span>
+          </button>
+          <button type="button" class="drawer-item" data-nav-screen="privacy">
+            <span class="drawer-item-icon">🔒</span>
+            <span class="drawer-item-text">Gizlilik Politikası</span>
           </button>
           <!-- Moderatör Paneli (Moderatör veya Admin için Görünür) -->
           <button type="button" id="drawer-btn-moderator" class="drawer-item drawer-item-admin hidden"
@@ -1829,6 +1844,277 @@
         </div>
       </div>
     </main>
+
+    <!-- ========================================================
+         19. EKRAN: KULLANIM KOŞULLARI (screen-terms)
+         Discord Developer Portal & Genel Kullanıcı Sözleşmesi
+         ======================================================== -->
+    <main id="screen-terms" class="screen platform-screen hidden">
+      <div class="platform-container">
+        <div class="section-header-bar">
+          <div>
+            <span class="section-eyebrow">📜 YASAL BİLGİLENDİRME &amp; SÖZLEŞME</span>
+            <h2>KULLANIM KOŞULLARI (TERMS OF SERVICE)</h2>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button type="button" class="mc-btn mc-btn-secondary" data-nav-screen="privacy">🔒 Gizlilik Politikası</button>
+            <button type="button" class="mc-btn mc-btn-primary" data-nav-screen="welcome">← Ana Sayfa</button>
+          </div>
+        </div>
+
+        <div class="platform-stack">
+          <!-- 1. Giriş ve Platformun Amacı -->
+          <div class="platform-card">
+            <h3>1. Giriş ve Platformun Tanımı</h3>
+            <p class="card-sub" style="margin-bottom:8px;">Son Güncelleme: 14 Ekim 2026</p>
+            <p>
+              <strong>MC Milyoner</strong> ("Platform"), Minecraft evrenine dair genel kültür, mekanikler, bloklar, moblar ve stratejiler üzerine hazırlanmış etkileşimli bir web bilgi yarışması, topluluk partileri ve turnuva platformudur.
+            </p>
+            <p>
+              Platformumuza erişerek veya üye hesabı oluşturarak bu sayfada yer alan Kullanım Koşullarını kabul etmiş sayılırsınız. Şartları kabul etmiyorsanız lütfen platformu ve ilişkili servisleri kullanmayınız.
+            </p>
+          </div>
+
+          <!-- 2. Discord Entegrasyonu ve Gerçek İşlevler -->
+          <div class="platform-card" style="border-left: 4px solid #5865F2;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <span style="font-size:1.5rem;">🤖</span>
+              <h3 style="margin:0;color:#818cf8;">2. Discord Entegrasyonu ve Kapsamı</h3>
+            </div>
+            <p>
+              MC Milyoner platformunda oyuncuların hesaplarına güvenle erişebilmeleri ve topluluk kimliklerini doğrulayabilmeleri için resmi bir <strong>Discord OAuth2 Entegrasyonu</strong> bulunmaktadır.
+            </p>
+            <div style="background:rgba(88,101,242,0.12);border:1px solid rgba(88,101,242,0.3);border-radius:6px;padding:12px;margin:12px 0;">
+              <strong style="color:#c7d2fe;display:block;margin-bottom:6px;">📌 Kod Tabanında Somut Olarak Yer Alan Gerçek Discord Özellikleri:</strong>
+              <ul class="guide-list" style="margin:0;padding-left:18px;">
+                <li><strong>Tek Tıkla Giriş (OAuth2 SSO):</strong> Oyuncular <code>identify email</code> yetki kapsamıyla Discord hesaplarını kullanarak doğrudan kayıt olabilir veya mevcut hesaplarına giriş yapabilirler.</li>
+                <li><strong>Hesap Bağlama ve Profil Entegrasyonu:</strong> Oyuncular profil ayarlarından Discord hesaplarını bağlayabilir; Discord kullanıcı adları ve profil avatarları MC Milyoner profilinde rozet olarak görüntülenir.</li>
+                <li><strong>Bağlantıyı Kaldırma Koruması:</strong> Oyuncular profil ayarlarından Discord bağlantısını diledikleri zaman kaldırabilirler. Hesabın kalıcı kilitlenmesini önlemek için alternatif bir giriş yöntemi (şifre, e-posta veya Telegram) tanımlı olmalıdır.</li>
+              </ul>
+            </div>
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:10px;margin-top:10px;font-size:0.85rem;color:#fca5a5;">
+              ⚠️ <strong>Dürüstlük ve Şeffaflık İlkesi:</strong> MC Milyoner projesi, Discord sunucularında arka planda çalışan otonom bir sohbet botu, ses kanalı dinleyicisi veya otomatik ceza botu <u>içermemektedir</u>. Entegrasyonumuz yalnızca resmi Discord OAuth2 arayüzü ile web kimlik doğrulaması sağlar; kullanıcıların sunucularına, özel mesajlarına veya arkadaş listelerine müdahale etmez.
+            </div>
+          </div>
+
+          <!-- 3. Hesap Güvenliği ve Kullanıcı Sorumluluğu -->
+          <div class="platform-card">
+            <h3>3. Hesap Güvenliği ve Kullanıcı Sorumlulukları</h3>
+            <ul class="guide-list">
+              <li><strong>Hesap Bilgilerinin Korunması:</strong> Kullanıcılar, kullanıcı adı ve parolalarının gizliliğinden kendileri sorumludur. Parolalar sunucumuzda asla açık metin olarak tutulmaz; tuzlanmış SHA-256 algoritmasıyla özetlenerek saklanır.</li>
+              <li><strong>Kişisel Bilgi Paylaşımı:</strong> Oyun içi sohbetlerde, partilerde, destek biletlerinde veya hata bildirimlerinde gerçek kimlik, telefon numarası veya finansal bilgi paylaşılmamalıdır. Yetkililerimiz oyunculardan asla parola talep etmez.</li>
+              <li><strong>Doğruluk Taahhüdü:</strong> Kayıt sırasında girilen bilgilerin (e-posta vb.) kullanıcıya ait olduğu kabul edilir. İsteğe bağlı girilen Minecraft oyuncu adı, yalnızca resmi Minecraft skin kafasını görüntülemek için kullanılır.</li>
+            </ul>
+          </div>
+
+          <!-- 4. Adil Oyun (Fair-Play) ve Topluluk Kuralları -->
+          <div class="platform-card">
+            <h3>4. Adil Oyun (Fair-Play) ve Davranış Kuralları</h3>
+            <p>Tüm oyuncuların eşit ve keyifli bir yarışma deneyimi yaşaması esastır. Aşağıdaki eylemler kesinlikle yasaktır:</p>
+            <ul class="guide-list">
+              <li>Soruları otomatik çözen botlar, web scraper'lar, scriptler veya yarışma süresini manipüle eden yazılımlar kullanmak.</li>
+              <li>Parti odalarında veya kullanıcı adlarında küfür, hakaret, nefret söylemi, taciz veya zararlı içerik barındırmak (sistemde otomatik Türkçe argo/küfür filtresi devrededir).</li>
+              <li>Platform güvenlik açıklarını kötüye kullanmak, sunucuya kasıtlı DoS/DDoS saldırısı veya aşırı istek göndermek.</li>
+            </ul>
+            <p style="font-size:0.86rem;color:#94a3b8;margin-top:8px;">
+              Kuralları ihlal eden hesaplar, yetkili moderatörler veya yöneticiler tarafından uyarılabilir, susturulabilir (mute) veya yarışmadan men edilebilir.
+            </p>
+          </div>
+
+          <!-- 5. Sanal Oyun Ekonomisi ve Haklar -->
+          <div class="platform-card">
+            <h3>5. Sanal Ekonomi, Zümrüt &amp; Netherite Kuralları</h3>
+            <ul class="guide-list">
+              <li><strong>Sanal Varlıklar:</strong> Yarışmalardan veya günlük ödüllerden kazanılan Zümrüt (Emerald), Netherite, Puanlar ve Ekstra Canlar tamamen sanal oyun içi simgelerdir.</li>
+              <li><strong>Nakit Karşılığı Yoktur:</strong> Oyun içi bakiyelerin hiçbir şekilde gerçek para, nakit iade, kripto varlık veya banka transferi karşılığı bulunmamaktadır ve üçüncü şahıslara satılamaz.</li>
+              <li><strong>Mağaza ve Rütbeler:</strong> Mağazadan alınan kozmetik rozetler, avatar çerçeveleri ve rütbeler oyun içi eğlence amaçlıdır. Hesabın silinmesi durumunda sanal varlıklar iade edilmez.</li>
+            </ul>
+          </div>
+
+          <!-- 6. Fikri Mülkiyet ve Yasal Uyarı -->
+          <div class="platform-card" style="border-left: 4px solid #facc15;">
+            <h3>6. Fikri Mülkiyet, Mojang Uyarısı ve Sorumluluk Reddi</h3>
+            <div style="background:rgba(250,204,21,0.08);border:1px solid rgba(250,204,21,0.25);border-radius:6px;padding:12px;margin-bottom:12px;font-size:0.88rem;">
+              <strong>⚠️ BAĞIMSIZ HAYRAN PROJESİ DUYURUSU:</strong><br />
+              MC Milyoner, Minecraft topluluğu için geliştirilmiş bağımsız bir hayran projesidir. <strong>Mojang Studios</strong> veya <strong>Microsoft</strong> ile herhangi bir resmi bağı, sponsorluğu, onayı veya ticari ortaklığı <u>bulunmamaktadır</u>. "Minecraft", Mojang Synergies AB'nin tescilli ticari markasıdır.
+            </div>
+            <p style="font-size:0.86rem;color:#cbd5e1;">
+              <strong>Yasal Uyarı:</strong> Bu Kullanım Koşulları ve Gizlilik metinleri oyuncuları ve platformu şeffaf bir şekilde bilgilendirmek amacıyla hazırlanmıştır. Herhangi bir yargı alanında kesin yasal uyumluluk garantisi veya hukuki taahhüt teşkil etmez.
+            </p>
+          </div>
+
+          <!-- 7. İletişim ve Destek Masası -->
+          <div class="platform-card">
+            <h3>7. İletişim ve Destek</h3>
+            <p>
+              Kullanım koşullarına dair soru, itiraz veya geri bildirimleriniz için oyun içi <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a> üzerinden bilet oluşturabilir veya resmi iletişim e-posta adresimiz olan <code style="color:#60a5fa;">codingdevelopia@gmail.com</code> üzerinden bizimle iletişime geçebilirsiniz.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ========================================================
+         20. EKRAN: GİZLİLİK POLİTİKASI (screen-privacy)
+         Discord Developer Portal & Kişisel Veri Şeffaflık Metni
+         ======================================================== -->
+    <main id="screen-privacy" class="screen platform-screen hidden">
+      <div class="platform-container">
+        <div class="section-header-bar">
+          <div>
+            <span class="section-eyebrow">🔒 GİZLİLİK &amp; VERİ KORUMA BEYANI</span>
+            <h2>GİZLİLİK POLİTİKASI (PRIVACY POLICY)</h2>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button type="button" class="mc-btn mc-btn-secondary" data-nav-screen="terms">📜 Kullanım Koşulları</button>
+            <button type="button" class="mc-btn mc-btn-primary" data-nav-screen="welcome">← Ana Sayfa</button>
+          </div>
+        </div>
+
+        <div class="platform-stack">
+          <!-- 1. Gizlilik Taahhüdümüz -->
+          <div class="platform-card">
+            <h3>1. Gizlilik İlkemiz ve Şeffaflık Taahhüdümüz</h3>
+            <p class="card-sub" style="margin-bottom:8px;">Son Güncelleme: 14 Ekim 2026</p>
+            <p>
+              <strong>MC Milyoner</strong> olarak oyuncularımızın gizliliğine ve güvenliğine büyük önem veriyoruz. Bu politika; web sitemizi ve Discord entegrasyonumuzu kullandığınızda hangi verilerin toplandığını, nasıl kullanıldığını, nerede saklandığını ve haklarınızı tüm şeffaflığıyla açıklamaktadır.
+            </p>
+            <p style="color:#10b981;font-weight:600;">
+              ✓ Temel İlke: Yalnızca oyunun ve hesap güvenliğinin gerektirdiği asgari veriler işlenir; kişisel veriler asla üçüncü taraf reklam şirketlerine satılmaz veya pazarlanmaz.
+            </p>
+          </div>
+
+          <!-- 2. Toplanan ve İşlenen Veriler (Kod Denetimli Gerçek Liste) -->
+          <div class="platform-card">
+            <h3>2. Toplanan ve Saklanan Veriler (Kod Tabanı Gerçek Listesi)</h3>
+            <p>Platformumuzun kod incelemesi doğrultusunda sistemde fiilen toplanan ve kaydedilen veriler şunlardır:</p>
+            <ul class="guide-list">
+              <li>
+                <strong>Hesap ve Giriş Bilgileri:</strong>
+                Kullanıcı adı, tuzlanmış SHA-256 parola özeti (parolanızın düz metin hali asla saklanmaz), isteğe bağlı Minecraft oyuncu adı (yalnızca Minecraft skin yüzünü profil simgesi olarak getirmek için kullanılır) ve e-posta ile kayıt olduysanız e-posta adresiniz (yalnızca OTP onay kodları ve şifre yenileme için).
+              </li>
+              <li>
+                <strong>Discord Entegrasyon Verileri (İsteğe Bağlı):</strong>
+                Kullanıcı Discord ile giriş yaptığında veya hesabını bağladığında, resmi Discord OAuth2 <code>identify email</code> yetkisiyle yalnızca şunlar alınır:
+                <strong>Discord Kullanıcı Kimliği (ID)</strong>, <strong>Discord kullanıcı adı</strong>, <strong>avatar görsel kimliği</strong> ve varsa <strong>Discord e-posta adresi</strong>. Bu veriler profilinize bağlanarak girişinizi kolaylaştırmak amacıyla <code>users.json</code> dosyasında saklanır.
+              </li>
+              <li>
+                <strong>Yarışma, Skor ve Oyun Verileri:</strong>
+                Cevaplanan soru sayıları, baraj başarıları, en yüksek puan, kazanılan/kaybedilen oyun sayıları, sanal bakiye (Zümrüt, Netherite, ekstra can), açılan başarımlar, kuşanılan kozmetikler ve oluşturulan parti odası kayıtları.
+              </li>
+              <li>
+                <strong>Destek, Hata Bildirimi ve Öneri Verileri:</strong>
+                Açtığınız destek biletleri (konu ve mesaj geçmişi), gönderdiğiniz hata bildirimleri (başlık, açıklama, önem derecesi, isteğe bağlı ekran görüntüsü linki ve parti kodu) ve öneri metinleriniz ile verdiğiniz oylar.
+              </li>
+            </ul>
+          </div>
+
+          <!-- 3. Kesinlikle Toplanmayan ve Yapılmayan Eylemler -->
+          <div class="platform-card" style="border-left: 4px solid #ef4444;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+              <span style="font-size:1.5rem;">🛑</span>
+              <h3 style="margin:0;color:#f87171;">3. Kesinlikle Toplanmayan Veriler ve Yapılmayan Eylemler</h3>
+            </div>
+            <p>Şeffaf ve dürüst bilgilendirme gereği, platformumuzun ASLA toplamadığı ve saklamadığı veriler:</p>
+            <ul class="guide-list">
+              <li><strong>Finansal Bilgiler:</strong> Kredi kartı, banka kartı veya IBAN bilgileriniz sunucularımızda ASLA toplanmaz, işlenmez veya saklanmaz. Olası bağış veya mağaza ödemeleri doğrudan Stripe gibi harici sertifikalı ödeme kuruluşları üzerinden güvenle tamamlanır.</li>
+              <li><strong>Discord Özel Verileri:</strong> Discord sunucu mesajlarınız, özel mesajlarınız (DM), sesli konuşmalarınız veya arkadaş listeniz ASLA okunmaz, dinlenmez veya kaydedilmez. Entegrasyonumuz yalnızca temel kimlik doğrulama kapsamındadır.</li>
+              <li><strong>Veri Ticareti Yoktur:</strong> Kullanıcı verileri hiçbir şart altında reklam ajanslarına, veri simsarlarına veya üçüncü şahıslara satılmaz, kiralanmaz veya ticari amaçla devredilmez.</li>
+            </ul>
+          </div>
+
+          <!-- 4. Verilerin Saklandığı Yerler ve Altyapı -->
+          <div class="platform-card">
+            <h3>4. Verilerin Saklama Ortamı ve Teknik Güvenlik</h3>
+            <div class="platform-grid-2">
+              <div style="background:rgba(15,23,42,0.6);border:1px solid #334155;border-radius:6px;padding:12px;">
+                <strong style="color:#38bdf8;display:block;margin-bottom:6px;">💻 Tarayıcı Tarafı (Yerel Depolama):</strong>
+                <p style="font-size:0.85rem;margin:0;color:#cbd5e1;">
+                  Oyun tercihleriniz (ses, parçacık efektleri), çevrimdışı oynanabilirlik ve aktif oturum anahtarınız tarayıcınızın yerel depolama alanında (<code>localStorage</code> - <code>mc_millionaire_tr_*</code> anahtarları) tutulur. Tarayıcı verilerini temizlediğinizde yerel önbellek sıfırlanır.
+                </p>
+              </div>
+              <div style="background:rgba(15,23,42,0.6);border:1px solid #334155;border-radius:6px;padding:12px;">
+                <strong style="color:#10b981;display:block;margin-bottom:6px;">🖥️ Sunucu Tarafı (Kalıcı JSON Dosyaları):</strong>
+                <p style="font-size:0.85rem;margin:0;color:#cbd5e1;">
+                  Sunucu tarafında kullanıcı hesapları, destek biletleri, hata raporları ve öneriler Node.js backend sunucumuzda yer alan güvenli JSON dosyalarında saklanır. Sistemde yetkisiz dosya erişimine karşı rol tabanlı yetki denetimi uygulanır.
+                </p>
+              </div>
+            </div>
+            <p style="font-size:0.82rem;color:#94a3b8;margin-top:10px;">
+              ℹ️ <em>Dürüst Bilgilendirme:</em> Verilerimiz modern web standartları ve dosya erişim denetimleriyle korunmaktadır. Ancak sistemimizde mevcut olmayan askeri düzey uçtan uca şifreleme veya otomatik veri imhası gibi asılsız iddialarda bulunulmaz.
+            </p>
+          </div>
+
+          <!-- 5. Harici Hizmetler ve Sağlayıcılar -->
+          <div class="platform-card">
+            <h3>5. Entegre Edilen Harici Sağlayıcılar</h3>
+            <p>Platformumuzun çalışması için belirli üçüncü taraf servislerle asgari düzeyde etkileşim kurulur:</p>
+            <ul class="guide-list">
+              <li><strong>Discord Inc.:</strong> OAuth2 kimlik doğrulama akışı için (<a href="https://discord.com/privacy" target="_blank" rel="noopener noreferrer" style="color:#60a5fa;">Discord Gizlilik Politikası</a>).</li>
+              <li><strong>Google LLC:</strong> İsteğe bağlı Google ile giriş ve Gmail SMTP üzerinden tek kullanımlık 6 haneli OTP onay kodlarının gönderimi.</li>
+              <li><strong>Telegram:</strong> İsteğe bağlı Telegram botu aracılığıyla tek kullanımlık oturum açma kodu üretimi.</li>
+              <li><strong>Mc-Heads.net:</strong> Oyuncunun girdiği Minecraft adına göre halka açık skin kafa görüntüsünü çeken açık CDN servisi.</li>
+            </ul>
+          </div>
+
+          <!-- 6. Kullanıcı Hakları ve Veri Silme Talepleri -->
+          <div class="platform-card">
+            <h3>6. Kullanıcı Hakları, Veri Güncelleme ve Hesap Silme</h3>
+            <ul class="guide-list">
+              <li><strong>Discord Bağlantısını Kaldırma:</strong> Profilim ekranına giderek istediğiniz an Discord hesabınızın bağlantısını kesebilirsiniz.</li>
+              <li><strong>Verileri Görüntüleme ve Düzeltme:</strong> Profil ekranından Minecraft kullanıcı adınızı, şifrenizi veya tercihlerinizi dilediğiniz zaman güncelleyebilirsiniz.</li>
+              <li><strong>Hesap ve Veri Silme Talebi:</strong> Hesabınızın, destek biletlerinizin veya sistemdeki kayıtlarınızın kalıcı olarak silinmesini talep etmek için oyun içi <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a> üzerinden talep açabilir veya <code style="color:#60a5fa;">codingdevelopia@gmail.com</code> adresine e-posta gönderebilirsiniz. Talebiniz makul süre içerisinde incelenerek sonuçlandırılır.</li>
+            </ul>
+          </div>
+
+          <!-- 7. Yasal Uyarı ve İletişim -->
+          <div class="platform-card" style="border-left: 4px solid #38bdf8;">
+            <h3>7. Yasal Beyan ve İletişim Bilgileri</h3>
+            <p style="font-size:0.86rem;color:#cbd5e1;">
+              Bu Gizlilik Politikası bilgilendirme amaçlı olup yasal bir garanti veya hukuki danışmanlık teşkil etmez. Politikamızda zaman zaman güncellemeler yapılabilir ve bu sayfada yayınlandığı tarihte yürürlüğe girer.
+            </p>
+            <p style="margin:0;">
+              Gizlilik konularına dair her türlü soru, öneri ve talepleriniz için resmi iletişim adresimiz: <code style="color:#38bdf8;">codingdevelopia@gmail.com</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ========================================================
+         GENEL WEB SİTESİ ALT BİLGİ ALANI (FOOTER)
+         Discord Developer Portal, GitHub Pages & Platform Navigasyonu
+         ======================================================== -->
+    <footer class="site-global-footer" id="site-global-footer">
+      <div class="footer-container">
+        <div class="footer-brand">
+          <img src="logo.png" alt="MC Milyoner Logo" class="footer-logo-img" />
+          <div style="text-align:left;">
+            <strong>MC MİLYONER</strong>
+            <p>Minecraft Bilgi Yarışması &amp; Turnuva Platformu</p>
+          </div>
+        </div>
+
+        <div class="footer-links">
+          <a href="#terms" class="footer-link" data-nav-screen="terms">Kullanım Koşulları</a>
+          <span class="footer-separator">•</span>
+          <a href="#privacy" class="footer-link" data-nav-screen="privacy">Gizlilik Politikası</a>
+          <span class="footer-separator">•</span>
+          <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a>
+          <span class="footer-separator">•</span>
+          <a href="#bug-report" class="footer-link" data-nav-screen="bug-report">Hata Bildir</a>
+          <span class="footer-separator">•</span>
+          <a href="#suggestions" class="footer-link" data-nav-screen="suggestions">Öneri Gönder</a>
+          <span class="footer-separator">•</span>
+          <a href="#how-to-play" class="footer-link" data-nav-screen="how-to-play">Nasıl Oynanır?</a>
+        </div>
+
+        <div class="footer-notice">
+          <span>MC Milyoner, bağımsız bir hayran projesidir. Mojang Studios veya Microsoft ile herhangi bir resmi bağı veya ortaklığı bulunmamaktadır. Minecraft, Mojang Synergies AB'nin tescilli ticari markasıdır.</span>
+          <span class="footer-copy">© 2026 MC Milyoner • Tüm hakları saklıdır.</span>
+        </div>
+      </div>
+    </footer>
   </div>
 
   <!-- ========================================================

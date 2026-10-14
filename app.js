@@ -2460,12 +2460,14 @@
       });
     });
 
-    // Aktif oturum varsa kapıyı gizle
+    // Aktif oturum veya herkese açık yasal ekran (terms/privacy) varsa kapıyı gizle
     const activeSession = svc().authService?.getActiveSession();
-    if (activeSession) {
+    const initialHashScreen = window.MCMPlatform?.resolveScreenFromHash?.();
+    const isPublicInitial = initialHashScreen === 'terms' || initialHashScreen === 'privacy';
+    if (activeSession || isPublicInitial) {
       gate?.classList.add('hidden');
       window.MCMPlatform?.syncHeaderAndDrawer();
-      const targetScreen = window.MCMPlatform?.resolveScreenFromHash?.() || 'welcome';
+      const targetScreen = initialHashScreen || 'welcome';
       window.MCMPlatform?.navigateToScreen(targetScreen, { skipHistory: true });
     } else {
       gate?.classList.remove('hidden');

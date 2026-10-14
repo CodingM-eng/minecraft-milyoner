@@ -8663,6 +8663,117 @@ body.screen-game-active #screen-game {
   }
 }
 
+/* ========================================================
+   GLOBAL WEBSITE FOOTER & LEGAL SECTIONS
+   ======================================================== */
+.site-global-footer {
+  width: 100%;
+  margin-top: 3rem;
+  padding: 2rem 1.25rem 2.5rem;
+  background: rgba(11, 15, 25, 0.96);
+  border-top: 2px solid #26314d;
+  color: #94a3b8;
+  font-size: 0.84rem;
+}
+
+.footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  align-items: center;
+  text-align: center;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+}
+
+.footer-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid #10b981;
+}
+
+.footer-brand strong {
+  color: #f8fafc;
+  font-size: 1rem;
+  letter-spacing: 0.8px;
+  display: block;
+}
+
+.footer-brand p {
+  margin: 2px 0 0 0;
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.9rem;
+}
+
+.footer-link {
+  color: #38bdf8;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.footer-link:hover {
+  color: #7dd3fc;
+  text-decoration: underline;
+  transform: translateY(-1px);
+}
+
+.footer-separator {
+  color: #334155;
+  font-size: 0.85rem;
+}
+
+.footer-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.76rem;
+  color: #64748b;
+  max-width: 820px;
+  line-height: 1.5;
+}
+
+.footer-copy {
+  color: #475569;
+  font-family: monospace;
+  font-size: 0.74rem;
+}
+
+/* Oyun esnasında odaklanmayı bozmaması için footer gizlenir */
+body.screen-game-active .site-global-footer {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  .site-global-footer {
+    padding: 1.5rem 1rem 2rem;
+    margin-top: 2rem;
+  }
+  .footer-links {
+    gap: 0.4rem 0.65rem;
+    font-size: 0.8rem;
+  }
+}
+
+
 
 
 

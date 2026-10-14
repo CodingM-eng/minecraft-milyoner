@@ -65,6 +65,14 @@
       .toLowerCase();
     if (!raw) return null;
     const aliasMap = {
+      'terms': 'terms',
+      'tos': 'terms',
+      'kullanim-kosullari': 'terms',
+      'kullanim-sartlari': 'terms',
+      'privacy': 'privacy',
+      'privacy-policy': 'privacy',
+      'gizlilik': 'privacy',
+      'gizlilik-politikasi': 'privacy',
       'bug-report': 'bug-report',
       'bug': 'bug-report',
       'bugs': 'bug-report',
@@ -450,7 +458,7 @@
     if (hName) {
       hName.textContent = user.username;
       hName.className = `user-chip-name ${cosMeta.nameClass}`.trim();
-      hName.style.cssText = cosMeta.nameCssText || '';
+      if (hName.style) hName.style.cssText = cosMeta.nameCssText || '';
     }
 
     const hRole = document.getElementById('header-user-role');
@@ -765,70 +773,77 @@
   function navigateToScreen(screenKey, options = {}) {
     closeDrawer();
 
+    const isPublicScreen = screenKey === 'terms' || screenKey === 'privacy';
     const session = getSession();
-    if (!session) {
+    if (!session && !isPublicScreen) {
       const gate = document.getElementById('access-gate');
       gate?.classList.remove('hidden');
       return;
     }
-
-    // Admin ekranı güvenlik kontrolü (codingdevelopia@gmail.com veya test1234@Admin)
-    if (screenKey === 'admin') {
-      const email = String(session.email || '').trim().toLowerCase();
-      const rankId = svc().authGuard?.getEffectiveRankId(session);
-      const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
-      const isVerifiedAdmin = Boolean(
-        ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
-        isTestAdmin
-      );
-      if (!isVerifiedAdmin) {
-        showToast('Yönetici paneline yalnızca yetkili yönetici erişebilir!', 'error');
-        navigateToScreen('welcome');
-        return;
-      }
+    if (isPublicScreen) {
+      const gate = document.getElementById('access-gate');
+      gate?.classList.add('hidden');
     }
 
-    // Moderatör ekranı güvenlik kontrolü (#1: Yöneticiler için tüm araçlar Admin panelindedir)
-    if (screenKey === 'moderator') {
-      const email = String(session.email || '').trim().toLowerCase();
-      const rankId = svc().authGuard?.getEffectiveRankId(session);
-      const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
-      const isVerifiedAdmin = Boolean(
-        ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
-        isTestAdmin
-      );
-      if (isVerifiedAdmin) {
-        showToast('Yönetici olarak tüm yönetim ve denetim araçları Yönetici Paneli içerisindedir.', 'info');
-        navigateToScreen('admin');
-        return;
+    if (session) {
+      // Admin ekranı güvenlik kontrolü (codingdevelopia@gmail.com veya test1234@Admin)
+      if (screenKey === 'admin') {
+        const email = String(session.email || '').trim().toLowerCase();
+        const rankId = svc().authGuard?.getEffectiveRankId(session);
+        const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
+        const isVerifiedAdmin = Boolean(
+          ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
+          isTestAdmin
+        );
+        if (!isVerifiedAdmin) {
+          showToast('Yönetici paneline yalnızca yetkili yönetici erişebilir!', 'error');
+          navigateToScreen('welcome');
+          return;
+        }
       }
-      const effRole = svc().authGuard?.getEffectiveRole(session);
-      if (effRole !== 'MODERATOR') {
-        showToast('Moderatör paneline yalnızca yetkili moderatörler erişebilir!', 'error');
-        navigateToScreen('welcome');
-        return;
-      }
-    }
 
-    // Destek Yetkili ekranı güvenlik kontrolü (#1: Yöneticiler için tüm araçlar Admin panelindedir)
-    if (screenKey === 'ticket') {
-      const email = String(session.email || '').trim().toLowerCase();
-      const rankId = svc().authGuard?.getEffectiveRankId(session);
-      const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
-      const isVerifiedAdmin = Boolean(
-        ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
-        isTestAdmin
-      );
-      if (isVerifiedAdmin) {
-        showToast('Yönetici olarak tüm destek yönetimi Yönetici Paneli içerisindedir.', 'info');
-        navigateToScreen('admin');
-        return;
+      // Moderatör ekranı güvenlik kontrolü (#1: Yöneticiler için tüm araçlar Admin panelindedir)
+      if (screenKey === 'moderator') {
+        const email = String(session.email || '').trim().toLowerCase();
+        const rankId = svc().authGuard?.getEffectiveRankId(session);
+        const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
+        const isVerifiedAdmin = Boolean(
+          ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
+          isTestAdmin
+        );
+        if (isVerifiedAdmin) {
+          showToast('Yönetici olarak tüm yönetim ve denetim araçları Yönetici Paneli içerisindedir.', 'info');
+          navigateToScreen('admin');
+          return;
+        }
+        const effRole = svc().authGuard?.getEffectiveRole(session);
+        if (effRole !== 'MODERATOR') {
+          showToast('Moderatör paneline yalnızca yetkili moderatörler erişebilir!', 'error');
+          navigateToScreen('welcome');
+          return;
+        }
       }
-      const effRole = svc().authGuard?.getEffectiveRole(session);
-      if (effRole !== 'TICKET') {
-        showToast('Destek yetkili paneline yalnızca yetkili destek personeli erişebilir!', 'error');
-        navigateToScreen('welcome');
-        return;
+
+      // Destek Yetkili ekranı güvenlik kontrolü (#1: Yöneticiler için tüm araçlar Admin panelindedir)
+      if (screenKey === 'ticket') {
+        const email = String(session.email || '').trim().toLowerCase();
+        const rankId = svc().authGuard?.getEffectiveRankId(session);
+        const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
+        const isVerifiedAdmin = Boolean(
+          ((session.isAdminSession || rankId === 'ADMIN') && email === 'codingdevelopia@gmail.com') ||
+          isTestAdmin
+        );
+        if (isVerifiedAdmin) {
+          showToast('Yönetici olarak tüm destek yönetimi Yönetici Paneli içerisindedir.', 'info');
+          navigateToScreen('admin');
+          return;
+        }
+        const effRole = svc().authGuard?.getEffectiveRole(session);
+        if (effRole !== 'TICKET') {
+          showToast('Destek yetkili paneline yalnızca yetkili destek personeli erişebilir!', 'error');
+          navigateToScreen('welcome');
+          return;
+        }
       }
     }
 
@@ -837,15 +852,15 @@
     // Yalnızca ADMIN ve MODERATOR rolleri hariç tüm kullanıcılar tam ekran bloklanır.
     const maintenanceStatus = svc().maintenanceService?.getMaintenanceStatus?.() || { enabled: false };
     const maintenanceOverlay = document.getElementById('maintenance-overlay');
-    const sessionEmail = String(session.email || '').trim().toLowerCase();
-    const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
+    const sessionEmail = String(session?.email || '').trim().toLowerCase();
+    const isTestAdmin = String(session?.username || '').toLowerCase() === 'test1234@admin';
     const isMaintenanceExempt = Boolean(
-      ((session.isAdminSession || session.role === 'ADMIN' || session.rank === 'ADMIN') &&
+      ((session?.isAdminSession || session?.role === 'ADMIN' || session?.rank === 'ADMIN') &&
       sessionEmail === 'codingdevelopia@gmail.com') ||
       isTestAdmin
-    ) || Boolean(session.isModerator || session.role === 'MODERATOR' || session.rank === 'MODERATOR');
+    ) || Boolean(session?.isModerator || session?.role === 'MODERATOR' || session?.rank === 'MODERATOR');
 
-    if (maintenanceStatus.enabled && !isMaintenanceExempt) {
+    if (maintenanceStatus.enabled && !isMaintenanceExempt && !isPublicScreen) {
       if (maintenanceOverlay) {
         maintenanceOverlay.classList.remove('hidden');
         const descEl = document.getElementById('maintenance-desc-text');
@@ -875,10 +890,12 @@
     targetEl.classList.add('active');
     state.currentScreen = screenKey;
 
-    if (screenKey === 'game') {
-      document.body.classList.add('screen-game-active');
-    } else {
-      document.body.classList.remove('screen-game-active');
+    if (document.body) {
+      if (screenKey === 'game') {
+        document.body.classList.add('screen-game-active');
+      } else {
+        document.body.classList.remove('screen-game-active');
+      }
     }
 
     // Çekmecedeki aktif öğeyi işaretle
@@ -960,7 +977,9 @@
         break;
     }
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   function openAdminLoginModal() {
