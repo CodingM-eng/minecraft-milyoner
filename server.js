@@ -112,6 +112,33 @@ function savePersistentUsers() {
   }
 }
 
+// Whitelist (Beyaz Liste) Yapılandırması
+let whitelistConfig = safeLoadJson('whitelist.json', {
+  enabled: false,
+  allowedUsers: ['admin', 'efekan', 'codingdevelopia@gmail.com']
+});
+function saveWhitelistConfig() {
+  safeSaveJson('whitelist.json', whitelistConfig);
+}
+
+// Etkinlik Modu (Events) Deposu
+let persistentEvents = safeLoadJson('events.json', []);
+let persistentEventClaims = safeLoadJson('event_claims.json', {});
+function savePersistentEvents() {
+  safeSaveJson('events.json', persistentEvents);
+  safeSaveJson('event_claims.json', persistentEventClaims);
+}
+
+// Bakım Modu (Maintenance) Yapılandırması
+let maintenanceConfig = safeLoadJson('maintenance.json', {
+  enabled: false,
+  title: 'BAKIM MODU',
+  message: 'Sunucumuz şu anda bakım modundadır. Lütfen daha sonra tekrar deneyiniz.'
+});
+function saveMaintenanceConfig() {
+  safeSaveJson('maintenance.json', maintenanceConfig);
+}
+
 function verifyStaffAccount(username, allowedRoles = ['TICKET', 'MODERATOR', 'ADMIN']) {
   if (!username) return null;
   const clean = String(username).trim().toLowerCase();
@@ -3648,7 +3675,9 @@ const server = http.createServer(async (req, res) => {
           type: 'NAVIGATE',
           target: 'admin',
           label: '🛡️ Yönetici Paneline Git',
-          title: 'Yönetici Paneli'
+          title: 'Yönetici Paneli',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Yönetici paneline yönlendirilmek istiyor musunuz?'
         };
       } else {
         answer = `🛡️ **Yönetici Asistanı Özeti**:\n` +
@@ -3657,12 +3686,15 @@ const server = http.createServer(async (req, res) => {
           `• Açık Destek Biletleri: ${stats.openTickets} | Bekleyen Hatalar: ${stats.unresolvedBugs}\n` +
           `• Toplam Stripe Geliri: ${stats.totalRevenueTry} ₺ | Bulut Yedekleri: ${stats.totalBackups} adet.\n\n` +
           `Sistem tüm bileşenleriyle stabil ve güvenli çalışıyor.`;
-        action = {
+        const wantsNav = q.includes('git') || q.includes('panel') || q.includes('rota');
+        action = wantsNav ? {
           type: 'NAVIGATE',
           target: 'admin',
           label: '🛡️ Yönetici Paneline Git',
-          title: 'Yönetici Paneli'
-        };
+          title: 'Yönetici Paneli',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Yönetici paneline yönlendirilmek istiyor musunuz?'
+        } : null;
       }
 
       answer += `\n\n⚠️ *Güvenlik Uyarısı: AI asistanı yalnızca öneri verir; sistemsel değişiklikler onayınızla yürütülür.*`;
@@ -3703,7 +3735,9 @@ const server = http.createServer(async (req, res) => {
           type: 'ADMIN_TAB',
           target: 'chatlogs',
           label: '💬 Sohbet Kayıtlarını İncele',
-          title: 'Sohbet Denetimi'
+          title: 'Sohbet Denetimi',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Sohbet denetimi sekmesine geçmek istiyor musunuz?'
         };
       } else if (q.includes('sustur') || q.includes('mute') || q.includes('ceza')) {
         answer = `⚔️ **Moderatör Asistanı — Ceza Yönetimi**:\n` +
@@ -3713,7 +3747,9 @@ const server = http.createServer(async (req, res) => {
           type: 'ADMIN_TAB',
           target: 'mutes',
           label: '⚔️ Susturulan Oyuncuları Aç',
-          title: 'Ceza Yönetimi'
+          title: 'Ceza Yönetimi',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Ceza yönetimi sekmesine geçmek istiyor musunuz?'
         };
       } else if (q.includes('hata') || q.includes('bug')) {
         answer = `⚔️ **Moderatör Asistanı — Hata İncelemesi**:\n` +
@@ -3723,7 +3759,9 @@ const server = http.createServer(async (req, res) => {
           type: 'ADMIN_TAB',
           target: 'bugs',
           label: '🐛 Hataları İncele',
-          title: 'Hata İncelemesi'
+          title: 'Hata İncelemesi',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Hata incelemesi sekmesine geçmek istiyor musunuz?'
         };
       } else if (q.includes('öneri') || q.includes('suggestion')) {
         answer = `⚔️ **Moderatör Asistanı — Öneri İncelemesi**:\n` +
@@ -3733,7 +3771,9 @@ const server = http.createServer(async (req, res) => {
           type: 'ADMIN_TAB',
           target: 'suggestions',
           label: '💡 Önerileri İncele',
-          title: 'Öneri İncelemesi'
+          title: 'Öneri İncelemesi',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Öneri incelemesi sekmesine geçmek istiyor musunuz?'
         };
       } else {
         answer = `⚔️ **Moderatör Asistanı Yanıtı**:\n` +
@@ -3741,12 +3781,15 @@ const server = http.createServer(async (req, res) => {
           `• Bekleyen Bilet: ${openTicketsCount} | Hata: ${reportedBugsCount} | Öneri: ${suggestionsCount}\n` +
           `• Aktif Cezalar: ${activeMutesCount} oyuncu.\n\n` +
           `Tüm moderasyon araçlarına erişmek için paneli açabilirsiniz.`;
-        action = {
+        const wantsNav = q.includes('panel') || q.includes('git') || q.includes('rota');
+        action = wantsNav ? {
           type: 'NAVIGATE',
           target: 'admin',
           label: '⚔️ Moderatör Paneline Git',
-          title: 'Moderatör Paneli'
-        };
+          title: 'Moderatör Paneli',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Moderatör paneline yönlendirilmek istiyor musunuz?'
+        } : null;
       }
 
       answer += `\n\n⚠️ *Güvenlik Uyarısı: AI asla otomatik ceza uygulamaz; işlem yetkili onayı gerektirir.*`;
@@ -3777,7 +3820,9 @@ const server = http.createServer(async (req, res) => {
           type: 'NAVIGATE',
           target: 'support',
           label: '🎫 Bilet Kuyruğunu Aç',
-          title: 'Destek Masası'
+          title: 'Destek Masası',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Destek masasına yönlendirilmek istiyor musunuz?'
         };
       } else if (q.includes('şifre') || q.includes('hesap') || q.includes('otp')) {
         answer += `Asla oyuncudan şifre talep etmeyiniz. E-posta OTP veya Discord bağlantısı ile parola yenileme adımlarını iletiniz.`;
@@ -3785,7 +3830,9 @@ const server = http.createServer(async (req, res) => {
           type: 'NAVIGATE',
           target: 'support',
           label: '🎧 Destek Masasına Git',
-          title: 'Destek Masası'
+          title: 'Destek Masası',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Destek masasına yönlendirilmek istiyor musunuz?'
         };
       } else if (q.includes('hata') || q.includes('bug')) {
         answer += `Oyuncunun hatasını Hata Bildirimi (#bug-report) modülüne yönlendiriniz; onaylandığında puan kazanır.`;
@@ -3793,16 +3840,21 @@ const server = http.createServer(async (req, res) => {
           type: 'NAVIGATE',
           target: 'bug-report',
           label: '🐛 Hata Bildirimlerine Git',
-          title: 'Hata Bildirimleri'
+          title: 'Hata Bildirimleri',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Hata bildirimleri ekranına yönlendirilmek istiyor musunuz?'
         };
       } else {
         answer += `Soru: "${question}"\n\nOyuncuya nazik ve açıklayıcı bir yanıt taslağı hazırlamanız önerilir. Biletleri incelemek için Destek Masasını açabilirsiniz.`;
-        action = {
+        const wantsNav = q.includes('bilet') || q.includes('destek') || q.includes('git');
+        action = wantsNav ? {
           type: 'NAVIGATE',
           target: 'support',
           label: '🎫 Destek Masasını Aç',
-          title: 'Destek Masası'
-        };
+          title: 'Destek Masası',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Destek masasına yönlendirilmek istiyor musunuz?'
+        } : null;
       }
       answer += `\n\n⚠️ *Güvenlik Uyarısı: AI yanıtları yalnızca taslaktır; bilet işlemleri yetkili onayı ile yürütülür.*`;
 
@@ -3840,7 +3892,9 @@ const server = http.createServer(async (req, res) => {
           type: 'NAVIGATE',
           target: 'quiz',
           label: '🗺️ Yarışma Rotasına Başla',
-          title: 'Yarışma Arenasına Git'
+          title: 'Yarışma Arenasına Git',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Yarışma arenasına yönlendirilmek istiyor musunuz?'
         };
       } else if (q.includes('şifre') || q.includes('parola')) {
         answer += `🔒 Güvenlik: Asla şifrenizi kimseyle paylaşmayın. Şifrenizi değiştirmek için Profil ekranındaki Parolayı Değiştir butonunu kullanın.`;
@@ -3848,59 +3902,83 @@ const server = http.createServer(async (req, res) => {
           type: 'NAVIGATE',
           target: 'profile',
           label: '🔑 Profile & Şifre Değiştir Ekranına Git',
-          title: 'Profil Ekranı'
+          title: 'Profil Ekranı',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Profil ve şifre değiştirme ekranına yönlendirilmek istiyor musunuz?'
         };
       } else if (q.includes('mağaza') || q.includes('market') || q.includes('rütbe') || q.includes('vip')) {
         answer += `Mağazadan VIP, VIP+, MVIP veya MVIP+ rütbeleri alarak günlük Netherite, özel rozetler ve joker indirimleri kazanabilirsiniz!`;
-        action = {
+        const wantsNav = q.includes('git') || q.includes('aç') || q.includes('al');
+        action = wantsNav ? {
           type: 'NAVIGATE',
           target: 'shop',
           label: '🛒 Mağazayı Aç',
-          title: 'Mağaza Ekranı'
-        };
+          title: 'Mağaza Ekranı',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Mağaza ekranına yönlendirilmek istiyor musunuz?'
+        } : null;
       } else if (q.includes('liderlik') || q.includes('sıralama')) {
         answer += `Liderlik tablosu en yüksek puan ve kazanca sahip oyuncuları sıralar.`;
-        action = {
+        const wantsNav = q.includes('git') || q.includes('aç');
+        action = wantsNav ? {
           type: 'NAVIGATE',
           target: 'leaderboard',
           label: '🏆 Liderlik Tablosuna Git',
-          title: 'Liderlik Tablosu'
-        };
+          title: 'Liderlik Tablosu',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Liderlik tablosuna yönlendirilmek istiyor musunuz?'
+        } : null;
       } else if (q.includes('parti') || q.includes('turnuva') || q.includes('jüri')) {
         answer += `Parti turnuvalarında dönüşümlü jüri sistemi uygulanır! 1. turda davet edilen oyuncu jüri iken, 2. turda lider jüri koltuğuna geçer.`;
-        action = {
+        const wantsNav = q.includes('git') || q.includes('aç');
+        action = wantsNav ? {
           type: 'NAVIGATE',
           target: 'parties',
           label: '👥 Parti Arenasına Git',
-          title: 'Partiler Ekranı'
-        };
+          title: 'Partiler Ekranı',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Parti arenasına yönlendirilmek istiyor musunuz?'
+        } : null;
       } else if (q.includes('netherite') || q.includes('zümrüt')) {
         answer += `Netherite en değerli madendir! İlk VIP alımında +50, VIP+ ve üzeri alımlarda +250 Netherite ilk alım bonusu verilir. Zümrütlerle Ölümsüzlük Totemi (Ekstra Can) ve özel mağaza kozmetikleri edinebilirsiniz.`;
-        action = {
+        const wantsNav = q.includes('git') || q.includes('aç') || q.includes('mağaza');
+        action = wantsNav ? {
           type: 'NAVIGATE',
           target: 'shop',
           label: '💎 Mağazayı Ziyaret Et',
-          title: 'Mağaza Ekranı'
-        };
+          title: 'Mağaza Ekranı',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Mağaza ekranına yönlendirilmek istiyor musunuz?'
+        } : null;
       } else if (q.includes('ender') || q.includes('dragon') || q.includes('ejderha')) {
         answer += `Ender Ejderhası'nı yenmek için yatak patlatma taktiğini kullanabilir veya kristallerini patlatarak can yenilemesini durdurabilirsiniz!`;
-        action = {
-          type: 'NAVIGATE',
-          target: 'quiz',
-          label: '🎮 Arenaya Git',
-          title: 'Yarışma Ekranı'
-        };
+        action = null;
+      } else if (q.includes('elmas') || q.includes('maden') || q.includes('seviye')) {
+        answer += `1.21 madenciliğinde Elmas (Diamond) Y=-58 ve Y=-53 seviyelerinde en yoğun bulunur. Demir için Y=16 ve dağ tepeleri idealdir!`;
+        action = null;
+      } else if (q.includes('kızıltaş') || q.includes('iksir') || q.includes('büyü')) {
+        answer += `Güç İksiri için Tuhaf İksir + Alev Tozu gerekir. Tamir (Mending) büyüsü ise balıkçılık veya köylü takasıyla elde edilir.`;
+        action = null;
       } else {
         answer += `"${question}" hakkında harika bir soru! Yarışmada 15. soruya ulaşmak için can hakkınızı ve seyirci/jüri jokerlerinizi kritik anlara saklamanızı öneririm! Bol şans! 🌟`;
-        action = {
+        const wantsNav = q.includes('git') || q.includes('çık') || q.includes('başla');
+        action = wantsNav ? {
           type: 'NAVIGATE',
           target: 'quiz',
           label: '⚔️ Arenaya Çık',
-          title: 'Yarışma Arenası'
-        };
+          title: 'Yarışma Arenası',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Yarışma arenasına yönlendirilmek istiyor musunuz?'
+        } : null;
       }
 
-      return sendJson(res, 200, { success: true, answer, reply: answer, action });
+      return sendJson(res, 200, {
+        success: true,
+        answer,
+        reply: answer,
+        action,
+        aiProvider: process.env.GEMINI_API_KEY ? 'GEMINI_LIVE' : 'BUILTIN_KNOWLEDGE_BASE'
+      });
     } catch (e) {
       return sendJson(res, 500, { success: false, error: e.message });
     }
@@ -4051,6 +4129,240 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+
+  // ==========================================
+  // 21. BEYAZ LİSTE (WHITELIST) YÖNETİMİ & DENETİMİ
+  // ==========================================
+  if (req.method === 'GET' && pathname === '/api/whitelist/status') {
+    return sendJson(res, 200, {
+      success: true,
+      enabled: Boolean(whitelistConfig.enabled),
+      count: (whitelistConfig.allowedUsers || []).length,
+      allowedUsers: whitelistConfig.allowedUsers || []
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/whitelist/toggle') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const staff = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      if (!staff && String(body.email || '').toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return sendJson(res, 403, { success: false, error: 'Yalnızca yetkili yönetici bu işlemi yapabilir.' });
+      }
+      whitelistConfig.enabled = Boolean(body.enabled);
+      saveWhitelistConfig();
+      return sendJson(res, 200, { success: true, enabled: whitelistConfig.enabled });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/whitelist/add') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const staff = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      if (!staff && String(body.email || '').toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return sendJson(res, 403, { success: false, error: 'Yalnızca yetkili yönetici bu işlemi yapabilir.' });
+      }
+      const cleanUser = String(body.username || '').trim();
+      if (!cleanUser) {
+        return sendJson(res, 400, { success: false, error: 'Kullanıcı adı belirtilmedi.' });
+      }
+      if (!Array.isArray(whitelistConfig.allowedUsers)) whitelistConfig.allowedUsers = [];
+      if (!whitelistConfig.allowedUsers.some(u => u.toLowerCase() === cleanUser.toLowerCase())) {
+        whitelistConfig.allowedUsers.push(cleanUser);
+        saveWhitelistConfig();
+      }
+      return sendJson(res, 200, { success: true, allowedUsers: whitelistConfig.allowedUsers });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/whitelist/remove') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const staff = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      if (!staff && String(body.email || '').toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return sendJson(res, 403, { success: false, error: 'Yalnızca yetkili yönetici bu işlemi yapabilir.' });
+      }
+      const cleanUser = String(body.username || '').trim().toLowerCase();
+      whitelistConfig.allowedUsers = (whitelistConfig.allowedUsers || []).filter(u => u.toLowerCase() !== cleanUser);
+      saveWhitelistConfig();
+      return sendJson(res, 200, { success: true, allowedUsers: whitelistConfig.allowedUsers });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // ==========================================
+  // 22. ETKİNLİK MODU (EVENTS) & ÖDÜL TALEP SİSTEMİ
+  // ==========================================
+  if (req.method === 'GET' && pathname === '/api/events') {
+    return sendJson(res, 200, { success: true, events: persistentEvents });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/events') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const staff = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      if (!staff && String(body.email || '').toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return sendJson(res, 403, { success: false, error: 'Yalnızca yetkili yönetici etkinlik oluşturabilir.' });
+      }
+      if (!body.title || !body.startDateTime) {
+        return sendJson(res, 400, { success: false, error: 'Başlık ve başlangıç tarihi zorunludur.' });
+      }
+      const newEvent = {
+        id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        title: String(body.title).trim(),
+        description: String(body.description || '').trim(),
+        imageUrl: String(body.imageUrl || '').trim(),
+        startDateTime: body.startDateTime,
+        endDateTime: body.endDateTime || null,
+        youtubeLiveUrl: String(body.youtubeLiveUrl || '').trim(),
+        status: body.status || 'UPCOMING',
+        createdAt: new Date().toISOString(),
+        createdBy: body.adminUsername || body.username || 'Admin',
+        prizes: body.prizes || {
+          first: ['1.000 Netherite', 'Şampiyon Rozeti', '10.000 Zümrüt'],
+          second: ['500 Netherite', 'Gümüş Madalya', '5.000 Zümrüt'],
+          third: ['250 Netherite', 'Bronz Madalya', '2.500 Zümrüt']
+        },
+        winners: null
+      };
+      persistentEvents.unshift(newEvent);
+      savePersistentEvents();
+
+      const emailConfigured = Boolean(process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS);
+      const emailReport = {
+        emailSent: false,
+        emailStatus: emailConfigured
+          ? 'E-posta servisi hazır, duyuru yayınlandı.'
+          : 'E-posta servisi (GMAIL_APP_PASSWORD) yapılandırılmadığı için yalnızca site içi duyuru yayınlandı.'
+      };
+
+      return sendJson(res, 200, { success: true, event: newEvent, emailReport });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/events/record-winners') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const staff = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      if (!staff && String(body.email || '').toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return sendJson(res, 403, { success: false, error: 'Yalnızca yetkili yönetici kazananları kaydedebilir.' });
+      }
+      const event = persistentEvents.find(e => e.id === body.eventId);
+      if (!event) {
+        return sendJson(res, 404, { success: false, error: 'Etkinlik bulunamadı.' });
+      }
+      const expiry = Date.now() + (7 * 24 * 60 * 60 * 1000);
+      const generatedClaimLinks = {};
+      const recordedWinners = {};
+
+      const placements = [
+        { place: 1, key: 'first', user: body.firstPlaceUsername, prizes: event.prizes?.first || ['1.000 Netherite', 'Şampiyon Rozeti'] },
+        { place: 2, key: 'second', user: body.secondPlaceUsername, prizes: event.prizes?.second || ['500 Netherite', 'Gümüş Madalya'] },
+        { place: 3, key: 'third', user: body.thirdPlaceUsername, prizes: event.prizes?.third || ['250 Netherite', 'Bronz Madalya'] }
+      ];
+
+      placements.forEach(p => {
+        if (p.user) {
+          const cleanU = String(p.user).trim();
+          const token = 'clm_' + Math.random().toString(36).substring(2, 10) + '_' + Math.random().toString(36).substring(2, 10);
+          recordedWinners[p.key] = {
+            username: cleanU,
+            prizes: p.prizes,
+            place: p.place,
+            recordedAt: new Date().toISOString()
+          };
+          persistentEventClaims[token] = {
+            token,
+            eventId: event.id,
+            eventTitle: event.title,
+            place: p.place,
+            placeLabel: `${p.place}. Sıra Ödülü`,
+            username: cleanU,
+            prizes: p.prizes,
+            expiresAt: expiry,
+            claimed: false,
+            claimedAt: null
+          };
+          generatedClaimLinks[p.key] = {
+            username: cleanU,
+            token,
+            claimUrl: `https://codingm-eng.github.io/minecraft-milyoner/#claim-prize?token=${token}&event=${event.id}`,
+            expiresAt: expiry
+          };
+        }
+      });
+
+      event.winners = recordedWinners;
+      event.status = 'COMPLETED';
+      savePersistentEvents();
+
+      return sendJson(res, 200, { success: true, event, claimLinks: generatedClaimLinks });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/events/claim') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const token = String(body.token || '').trim();
+      const username = String(body.username || '').trim();
+      const record = persistentEventClaims[token];
+      if (!record) {
+        return sendJson(res, 404, { success: false, error: 'Ödül talep kodu bulunamadı veya geçersiz.' });
+      }
+      if (record.claimed) {
+        return sendJson(res, 400, { success: false, error: 'Bu ödül daha önce talep edilmiştir.' });
+      }
+      if (Date.now() > record.expiresAt) {
+        return sendJson(res, 400, { success: false, error: 'Bu ödül talep kodunun geçerlilik süresi (7 gün) dolmuştur.' });
+      }
+      if (record.username && username && record.username.toLowerCase() !== username.toLowerCase()) {
+        return sendJson(res, 403, { success: false, error: `Bu ödül yalnızca "${record.username}" tarafından talep edilebilir.` });
+      }
+      record.claimed = true;
+      record.claimedAt = new Date().toISOString();
+      record.claimedBy = username || record.username;
+      savePersistentEvents();
+      return sendJson(res, 200, { success: true, message: 'Ödüller başarıyla talep edildi!', prizes: record.prizes });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
+
+  // ==========================================
+  // 23. BAKIM MODU (MAINTENANCE) YÖNETİMİ
+  // ==========================================
+  if (req.method === 'GET' && pathname === '/api/maintenance/status') {
+    return sendJson(res, 200, {
+      success: true,
+      maintenance: maintenanceConfig
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/maintenance/toggle') {
+    try {
+      const { json: body } = await parseRequestBody(req);
+      const staff = verifyStaffAccount(body.adminUsername || body.username, ['ADMIN']);
+      if (!staff && String(body.email || '').toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+        return sendJson(res, 403, { success: false, error: 'Yalnızca yetkili yönetici bakım modunu değiştirebilir.' });
+      }
+      maintenanceConfig.enabled = Boolean(body.enabled);
+      if (body.title) maintenanceConfig.title = String(body.title).trim();
+      if (body.message) maintenanceConfig.message = String(body.message).trim();
+      saveMaintenanceConfig();
+      return sendJson(res, 200, { success: true, maintenance: maintenanceConfig });
+    } catch (e) {
+      return sendJson(res, 500, { success: false, error: e.message });
+    }
+  }
 
   // ==========================================
   // STATİK DOSYA SUNUCUSU (Web Platformu)

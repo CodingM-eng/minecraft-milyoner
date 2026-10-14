@@ -104,6 +104,14 @@
       'admin': 'admin',
       'moderator': 'moderator',
       'ticket': 'ticket',
+      'events': 'events',
+      'event': 'events',
+      'turnuva': 'events',
+      'turnuvalar': 'events',
+      'etkinlik': 'events',
+      'etkinlikler': 'events',
+      'maintenance': 'maintenance',
+      'bakim': 'maintenance',
       'welcome': 'welcome'
     };
     const target = aliasMap[raw] || raw;
@@ -875,6 +883,17 @@
       }
     }
 
+    // Faz 7: BEYAZ LİSTE (WHITELIST) KONTROLÜ
+    if (svc().whitelistService?.isWhitelistActive?.() && !isMaintenanceExempt && !isPublicScreen) {
+      const isAllowed = svc().whitelistService.isUserAllowed(session?.username) ||
+                        svc().whitelistService.isUserAllowed(session?.email);
+      if (!isAllowed && ['game', 'party', 'events'].includes(screenKey)) {
+        showToast('🛡️ Sunucu Beyaz Liste (Whitelist) modunda! Yalnızca izinli oyuncular katılabilir.', 'warning');
+        navigateToScreen('welcome');
+        return;
+      }
+    }
+
     const targetId = `screen-${screenKey}`;
     const targetEl = document.getElementById(targetId);
     if (!targetEl) {
@@ -972,6 +991,9 @@
         break;
       case 'ticket':
         renderTicket();
+        break;
+      case 'events':
+        renderEventsScreen();
         break;
       default:
         break;
@@ -1107,6 +1129,45 @@
     const pWin = document.getElementById('profile-win-ratio');
     if (pWin) {
       pWin.textContent = `${Number(user.gamesWon || 0)} / ${Number(user.gamesPlayed || 0)}`;
+    }
+
+    // Dereceli Kademe ve İlerleme Kartı (Ranked Tiers - Requirement 1)
+    const userTier = svc().tierService?.getUserTier?.(user) || {
+      id: 'UNRANKED',
+      name: 'Unranked',
+      category: 'Unranked',
+      categoryName: 'Derecesiz',
+      badge: '⚪',
+      color: '#94a3b8',
+      progress: 0,
+      nextTier: 'Iron',
+      requirements: { minGames: 5 }
+    };
+
+    const tierBadgeEl = document.getElementById('profile-tier-badge');
+    if (tierBadgeEl) {
+      tierBadgeEl.className = `tier-badge tier-badge-${String(userTier.id).toLowerCase()}`;
+      tierBadgeEl.innerHTML = `${userTier.badge} ${escapeHtml(userTier.name)} <span style="font-size:0.7rem;opacity:0.85;">[${escapeHtml(userTier.categoryName)}]</span>`;
+    }
+
+    const tierCardEl = document.getElementById('profile-tier-progress-card');
+    if (tierCardEl) {
+      tierCardEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div>
+            <strong style="color:${userTier.color};font-size:0.95rem;">${userTier.badge} ${escapeHtml(userTier.name)} Kademesi</strong>
+            <div style="font-size:0.75rem;color:#94a3b8;">Kategori: <strong>${escapeHtml(userTier.categoryName)} Kademe</strong></div>
+          </div>
+          <span style="font-size:0.8rem;color:#facc15;font-weight:bold;">${userTier.progress}%</span>
+        </div>
+        <div class="tier-progress-bar-bg" style="background:#1e293b;border-radius:4px;height:8px;overflow:hidden;border:1px solid #334155;">
+          <div class="tier-progress-bar-fill" style="width:${userTier.progress}%;height:100%;background:${userTier.color};transition:width 0.3s ease;"></div>
+        </div>
+        <div style="margin-top:6px;font-size:0.74rem;color:#94a3b8;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">
+          <span>Sonraki Kademe: <strong>${escapeHtml(userTier.nextTier || 'Zirve')}</strong></span>
+          <span>Maç: ${Number(user.gamesPlayed || 0)} • Kazanma: %${user.gamesPlayed ? Math.round((Number(user.gamesWon || 0) / Number(user.gamesPlayed)) * 100) : 0}</span>
+        </div>
+      `;
     }
 
     syncDailyNetheriteWidgets();
@@ -2771,6 +2832,9 @@
                     }
                     <span class="profile-mini-tag">👤 Profil</span>
                     ${driveStatusTag}
+                    <span class="tier-badge tier-badge-${String((svc().tierService?.getUserTier?.(rUser) || {}).id || 'unranked').toLowerCase()}" style="font-size:0.68rem;padding:2px 6px;border-radius:3px;background:rgba(255,255,255,0.08);font-weight:bold;">
+                      ${(svc().tierService?.getUserTier?.(rUser) || {}).badge || '⚪'} ${(svc().tierService?.getUserTier?.(rUser) || {}).name || 'Unranked'}
+                    </span>
                   </div>
                   ${
                     r.minecraftPlayerName
@@ -4971,19 +5035,32 @@
               )}" />
             </div>
             <div class="settings-toggle-list" style="margin: 12px 0 16px;">
-              <label class="setting-row" style="border: 2px solid #ef4444; background: rgba(127, 29, 29, 0.25); padding: 12px; border-radius: 6px;">
-                <div>
-                  <strong style="color: #fca5a5;">🚨 BAKIM MODU (TÜM OYUNCULARI BLOKLAR)</strong>
-                  <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: #cbd5e1;">
-                    Aktif edildiğinde sadece Admin (codingdevelopia@gmail.com) ve Moderatörler girebilir, diğer oyuncular kırmızı piksel sanatlı bakım ekranıyla kilitlenir.
-                  </p>
+              <div style="border: 2px solid ${pSettings.maintenanceMode ? '#ef4444' : '#22c55e'}; background: ${pSettings.maintenanceMode ? 'rgba(127, 29, 29, 0.25)' : 'rgba(20, 83, 45, 0.25)'}; padding: 14px; border-radius: 8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                  <div>
+                    <strong style="color: ${pSettings.maintenanceMode ? '#fca5a5' : '#86efac'}; font-size:1rem;">
+                      ${pSettings.maintenanceMode ? '🚨 BAKIM MODU AKTİF (Tüm Oyuncular Kilitli)' : '🟢 SİSTEM ÇEVRİMİÇİ (Oyunculara Açık)'}
+                    </strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.78rem; color: #cbd5e1;">
+                      Bakım modu açıkken yalnızca Admin (<code>codingdevelopia@gmail.com</code> / <code>test1234@Admin</code>) ve Moderatörler sisteme erişebilir. Normal ziyaretçiler bakım ekranı ile karşılanır.
+                    </p>
+                  </div>
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                    <span style="font-size:0.8rem;color:#f8fafc;font-weight:bold;">Bakım Modunu Aç:</span>
+                    <input type="checkbox" id="adm-set-maintenance" ${
+                      pSettings.maintenanceMode ? 'checked' : ''
+                    } style="transform: scale(1.4); cursor: pointer;" />
+                  </label>
                 </div>
-                <input type="checkbox" id="adm-set-maintenance" ${
-                  pSettings.maintenanceMode ? 'checked' : ''
-                } style="transform: scale(1.4); cursor: pointer;" />
-              </label>
+                <div class="input-group" style="margin-top:10px;">
+                  <label style="font-size:0.75rem;">ZİYARETÇİLERE GÖSTERİLECEK BAKIM AÇIKLAMA METNİ</label>
+                  <input type="text" id="adm-set-maintenance-msg" value="${escapeHtml(
+                    pSettings.maintenanceMessage || 'Sunucumuzda bakım ve altyapı güncellemeleri yapılmaktadır. Lütfen daha sonra tekrar ziyaret ediniz.'
+                  )}" placeholder="Ziyaretçilere iletilecek mesaj..." />
+                </div>
+              </div>
             </div>
-            <button type="submit" class="mc-btn mc-btn-primary">Ayarları &amp; Bakım Modunu Kaydet</button>
+            <button type="submit" class="mc-btn mc-btn-primary">💾 Ayarları &amp; Bakım Modunu Kaydet</button>
           </form>
         </div>
       `;
@@ -5001,6 +5078,201 @@
           }
         }).catch(() => {});
       }, 50);
+    }
+
+    // 16. BEYAZ LİSTE (WHITELIST) YÖNETİMİ (state.adminTab === 'whitelist' - Requirement 5)
+    if (state.adminTab === 'whitelist') {
+      const wlService = svc().whitelistService;
+      const wlStatus = wlService?.getStatus() || { enabled: false, allowedUsers: [] };
+      const usersList = wlStatus.allowedUsers || [];
+
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <div class="card-title-row">
+            <h3>🛡️ Beyaz Liste (Whitelist) Yönetimi</h3>
+            <span class="role-badge ${wlStatus.enabled ? 'role-admin' : 'role-muted'}" id="adm-wl-status-badge" style="font-size:0.85rem;padding:4px 10px;">
+              ${wlStatus.enabled ? '🟢 BEYAZ LİSTE AKTİF (Korumalı)' : '⚪ BEYAZ LİSTE DEVRE DIŞI (Herkese Açık)'}
+            </span>
+          </div>
+          <p class="card-sub">
+            Beyaz liste aktif edildiğinde, yalnızca bu listede yer alan veya yönetici yetkisine sahip kullanıcılar turnuvalara ve korumalı alanlara erişebilir. Sistem yöneticileri (<code>codingdevelopia@gmail.com</code> ve <code>test1234@Admin</code>) kilitlenme koruması kapsamında her zaman erişim hakkına sahiptir.
+          </p>
+
+          <div style="background:rgba(15,23,42,0.6);border:1px solid #334155;border-radius:8px;padding:14px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <strong style="color:#f8fafc;font-size:0.95rem;">Beyaz Liste Modunu Aç / Kapat</strong>
+              <div style="font-size:0.8rem;color:#94a3b8;margin-top:2px;">
+                Şu anki mod: <strong>${wlStatus.enabled ? 'Sadece İzin Verilen Oyuncular' : 'Tüm Kayıtlı Oyuncular Katılabilir'}</strong>
+              </div>
+            </div>
+            <button type="button" id="btn-admin-toggle-whitelist" class="mc-btn ${wlStatus.enabled ? 'mc-btn-danger' : 'mc-btn-primary'}">
+              ${wlStatus.enabled ? '🛑 Beyaz Listeyi Kapat (Herkese Aç)' : '🛡️ Beyaz Listeyi Aç (Korumaya Al)'}
+            </button>
+          </div>
+
+          <!-- Yeni Kullanıcı Ekleme Formu -->
+          <div class="platform-card" style="margin-bottom:20px;">
+            <h4>➕ Beyaz Listeye Kullanıcı Ekle</h4>
+            <form id="admin-whitelist-add-form" class="platform-form" style="margin-top:10px;">
+              <div class="inline-form-row">
+                <input type="text" id="adm-wl-input-user" placeholder="Kullanıcı adı veya e-posta adresi girin" required style="flex:1;" />
+                <button type="submit" class="mc-btn mc-btn-gold">Listeye Ekle</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- İzinli Kullanıcılar Listesi -->
+          <div class="card-title-row">
+            <h4>📋 İzin Verilen Kullanıcılar (${usersList.length})</h4>
+          </div>
+          <div class="table-responsive">
+            <table class="platform-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Kullanıcı / E-posta</th>
+                  <th>Eklenme Tarihi</th>
+                  <th>Ekleyen Yetkili</th>
+                  <th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody id="admin-whitelist-tbody">
+                ${usersList.length === 0 ? `
+                  <tr><td colspan="5" class="empty-table-cell">Beyaz listede henüz özel kullanıcı bulunmuyor.</td></tr>
+                ` : usersList.map((u, i) => {
+                  const targetName = typeof u === 'string' ? u : u.target;
+                  const isProtected = ['codingdevelopia@gmail.com', 'test1234@admin'].includes(String(targetName).toLowerCase());
+                  const addedDate = u.addedAt ? new Date(u.addedAt).toLocaleDateString('tr-TR') : 'Sistem Kurulumu';
+                  const addedBy = u.addedBy || 'Admin';
+                  return `
+                    <tr>
+                      <td>${i + 1}</td>
+                      <td><strong>${escapeHtml(targetName)}</strong> ${isProtected ? '<span class="role-badge role-admin" style="font-size:0.7rem;margin-left:4px;">🛡️ Kalıcı Yönetici</span>' : ''}</td>
+                      <td>${addedDate}</td>
+                      <td>${escapeHtml(addedBy)}</td>
+                      <td>
+                        ${isProtected ? '<span style="color:#94a3b8;font-size:0.75rem;">Kaldırılamaz</span>' : `
+                          <button type="button" class="mc-btn mc-btn-danger mc-btn-xs btn-admin-remove-whitelist" data-wl-target="${escapeHtml(targetName)}">
+                            🗑️ Kaldır
+                          </button>
+                        `}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    // 17. ETKİNLİK VE TURNUVA YÖNETİMİ (state.adminTab === 'events' - Requirement 4)
+    if (state.adminTab === 'events') {
+      const evService = svc().eventService;
+      const allEvents = evService?.getAllEvents() || [];
+
+      container.innerHTML = `
+        <div class="admin-panel-section">
+          <div class="card-title-row">
+            <h3>🏆 Etkinlik ve Turnuva Yönetimi</h3>
+            <span class="badge-count">${allEvents.length} Kayıtlı Etkinlik</span>
+          </div>
+          <p class="card-sub">
+            Yeni yarışma turnuvaları yayınlayabilir, YouTube canlı yayın linki ekleyebilir, 1., 2. ve 3. sıra için çoklu ödül türleri tanımlayabilir ve yarışma bitiminde kazananları belirleyip güvenli ödül talep jetonları üretebilirsiniz.
+          </p>
+
+          <!-- Yeni Etkinlik Oluşturma Formu -->
+          <div class="platform-card" style="margin-bottom:20px;">
+            <h4>➕ Yeni Turnuva / Etkinlik Yayınla</h4>
+            <form id="admin-event-create-form" class="platform-form" style="margin-top:12px;">
+              <div class="input-row-2">
+                <div class="input-group">
+                  <label>ETKİNLİK BAŞLIĞI</label>
+                  <input type="text" id="adm-ev-title" placeholder="Örn: Haftalık Minecraft Milyoner Şampiyonası" required />
+                </div>
+                <div class="input-group">
+                  <label>YOUTUBE CANLI YAYIN LİNKİ (OPSİYONEL)</label>
+                  <input type="url" id="adm-ev-youtube" placeholder="https://www.youtube.com/watch?v=..." />
+                </div>
+              </div>
+
+              <div class="input-group">
+                <label>ETKİNLİK AÇIKLAMASI</label>
+                <textarea id="adm-ev-desc" rows="2" placeholder="Etkinlik kuralları, formatı ve katılımcı detayları..."></textarea>
+              </div>
+
+              <div class="input-row-2">
+                <div class="input-group">
+                  <label>BAŞLANGIÇ TARİHİ VE SAATİ</label>
+                  <input type="datetime-local" id="adm-ev-start" required />
+                </div>
+                <div class="input-group">
+                  <label>BİTİŞ TARİHİ VE SAATİ (OPSİYONEL - BİLİNMİYORSA BOŞ BIRAKIN)</label>
+                  <input type="datetime-local" id="adm-ev-end" />
+                </div>
+              </div>
+
+              <div style="margin-top:8px;padding:10px;background:rgba(15,23,42,0.6);border-radius:6px;">
+                <label style="font-weight:bold;color:#facc15;font-size:0.84rem;margin-bottom:6px;display:block;">
+                  🎁 DERECE ÖDÜLLERİ (ÇOKLU ÖDÜLLERİ VİRGÜL İLE AYIRIN)
+                </label>
+                <div class="input-row-3">
+                  <div class="input-group">
+                    <label>🥇 1. SIRA ÖDÜLLERİ</label>
+                    <input type="text" id="adm-ev-prize-1" placeholder="1000 Netherite, Şampiyon Rozeti" value="1000 Netherite, 10000 Zümrüt" required />
+                  </div>
+                  <div class="input-group">
+                    <label>🥈 2. SIRA ÖDÜLLERİ</label>
+                    <input type="text" id="adm-ev-prize-2" placeholder="500 Netherite, Gümüş Madalya" value="500 Netherite, 5000 Zümrüt" required />
+                  </div>
+                  <div class="input-group">
+                    <label>🥉 3. SIRA ÖDÜLLERİ</label>
+                    <input type="text" id="adm-ev-prize-3" placeholder="250 Netherite, Bronz Madalya" value="250 Netherite, 2500 Zümrüt" required />
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
+                <button type="submit" class="mc-btn mc-btn-primary">
+                  📢 Turnuvayı Yayınla &amp; Bildir
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Mevcut Etkinlikler Listesi -->
+          <div class="card-title-row">
+            <h4>📅 Planlanmış ve Geçmiş Turnuvalar (${allEvents.length})</h4>
+          </div>
+          <div id="admin-events-list">
+            ${allEvents.length === 0 ? `
+              <div class="empty-state-box">Henüz oluşturulmuş bir etkinlik bulunmuyor.</div>
+            ` : allEvents.map(ev => `
+              <div class="platform-card" style="margin-bottom:12px;background:#1e293b;border-left:4px solid ${ev.status === 'LIVE' ? '#ef4444' : (ev.status === 'COMPLETED' ? '#64748b' : '#38bdf8')};">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+                  <div>
+                    <h4 style="margin:0;font-size:1rem;color:#f8fafc;">${escapeHtml(ev.title)}</h4>
+                    <span style="font-size:0.75rem;color:#94a3b8;">ID: <code>${escapeHtml(ev.id)}</code> • Başlangıç: ${ev.startDate ? new Date(ev.startDate).toLocaleString('tr-TR') : 'Belirtilmedi'}</span>
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <span class="role-badge role-${ev.status === 'LIVE' ? 'admin' : 'member'}" style="font-size:0.75rem;">${ev.status}</span>
+                    <button type="button" class="mc-btn mc-btn-gold mc-btn-xs btn-admin-record-winners" data-ev-id="${escapeHtml(ev.id)}">
+                      🏆 Kazananları Belirle &amp; Jeton Üret
+                    </button>
+                  </div>
+                </div>
+
+                ${ev.winners && Object.keys(ev.winners).length > 0 ? `
+                  <div style="margin-top:8px;padding:6px 10px;background:rgba(15,23,42,0.8);border-radius:4px;font-size:0.78rem;color:#cbd5e1;">
+                    🏆 <strong>Kayıtlı Kazananlar:</strong> 1.: ${escapeHtml(ev.winners.first || '-')} | 2.: ${escapeHtml(ev.winners.second || '-')} | 3.: ${escapeHtml(ev.winners.third || '-')}
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
     }
   }
 
@@ -5433,6 +5705,113 @@
         </div>
       </div>
     `;
+  }
+
+  // ==========================================
+  // 21. EKRAN: ETKİNLİK VE TURNUVA MERKEZİ (renderEventsScreen — Requirement 4)
+  // ==========================================
+  function renderEventsScreen() {
+    const { eventService } = svc();
+    const container = document.getElementById('events-list-container');
+    const emptyState = document.getElementById('events-empty-state');
+    const countBadge = document.getElementById('events-total-count');
+    const liveBanner = document.getElementById('events-live-banner');
+    const liveTitle = document.getElementById('events-live-title');
+    const liveLink = document.getElementById('events-live-link');
+
+    if (!eventService) return;
+
+    const events = eventService.getAllEvents();
+    if (countBadge) countBadge.textContent = `${events.length} Etkinlik`;
+
+    // Canlı Yayın / YouTube Banner Kontrolü
+    const activeStreamEvent = events.find(e => e.status === 'LIVE' || (e.youtubeUrl && e.status !== 'COMPLETED'));
+    if (liveBanner && liveTitle && liveLink) {
+      if (activeStreamEvent && activeStreamEvent.youtubeUrl) {
+        liveBanner.classList.remove('hidden');
+        liveTitle.textContent = activeStreamEvent.title || 'Minecraft Milyoner Şampiyonluk Turnuvası Canlı Yayında!';
+        liveLink.href = activeStreamEvent.youtubeUrl;
+      } else {
+        liveBanner.classList.add('hidden');
+      }
+    }
+
+    if (!container) return;
+
+    if (events.length === 0) {
+      if (emptyState) emptyState.classList.remove('hidden');
+      return;
+    }
+
+    if (emptyState) emptyState.classList.add('hidden');
+
+    const prizeFormat = (prizes) => {
+      if (!prizes || prizes.length === 0) return 'Ödül tanımlanmadı';
+      if (Array.isArray(prizes)) {
+        return prizes.map(p => typeof p === 'string' ? p : `${p.amount || ''} ${p.type || ''}`).join(', ');
+      }
+      return String(prizes);
+    };
+
+    const statusBadges = {
+      SCHEDULED: '<span class="role-badge role-member" style="background:#0284c7;color:#fff;">📅 Planlandı</span>',
+      LIVE: '<span class="role-badge role-admin" style="background:#dc2626;color:#fff;animation:pulse 1.5s infinite;">🔴 CANLI YAYINDA</span>',
+      COMPLETED: '<span class="role-badge role-muted" style="background:#475569;color:#94a3b8;">🏁 Tamamlandı</span>'
+    };
+
+    container.innerHTML = events.map(ev => {
+      const startDateStr = ev.startDate ? new Date(ev.startDate).toLocaleString('tr-TR', { dateStyle: 'long', timeStyle: 'short' }) : 'Belirtilmedi';
+      const endDateStr = ev.endDate ? new Date(ev.endDate).toLocaleString('tr-TR', { dateStyle: 'long', timeStyle: 'short' }) : 'Belirtilmedi (Bitiş Serbest)';
+
+      const winnersHtml = ev.winners && Object.keys(ev.winners).length > 0 ? `
+        <div style="margin-top:12px;padding:10px;background:rgba(15,23,42,0.8);border:1px solid #eab308;border-radius:6px;">
+          <strong style="color:#facc15;font-size:0.85rem;">🏆 Turnuva Kazananları:</strong>
+          <div style="font-size:0.8rem;color:#f8fafc;margin-top:4px;">
+            ${ev.winners.first ? `<div>🥇 1. Sıra: <strong>${escapeHtml(ev.winners.first)}</strong></div>` : ''}
+            ${ev.winners.second ? `<div>🥈 2. Sıra: <strong>${escapeHtml(ev.winners.second)}</strong></div>` : ''}
+            ${ev.winners.third ? `<div>🥉 3. Sıra: <strong>${escapeHtml(ev.winners.third)}</strong></div>` : ''}
+          </div>
+        </div>
+      ` : '';
+
+      const ytBtn = ev.youtubeUrl ? `
+        <a href="${escapeHtml(ev.youtubeUrl)}" target="_blank" rel="noopener noreferrer" class="mc-btn mc-btn-danger mc-btn-xs" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+          ▶️ YouTube Canlı Yayın
+        </a>
+      ` : '';
+
+      return `
+        <div class="event-item-card" style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:14px;margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <h4 style="margin:0;font-size:1.05rem;color:#f8fafc;">${escapeHtml(ev.title)}</h4>
+                ${statusBadges[ev.status] || statusBadges.SCHEDULED}
+              </div>
+              <p style="margin:0;font-size:0.84rem;color:#94a3b8;line-height:1.4;">${escapeHtml(ev.description || '')}</p>
+            </div>
+            ${ytBtn}
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:12px;padding:8px;background:rgba(15,23,42,0.5);border-radius:6px;font-size:0.8rem;color:#cbd5e1;">
+            <div>🕒 <strong>Başlangıç:</strong> ${startDateStr}</div>
+            <div>⌛ <strong>Bitiş:</strong> ${endDateStr}</div>
+          </div>
+
+          <!-- Derece Ödülleri -->
+          <div style="margin-top:10px;padding:8px 10px;background:rgba(30,41,59,0.7);border-radius:6px;font-size:0.82rem;">
+            <strong style="color:#38bdf8;">🎁 Derece Ödülleri:</strong>
+            <ul style="margin:4px 0 0 16px;padding:0;color:#e2e8f0;">
+              <li>🥇 1. Sıra: ${escapeHtml(prizeFormat(ev.prizes?.first))}</li>
+              <li>🥈 2. Sıra: ${escapeHtml(prizeFormat(ev.prizes?.second))}</li>
+              <li>🥉 3. Sıra: ${escapeHtml(prizeFormat(ev.prizes?.third))}</li>
+            </ul>
+          </div>
+
+          ${winnersHtml}
+        </div>
+      `;
+    }).join('');
   }
 
   // ==========================================
@@ -6537,18 +6916,47 @@
 
         document.getElementById('ai-user-loading')?.remove();
         if (msgsBox) {
-          const actionHtml = res.action ? `
-            <div class="ai-action-box" style="margin-top:10px;padding:8px 10px;background:rgba(15,23,42,0.7);border:1px solid #38bdf8;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-              <span style="font-size:0.82rem;color:#bae6fd;">📌 <strong>Önerilen Eylem:</strong> ${escapeHtml(res.action.title || res.action.label)}</span>
-              <button type="button" class="mc-btn mc-btn-primary mc-btn-sm btn-ai-action-exec"
-                data-action-type="${escapeHtml(res.action.type)}"
-                data-action-target="${escapeHtml(res.action.target || '')}"
-                data-action-confirm="${res.action.requiresConfirmation ? 'true' : 'false'}"
-                data-action-prompt="${escapeHtml(res.action.confirmPrompt || '')}">
-                ${escapeHtml(res.action.label || 'İşlemi Gerçekleştir')}
-              </button>
-            </div>
-          ` : '';
+          let actionHtml = '';
+          if (res.action) {
+            const isNavOrAgentAction = ['NAVIGATE', 'ADMIN_TAB', 'BACKUP_TRIGGER', 'TOGGLE_MAINTENANCE'].includes(res.action.type) || res.action.requiresConfirmation;
+            if (isNavOrAgentAction) {
+              // Confirm-Before-Navigation Kartı (Requirement 3: "Emin misiniz?", "Onayla", "İptal")
+              actionHtml = `
+                <div class="ai-confirm-card" style="margin-top:10px;padding:12px;background:#0f172a;border:2px solid #38bdf8;border-radius:8px;">
+                  <div style="font-size:0.9rem;font-weight:bold;color:#facc15;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                    <span>❓</span> <span>Emin misiniz?</span>
+                  </div>
+                  <div style="font-size:0.84rem;color:#cbd5e1;margin-bottom:10px;line-height:1.4;">
+                    ${escapeHtml(res.action.confirmPrompt || res.action.title || (res.action.label + ' işlemini onaylıyor musunuz?'))}
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button type="button" class="mc-btn mc-btn-secondary mc-btn-sm btn-cancel-action" style="padding:5px 12px;font-size:0.8rem;">
+                      ❌ İptal
+                    </button>
+                    <button type="button" class="mc-btn mc-btn-primary mc-btn-sm btn-confirm-action"
+                      data-action-type="${escapeHtml(res.action.type)}"
+                      data-action-target="${escapeHtml(res.action.target || '')}"
+                      data-action-bot="${activeAiBotType}"
+                      data-action-label="${escapeHtml(res.action.label || '')}"
+                      style="padding:5px 14px;font-size:0.8rem;font-weight:bold;">
+                      ✅ Onayla
+                    </button>
+                  </div>
+                </div>
+              `;
+            } else {
+              actionHtml = `
+                <div class="ai-action-box" style="margin-top:10px;padding:8px 10px;background:rgba(15,23,42,0.7);border:1px solid #38bdf8;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:0.82rem;color:#bae6fd;">📌 <strong>Önerilen Eylem:</strong> ${escapeHtml(res.action.title || res.action.label)}</span>
+                  <button type="button" class="mc-btn mc-btn-primary mc-btn-sm btn-ai-action-exec"
+                    data-action-type="${escapeHtml(res.action.type)}"
+                    data-action-target="${escapeHtml(res.action.target || '')}">
+                    ${escapeHtml(res.action.label || 'İşlemi Gerçekleştir')}
+                  </button>
+                </div>
+              `;
+            }
+          }
 
           msgsBox.innerHTML += `
             <div style="background:#1e293b;padding:10px 12px;border-radius:8px;border-left:3px solid #facc15;font-size:0.88rem;color:#f8fafc;">
@@ -6576,8 +6984,95 @@
       }
     });
 
-    // Yapay Zeka Eylem Butonu Tıklamaları & Not Silme
+    // Yapay Zeka Eylem Butonu Tıklamaları & Onaylama / İptal (Requirement 3)
     document.getElementById('ai-chat-messages')?.addEventListener('click', async e => {
+      // 1. İptal Butonu (.btn-cancel-action)
+      const cancelBtn = e.target.closest('.btn-cancel-action');
+      if (cancelBtn) {
+        const card = cancelBtn.closest('.ai-confirm-card');
+        if (card) {
+          card.innerHTML = `<div style="font-size:0.82rem;color:#94a3b8;font-style:italic;padding:4px 0;">❌ İşlem iptal edildi.</div>`;
+        }
+        return;
+      }
+
+      // 2. Onay Butonu (.btn-confirm-action)
+      const confirmBtn = e.target.closest('.btn-confirm-action');
+      if (confirmBtn) {
+        const type = confirmBtn.getAttribute('data-action-type');
+        const target = confirmBtn.getAttribute('data-action-target');
+        const card = confirmBtn.closest('.ai-confirm-card');
+        const session = getSession();
+
+        const isVerifiedAdmin = Boolean(
+          session && (
+            (session.isAdminSession && String(session.email || '').toLowerCase() === 'codingdevelopia@gmail.com') ||
+            String(session.username || '').toLowerCase() === 'test1234@admin' ||
+            svc().authGuard?.getEffectiveRole(session) === 'ADMIN'
+          )
+        );
+
+        if (['ADMIN_TAB', 'BACKUP_TRIGGER', 'TOGGLE_MAINTENANCE'].includes(type) && !isVerifiedAdmin) {
+          showToast('Bu işlemi gerçekleştirmek için yönetici (Admin) yetkisi gereklidir!', 'error');
+          if (card) {
+            card.innerHTML = `<div style="font-size:0.82rem;color:#ef4444;font-weight:bold;padding:4px 0;">⛔ Yetkisiz işlem: Bu eylem yalnızca yönetici tarafından yürütülebilir.</div>`;
+          }
+          return;
+        }
+
+        try {
+          if (type === 'NAVIGATE') {
+            if (target) {
+              window.location.hash = '#' + target;
+              if (typeof window.navigateToSection === 'function') {
+                window.navigateToSection(target);
+              } else {
+                navigateToScreen(target);
+              }
+              document.getElementById('modal-ai-assistant')?.classList.add('hidden');
+              showToast(`'${target}' ekranına yönlendirildiniz.`, 'success');
+            }
+          } else if (type === 'ADMIN_TAB') {
+            window.location.hash = '#admin';
+            if (typeof window.navigateToSection === 'function') {
+              window.navigateToSection('admin');
+            } else {
+              navigateToScreen('admin');
+            }
+            if (typeof window.setAdminTab === 'function') {
+              window.setAdminTab(target);
+            } else {
+              state.adminTab = target;
+              renderAdmin();
+            }
+            document.getElementById('modal-ai-assistant')?.classList.add('hidden');
+            showToast(`Yönetici paneli '${target}' sekmesine geçildi.`, 'success');
+          } else if (type === 'BACKUP_TRIGGER') {
+            if (session && svc().backupService) {
+              const res = svc().backupService.createFullBackup(session, 'AI Yönetici Asistanı Onaylı Tetikleme');
+              showToast(`Bulut yedeği (#${res.id}) başarıyla oluşturuldu!`, 'success');
+            }
+          } else if (type === 'TOGGLE_MAINTENANCE') {
+            if (session && svc().maintenanceService) {
+              const isCurrentlyActive = svc().maintenanceService.isMaintenanceActive();
+              svc().maintenanceService.setMaintenanceMode(session, !isCurrentlyActive);
+              showToast(`Bakım modu ${!isCurrentlyActive ? 'AKTİF EDİLDİ' : 'KAPATILDI'}.`, 'success');
+            }
+          }
+
+          if (card) {
+            card.innerHTML = `<div style="font-size:0.82rem;color:#4ade80;font-weight:bold;padding:4px 0;">✅ İşlem başarıyla gerçekleştirildi.</div>`;
+          }
+        } catch (err) {
+          showToast('Eylem yürütülemedi: ' + err.message, 'error');
+          if (card) {
+            card.innerHTML = `<div style="font-size:0.82rem;color:#ef4444;padding:4px 0;">⚠️ Hata: ${escapeHtml(err.message)}</div>`;
+          }
+        }
+        return;
+      }
+
+      // 3. Klasik / Geriye Dönük Eylem Butonları (.btn-ai-action-exec)
       const actionBtn = e.target.closest('.btn-ai-action-exec');
       if (actionBtn) {
         const type = actionBtn.getAttribute('data-action-type');
@@ -6600,6 +7095,8 @@
               window.location.hash = '#' + target;
               if (typeof window.navigateToSection === 'function') {
                 window.navigateToSection(target);
+              } else {
+                navigateToScreen(target);
               }
               document.getElementById('modal-ai-assistant')?.classList.add('hidden');
               showToast(`'${target}' ekranına yönlendirildiniz.`, 'success');
@@ -6608,9 +7105,14 @@
             window.location.hash = '#admin';
             if (typeof window.navigateToSection === 'function') {
               window.navigateToSection('admin');
+            } else {
+              navigateToScreen('admin');
             }
             if (typeof window.setAdminTab === 'function') {
               window.setAdminTab(target);
+            } else {
+              state.adminTab = target;
+              renderAdmin();
             }
             document.getElementById('modal-ai-assistant')?.classList.add('hidden');
             showToast(`Yönetici paneli '${target}' sekmesine geçildi.`, 'success');
@@ -7957,6 +8459,64 @@
         return;
       }
 
+      // Beyaz Liste Aç/Kapat Butonu (#btn-admin-toggle-whitelist)
+      if (e.target.closest('#btn-admin-toggle-whitelist')) {
+        try {
+          const wlService = svc().whitelistService;
+          const currentStatus = wlService?.getStatus()?.enabled;
+          const res = wlService?.toggleWhitelist(session, !currentStatus);
+          showToast(`Beyaz liste modu ${res.enabled ? 'AKTİF EDİLDİ (Korumalı)' : 'DEVRE DIŞI BIRAKILDI (Açık)'}.`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // Beyaz Listeden Kullanıcı Kaldır (.btn-admin-remove-whitelist)
+      const wlRemBtn = e.target.closest('.btn-admin-remove-whitelist');
+      if (wlRemBtn) {
+        const target = wlRemBtn.getAttribute('data-wl-target');
+        try {
+          svc().whitelistService?.removeFromWhitelist(session, target);
+          showToast(`${target} beyaz listeden çıkarıldı.`, 'info');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
+      // Turnuva Kazananlarını Belirle & Jeton Üret (.btn-admin-record-winners)
+      const recWinBtn = e.target.closest('.btn-admin-record-winners');
+      if (recWinBtn) {
+        const evId = recWinBtn.getAttribute('data-ev-id');
+        const ev = svc().eventService?.getEventById(evId);
+        if (!ev) {
+          showToast('Etkinlik bulunamadı.', 'error');
+          return;
+        }
+        const w1 = prompt('🥇 1. Sıra Kazananının Oyuncu Adı:', ev.winners?.first || '');
+        if (w1 === null) return;
+        const w2 = prompt('🥈 2. Sıra Kazananının Oyuncu Adı:', ev.winners?.second || '');
+        if (w2 === null) return;
+        const w3 = prompt('🥉 3. Sıra Kazananının Oyuncu Adı:', ev.winners?.third || '');
+        if (w3 === null) return;
+
+        try {
+          const res = svc().eventService?.recordWinners(session, evId, {
+            first: w1.trim(),
+            second: w2.trim(),
+            third: w3.trim()
+          });
+          showToast(`🏆 Kazananlar kaydedildi ve ${res.claimTokens ? Object.keys(res.claimTokens).length : 0} güvenli talep jetonu oluşturuldu!`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+
       const modToggleBtn = e.target.closest('[data-admin-toggle-mod]');
       if (modToggleBtn) {
         const targetUser = modToggleBtn.getAttribute('data-admin-toggle-mod');
@@ -8678,17 +9238,109 @@
           }
           if (typeof window !== 'undefined') window.MCM_API_BASE_URL = apiUrl;
 
+          const maintenanceMsg = String(document.getElementById('adm-set-maintenance-msg')?.value || '').trim();
           svc().backupService.updatePlatformSettings(session, {
             siteTitle: document.getElementById('adm-set-title')?.value || 'Minecraft Milyoner',
             announcementText: document.getElementById('adm-set-announcement')?.value || '',
-            maintenanceMode: Boolean(maintenanceActive)
+            maintenanceMode: Boolean(maintenanceActive),
+            maintenanceMessage: maintenanceMsg
           });
           if (svc().maintenanceService) {
-            svc().maintenanceService.setMaintenanceMode(session, maintenanceActive);
+            svc().maintenanceService.setMaintenanceMode(session, maintenanceActive, maintenanceMsg);
           }
           showToast('Platform ayarları, Backend API URL ve Bakım Modu başarıyla güncellendi.', 'success');
         } catch (err) {
           showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-whitelist-add-form') {
+        e.preventDefault();
+        try {
+          const inp = document.getElementById('adm-wl-input-user');
+          const targetUser = String(inp?.value || '').trim();
+          if (!targetUser) return;
+          svc().whitelistService?.addToWhitelist(session, targetUser);
+          showToast(`✓ ${targetUser} beyaz listeye eklendi!`, 'success');
+          if (inp) inp.value = '';
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'admin-event-create-form') {
+        e.preventDefault();
+        try {
+          const title = String(document.getElementById('adm-ev-title')?.value || '').trim();
+          const youtubeUrl = String(document.getElementById('adm-ev-youtube')?.value || '').trim();
+          const description = String(document.getElementById('adm-ev-desc')?.value || '').trim();
+          const startDate = document.getElementById('adm-ev-start')?.value || '';
+          const endDate = document.getElementById('adm-ev-end')?.value || '';
+          const p1 = String(document.getElementById('adm-ev-prize-1')?.value || '').trim();
+          const p2 = String(document.getElementById('adm-ev-prize-2')?.value || '').trim();
+          const p3 = String(document.getElementById('adm-ev-prize-3')?.value || '').trim();
+
+          if (!title || !startDate) {
+            showToast('Lütfen etkinlik başlığını ve başlangıç tarihini girin.', 'warning');
+            return;
+          }
+
+          svc().eventService?.createEvent(session, {
+            title,
+            description,
+            youtubeUrl,
+            startDate,
+            endDate,
+            prizes: {
+              first: p1.split(',').map(s => s.trim()).filter(Boolean),
+              second: p2.split(',').map(s => s.trim()).filter(Boolean),
+              third: p3.split(',').map(s => s.trim()).filter(Boolean)
+            }
+          });
+
+          showToast(`📢 '${title}' turnuvası başarıyla yayınlandı!`, 'success');
+          renderAdmin();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      } else if (e.target.id === 'form-claim-event-prize') {
+        e.preventDefault();
+        const curSession = getSession();
+        if (!curSession) {
+          showToast('Ödül talep etmek için lütfen oturum açın.', 'warning');
+          return;
+        }
+        const tokenInp = document.getElementById('input-claim-token');
+        const token = String(tokenInp?.value || '').trim();
+        const resEl = document.getElementById('claim-prize-result');
+        const errEl = document.getElementById('claim-prize-error');
+        const btn = document.getElementById('btn-submit-claim-prize');
+
+        if (!token) return;
+
+        try {
+          if (btn) { btn.disabled = true; btn.textContent = '⏳ Doğrulanıyor...'; }
+          if (resEl) resEl.classList.add('hidden');
+          if (errEl) errEl.classList.add('hidden');
+
+          const result = svc().eventService?.claimPrize(curSession, token);
+          if (result && result.success) {
+            if (resEl) {
+              resEl.textContent = `🎉 Tebrikler! ${result.message || 'Turnuva ödülünüz başarıyla hesabınıza yüklendi!'}`;
+              resEl.classList.remove('hidden');
+            }
+            if (tokenInp) tokenInp.value = '';
+            showToast('Ödülünüz başarıyla hesabınıza yüklendi!', 'success');
+            syncHeaderAndDrawer();
+            renderProfile();
+          } else {
+            throw new Error(result?.message || 'Geçersiz veya süresi dolmuş ödül kodu.');
+          }
+        } catch (err) {
+          if (errEl) {
+            errEl.textContent = `⚠️ ${err.message}`;
+            errEl.classList.remove('hidden');
+          }
+          showToast(err.message, 'error');
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = '💎 Ödülü Hesabıma Tanımla'; }
         }
       }
     });
@@ -8875,8 +9527,20 @@
     initPlatformUI();
   }
 
+  window.navigateToSection = function(screenKey) {
+    navigateToScreen(screenKey);
+  };
+  window.setAdminTab = function(tabKey) {
+    state.adminTab = tabKey;
+    renderAdmin();
+  };
+  window.renderEventsScreen = renderEventsScreen;
+
   window.MCMPlatform = {
     navigateToScreen,
+    navigateToSection: window.navigateToSection,
+    setAdminTab: window.setAdminTab,
+    renderEventsScreen,
     syncHeaderAndDrawer,
     openDrawer,
     closeDrawer,

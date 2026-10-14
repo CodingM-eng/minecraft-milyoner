@@ -535,6 +535,10 @@
             <span class="drawer-item-icon">🎉</span>
             <span class="drawer-item-text">Partiler</span>
           </button>
+          <button type="button" class="drawer-item" data-nav-screen="events">
+            <span class="drawer-item-icon">🎪</span>
+            <span class="drawer-item-text">Etkinlikler</span>
+          </button>
           <button type="button" class="drawer-item" data-nav-screen="stats">
             <span class="drawer-item-icon">📊</span>
             <span class="drawer-item-text">İstatistikler</span>
@@ -718,6 +722,11 @@
                 <circle class="timer-ring-fill" id="timer-ring-fill" cx="30" cy="30" r="26" />
               </svg>
               <span class="timer-text" id="timer-text">30</span>
+            </div>
+
+            <div class="hud-item">
+              <span class="hud-label">LİG DERECESİ</span>
+              <span class="hud-value" id="quiz-hud-tier" style="font-size:0.75rem;padding:2px 6px;border-radius:4px;border:1px solid #94a3b8;color:#94a3b8;">⚪ Derecesiz</span>
             </div>
 
             <div class="hud-item">
@@ -954,6 +963,7 @@
               <div class="profile-name-row">
                 <h3 id="profile-username-display">Oyuncu</h3>
                 <span id="profile-rank-badge" class="role-badge role-member">🌱 Üye</span>
+                <span id="profile-tier-badge" class="tier-badge" style="font-size:0.75rem;padding:3px 8px;border-radius:4px;background:#334155;color:#e2e8f0;font-weight:bold;">⚪ Unranked [Derecesiz]</span>
               </div>
               <p id="profile-email-display" class="profile-meta-line" style="margin:4px 0;font-size:0.82rem;color:#94a3b8;">
                 📧 E-posta: <strong id="profile-email-val" style="color:#60a5fa;">-</strong> <span id="profile-email-verified-tag" class="role-badge role-member" style="font-size:0.68rem;padding:2px 6px;">✓ Doğrulandı</span>
@@ -1036,6 +1046,9 @@
                 <strong class="metric-value" id="profile-win-ratio">0 / 0</strong>
               </div>
             </div>
+
+            <!-- Dereceli Kademe ve İlerleme Durumu (Ranked Tiers) -->
+            <div id="profile-tier-progress-card" class="tier-progress-card" style="margin: 12px 0; padding: 12px; background: rgba(15, 23, 42, 0.7); border: 1px solid #334155; border-radius: 6px;"></div>
 
             <!-- Günlük Rütbe Ödül Durumu (#13) -->
             <div class="profile-daily-netherite-box" id="profile-daily-netherite-box">
@@ -1753,6 +1766,8 @@
             <button type="button" class="admin-nav-btn" data-admin-tab="ranks">👑 Rütbeler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="parties">🎉 Partiler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="leaderboard">🏆 Liderlik Tablosu</button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="whitelist">📋 Beyaz Liste</button>
+            <button type="button" class="admin-nav-btn" data-admin-tab="events">🎪 Etkinlikler</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="economy">💎 Ekonomi</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="shop">🛒 Mağaza</button>
             <button type="button" class="admin-nav-btn" data-admin-tab="payments">💳 Ödemeler</button>
@@ -2082,6 +2097,83 @@
     </main>
 
     <!-- ========================================================
+         21. EKRAN: ETKİNLİK MERKEZİ & TURNUVALAR (screen-events)
+         ======================================================== -->
+    <main id="screen-events" class="screen platform-screen hidden">
+      <div class="platform-container">
+        <div class="section-header-bar">
+          <div>
+            <span class="section-eyebrow">🎪 CANLI MÜCADELELER &amp; TURNUVA TAKVİMİ</span>
+            <h2>ETKİNLİK MERKEZİ</h2>
+          </div>
+          <div class="header-bar-actions">
+            <button type="button" class="mc-btn mc-btn-secondary" data-nav-screen="welcome">← Ana Sayfa</button>
+          </div>
+        </div>
+
+        <!-- Canlı Yayın Bannerı (Varsa YouTube) -->
+        <div id="events-live-banner" class="events-live-banner hidden">
+          <div class="live-banner-content">
+            <span class="live-pulse-dot">🔴 CANLI YAYIN</span>
+            <strong id="events-live-title">Minecraft Milyoner Şampiyonluk Turnuvası Başladı!</strong>
+            <a href="#" id="events-live-link" target="_blank" rel="noopener noreferrer" class="mc-btn mc-btn-danger mc-btn-sm">
+              📺 YouTube Canlı Yayınını İzle
+            </a>
+          </div>
+        </div>
+
+        <div class="events-layout-grid">
+          <!-- Sol: Etkinlikler ve Takvim -->
+          <div class="events-main-col">
+            <div class="card-title-row">
+              <h3>📅 Yaklaşan ve Aktif Etkinlikler</h3>
+              <span class="badge-count" id="events-total-count">0 Etkinlik</span>
+            </div>
+            <div id="events-list-container" class="events-list-container">
+              <div class="empty-state-card" id="events-empty-state">
+                <span style="font-size: 2rem;">🎪</span>
+                <h4>Henüz Planlanmış Etkinlik Bulunmuyor</h4>
+                <p>Yeni turnuvalar ve özel ödüllü yarışmalar için duyuruları takipte kalın!</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sağ: Ödül Talep Etme & Detay Kartı -->
+          <div class="events-side-col">
+            <div class="platform-card" style="border-top: 3px solid #facc15;">
+              <h3>🎁 Turnuva Ödülü Talep Et</h3>
+              <p style="font-size:0.84rem;color:#cbd5e1;line-height:1.5;">
+                Turnuvalarda 1., 2. veya 3. olduysanız, yönetici tarafından size iletilen <strong>güvenli ödül kodunuzu (Jeton)</strong> buraya girerek Netherite ve Zümrüt ödüllerinizi anında hesabınıza tanımlayabilirsiniz.
+              </p>
+              <form id="form-claim-event-prize" class="platform-form">
+                <div class="input-group">
+                  <label for="input-claim-token">GÜVENLİ ÖDÜL TALEP KODU (JETON)</label>
+                  <input type="text" id="input-claim-token" placeholder="Örn: clm_abcdef_123456" required />
+                  <span class="input-hint">Ödül kodları 7 gün süreyle geçerlidir.</span>
+                </div>
+                <div id="claim-prize-result" class="gate-success hidden" style="margin-bottom:10px;"></div>
+                <div id="claim-prize-error" class="gate-error hidden" style="margin-bottom:10px;"></div>
+                <button type="submit" id="btn-submit-claim-prize" class="mc-btn mc-btn-gold mc-btn-block">
+                  💎 Ödülü Hesabıma Tanımla
+                </button>
+              </form>
+            </div>
+
+            <!-- Turnuva Derece Ödülleri Bilgi Kartı -->
+            <div class="platform-card" style="margin-top:16px;">
+              <h4>🏆 Standart Turnuva Derece Ödülleri</h4>
+              <ul class="guide-list" style="font-size:0.82rem;">
+                <li>🥇 <strong>1. Sıra (Şampiyon):</strong> 1.000 Netherite, Şampiyon Rozeti &amp; 10.000 Zümrüt</li>
+                <li>🥈 <strong>2. Sıra (İkinci):</strong> 500 Netherite, Gümüş Madalya &amp; 5.000 Zümrüt</li>
+                <li>🥉 <strong>3. Sıra (Üçüncü):</strong> 250 Netherite, Bronz Madalya &amp; 2.500 Zümrüt</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ========================================================
          GENEL WEB SİTESİ ALT BİLGİ ALANI (FOOTER)
          Discord Developer Portal, GitHub Pages & Platform Navigasyonu
          ======================================================== -->
@@ -2100,6 +2192,8 @@
           <span class="footer-separator">•</span>
           <a href="#privacy" class="footer-link" data-nav-screen="privacy">Gizlilik Politikası</a>
           <span class="footer-separator">•</span>
+          <a href="#events" class="footer-link" data-nav-screen="events">Etkinlikler</a>
+          <span class="footer-separator">•</span>
           <a href="#support" class="footer-link" data-nav-screen="support">Destek Masası</a>
           <span class="footer-separator">•</span>
           <a href="#bug-report" class="footer-link" data-nav-screen="bug-report">Hata Bildir</a>
@@ -2111,7 +2205,7 @@
 
         <div class="footer-notice">
           <span>MC Milyoner, bağımsız bir hayran projesidir. Mojang Studios veya Microsoft ile herhangi bir resmi bağı veya ortaklığı bulunmamaktadır. Minecraft, Mojang Synergies AB'nin tescilli ticari markasıdır.</span>
-          <span class="footer-copy">© 2026 MC Milyoner • Tüm hakları saklıdır.</span>
+          <span class="footer-copy">© 2026, All rights reserved • Tüm hakları saklıdır.</span>
         </div>
       </div>
     </footer>
@@ -2402,8 +2496,8 @@
           <rect x="11" y="16" width="2" height="2" fill="#fef08a" />
         </svg>
       </div>
-      <h1 id="maintenance-title" class="maintenance-title">BAKIM MODU AKTİF</h1>
-      <div class="maintenance-banner-strip">⚠️ SUNUCU GÜNCELLEMESİ YAPILIYOR ⚠️</div>
+      <h1 id="maintenance-title" class="maintenance-title">Sunucu Bakımda</h1>
+      <div class="maintenance-banner-strip">⚠️ SUNUCU GÜNCELLEMESİ YAPILIYOR • BAKIM MODU AKTİF ⚠️</div>
       <p id="maintenance-desc-text" class="maintenance-text">
         Sunucumuz şu anda bakımda. Daha iyi bir deneyim sunabilmek için çalışmalarımız devam ediyor. Lütfen daha sonra tekrar deneyin.
       </p>
@@ -2464,8 +2558,18 @@
 
   <!-- 🧙‍♂️ MVIP BİLGE ASİSTAN YÜZEN BUTONU -->
   <div id="floating-ai-btn" class="floating-ai-btn hidden" title="🧙‍♂️ Bilge Asistan (MVP / MVIP Özel)">
-    <div class="support-btn-pulse" style="border-color:#facc15;"></div>
-    <span class="support-btn-icon">🧙‍♂️</span>
+    <div class="support-btn-pulse" style="border-color:#a855f7;"></div>
+    <span class="support-btn-icon mc-ai-logo-wrap">
+      <svg class="mc-ai-logo-svg" viewBox="0 0 32 32" width="30" height="30" shape-rendering="crispEdges">
+        <rect x="8" y="2" width="16" height="4" fill="#6b21a8" />
+        <rect x="6" y="6" width="20" height="6" fill="#7e22ce" />
+        <rect x="8" y="12" width="16" height="12" fill="#c084fc" />
+        <rect x="10" y="14" width="4" height="4" fill="#22c55e" stroke="#15803d" stroke-width="0.5" />
+        <rect x="18" y="14" width="4" height="4" fill="#22c55e" stroke="#15803d" stroke-width="0.5" />
+        <rect x="14" y="17" width="4" height="6" fill="#9333ea" />
+        <rect x="12" y="24" width="8" height="4" fill="#facc15" />
+      </svg>
+    </span>
   </div>
 
   <!-- 🎧 24/7 Destek Modalı / Canlı Sohbet Paneli -->
@@ -2602,7 +2706,17 @@
     <div class="mc-modal-card ai-assistant-modal-card">
       <div class="mc-modal-header ai-assistant-modal-header">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span id="modal-ai-icon" style="font-size:1.3rem;">🧙‍♂️</span>
+          <span id="modal-ai-icon" class="mc-ai-logo-wrap" style="display:inline-flex;align-items:center;">
+            <svg class="mc-ai-logo-svg" viewBox="0 0 32 32" width="24" height="24" shape-rendering="crispEdges">
+              <rect x="8" y="2" width="16" height="4" fill="#6b21a8" />
+              <rect x="6" y="6" width="20" height="6" fill="#7e22ce" />
+              <rect x="8" y="12" width="16" height="12" fill="#c084fc" />
+              <rect x="10" y="14" width="4" height="4" fill="#22c55e" stroke="#15803d" stroke-width="0.5" />
+              <rect x="18" y="14" width="4" height="4" fill="#22c55e" stroke="#15803d" stroke-width="0.5" />
+              <rect x="14" y="17" width="4" height="6" fill="#9333ea" />
+              <rect x="12" y="24" width="8" height="4" fill="#facc15" />
+            </svg>
+          </span>
           <h3 id="modal-ai-title" style="margin:0;color:#facc15;">BİLGE ASİSTAN</h3>
         </div>
         <button type="button" id="btn-close-ai-assistant" class="drawer-close-btn" aria-label="Kapat">✕</button>

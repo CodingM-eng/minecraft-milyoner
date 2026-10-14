@@ -8752,9 +8752,11 @@ body.screen-game-active #screen-game {
 }
 
 .footer-copy {
-  color: #475569;
+  color: #64748b;
   font-family: monospace;
-  font-size: 0.74rem;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
 }
 
 /* Oyun esnasında odaklanmayı bozmaması için footer gizlenir */
@@ -8771,6 +8773,180 @@ body.screen-game-active .site-global-footer {
     gap: 0.4rem 0.65rem;
     font-size: 0.8rem;
   }
+}
+
+/* ========================================================
+   AI CHATBOT LOGO & CONFIRM-BEFORE-NAVIGATION CARD
+   ======================================================== */
+.mc-ai-logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mc-ai-logo-svg {
+  filter: drop-shadow(0 2px 5px rgba(168, 85, 247, 0.45));
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+.floating-ai-btn:hover .mc-ai-logo-svg {
+  transform: scale(1.12);
+  filter: drop-shadow(0 0 10px rgba(192, 132, 252, 0.8));
+}
+
+.ai-confirm-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1.5px solid #38bdf8;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.ai-confirm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  color: #38bdf8;
+}
+.ai-confirm-body {
+  font-size: 0.82rem;
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+.ai-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.btn-confirm-action {
+  background: #10b981;
+  color: #ffffff;
+  border: 1px solid #059669;
+}
+.btn-confirm-action:hover {
+  background: #059669;
+}
+.btn-cancel-action {
+  background: #334155;
+  color: #cbd5e1;
+  border: 1px solid #475569;
+}
+.btn-cancel-action:hover {
+  background: #475569;
+}
+
+/* ========================================================
+   DERECELİ LİG (TIER) BADGES & PROGRESS CARDS
+   ======================================================== */
+.tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+.tier-progress-card {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 12px;
+}
+.tier-progress-bar-bg {
+  height: 10px;
+  background: #0f172a;
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 8px 0;
+  border: 1px solid #334155;
+}
+.tier-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #a855f7);
+  transition: width 0.3s ease;
+}
+
+/* ========================================================
+   ETKİNLİK MERKEZİ (EVENTS) & CANLI YAYIN
+   ======================================================== */
+.events-live-banner {
+  background: linear-gradient(90deg, rgba(185, 28, 28, 0.95), rgba(127, 29, 29, 0.9));
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.25);
+}
+.live-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.live-pulse-dot {
+  color: #fef08a;
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.events-layout-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1.2fr;
+  gap: 20px;
+}
+@media (max-width: 860px) {
+  .events-layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.event-item-card {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease;
+}
+.event-item-card:hover {
+  border-color: #38bdf8;
+}
+.event-prize-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  background: rgba(250, 204, 21, 0.15);
+  border: 1px solid #facc15;
+  color: #fef08a;
+}
+
+/* ========================================================
+   YENİLENMİŞ BAKIM MODU (MAINTENANCE) STİLLERİ
+   ======================================================== */
+.maintenance-status-badges {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.maint-badge {
+  font-size: 0.76rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
 }
 
 

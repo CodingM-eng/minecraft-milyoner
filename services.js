@@ -51,7 +51,10 @@
     POINTS_CONFIG: 'mc_millionaire_tr_points_cfg_v10',
     USERS_BACKUP: 'mc_millionaire_tr_users_backup_v10',
     TELEGRAM_SUPPORT_CONFIG: 'mc_millionaire_tr_tg_support_cfg_v10',
-    USER_NOTES: 'mc_millionaire_tr_user_notes_v10'
+    USER_NOTES: 'mc_millionaire_tr_user_notes_v10',
+    WHITELIST: 'mc_millionaire_tr_whitelist_v10',
+    EVENTS: 'mc_millionaire_tr_events_v10',
+    EVENT_CLAIMS: 'mc_millionaire_tr_event_claims_v10'
   };
 
   // Eski sürümlerden (_v5, _v6, _v8, _v9 vb.) kalan verileri _v10 sürümüne GÜVENLİ MİGRE ET
@@ -1464,6 +1467,16 @@
         session.username,
         `Yönetici ${session.username} tüm oyunculara (${sentCount}) bildirim gönderdi: ${title}`
       );
+      return { sentCount };
+    },
+
+    broadcast(options) {
+      const users = (typeof userService !== 'undefined' && userService.getAllUsers) ? userService.getAllUsers() : [];
+      let sentCount = 0;
+      users.forEach(u => {
+        this.notifyUser(u.username, options || {});
+        sentCount++;
+      });
       return { sentCount };
     },
 
@@ -5693,18 +5706,28 @@
       return Boolean(status.enabled);
     },
 
+    isUserExempt(session) {
+      if (!session) return false;
+      const email = String(session.email || '').trim().toLowerCase();
+      const isSuperAdmin = email === 'codingdevelopia@gmail.com';
+      const isTestAdmin = String(session.username || '').toLowerCase() === 'test1234@admin';
+      const effRole = authGuard.getEffectiveRole(session);
+      return Boolean(isSuperAdmin || isTestAdmin || effRole === 'ADMIN' || effRole === 'MODERATOR');
+    },
+
     setMaintenanceMode(session, enabled, options = {}) {
       authGuard.requireRole(session, ['ADMIN']);
+      const opts = typeof options === 'string' ? { message: options } : (options || {});
       const current = storage.get(STORAGE_KEYS.PLATFORM_SETTINGS, {});
       const next = {
         ...current,
         maintenanceMode: Boolean(enabled),
         maintenanceStartedAt: enabled ? new Date().toISOString() : null,
-        maintenanceTitle: options.title || 'BAKIM MODU',
+        maintenanceTitle: opts.title || 'BAKIM MODU',
         maintenanceMessage:
-          options.message ||
+          opts.message ||
           'Sunucularımız şu anda Minecraft Java 1.21.11 güncellemesi ve teknik bakım sebebiyle geçici olarak hizmet dışıdır. Lütfen daha sonra tekrar deneyiniz.',
-        maintenanceDuration: options.estimatedDuration || '30 Dakika'
+        maintenanceDuration: opts.estimatedDuration || '30 Dakika'
       };
       storage.set(STORAGE_KEYS.PLATFORM_SETTINGS, next);
       activityService.log(
@@ -8210,6 +8233,454 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
   };
 
   // ==========================================
+  // DERECELİ LİG & ZORLUK SERVİSİ (tierService)
+  // Derecesiz (Unranked), Düşük (Low) ve Yüksek (High) Lig Kademeleri
+  // Soru zorluk dağılımı kullanıcının ligine göre dinamik belirlenir
+  // ==========================================
+  const tierService = {
+    TIERS: {
+      UNRANKED: {
+        id: 'UNRANKED',
+        label: 'Derecesiz',
+        category: 'UNRANKED',
+        categoryLabel: 'Derecesiz',
+        badge: '⚪ Derecesiz',
+        icon: '⚪',
+        color: '#94a3b8',
+        minGames: 0,
+        minPoints: 0,
+        minWins: 0,
+        distribution: { easy: 8, medium: 5, hard: 2 },
+        nextTier: 'IRON',
+        description: 'Henüz bir lige hak kazanmadınız. Lige girmek için en az 5 oyun ve 100 puan toplayın.'
+      },
+      IRON: {
+        id: 'IRON',
+        label: 'Demir Lig',
+        category: 'LOW',
+        categoryLabel: 'Düşük Kategori',
+        badge: '🔩 Demir',
+        icon: '🔩',
+        color: '#cbd5e1',
+        minGames: 5,
+        minPoints: 100,
+        minWins: 0,
+        distribution: { easy: 8, medium: 5, hard: 2 },
+        nextTier: 'GOLD',
+        description: 'Düşük Kategori: Temel seviye lig rekabeti. Kolay ağırlıklı başlangıç soruları.'
+      },
+      GOLD: {
+        id: 'GOLD',
+        label: 'Altın Lig',
+        category: 'LOW',
+        categoryLabel: 'Düşük Kategori',
+        badge: '🪙 Altın',
+        icon: '🪙',
+        color: '#facc15',
+        minGames: 15,
+        minPoints: 500,
+        minWins: 3,
+        distribution: { easy: 6, medium: 6, hard: 3 },
+        nextTier: 'DIAMOND',
+        description: 'Düşük Kategori: Deneyimli madenciler için dengeli lig parkuru.'
+      },
+      DIAMOND: {
+        id: 'DIAMOND',
+        label: 'Elmas Lig',
+        category: 'HIGH',
+        categoryLabel: 'Yüksek Kategori',
+        badge: '💎 Elmas',
+        icon: '💎',
+        color: '#38bdf8',
+        minGames: 30,
+        minPoints: 1500,
+        minWins: 10,
+        distribution: { easy: 3, medium: 7, hard: 5 },
+        nextTier: 'NETHERITE',
+        description: 'Yüksek Kategori: Zorlayıcı orta ve ileri seviye sorularla elit rekabet.'
+      },
+      NETHERITE: {
+        id: 'NETHERITE',
+        label: 'Netherite Lig',
+        category: 'HIGH',
+        categoryLabel: 'Yüksek Kategori',
+        badge: '👑 Netherite',
+        icon: '👑',
+        color: '#a855f7',
+        minGames: 50,
+        minPoints: 3500,
+        minWins: 25,
+        distribution: { easy: 1, medium: 6, hard: 8 },
+        nextTier: null,
+        description: 'Yüksek Kategori: Zirvedeki şampiyonlar için en zorlu Minecraft soruları!'
+      }
+    },
+
+    getAllTiers() {
+      return Object.values(this.TIERS);
+    },
+
+    getUserTier(userOrStats) {
+      const stats = userOrStats || {};
+      const gamesPlayed = Math.max(0, Number(stats.gamesPlayed || stats.totalGames || 0));
+      const points = Math.max(0, Number(stats.points || 0));
+      const gamesWon = Math.max(0, Number(stats.gamesWon || stats.wins || 0));
+
+      let matchedTier = this.TIERS.UNRANKED;
+
+      if (gamesPlayed >= 50 && points >= 3500 && gamesWon >= 25) {
+        matchedTier = this.TIERS.NETHERITE;
+      } else if (gamesPlayed >= 30 && points >= 1500 && gamesWon >= 10) {
+        matchedTier = this.TIERS.DIAMOND;
+      } else if (gamesPlayed >= 15 && points >= 500 && (gamesWon >= 3 || points >= 800)) {
+        matchedTier = this.TIERS.GOLD;
+      } else if (gamesPlayed >= 5 && points >= 100) {
+        matchedTier = this.TIERS.IRON;
+      }
+
+      const nextTierKey = matchedTier.nextTier;
+      const nextTier = nextTierKey ? this.TIERS[nextTierKey] : null;
+
+      let progressPercent = 100;
+      let requirements = { gamesNeeded: 0, pointsNeeded: 0, winsNeeded: 0 };
+
+      if (nextTier) {
+        const gamesRatio = Math.min(1, gamesPlayed / nextTier.minGames);
+        const pointsRatio = Math.min(1, points / nextTier.minPoints);
+        const winsRatio = nextTier.minWins > 0 ? Math.min(1, gamesWon / nextTier.minWins) : 1;
+        progressPercent = Math.round(((gamesRatio + pointsRatio + winsRatio) / 3) * 100);
+        requirements = {
+          gamesNeeded: Math.max(0, nextTier.minGames - gamesPlayed),
+          pointsNeeded: Math.max(0, nextTier.minPoints - points),
+          winsNeeded: Math.max(0, nextTier.minWins - gamesWon)
+        };
+      }
+
+      return {
+        ...matchedTier,
+        currentStats: { gamesPlayed, points, gamesWon },
+        progress: {
+          percent: progressPercent,
+          nextTier: nextTier ? nextTier.label : null,
+          nextBadge: nextTier ? nextTier.badge : null,
+          requirements
+        }
+      };
+    },
+
+    getDistributionForUser(userOrStats) {
+      const tier = this.getUserTier(userOrStats);
+      return tier.distribution;
+    },
+
+    getTierDifficultyDistribution(tierId) {
+      const clean = String(tierId || 'UNRANKED').toUpperCase();
+      return this.TIERS[clean]?.distribution || this.TIERS.UNRANKED.distribution;
+    }
+  };
+
+  // ==========================================
+  // BEYAZ LİSTE SERVİSİ (whitelistService)
+  // Sunucu yetkilendirme katmanı ve erişim denetimi
+  // ==========================================
+  const whitelistService = {
+    getStatus() {
+      const stored = storage.get(STORAGE_KEYS.WHITELIST, {
+        enabled: false,
+        allowedUsers: ['admin', 'efekan', 'codingdevelopia@gmail.com']
+      });
+      return {
+        enabled: Boolean(stored.enabled),
+        count: Array.isArray(stored.allowedUsers) ? stored.allowedUsers.length : 0,
+        allowedUsers: Array.isArray(stored.allowedUsers) ? [...stored.allowedUsers] : []
+      };
+    },
+
+    isUserAllowed(usernameOrEmail, role = 'MEMBER') {
+      const candidate = String(usernameOrEmail || '').trim().toLowerCase();
+      if (candidate === 'codingdevelopia@gmail.com' || candidate === 'test1234@admin' || candidate === 'admin' || candidate === 'efekan') {
+        return true;
+      }
+      const status = this.getStatus();
+      if (!status.enabled) return true;
+
+      const upperRole = String(role || '').toUpperCase();
+      if (upperRole === 'ADMIN' || upperRole === 'MODERATOR' || upperRole === 'TICKET') {
+        return true;
+      }
+
+      if (!candidate) return false;
+
+      return status.allowedUsers.some(u => String(u).trim().toLowerCase() === candidate);
+    },
+
+    setEnabled(session, enabled) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const current = storage.get(STORAGE_KEYS.WHITELIST, {
+        enabled: false,
+        allowedUsers: ['admin', 'efekan', 'codingdevelopia@gmail.com']
+      });
+      current.enabled = Boolean(enabled);
+      storage.set(STORAGE_KEYS.WHITELIST, current);
+      activityService.log('WHITELIST_TOGGLE', session.username, `Beyaz liste ${current.enabled ? 'AÇILDI' : 'KAPATILDI'}.`);
+      return this.getStatus();
+    },
+
+    toggleWhitelist(session, enabled) {
+      return this.setEnabled(session, enabled);
+    },
+
+    addAllowedUser(session, username) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const clean = String(username || '').trim();
+      if (!clean) throw new Error('Geçerli bir kullanıcı adı giriniz.');
+      const current = storage.get(STORAGE_KEYS.WHITELIST, {
+        enabled: false,
+        allowedUsers: ['admin', 'efekan', 'codingdevelopia@gmail.com']
+      });
+      if (!Array.isArray(current.allowedUsers)) current.allowedUsers = [];
+      const norm = clean.toLowerCase();
+      if (!current.allowedUsers.some(u => u.toLowerCase() === norm)) {
+        current.allowedUsers.push(clean);
+        storage.set(STORAGE_KEYS.WHITELIST, current);
+        activityService.log('WHITELIST_ADD', session.username, `${clean} beyaz listeye eklendi.`);
+      }
+      return this.getStatus();
+    },
+
+    addToWhitelist(session, username) {
+      return this.addAllowedUser(session, username);
+    },
+
+    removeAllowedUser(session, username) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const clean = String(username || '').trim().toLowerCase();
+      if (clean === 'codingdevelopia@gmail.com' || clean === 'test1234@admin' || clean === 'admin' || clean === 'efekan') {
+        throw new Error('Süper yöneticiler ve sistem hesapları beyaz listeden kaldırılamaz.');
+      }
+      const current = storage.get(STORAGE_KEYS.WHITELIST, {
+        enabled: false,
+        allowedUsers: ['admin', 'efekan', 'codingdevelopia@gmail.com']
+      });
+      if (Array.isArray(current.allowedUsers)) {
+        current.allowedUsers = current.allowedUsers.filter(u => u.toLowerCase() !== clean);
+        storage.set(STORAGE_KEYS.WHITELIST, current);
+        activityService.log('WHITELIST_REMOVE', session.username, `${clean} beyaz listeden çıkarıldı.`);
+      }
+      return this.getStatus();
+    },
+
+    removeFromWhitelist(session, username) {
+      return this.removeAllowedUser(session, username);
+    }
+  };
+
+  // ==========================================
+  // ETKİNLİK MODU SERVİSİ (eventService)
+  // Yönetici etkinlik yönetimi, takvim, çoklu ödüller ve güvenli talep jetonları
+  // ==========================================
+  const eventService = {
+    getAllEvents() {
+      const list = storage.get(STORAGE_KEYS.EVENTS, []);
+      return Array.isArray(list) ? list : [];
+    },
+
+    getEventById(id) {
+      const list = this.getAllEvents();
+      return list.find(e => e.id === id) || null;
+    },
+
+    createEvent(session, eventData) {
+      authGuard.requireRole(session, ['ADMIN']);
+      if (!eventData.title) throw new Error('Etkinlik başlığı zorunludur.');
+      const startDateTime = eventData.startDate || eventData.startDateTime;
+      if (!startDateTime) throw new Error('Etkinlik başlangıç tarihi zorunludur.');
+
+      const newEvent = {
+        id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        title: String(eventData.title).trim(),
+        description: String(eventData.description || '').trim(),
+        imageUrl: String(eventData.imageUrl || '').trim(),
+        startDate: startDateTime,
+        startDateTime: startDateTime,
+        endDate: eventData.endDate !== undefined ? eventData.endDate : (eventData.endDateTime || null),
+        endDateTime: eventData.endDate !== undefined ? eventData.endDate : (eventData.endDateTime || null),
+        youtubeUrl: String(eventData.youtubeUrl || eventData.youtubeLiveUrl || '').trim(),
+        youtubeLiveUrl: String(eventData.youtubeUrl || eventData.youtubeLiveUrl || '').trim(),
+        status: eventData.status || 'UPCOMING',
+        createdAt: new Date().toISOString(),
+        createdBy: session.username,
+        prizes: {
+          first: Array.isArray(eventData.prizes?.first) ? eventData.prizes.first : ['1.000 Netherite', 'Şampiyon Rozeti', '10.000 Zümrüt'],
+          second: Array.isArray(eventData.prizes?.second) ? eventData.prizes.second : ['500 Netherite', 'Gümüş Madalya', '5.000 Zümrüt'],
+          third: Array.isArray(eventData.prizes?.third) ? eventData.prizes.third : ['250 Netherite', 'Bronz Madalya', '2.500 Zümrüt']
+        },
+        winners: null
+      };
+
+      const list = this.getAllEvents();
+      list.unshift(newEvent);
+      storage.set(STORAGE_KEYS.EVENTS, list);
+
+      notificationService.broadcast({
+        type: 'EVENT_ANNOUNCEMENT',
+        title: `🎪 Yeni Etkinlik: ${newEvent.title}`,
+        message: `${newEvent.description || 'Turnuvamıza davetlisiniz!'} Başlangıç: ${new Date(newEvent.startDateTime).toLocaleString('tr-TR')}`
+      });
+
+      const emailReport = {
+        emailSent: false,
+        emailStatus: 'E-posta servisi (GMAIL_APP_PASSWORD) yapılandırılmadığı için yalnızca site içi duyuru yayınlandı.'
+      };
+
+      activityService.log('EVENT_CREATE', session.username, `Yeni etkinlik oluşturuldu: ${newEvent.title}`);
+      return Object.assign(newEvent, { event: newEvent, emailReport });
+    },
+
+    recordWinners(session, eventId, winnersData) {
+      authGuard.requireRole(session, ['ADMIN']);
+      const list = this.getAllEvents();
+      const event = list.find(e => e.id === eventId);
+      if (!event) throw new Error('Etkinlik bulunamadı.');
+
+      const claims = storage.get(STORAGE_KEYS.EVENT_CLAIMS, {});
+      const now = Date.now();
+      const expiry = now + (7 * 24 * 60 * 60 * 1000);
+
+      function generateSecureToken() {
+        return 'evclaim_' + Math.random().toString(36).substring(2, 10) + '_' + Math.random().toString(36).substring(2, 10);
+      }
+
+      const recordedWinners = {};
+      const generatedClaimLinks = {};
+
+      const placements = [
+        { place: 1, key: 'first', user: winnersData.first || winnersData.firstPlaceUsername, prizes: event.prizes.first },
+        { place: 2, key: 'second', user: winnersData.second || winnersData.secondPlaceUsername, prizes: event.prizes.second },
+        { place: 3, key: 'third', user: winnersData.third || winnersData.thirdPlaceUsername, prizes: event.prizes.third }
+      ];
+
+      placements.forEach(p => {
+        if (p.user) {
+          const cleanUser = String(p.user).trim();
+          const token = generateSecureToken();
+          recordedWinners[p.key] = {
+            username: cleanUser,
+            prizes: p.prizes,
+            place: p.place,
+            recordedAt: new Date().toISOString()
+          };
+          claims[token] = {
+            token,
+            eventId: event.id,
+            eventTitle: event.title,
+            place: p.place,
+            placeLabel: `${p.place}. Sıra Ödülü`,
+            username: cleanUser,
+            prizes: p.prizes,
+            expiresAt: expiry,
+            claimed: false,
+            claimedAt: null
+          };
+          generatedClaimLinks[p.key] = {
+            username: cleanUser,
+            token,
+            claimUrl: `https://codingm-eng.github.io/minecraft-milyoner/#claim-prize?token=${token}&event=${event.id}`,
+            expiresAt: expiry
+          };
+
+          notificationService.notifyUser(cleanUser, {
+            type: 'EVENT_WINNER',
+            title: `🏆 Tebrikler! ${event.title} Yarışmasında ${p.place}. Oldunuz!`,
+            message: `Ödüllerinizi profilinizden veya etkinlik sayfasından talep edebilirsiniz (Jeton: ${token}).`
+          });
+        }
+      });
+
+      event.winners = recordedWinners;
+      event.status = 'COMPLETED';
+      storage.set(STORAGE_KEYS.EVENTS, list);
+      storage.set(STORAGE_KEYS.EVENT_CLAIMS, claims);
+
+      activityService.log('EVENT_WINNERS_RECORDED', session.username, `${event.title} etkinliği kazananları kaydedildi.`);
+
+      return {
+        event,
+        claimLinks: generatedClaimLinks,
+        claimTokens: generatedClaimLinks
+      };
+    },
+
+    claimPrize(session, claimToken) {
+      authGuard.verifySession(session);
+      const token = String(claimToken || '').trim();
+      if (!token) throw new Error('Geçersiz ödül talep kodu.');
+
+      const claims = storage.get(STORAGE_KEYS.EVENT_CLAIMS, {});
+      const record = claims[token];
+      if (!record) throw new Error('Ödül talep kodu bulunamadı veya geçersiz.');
+
+      if (record.claimed) {
+        throw new Error(`Bu ödül zaten kullanılmış ve talep edilmiştir.`);
+      }
+
+      if (Date.now() > record.expiresAt) {
+        throw new Error('Bu ödül talep kodunun 7 günlük geçerlilik süresi dolmuştur.');
+      }
+
+      if (record.username && record.username.toLowerCase() !== session.username.toLowerCase()) {
+        throw new Error(`Yetkisiz işlem: Bu ödül başka bir kullanıcıya aittir ve kullanıcı adı uyuşmuyor.`);
+      }
+
+      const user = userService.getUserByUsername(session.username);
+      if (user) {
+        let netheriteAdded = 0;
+        let emeraldsAdded = 0;
+        record.prizes.forEach(pz => {
+          const str = String(pz).toLowerCase();
+          if (str.includes('netherite')) {
+            const m = str.match(/\d+[\.,]?\d*/);
+            if (m) {
+              const val = parseInt(m[0].replace(/\./g, ''), 10) || 500;
+              netheriteAdded += val;
+            }
+          } else if (str.includes('zümrüt') || str.includes('emerald')) {
+            const m = str.match(/\d+[\.,]?\d*/);
+            if (m) {
+              const val = parseInt(m[0].replace(/\./g, ''), 10) || 2000;
+              emeraldsAdded += val;
+            }
+          }
+        });
+
+        if (netheriteAdded > 0) {
+          user.netheriteBalance = (user.netheriteBalance || 0) + netheriteAdded;
+        }
+        if (emeraldsAdded > 0) {
+          user.emeraldBalance = (user.emeraldBalance || 0) + emeraldsAdded;
+        }
+        userService.syncUserFields(session.username, {
+          netheriteBalance: user.netheriteBalance,
+          emeraldBalance: user.emeraldBalance
+        });
+      }
+
+      record.claimed = true;
+      record.claimedAt = new Date().toISOString();
+      record.claimedBy = session.username;
+      storage.set(STORAGE_KEYS.EVENT_CLAIMS, claims);
+
+      activityService.log('EVENT_PRIZE_CLAIMED', session.username, `${record.eventTitle} etkinliği ${record.placeLabel} ödülü başarıyla talep edildi.`);
+
+      return {
+        success: true,
+        message: `Tebrikler! ${record.placeLabel} ödülleriniz başarıyla hesabınıza tanımlandı!`,
+        prizes: record.prizes
+      };
+    }
+  };
+
+  // ==========================================
   // YAPAY ZEKA ASİSTAN SERVİSİ (aiAssistantService - Admin, Mod, MVIP Özel)
   // ==========================================
   const aiAssistantService = {
@@ -8326,7 +8797,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'admin',
             label: '🛡️ Yönetici Paneline Git',
-            title: 'Yönetici Paneli'
+            title: 'Yönetici Paneli',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Yönetici paneline yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8337,16 +8810,19 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
         `• Sistem Durumu: Veritabanı ve tüm modüller stabil çalışıyor.\n` +
         `• Açık Bilet: ${stats.openTickets} | Bekleyen Hata: ${stats.unresolvedBugs} | Yedekler: ${stats.totalBackups} adet.\n` +
         `Detaylı ayarlar ve yönetimsel işlemler için Yönetici Paneline geçiş yapabilirsiniz.`;
+      const wantsNav = q.includes('panel') || q.includes('git') || q.includes('rota');
       return {
         reply,
         answer: reply,
         stats,
-        action: {
+        action: wantsNav ? {
           type: 'NAVIGATE',
           target: 'admin',
           label: '🛡️ Yönetici Paneline Git',
-          title: 'Yönetim Paneli'
-        }
+          title: 'Yönetim Paneli',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Yönetici paneline yönlendirilmek istiyor musunuz?'
+        } : null
       };
     },
 
@@ -8397,7 +8873,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'ADMIN_TAB',
             target: 'chatlogs',
             label: '💬 Sohbet Kayıtlarını İncele',
-            title: 'Sohbet Denetimi'
+            title: 'Sohbet Denetimi',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Sohbet kayıtları sekmesine geçmek istiyor musunuz?'
           }
         };
       }
@@ -8415,7 +8893,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'ADMIN_TAB',
             target: 'mutes',
             label: '⚔️ Susturulan Oyuncuları Aç',
-            title: 'Ceza Yönetimi'
+            title: 'Ceza Yönetimi',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Ceza yönetimi sekmesine geçmek istiyor musunuz?'
           }
         };
       }
@@ -8433,7 +8913,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'ADMIN_TAB',
             target: 'bugs',
             label: '🐛 Bekleyen Hataları İncele',
-            title: 'Hata İncelemesi'
+            title: 'Hata İncelemesi',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Hata bildirimleri sekmesine geçmek istiyor musunuz?'
           }
         };
       }
@@ -8451,7 +8933,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'ADMIN_TAB',
             target: 'suggestions',
             label: '💡 Önerileri İncele',
-            title: 'Öneri İncelemesi'
+            title: 'Öneri İncelemesi',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Öneri inceleme sekmesine geçmek istiyor musunuz?'
           }
         };
       }
@@ -8466,7 +8950,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'admin',
             label: '⚔️ Moderatör Paneline Git',
-            title: 'Moderatör Paneli'
+            title: 'Moderatör Paneli',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Moderatör paneline yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8475,15 +8961,18 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
       const reply = `⚔️ **Moderatör Asistanı Tavsiyesi**:\n` +
         `Soru: "${question}"\n\n` +
         `Moderatör ekibi olarak oyuncular arası saygıyı korumak, küfürlü sohbeti denetlemek ve bilet/hata süreçlerini adil yönetmek esastır. İlgili modüle hızlıca erişmek için paneli açabilirsiniz.`;
+      const wantsNav = q.includes('panel') || q.includes('git') || q.includes('rota');
       return {
         reply,
         answer: reply,
-        action: {
+        action: wantsNav ? {
           type: 'NAVIGATE',
           target: 'admin',
           label: '⚔️ Moderatör Paneline Git',
-          title: 'Moderatör Paneli'
-        }
+          title: 'Moderatör Paneli',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Moderatör paneline yönlendirilmek istiyor musunuz?'
+        } : null
       };
     },
 
@@ -8531,7 +9020,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'support',
             label: '🎫 Bilet Kuyruğunu Aç',
-            title: 'Destek Masası'
+            title: 'Destek Masası',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Destek masasına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8548,7 +9039,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'support',
             label: '🎧 Destek Masasına Git',
-            title: 'Destek Ekranı'
+            title: 'Destek Ekranı',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Destek masasına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8563,7 +9056,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'bug-report',
             label: '🐛 Hata Bildirimlerine Git',
-            title: 'Hata Bildirimleri'
+            title: 'Hata Bildirimleri',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Hata bildirimleri ekranına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8579,7 +9074,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'support',
             label: '🎫 Destek Masasını Aç',
-            title: 'Destek Biletleri'
+            title: 'Destek Biletleri',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Destek masasına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8588,15 +9085,18 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
       const reply = `🎫 **Destek Masası Asistanı Yanıt Taslağı**:\n` +
         `Değerli oyuncumuz, konuyu titizlikle incelemeye aldık. Sorununuz en kısa sürede çözüme kavuşturulacaktır.\n\n` +
         `Tavsiye: Oyuncuya nazik ve açıklayıcı yanıt veriniz. Destek biletini sahiplenip yanıtlamak için Destek Masasını açabilirsiniz.`;
+      const wantsNav = q.includes('bilet') || q.includes('destek') || q.includes('git') || q.includes('aç');
       return {
         reply,
         answer: reply,
-        action: {
+        action: wantsNav ? {
           type: 'NAVIGATE',
           target: 'support',
           label: '🎫 Destek Masasını Aç',
-          title: 'Destek Biletleri'
-        }
+          title: 'Destek Biletleri',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Destek masasına yönlendirilmek istiyor musunuz?'
+        } : null
       };
     },
 
@@ -8636,7 +9136,7 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
           `• 🏆 **3. Sıralama Rotası (#leaderboard)**: Sunucunun en bilgili milyonerleri.\n` +
           `• 👥 **4. Parti Rotası (#parties)**: 2 turlu jürili canlı arkadaş düelloları.\n` +
           `• 🎧 **5. Destek & Bildirim Rotası (#support, #bug-report)**: 24/7 bilet ve hata bildirimi.\n\n` +
-          `Yarışma arenasına doğrudan adım atmak için aşağıdaki butona basabilirsiniz!`;
+          `Yarışma arenasına doğrudan adım atmak için aşağıdaki onay butonuyla devam edebilirsiniz!`;
         return {
           reply,
           answer: reply,
@@ -8644,7 +9144,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'quiz',
             label: '🗺️ Yarışma Rotasına Başla',
-            title: 'Yarışma Arenasına Git'
+            title: 'Yarışma Arenasına Git',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Yarışma arenasına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8660,7 +9162,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'profile',
             label: '🔑 Profile & Şifre Değiştir Ekranına Git',
-            title: 'Profil Ekranı'
+            title: 'Profil Ekranı',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Profil ve şifre değiştirme ekranına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8680,7 +9184,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'shop',
             label: '🛒 Mağazayı Aç',
-            title: 'Mağaza Ekranı'
+            title: 'Mağaza Ekranı',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Mağaza ekranına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8696,7 +9202,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'leaderboard',
             label: '🏆 Liderlik Tablosuna Git',
-            title: 'Liderlik Tablosu'
+            title: 'Liderlik Tablosu',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Liderlik tablosuna yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8715,7 +9223,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'parties',
             label: '👥 Parti Arenasına Git',
-            title: 'Partiler Ekranı'
+            title: 'Partiler Ekranı',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Parti arenasına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8731,7 +9241,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'support',
             label: '🎧 Destek Masasını Aç',
-            title: 'Destek Ekranı'
+            title: 'Destek Ekranı',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Destek masasına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8747,7 +9259,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'bug-report',
             label: '🐛 Hata Bildirimi Ekranına Git',
-            title: 'Hata Bildirimi'
+            title: 'Hata Bildirimi',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Hata bildirimi ekranına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8763,7 +9277,9 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
             type: 'NAVIGATE',
             target: 'suggestions',
             label: '💡 Öneri Ekranına Git',
-            title: 'Öneri Ekranı'
+            title: 'Öneri Ekranı',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Öneri ekranına yönlendirilmek istiyor musunuz?'
           }
         };
       }
@@ -8775,15 +9291,18 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
           `• **Netherite**: Arenada ilk VIP alımında +50, VIP+ ve üzerinde +250 Netherite ilk alım hediyesi verilir.\n` +
           `• **Zümrüt**: Doğru cevaplanan sorularla birikir ve Ölümsüzlük Totemi (Ekstra Can) almak için kullanılır.\n` +
           `• **Ekstra Can**: Yanlış cevap verdiğinde yarışmadan elenmeden devam etmeni sağlar!`;
+        const wantsNav = q.includes('git') || q.includes('aç') || q.includes('mağaza') || q.includes('market') || q.includes('satın al');
         return {
           reply,
           answer: reply,
-          action: {
+          action: wantsNav ? {
             type: 'NAVIGATE',
             target: 'shop',
             label: '💎 Mağazayı Ziyaret Et',
-            title: 'Mağaza Ekranı'
-          }
+            title: 'Mağaza Ekranı',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Mağaza ekranına yönlendirilmek istiyor musunuz?'
+          } : null
         };
       }
 
@@ -8795,15 +9314,18 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
           `• **Sunucuya Sor (Telegram Canlı Anket)**: Topluluğun oylarını canlı getirir.\n` +
           `• **Bilge Köylü İpucu**: 1 Zümrüt takasıyla sana en olası doğru şıkkı fısıldarım!\n` +
           `• Barajlar: 5. Soru (5.000 ₺) ve 10. Soru (100.000 ₺) garanti barajlarıdır.`;
+        const wantsNav = q.includes('git') || q.includes('çık') || q.includes('başla') || q.includes('rota');
         return {
           reply,
           answer: reply,
-          action: {
+          action: wantsNav ? {
             type: 'NAVIGATE',
             target: 'quiz',
             label: '⚔️ Arenaya Çık',
-            title: 'Yarışma Ekranı'
-          }
+            title: 'Yarışma Ekranı',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Yarışma arenasına yönlendirilmek istiyor musunuz?'
+          } : null
         };
       }
 
@@ -8813,32 +9335,75 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
           `Hrmmm! Tehlikeli yaratıklara karşı Bilge Köylü tavsiyeleri:\n` +
           `• **Ender Ejderhası**: Yatak patlatma taktiği en yüksek hasarı verir. Önce kulelerdeki kristalleri okla patlat!\n` +
           `• **Warden**: Asla doğrudan dövüşme; kartopu atarak yönünü şaşırt ve gizlice eğilerek ilerle.\n` +
-          `• **Wither**: Dar kapalı alanda savaşarak kafalarının yayılmasını önle.`;
+          `• **Wither**: Dar kapalı alanda savaşarak kafalarının yayılmasını önle.\n` +
+          `• **Creeper**: Kalkan kullanarak patlama hasarını sıfırlayabilir veya yayla uzaktan avlayabilirsin.`;
+        const wantsNav = q.includes('git') || q.includes('çık') || q.includes('başla') || q.includes('rota');
         return {
           reply,
           answer: reply,
-          action: {
+          action: wantsNav ? {
             type: 'NAVIGATE',
             target: 'quiz',
             label: '🎮 Arenaya Git',
-            title: 'Yarışma Arenası'
-          }
+            title: 'Yarışma Arenası',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Yarışma arenasına yönlendirilmek istiyor musunuz?'
+          } : null
+        };
+      }
+
+      // 12. MADENCİLİK VE CEVHER DERİNLİKLERİ
+      if (q.includes('maden') || q.includes('elmas') || q.includes('demir') || q.includes('nerede çıkar') || q.includes('seviye') || q.includes('y=')) {
+        const reply = `⛏️ **Bilge Asistan — 1.21 Madencilik Rehberi**:\n` +
+          `• **Elmas (Diamond)**: Y=-58 ve Y=-53 seviyelerinde en yoğun bulunur. Mağaralara inmek şansını artırır!\n` +
+          `• **Demir (Iron)**: Y=16 ve Y=232 (yüksek dağ tepeleri) civarında bolca çıkar.\n` +
+          `• **Antik Kalıntı (Netherite)**: Nether'da Y=15 seviyesinde yatak veya dinamit patlatarak hızlıca bulunur.\n` +
+          `• **Kömür**: Y=95 ve Y=136 seviyelerinde en fazladır.`;
+        const wantsNav = q.includes('git') || q.includes('çık') || q.includes('başla');
+        return {
+          reply,
+          answer: reply,
+          action: wantsNav ? {
+            type: 'NAVIGATE',
+            target: 'quiz',
+            label: '⚔️ Arenaya Çık',
+            title: 'Yarışma Arenası',
+            requiresConfirmation: true,
+            confirmPrompt: 'Emin misiniz? Yarışma arenasına yönlendirilmek istiyor musunuz?'
+          } : null
+        };
+      }
+
+      // 13. KIZILTAŞ VE İKSİR
+      if (q.includes('kızıltaş') || q.includes('redstone') || q.includes('iksir') || q.includes('büyü') || q.includes('enchant')) {
+        const reply = `🧪 **Bilge Asistan — Simya ve Kızıltaş Rehberi**:\n` +
+          `• **Güç İksiri**: Tuhaf İksir (Nether Wart) + Alev Tozu ile yapılır.\n` +
+          `• **Hız İksiri**: Tuhaf İksir + Şeker.\n` +
+          `• **Tamir (Mending)**: Balıkçılık veya köylü takasıyla elde edilir, XP topladıkça zırhını onarır.\n` +
+          `• **Kızıltaş Karşılaştırıcı**: Sandık, fırın veya hopper doluluk oranını algılar.`;
+        return {
+          reply,
+          answer: reply,
+          action: null
         };
       }
 
       // Genel Minecraft Yanıtı
       const reply = `🧙‍♂️ **Bilge Asistan Yanıtı**:\n` +
         `Hrmmm! "${question}" hakkında harika bir soru sordun!\n\n` +
-        `Minecraft Milyoner arenasında başarıya ulaşmak için sakin olmalı, soruları dikkatle okumalı ve jokerlerini baraj soruları (5 ve 10) sonrasına saklamalısın. Arenaya çıkıp şansını denemek ister misin?`;
+        `Minecraft Milyoner arenasında başarıya ulaşmak için sakin olmalı, soruları dikkatle okumalı ve jokerlerini baraj soruları (5 ve 10) sonrasına saklamalısın. İpuçları, taktikler veya ekonomi hakkında merak ettiğin her şeyi bana sorabilirsin!`;
+      const wantsNav = q.includes('git') || q.includes('başla') || q.includes('çık') || q.includes('rota');
       return {
         reply,
         answer: reply,
-        action: {
+        action: wantsNav ? {
           type: 'NAVIGATE',
           target: 'quiz',
           label: '⚔️ Arenaya Çık',
-          title: 'Yarışma Arenası'
-        }
+          title: 'Yarışma Arenası',
+          requiresConfirmation: true,
+          confirmPrompt: 'Emin misiniz? Yarışma arenasına yönlendirilmek istiyor musunuz?'
+        } : null
       };
     },
 
@@ -8894,6 +9459,16 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
       } catch (e) {}
       return {
         improved: `Değerli oyuncumuz, talebiniz titizlikle incelenmiştir. ${text} İyi ve keyifli oyunlar dileriz! 🎮💎`
+      };
+    },
+
+    checkAiProviderStatus() {
+      const hasKey = typeof process !== 'undefined' && process.env && Boolean(process.env.GEMINI_API_KEY);
+      return {
+        configured: Boolean(hasKey),
+        provider: hasKey ? 'GEMINI_AI' : 'BUILTIN_LOCAL_KNOWLEDGE_BASE',
+        mode: 'TURKISH_ASSISTANT',
+        statusMessage: hasKey ? 'Harici Gemini AI servisi devrede.' : 'Dahili kural ve bilgi tabanlı asistan devrede.'
       };
     }
   };
@@ -9075,7 +9650,10 @@ Yanıtını SADECE geçerli bir JSON dizisi (Array) olarak döndür. Her eleman 
     aiAssistantService,
     chatModerationService,
     backendStatusService,
-    noteService
+    noteService,
+    tierService,
+    whitelistService,
+    eventService
   });
 
   // Bulut senkronizasyonunu güvenle başlat

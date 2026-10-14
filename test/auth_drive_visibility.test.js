@@ -2284,8 +2284,272 @@ const AUTH_SALT_CONST = 'MCM_2026_SALT';
     assert.strictEqual(gateHidden, true, 'terms ekranı oturumsuz ziyaret edildiğinde access-gate gizlenmelidir.');
     console.log('✓ Herkese Açık Erişim: Oturumsuz ziyaretçiler için Kullanım Koşulları ve Gizlilik Politikası doğrudan erişilebilir.');
 
+    // ====================================================
+    // TEST 51: Dereceli Kademeler (Ranked Tiers) & Soru Zorluk Dağılımı (Requirement 1)
+    // ====================================================
     console.log('\n====================================================');
-    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-50 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
+    console.log('TEST 51: Dereceli Kademeler (Ranked Tiers) & Soru Zorluk Dağılımı (Requirement 1)');
+    console.log('====================================================');
+
+    const tierService = window.MCMServices.tierService;
+    assert.ok(tierService, 'tierService tanımlı olmalıdır.');
+
+    // 51.1: Unranked ve Kademe Uygunluk Kuralları
+    const unrankedUser = { username: 'YeniOyuncu', gamesPlayed: 2, gamesWon: 1, points: 200 };
+    const unrankedTier = tierService.getUserTier(unrankedUser);
+    assert.strictEqual(unrankedTier.id, 'UNRANKED', '5 maçtan az oynayan oyuncu Unranked olmalıdır.');
+    assert.strictEqual(unrankedTier.category, 'UNRANKED', 'Unranked kategorisi doğru olmalıdır.');
+
+    const ironUser = { username: 'DemirOyuncu', gamesPlayed: 8, gamesWon: 2, points: 500 };
+    const ironTier = tierService.getUserTier(ironUser);
+    assert.strictEqual(ironTier.id, 'IRON', 'Kriterleri sağlayan oyuncu IRON kademesinde olmalıdır.');
+    assert.strictEqual(ironTier.category, 'LOW', 'IRON kademesi LOW kategorisinde olmalıdır.');
+
+    const diamondUser = { username: 'ElmasOyuncu', gamesPlayed: 35, gamesWon: 18, points: 3000 };
+    const diamondTier = tierService.getUserTier(diamondUser);
+    assert.strictEqual(diamondTier.id, 'DIAMOND', 'Kriterleri sağlayan oyuncu DIAMOND kademesinde olmalıdır.');
+    assert.strictEqual(diamondTier.category, 'HIGH', 'DIAMOND kademesi HIGH kategorisinde olmalıdır.');
+
+    const netheriteUser = { username: 'NetheritePro', gamesPlayed: 50, gamesWon: 40, points: 8000 };
+    const netheriteTier = tierService.getUserTier(netheriteUser);
+    assert.strictEqual(netheriteTier.id, 'NETHERITE', 'Kriterleri sağlayan oyuncu NETHERITE kademesinde olmalıdır.');
+    assert.strictEqual(netheriteTier.category, 'HIGH', 'NETHERITE kademesi HIGH kategorisinde olmalıdır.');
+
+    // 51.2: İstemci Tarafı Manipülasyon Koruması
+    const fakeTamperedUser = { username: 'Hileci', tier: 'NETHERITE', gamesPlayed: 1, gamesWon: 0, points: 50 };
+    const computedTier = tierService.getUserTier(fakeTamperedUser);
+    assert.strictEqual(computedTier.id, 'UNRANKED', 'İstemci tarafı sahte tier manipülasyonu engellenmelidir.');
+    console.log('✓ Dereceli Kademeler & İstemci Manipülasyon Koruması başarıyla doğrulandı.');
+
+    // 51.3: Kademeye Göre Soru Zorluk Dağılımı
+    const unrankedDist = tierService.getTierDifficultyDistribution('UNRANKED');
+    assert.ok(unrankedDist.easy >= 6, 'Unranked oyuncular daha yüksek kolay soru sayısına sahip olmalıdır.');
+    assert.ok(unrankedDist.hard <= 3, 'Unranked oyuncular düşük zor soru sayısına sahip olmalıdır.');
+
+    const highTierDist = tierService.getTierDifficultyDistribution('DIAMOND');
+    assert.ok(highTierDist.hard >= 5, 'Yüksek kademe oyuncular ağırlıklı olarak zor sorular almalıdır.');
+    const netheriteDist = tierService.getTierDifficultyDistribution('NETHERITE');
+    assert.ok(netheriteDist.hard >= 7, 'Netherite kademesi en yüksek zor soru sayısına sahip olmalıdır.');
+    console.log('✓ Kademeye Göre Dinamik Soru Zorluk Dağılımı başarıyla doğrulandı.');
+
+    // ====================================================
+    // TEST 52: AI Chatbot Logosu & Farklılaştırılmış/Dürüst Yanıtlar (Requirement 2)
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 52: AI Chatbot Logosu & Farklılaştırılmış/Dürüst Yanıtlar (Requirement 2)');
+    console.log('====================================================');
+
+    // 52.1: Özel Minecraft Piksel Sanatlı SVG Logo
+    const indexHtmlFresh = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    assert.ok(indexHtmlFresh.includes('mc-ai-logo-svg'), 'index.html içerisinde mc-ai-logo-svg sınıfına sahip özel SVG logo bulunmalıdır.');
+    assert.ok(indexHtmlFresh.includes('<svg') && indexHtmlFresh.includes('viewBox="0 0 24 24"'), 'Yapay zeka asistanı için vektörel SVG logo doğrulanmalıdır.');
+    console.log('✓ Özel Minecraft Piksel Sanatlı AI Logosu doğrulandı.');
+
+    // 52.2: Farklılaştırılmış ve Bağlama Özel Yanıtlar
+    const q1 = await window.MCMServices.aiAssistantService.askUserAI(mvipSession, 'rotayı bul');
+    const q2 = await window.MCMServices.aiAssistantService.askUserAI(mvipSession, 'zümrüt nasıl kazanırım');
+    const q3 = await window.MCMServices.aiAssistantService.askUserAI(mvipSession, 'jokerler nelerdir');
+    assert.notStrictEqual(q1.reply, q2.reply, 'Farklı sorulara aynı sabit cevap döndürülmemelidir.');
+    assert.notStrictEqual(q2.reply, q3.reply, 'Her soru kendi bağlamına özel yanıt almalıdır.');
+    assert.ok(q1.reply.toLowerCase().includes('rota') || q1.reply.toLowerCase().includes('yarışma'), 'Rota sorusuna rota ile ilgili yanıt dönmelidir.');
+    assert.ok(q2.reply.toLowerCase().includes('zümrüt') || q2.reply.toLowerCase().includes('ödül'), 'Zümrüt sorusuna ekonomi ile ilgili yanıt dönmelidir.');
+    console.log('✓ Farklılaştırılmış ve Bağlama Özel Yanıtlar başarıyla doğrulandı.');
+
+    // 52.3: Dürüst AI Sağlayıcı Durumu (Secret Sızıntısı Yok)
+    const honestCheck = window.MCMServices.aiAssistantService.checkAiProviderStatus();
+    assert.ok(honestCheck, 'AI sağlayıcı durum kontrolü bulunmalıdır.');
+    assert.ok(!JSON.stringify(honestCheck).includes('AIzaSy'), 'Sağlayıcı durumu API anahtarı veya gizli veri sızdırmamalıdır.');
+    console.log('✓ Dürüst AI Sağlayıcı Durumu & Gizlilik Koruması doğrulandı.');
+
+    // ====================================================
+    // TEST 53: Eylemler İçin Onay Ekranı (Confirm-Before-Navigation) (Requirement 3)
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 53: Eylemler İçin Onay Ekranı (Confirm-Before-Navigation) (Requirement 3)');
+    console.log('====================================================');
+
+    // 53.1: Navigasyon ve Ajan Eylemlerinde Onay Gereksinimi
+    const navQuestionRes = await window.MCMServices.aiAssistantService.askUserAI(mvipSession, 'rotayı bul');
+    assert.ok(navQuestionRes.action, 'Navigasyon isteği eylem üretmelidir.');
+    assert.strictEqual(navQuestionRes.action.requiresConfirmation, true, 'Navigasyon eylemleri doğrudan yönlendirmek yerine onay gerektirmelidir.');
+    assert.ok(navQuestionRes.action.confirmPrompt.includes('Emin misiniz'), 'Onay sorusu "Emin misiniz" içermelidir.');
+
+    // 53.2: Sıradan Sorularda Onay Ekranı Gösterilmemesi
+    const generalQuestionRes = await window.MCMServices.aiAssistantService.askUserAI(mvipSession, 'jokerler nasıl kullanılır');
+    assert.strictEqual(generalQuestionRes.action?.requiresConfirmation || false, false, 'Sıradan sorularda onay kartı tetiklenmemelidir.');
+
+    // 53.3: Bilge, Ticket, Mod ve Admin Bot Yetki İzolasyonu
+    const testSessionUser = { username: 'RegularPlayer', role: 'MEMBER', email: 'regular@player.com', isAdminSession: false };
+    const adminSessionUser = { username: 'test1234@Admin', email: 'codingdevelopia@gmail.com', role: 'ADMIN', isAdminSession: true };
+    const adminActionRes = await window.MCMServices.aiAssistantService.askAdminAI(adminSessionUser, 'yedek al');
+    assert.ok(adminActionRes.action, 'Yönetici botu yedekleme eylemi sunabilmelidir.');
+    assert.strictEqual(adminActionRes.action.requiresConfirmation, true, 'Yönetici kritik işlemleri onay gerektirmelidir.');
+
+    // Yetkisiz kullanıcının Mod / Admin botuna erişim engeli
+    await assert.rejects(
+      async () => window.MCMServices.aiAssistantService.askAdminAI(testSessionUser, 'yedek al'),
+      /yetki|erişim|yönetici/i,
+      'Yetkisiz kullanıcı Admin AI üzerinden işlem yapamamalıdır.'
+    );
+    console.log('✓ Confirm-Before-Navigation Davranışı ve Bot Yetki Matrisi başarıyla doğrulandı.');
+
+    // ====================================================
+    // TEST 54: Beyaz Liste (Whitelist) On/Off, Yönetim ve Yetkilendirme (Requirement 5)
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 54: Beyaz Liste (Whitelist) On/Off, Yönetim ve Yetkilendirme (Requirement 5)');
+    console.log('====================================================');
+
+    const whitelistService = window.MCMServices.whitelistService;
+    assert.ok(whitelistService, 'whitelistService tanımlı olmalıdır.');
+
+    // 54.1: Admin Açma / Kapama Anahtarı
+    whitelistService.toggleWhitelist(adminSessionUser, true);
+    assert.strictEqual(whitelistService.getStatus().enabled, true, 'Yönetici beyaz listeyi açabilmelidir.');
+
+    // Yetkisiz kullanıcının beyaz listeyi değiştirmesi engellenmelidir
+    assert.throws(
+      () => whitelistService.toggleWhitelist(testSessionUser, false),
+      /yetki|erişim|yönetici/i,
+      'Yetkisiz kullanıcı beyaz liste anahtarını değiştirememelidir.'
+    );
+
+    // 54.2: Kullanıcı Ekleme ve Kaldırma
+    whitelistService.addToWhitelist(adminSessionUser, 'DavetliOyuncu');
+    assert.strictEqual(whitelistService.isUserAllowed('DavetliOyuncu'), true, 'Listeye eklenen oyuncu izinli olmalıdır.');
+
+    whitelistService.removeFromWhitelist(adminSessionUser, 'DavetliOyuncu');
+    assert.strictEqual(whitelistService.isUserAllowed('DavetliOyuncu'), false, 'Listeden çıkarılan oyuncunun izni kalkmalıdır.');
+
+    // 54.3: Kalıcı Süper Yönetici Koruması (Anti-Lockout)
+    assert.strictEqual(whitelistService.isUserAllowed('codingdevelopia@gmail.com'), true, 'codingdevelopia@gmail.com kalıcı olarak muaf olmalıdır.');
+    assert.strictEqual(whitelistService.isUserAllowed('test1234@Admin'), true, 'test1234@Admin kalıcı olarak muaf olmalıdır.');
+    assert.throws(
+      () => whitelistService.removeFromWhitelist(adminSessionUser, 'codingdevelopia@gmail.com'),
+      /kaldırılamaz/i,
+      'Süper yöneticiler beyaz listeden kaldırılamaz.'
+    );
+
+    // Beyaz listeyi varsayılana getir
+    whitelistService.toggleWhitelist(adminSessionUser, false);
+    console.log('✓ Beyaz Liste (Whitelist) Aç/Kapa, Kullanıcı Yönetimi ve Kilitlenme Koruması doğrulandı.');
+
+    // ====================================================
+    // TEST 55: Etkinlik Modu (Event Mode), YouTube Canlı Yayını & Güvenli Ödül Jetonları (Requirement 4)
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 55: Etkinlik Modu (Event Mode), YouTube Canlı Yayını & Güvenli Ödül Jetonları (Requirement 4)');
+    console.log('====================================================');
+
+    const eventService = window.MCMServices.eventService;
+    assert.ok(eventService, 'eventService tanımlı olmalıdır.');
+
+    // 55.1: Etkinlik Oluşturma (Bitiş Tarihi Opsiyonel, YouTube Canlı Linki, Çoklu Ödüller)
+    const newEvent = eventService.createEvent(adminSessionUser, {
+      title: 'MC Milyoner Büyük Şampiyonası',
+      description: 'Haftalık canlı turnuva mücadelesi',
+      startDate: new Date(Date.now() + 86400000).toISOString(),
+      endDate: null,
+      youtubeUrl: 'https://www.youtube.com/watch?v=live_mcm_tourney',
+      prizes: {
+        first: ['1000 Netherite', 'VIP Rütbesi', 'Şampiyon Rozeti'],
+        second: ['500 Netherite', '5000 Zümrüt'],
+        third: ['250 Netherite', '2500 Zümrüt']
+      }
+    });
+
+    assert.ok(newEvent.id, 'Etkinlik başarıyla oluşturulmalı ve ID almalıdır.');
+    assert.strictEqual(newEvent.endDate, null, 'Bitiş tarihi tanımsız bırakılabilmelidir.');
+    assert.strictEqual(newEvent.youtubeUrl, 'https://www.youtube.com/watch?v=live_mcm_tourney', 'YouTube canlı yayın linki kaydedilmelidir.');
+    assert.strictEqual(newEvent.prizes.first.length, 3, '1. sıra için çoklu ödül desteklenmelidir.');
+
+    // 55.2: Kazananları Belirleme & Güvenli Zaman Sınırlı Ödül Jetonları (Claim Tokens)
+    const recordResult = eventService.recordWinners(adminSessionUser, newEvent.id, {
+      first: 'WinnerSteve',
+      second: 'AlexRunnerUp',
+      third: 'ThirdPlacePlayer'
+    });
+
+    assert.ok(recordResult.claimTokens, 'Her kazanan için güvenli jeton oluşturulmalıdır.');
+    const winnerToken = recordResult.claimTokens.first;
+    assert.ok(winnerToken && winnerToken.token, '1. sıra kazananının jetonu bulunmalıdır.');
+    assert.ok(winnerToken.token.startsWith('evclaim_'), 'Jeton güvenli önek taşımalıdır.');
+    assert.ok(!winnerToken.token.includes('password') && !winnerToken.token.includes('secret'), 'Jeton hassas veri içermemelidir.');
+
+    // 55.3: Ödül Talep Etme ve Tek Kullanımlık Güvenlik Kontrolü
+    const winnerSession = { username: 'WinnerSteve', role: 'MEMBER' };
+    const claimRes = eventService.claimPrize(winnerSession, winnerToken.token);
+    assert.strictEqual(claimRes.success, true, 'Hak sahibi kazanan ödülünü talep edebilmelidir.');
+
+    // Mükerrer talep koruması (Replay Attack Engeli)
+    assert.throws(
+      () => eventService.claimPrize(winnerSession, winnerToken.token),
+      /kullanılmış/i,
+      'Aynı ödül jetonu ikinci kez kullanılamamalıdır.'
+    );
+
+    // Başka kullanıcının başkasının jetonunu talep etmesini engelleme
+    const secondToken = recordResult.claimTokens.second;
+    const impostorSession = { username: 'ImpostorUser', role: 'MEMBER' };
+    assert.throws(
+      () => eventService.claimPrize(impostorSession, secondToken.token),
+      /uyuşmuyor|yetkisiz/i,
+      'Yalnızca hak sahibi kazanan kendi ödül jetonunu talep edebilmelidir.'
+    );
+    console.log('✓ Etkinlik Yönetimi, YouTube Canlı Yayını, Çoklu Ödüller ve Güvenli Jeton Talebi doğrulandı.');
+
+    // ====================================================
+    // TEST 56: Yeniden Tasarlanmış Bakım Modu (Maintenance Mode Redesign) (Requirement 6)
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 56: Yeniden Tasarlanmış Bakım Modu (Maintenance Mode Redesign) (Requirement 6)');
+    console.log('====================================================');
+
+    const maintSvc = window.MCMServices.maintenanceService;
+    assert.ok(maintSvc, 'maintenanceService tanımlı olmalıdır.');
+
+    // 56.1: Bakım Modu Açma ve Özel Mesaj Kaydı
+    maintSvc.setMaintenanceMode(adminSessionUser, true, 'Sunucu altyapı güçlendirmesi nedeniyle kısa süre bakımdadır.');
+    const mStatus = maintSvc.getMaintenanceStatus();
+    assert.strictEqual(mStatus.enabled, true, 'Bakım modu aktif olmalıdır.');
+    assert.ok(mStatus.message.includes('altyapı güçlendirmesi'), 'Özel bakım mesajı kaydedilmelidir.');
+
+    // 56.2: Arayüz ve Ziyaretçi Ekranı Koruması
+    assert.ok(indexHtmlFresh.includes('id="maintenance-overlay"'), 'Ziyaretçiler için tam ekran bakım overlay ekranı bulunmalıdır.');
+    assert.ok(indexHtmlFresh.includes('Sunucu Bakımda'), 'Bakım ekranı Türkçe bilgilendirme içermelidir.');
+
+    // 56.3: Yönetici Tam Erişim Muafiyeti (Admin Retains Access)
+    assert.strictEqual(maintSvc.isUserExempt(adminSessionUser), true, 'Yönetici oturumları bakım modunda tam erişime sahip olmalıdır.');
+
+    // Bakım modunu tekrar kapat
+    maintSvc.setMaintenanceMode(adminSessionUser, false);
+    console.log('✓ Yeniden Tasarlanmış Bakım Modu, Ziyaretçi Ekranı ve Yönetici Erişimi başarıyla doğrulandı.');
+
+    // ====================================================
+    // TEST 57: Global Footer Telif Hakkı (Copyright) Metni ve Biçimlendirmesi (Requirement 7)
+    // ====================================================
+    console.log('\n====================================================');
+    console.log('TEST 57: Global Footer Telif Hakkı (Copyright) Metni ve Biçimlendirmesi (Requirement 7)');
+    console.log('====================================================');
+
+    // 57.1: index.html Footer Telif Hakkı Metni
+    assert.ok(
+      indexHtmlFresh.includes('© 2026, All rights reserved • Tüm hakları saklıdır.'),
+      'Footer içerisinde "© 2026, All rights reserved • Tüm hakları saklıdır." metni eksiksiz yer almalıdır.'
+    );
+
+    // 57.2: CSS Uyumu ve Okunabilirlik
+    const styleCssSource = fs.readFileSync(path.join(__dirname, '..', 'style.css'), 'utf8');
+    assert.ok(styleCssSource.includes('.footer-copy'), 'style.css içerisinde .footer-copy sınıfı bulunmalıdır.');
+    assert.ok(styleCssSource.includes('font-size: 0.68rem') || styleCssSource.includes('0.7rem'), 'Footer telif hakkı metni kompakt ve okunabilir puntoya sahip olmalıdır.');
+
+    // 57.3: Hukuki Bağlantıların Korunması
+    assert.ok(indexHtmlFresh.includes('href="#terms"'), 'Footer Kullanım Koşulları bağlantısını korumalıdır.');
+    assert.ok(indexHtmlFresh.includes('href="#privacy"'), 'Footer Gizlilik Politikası bağlantısını korumalıdır.');
+    console.log('✓ Global Footer Telif Hakkı Metni, Okunabilir Boyutlandırma ve Bağlantılar başarıyla doğrulandı.');
+
+    console.log('\n====================================================');
+    console.log('TÜM TESTLER BAŞARIYLA GEÇTİ! 🏆 (1-57 TESTLERİN TAMAMI EKSİKSİZ BAŞARILI)');
     console.log('====================================================\n');
     process.exit(0);
   } catch (err) {

@@ -557,10 +557,22 @@
     return orderedCandidates.slice(0, count);
   }
 
-  function buildMatchQuestions() {
-    const easy = pickNonRepeatingDifficultyQuestions('easy', 5);
-    const medium = pickNonRepeatingDifficultyQuestions('medium', 5);
-    const hard = pickNonRepeatingDifficultyQuestions('hard', 5);
+  function buildMatchQuestions(providedUserOrTier = null) {
+    let tier = null;
+    if (providedUserOrTier && typeof providedUserOrTier === 'object' && providedUserOrTier.distribution) {
+      tier = providedUserOrTier;
+    } else {
+      const session = svc().authService?.getActiveSession();
+      if (session && svc().tierService) {
+        const user = svc().userService?.getUserByUsername?.(session.username);
+        tier = svc().tierService.getUserTier(user || session);
+      }
+    }
+
+    const dist = tier?.distribution || { easy: 5, medium: 5, hard: 5 };
+    const easy = pickNonRepeatingDifficultyQuestions('easy', dist.easy);
+    const medium = pickNonRepeatingDifficultyQuestions('medium', dist.medium);
+    const hard = pickNonRepeatingDifficultyQuestions('hard', dist.hard);
     const combined = [...easy, ...medium, ...hard];
 
     svc().aiQuestionService?.markQuestionsSeen?.(combined);
@@ -573,6 +585,8 @@
       const mixed = shuffle(indexed);
       return {
         ...item,
+        tierCategory: tier?.category || 'UNRANKED',
+        tierLabel: tier?.label || 'Derecesiz',
         options: mixed.map(m => m.text),
         answer: mixed.findIndex(m => m.correct)
       };
@@ -614,6 +628,15 @@
       return;
     }
 
+    if (svc().whitelistService && !svc().whitelistService.isUserAllowed(session.username, session.role)) {
+      if (typeof showToast === 'function') {
+        showToast('Sunucu beyaz liste (whitelist) modundadır. Yalnızca onaylı oyuncular yarışmaya katılabilir.', 'error');
+      } else {
+        alert('Sunucu beyaz liste (whitelist) modundadır. Yalnızca onaylı oyuncular yarışmaya katılabilir.');
+      }
+      return;
+    }
+
     soundEngine.click();
     stopQuestionTimer();
 
@@ -622,6 +645,14 @@
     gameState.isJudgeMode = false;
     gameState.activeMatchId = null;
     gameState.questions = buildMatchQuestions();
+    const userTier = svc().tierService?.getUserTier(session);
+    gameState.userTier = userTier;
+    const hudTierEl = document.getElementById('quiz-hud-tier');
+    if (hudTierEl && userTier) {
+      hudTierEl.textContent = `${userTier.badge} (${userTier.categoryLabel})`;
+      hudTierEl.style.borderColor = userTier.color;
+      hudTierEl.classList.remove('hidden');
+    }
     gameState.currentIndex = 0;
     gameState.currentPrize = 0;
     gameState.safePrize = 0;
